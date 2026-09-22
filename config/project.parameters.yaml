@@ -115,4 +115,3 @@ parameters:
   backup.restore_test_interval_days:
     value: null
     status: unresolved
-
