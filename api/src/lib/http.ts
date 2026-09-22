@@ -4,7 +4,7 @@
  */
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { config } from "./config.ts";
-import { ApiError, fromDatabaseError } from "./errors.ts";
+import { ApiError, fromDatabaseError, pgFields } from "./errors.ts";
 import type { Principal } from "./auth.ts";
 
 export interface AppEnv {
@@ -64,8 +64,15 @@ export function handleError(error: unknown, c: Context<AppEnv>) {
   const apiError = error instanceof ApiError ? error : fromDatabaseError(error);
 
   if (apiError.status >= 500) {
+    // Драйвер прячет исходную ошибку за «transaction aborted», поэтому пишем
+    // и поля ответа PostgreSQL: код, деталь и подсказку. Секретов в них нет.
+    const pg = pgFields(error);
     log("error", requestId, "unhandled", {
       error: error instanceof Error ? error.message : String(error),
+      pg_code: pg.code,
+      pg_constraint: pg.constraint,
+      pg_message: pg.message,
+      pg_detail: pg.detail,
     });
   } else {
     log("warn", requestId, "rejected", { code: apiError.code });

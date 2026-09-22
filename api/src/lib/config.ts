@@ -39,6 +39,20 @@ export const config = {
     defaultPageSize: Number(optional("API_PAGE_SIZE_DEFAULT", "24")),
     maxPageSize: Number(optional("API_PAGE_SIZE_MAX", "100")),
   },
+  media: {
+    /** Корень собственного хранилища нового контура (решение Р-22). */
+    root: optional("MEDIA_ROOT", "/data"),
+    maxBytes: Number(optional("MEDIA_MAX_BYTES", String(1024 * 1024 * 1024))),
+    maxPixels: Number(optional("MEDIA_MAX_PIXELS", "400000000")),
+    allowedMimeTypes: optional(
+      "MEDIA_ALLOWED_MIME",
+      "image/jpeg,image/png,image/webp,image/avif,image/tiff,image/heic,application/pdf,video/mp4",
+    ).split(",").map((t) => t.trim()),
+    screenMaxEdge: Number(optional("MEDIA_SCREEN_MAX_EDGE", "2560")),
+    thumbnailMaxEdge: Number(optional("MEDIA_THUMBNAIL_MAX_EDGE", "400")),
+    quality: Number(optional("MEDIA_QUALITY", "82")),
+    recipeVersion: optional("MEDIA_RECIPE_VERSION", "v1"),
+  },
   /** Версия контракта: клиент сверяет её через GET /capabilities. */
   contractVersion: "1.0.0-draft",
   blockNoteSchemaVersion: 1,

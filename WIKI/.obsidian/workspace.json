@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Решения.md",
+                "file": "Схема этапа 1 — предложение.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Решения"
+              "title": "Схема этапа 1 — предложение"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Решения.md",
+                "file": "Схема этапа 1 — предложение.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Решения.md",
+                "file": "Схема этапа 1 — предложение.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Решения.md",
+                "file": "Схема этапа 1 — предложение.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,6 +190,7 @@
   },
   "active": "a8f13fb08152fa66",
   "lastOpenFiles": [
+    "Решения.md",
     "Схема этапа 1 — предложение.md",
     "Схема этапа 1 — предложение.md.tmp.8976.15053113e2dc",
     "Готовность к разработке.md",
@@ -198,7 +199,6 @@
     "Техническое задание.md",
     "API.md",
     "BackUp.md",
-    "Решения.md",
     "Решения.md.tmp.8976.ac201299e703",
     "Правила проекта.md",
     "План реализации.md",

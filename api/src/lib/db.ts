@@ -75,7 +75,7 @@ export async function transaction<T>(
   } catch (error) {
     try {
       await tx.rollback();
-    } catch { /* соединение уже закрыто — откат выполнен сервером */ }
+    } catch { /* откат уже выполнен сервером — исходная ошибка важнее */ }
     throw error;
   } finally {
     client.release();

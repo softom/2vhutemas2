@@ -13,6 +13,8 @@ import { closePool, healthCheck, sql } from "./lib/db.ts";
 import { principalFromRequest } from "./lib/auth.ts";
 import { type AppEnv, cors, handleError, log, requestContext } from "./lib/http.ts";
 import { entities } from "./routes/entities.ts";
+import { media } from "./routes/media.ts";
+import { documents } from "./routes/documents.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -63,6 +65,8 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
     limits: {
       page_size_default: config.pagination.defaultPageSize,
       page_size_max: config.pagination.maxPageSize,
+      media_max_bytes: config.media.maxBytes,
+      media_allowed_mime_types: config.media.allowedMimeTypes,
     },
     dictionaries: grouped,
   });
@@ -81,6 +85,8 @@ app.get("/api/v1/me", (c: Context<AppEnv>) => {
 });
 
 app.route("/api/v1/entities", entities);
+app.route("/api/v1/media", media);
+app.route("/api/v1/documents", documents);
 
 const shutdown = async () => {
   log("info", "system", "остановка сервиса");

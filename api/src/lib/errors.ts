@@ -55,10 +55,39 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Разворачивает цепочку: драйвер оборачивает ошибку запроса в ошибку
+ * транзакции, и без этого наружу уходит бесполезное «транзакция прервана».
+ */
+export function rootCause(error: unknown): unknown {
+  let current = error;
+  for (let depth = 0; depth < 5; depth++) {
+    const cause = (current as { cause?: unknown })?.cause;
+    if (!cause) break;
+    current = cause;
+  }
+  return current;
+}
+
+/** Поля ответа PostgreSQL: код, ограничение, подробности. Секретов в них нет. */
+export function pgFields(error: unknown): Record<string, string | undefined> {
+  const source = rootCause(error) as {
+    fields?: Record<string, string>;
+    code?: string;
+    message?: string;
+  };
+  return {
+    code: source.fields?.code ?? source.code,
+    constraint: source.fields?.constraint,
+    detail: source.fields?.detail,
+    message: source.fields?.message ?? source.message,
+  };
+}
+
 /** Ошибки БД переводятся в понятные коды; текст драйвера наружу не уходит. */
 export function fromDatabaseError(error: unknown): ApiError {
-  const pgError = error as { code?: string; constraint_name?: string; message?: string };
-  const constraint = pgError.constraint_name ?? "";
+  const pgError = pgFields(error);
+  const constraint = pgError.constraint ?? "";
 
   if (pgError.code === "23505") {
     if (constraint.includes("slug")) {
@@ -74,6 +103,9 @@ export function fromDatabaseError(error: unknown): ApiError {
       "validation_failed",
       "Адрес может содержать только строчные латинские буквы, цифры и дефис",
     );
+  }
+  if (pgError.code === "23514" && constraint.includes("media_files")) {
+    return new ApiError("validation_failed", "Недопустимое состояние файла", { constraint });
   }
   if (pgError.message?.includes("не имеет обоснования")) {
     return new ApiError(

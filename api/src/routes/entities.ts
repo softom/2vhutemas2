@@ -185,7 +185,7 @@ entities.post("/", async (c: Context<AppEnv>) => {
     const data = await snapshot(tx, entityId);
     const revisions = await tx`
       insert into app.revisions (material_id, edited_by, operation, summary, snapshot)
-      values (${materialId}, ${principal.contributorId}, 'create', 'Создание карточки', ${data})
+      values (${materialId}, ${principal.contributorId}, 'create', 'Создание карточки', ${JSON.stringify(data)}::jsonb)
       returning id
     `;
 
@@ -248,7 +248,7 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
     const revisions = await tx`
       insert into app.revisions (material_id, base_revision_id, edited_by, operation, summary, snapshot)
       values (${material_id}, ${latest_revision_id}, ${principal.contributorId}, 'edit',
-              ${"Правка карточки"}, ${data})
+              ${"Правка карточки"}, ${JSON.stringify(data)}::jsonb)
       returning id
     `;
     return { id, material_id, revision_id: revisions[0].id };
