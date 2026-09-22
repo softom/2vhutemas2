@@ -1,7 +1,7 @@
 """Применение миграций проекта (решение Р-12).
 
 Каждый файл db/migrations/NNNN_*.sql выполняется одной транзакцией вместе с
-записью в журнал v2.schema_migrations. Только вперёд: обратных миграций нет.
+записью в журнал app.schema_migrations. Только вперёд: обратных миграций нет.
 Файл, уже применённый с другой контрольной суммой, останавливает работу.
 
 Подключение: ssh на сервер, psql внутри контейнера supa_db от роли
@@ -50,10 +50,10 @@ def local_migrations():
 
 
 def applied(host):
-    exists = run_sql(host, "select to_regclass('v2.schema_migrations') is not null;")
+    exists = run_sql(host, "select to_regclass('app.schema_migrations') is not null;")
     if exists != "t":
         return None
-    rows = run_sql(host, "select number, filename, checksum from v2.schema_migrations order by number;")
+    rows = run_sql(host, "select number, filename, checksum from app.schema_migrations order by number;")
     result = {}
     for line in filter(None, rows.split("\n")):
         number, filename, checksum = line.split("|")
@@ -63,7 +63,7 @@ def applied(host):
 
 def apply(host, item):
     register = (
-        "insert into v2.schema_migrations(number, filename, checksum, duration_ms) "
+        "insert into app.schema_migrations(number, filename, checksum, duration_ms) "
         "values ({number}, '{name}', '{checksum}', {duration});"
     )
     started = time.monotonic()
@@ -72,7 +72,7 @@ def apply(host, item):
         duration=0) + "\ncommit;"
     run_sql(host, sql, flags="-q")
     elapsed = int((time.monotonic() - started) * 1000)
-    run_sql(host, f"update v2.schema_migrations set duration_ms = {elapsed} "
+    run_sql(host, f"update app.schema_migrations set duration_ms = {elapsed} "
                   f"where number = {item['number']};", flags="-q")
     return elapsed
 
