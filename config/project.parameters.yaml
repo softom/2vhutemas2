@@ -1,6 +1,9 @@
 # Проект конфигурации; приложение пока не читает этот файл.
 # null = значение не согласовано, НЕ отключение ограничения.
 # Значения со статусом proposed требуют проверки перед использованием.
+# 2026-09-22: лимиты медиа выведены из фактического содержимого хранилища
+# (PDF до 928 МБ, изображение 28087x10521 = 295 Мп), см. WIKI/Инвентаризация сервера.md.
+# backup.schedule — cron UTC: 00:30 UTC = 03:30 МСК.
 schema_version: 1
 status: draft
 parameters:
@@ -14,50 +17,50 @@ parameters:
     value: false
     status: specified
   media.screen.output_format:
-    value: null
-    status: unresolved
+    value: webp
+    status: proposed
   media.thumbnail.output_format:
-    value: null
-    status: unresolved
+    value: webp
+    status: proposed
   media.derivatives.quality:
-    value: null
-    status: unresolved
+    value: 82
+    status: proposed
   media.upload.max_bytes:
-    value: null
-    status: unresolved
+    value: 1073741824
+    status: proposed
   media.upload.max_pixels:
-    value: null
-    status: unresolved
+    value: 400000000
+    status: proposed
   media.upload.allowed_mime_types:
-    value: null
-    status: unresolved
+    value: [image/jpeg, image/png, image/webp, image/avif, image/tiff, image/heic, application/pdf, video/mp4]
+    status: proposed
   media.processing.timeout_seconds:
-    value: null
-    status: unresolved
+    value: 300
+    status: proposed
   media.processing.max_concurrency:
-    value: null
-    status: unresolved
+    value: 2
+    status: proposed
   editor.image.allowed_width_presets:
-    value: null
-    status: unresolved
+    value: [480, 720, 960, full]
+    status: proposed
   editor.image.default_width_preset:
-    value: null
-    status: unresolved
+    value: 720
+    status: proposed
   editor.image.allowed_alignments:
-    value: null
-    status: unresolved
+    value: [left, center, full]
+    status: proposed
   editor.image.default_alignment:
-    value: null
-    status: unresolved
+    value: center
+    status: proposed
   editor.autosave.debounce_ms:
-    value: null
-    status: unresolved
+    value: 1500
+    status: proposed
   theme.content.max_width_px:
-    value: null
-    status: unresolved
+    value: 880
+    status: proposed
   theme.breakpoints_px:
-    value: null
-    status: unresolved
+    value: [480, 768, 1200]
+    status: proposed
   theme.fonts:
     value: null
     status: unresolved
@@ -74,44 +77,44 @@ parameters:
     value: [russian, english, simple]
     status: proposed
   api.pagination.default_page_size:
-    value: null
-    status: unresolved
+    value: 24
+    status: proposed
   api.pagination.max_page_size:
-    value: null
-    status: unresolved
+    value: 100
+    status: proposed
   imports.max_items_per_batch:
-    value: null
-    status: unresolved
+    value: 200
+    status: proposed
   imports.max_payload_bytes:
-    value: null
-    status: unresolved
+    value: 8388608
+    status: proposed
   automation.retry.max_attempts:
     value: 3
     status: proposed
   api.idempotency.retention_seconds:
-    value: null
-    status: unresolved
+    value: 86400
+    status: proposed
   telegram.link_code.ttl_seconds:
-    value: null
-    status: unresolved
+    value: 900
+    status: proposed
   telegram.link_code.max_attempts:
-    value: null
-    status: unresolved
+    value: 5
+    status: proposed
   users.onboarding.default_role_ids:
     value: null
     status: unresolved
   backup.schedule:
-    value: null
-    status: unresolved
+    value: "30 0 * * *"
+    status: proposed
   backup.retention_days:
-    value: null
-    status: unresolved
+    value: 30
+    status: proposed
   backup.target_rpo_hours:
-    value: null
-    status: unresolved
+    value: 24
+    status: proposed
   backup.target_rto_hours:
-    value: null
-    status: unresolved
+    value: 4
+    status: proposed
   backup.restore_test_interval_days:
-    value: null
-    status: unresolved
+    value: 30
+    status: proposed
