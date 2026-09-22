@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Техническое задание.md",
+                "file": "План реализации.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Техническое задание"
+              "title": "План реализации"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Техническое задание.md",
+                "file": "План реализации.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Техническое задание.md",
+                "file": "План реализации.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Техническое задание.md",
+                "file": "План реализации.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,11 +190,14 @@
   },
   "active": "a8f13fb08152fa66",
   "lastOpenFiles": [
-    "BackUp.md",
+    "Инвентаризация сервера.md",
+    "Инвентаризация сервера.md.tmp.8976.d547b279588b",
     "Правила проекта.md",
-    "API.md",
     "Структура БД.md",
     "Техническое задание.md",
+    "План реализации.md",
+    "BackUp.md",
+    "API.md",
     "Параметры проекта.md",
     "Описание проекта.md",
     "assets/db-concept-original.png",
