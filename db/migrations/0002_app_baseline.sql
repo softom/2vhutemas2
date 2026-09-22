@@ -120,6 +120,69 @@ create table app.period_types (
     unique (theme_code, section_code)
 );
 
+-- ── Медиа: собственный реестр нового контура ───────────────────────────────
+-- Решение пользователя 2026-09-22: новый контур ведёт собственный реестр и не
+-- дополняет реестр старого проекта. Файлы старого контура переносятся отдельной
+-- работой с таблицей соответствия идентификаторов; старый реестр не изменяется.
+
+create table app.media_assets (
+    id            uuid primary key default gen_random_uuid(),
+    asset_class   text not null default 'image'
+                  check (asset_class in ('image', 'pdf', 'video', 'audio', 'doc', 'other')),
+    caption_ru    text,
+    alt_text      text,
+    credit        text,
+    source_url    text,
+    license_code  text,
+    license_url   text,
+    visibility    text not null default 'private' check (visibility in ('public', 'private')),
+    is_published  boolean not null default false,
+    created_at    timestamptz not null default now(),
+    updated_at    timestamptz not null default now(),
+    created_by    uuid,
+    updated_by    uuid,
+    archived_at   timestamptz
+);
+comment on table app.media_assets is
+    'Реестр изображений и файлов нового контура. Физические варианты — в app.media_files.';
+comment on column app.media_assets.credit is 'Автор и атрибуция источника; отличается от загрузившего пользователя';
+comment on column app.media_assets.is_published is 'Производный признак: ведётся триггером от materials.status';
+
+create table app.media_files (
+    id                uuid primary key default gen_random_uuid(),
+    asset_id          uuid not null references app.media_assets(id) on delete cascade,
+    variant           text not null check (variant in ('original', 'screen', 'thumbnail')),
+    source_file_id    uuid references app.media_files(id) on delete set null,
+    storage_backend   text not null default 'fs',
+    storage_key       text,
+    original_name     text,
+    mime_type         text,
+    size_bytes        bigint,
+    width             integer,
+    height            integer,
+    sha256            text,
+    status            text not null default 'pending'
+                      check (status in ('pending', 'processing', 'ready', 'failed')),
+    recipe_version    text,
+    transform_params  jsonb not null default '{}'::jsonb,
+    is_current        boolean not null default true,
+    error_code        text,
+    created_at        timestamptz not null default now(),
+    generated_at      timestamptz,
+    constraint media_files_original_has_no_source_chk
+        check ((variant = 'original') = (source_file_id is null)),
+    constraint media_files_ready_complete_chk check (
+        status <> 'ready' or (storage_key is not null and mime_type is not null
+                              and size_bytes is not null and sha256 is not null))
+);
+comment on table app.media_files is
+    'Неизменяемые физические варианты файла. Оригинал не перезаписывается; производная создаётся заново и переключается атомарно.';
+
+create unique index media_files_current_variant_uniq
+    on app.media_files(asset_id, variant) where is_current;
+create index media_files_asset_idx  on app.media_files(asset_id);
+create index media_files_sha256_idx on app.media_files(sha256);
+
 -- ── Сущности и профили ──────────────────────────────────────────────────────
 
 create table app.entities (
@@ -134,7 +197,7 @@ create table app.entities (
     is_published       boolean not null default false,
     sort_order         integer not null default 0,
     color              text,
-    cover_media_id     bigint references public.media_assets(id) on delete set null,
+    cover_media_id     uuid references app.media_assets(id) on delete set null,
     created_at         timestamptz not null default now(),
     updated_at         timestamptz not null default now(),
     created_by         uuid,
@@ -314,7 +377,7 @@ create table app.attachments (
     note               text,
     meta               jsonb not null default '{}'::jsonb,
     document_id        bigint references app.documents(id) on delete cascade,
-    asset_id           bigint references public.media_assets(id) on delete cascade,
+    asset_id           uuid references app.media_assets(id) on delete cascade,
     reference_item_id  bigint references app.reference_items(id) on delete cascade,
     created_at         timestamptz not null default now(),
     updated_at         timestamptz not null default now(),
