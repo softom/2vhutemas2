@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 .secrets/
+secrets/
+*.secret
+credentials*.json
 *.pem
 *.key
 backups/
