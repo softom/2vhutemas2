@@ -1,0 +1,13 @@
+# Local secrets and generated artefacts are backed up separately where required.
+.env
+.env.*
+!.env.example
+.secrets/
+*.pem
+*.key
+backups/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

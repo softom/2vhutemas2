@@ -1,0 +1,118 @@
+# Проект конфигурации; приложение пока не читает этот файл.
+# null = значение не согласовано, НЕ отключение ограничения.
+# Значения со статусом proposed требуют проверки перед использованием.
+schema_version: 1
+status: draft
+parameters:
+  media.screen.max_long_edge_px:
+    value: 2560
+    status: proposed
+  media.thumbnail.max_long_edge_px:
+    value: 400
+    status: proposed
+  media.derivatives.allow_upscale:
+    value: false
+    status: specified
+  media.screen.output_format:
+    value: null
+    status: unresolved
+  media.thumbnail.output_format:
+    value: null
+    status: unresolved
+  media.derivatives.quality:
+    value: null
+    status: unresolved
+  media.upload.max_bytes:
+    value: null
+    status: unresolved
+  media.upload.max_pixels:
+    value: null
+    status: unresolved
+  media.upload.allowed_mime_types:
+    value: null
+    status: unresolved
+  media.processing.timeout_seconds:
+    value: null
+    status: unresolved
+  media.processing.max_concurrency:
+    value: null
+    status: unresolved
+  editor.image.allowed_width_presets:
+    value: null
+    status: unresolved
+  editor.image.default_width_preset:
+    value: null
+    status: unresolved
+  editor.image.allowed_alignments:
+    value: null
+    status: unresolved
+  editor.image.default_alignment:
+    value: null
+    status: unresolved
+  editor.autosave.debounce_ms:
+    value: null
+    status: unresolved
+  theme.content.max_width_px:
+    value: null
+    status: unresolved
+  theme.breakpoints_px:
+    value: null
+    status: unresolved
+  theme.fonts:
+    value: null
+    status: unresolved
+  theme.spacing_scale:
+    value: null
+    status: unresolved
+  theme.highlight_palette:
+    value: null
+    status: unresolved
+  articles.references.default_version_mode:
+    value: latest_published
+    status: proposed
+  search.language_configs:
+    value: [russian, english, simple]
+    status: proposed
+  api.pagination.default_page_size:
+    value: null
+    status: unresolved
+  api.pagination.max_page_size:
+    value: null
+    status: unresolved
+  imports.max_items_per_batch:
+    value: null
+    status: unresolved
+  imports.max_payload_bytes:
+    value: null
+    status: unresolved
+  automation.retry.max_attempts:
+    value: 3
+    status: proposed
+  api.idempotency.retention_seconds:
+    value: null
+    status: unresolved
+  telegram.link_code.ttl_seconds:
+    value: null
+    status: unresolved
+  telegram.link_code.max_attempts:
+    value: null
+    status: unresolved
+  users.onboarding.default_role_ids:
+    value: null
+    status: unresolved
+  backup.schedule:
+    value: null
+    status: unresolved
+  backup.retention_days:
+    value: null
+    status: unresolved
+  backup.target_rpo_hours:
+    value: null
+    status: unresolved
+  backup.target_rto_hours:
+    value: null
+    status: unresolved
+  backup.restore_test_interval_days:
+    value: null
+    status: unresolved
+
