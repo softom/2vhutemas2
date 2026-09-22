@@ -110,7 +110,27 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
              order by r.created_at desc limit 1) as latest_revision_id,
            coalesce(to_jsonb(op) - 'entity_id' - 'kind_id',
                     to_jsonb(pp) - 'entity_id' - 'kind_id',
-                    to_jsonb(rp) - 'entity_id' - 'kind_id', '{}'::jsonb) as profile
+                    to_jsonb(rp) - 'entity_id' - 'kind_id', '{}'::jsonb) as profile,
+           (select a.document_id from app.attachments a
+              join app.targets t on t.id = a.target_id
+              join app.attachment_roles ar on ar.id = a.role_id
+             where t.entity_id = e.id and a.document_id is not null
+               and ar.code in ('description', 'wiki')
+             order by a.sort_order limit 1) as description_document_id,
+           coalesce((select jsonb_agg(jsonb_build_object(
+                        'asset_id', a.asset_id, 'role', ar.code, 'sort_order', a.sort_order)
+                        order by a.sort_order)
+                     from app.attachments a
+                     join app.targets t on t.id = a.target_id
+                     join app.attachment_roles ar on ar.id = a.role_id
+                    where t.entity_id = e.id and a.asset_id is not null), '[]'::jsonb) as media,
+           (select jsonb_agg(jsonb_build_object(
+                      'kind', dk.code, 'title', dk.title_ru,
+                      'start_year', d.start_year, 'end_year', d.end_year,
+                      'is_approximate', d.is_approximate, 'is_ongoing', d.is_ongoing)
+                      order by d.sort_order, d.start_year)
+            from app.entity_dates d join app.date_kinds dk on dk.id = d.kind_id
+           where d.entity_id = e.id) as dates
     from app.entities e
     join app.entity_kinds k on k.id = e.kind_id
     left join app.materials m on m.entity_id = e.id
