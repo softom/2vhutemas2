@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Структура БД.md",
+                "file": "Решения.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Структура БД"
+              "title": "Решения"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Структура БД.md",
+                "file": "Решения.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Структура БД.md",
+                "file": "Решения.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Структура БД.md",
+                "file": "Решения.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,12 +190,12 @@
   },
   "active": "a8f13fb08152fa66",
   "lastOpenFiles": [
+    "Структура БД.md",
     "Техническое задание.md",
     "API.md",
     "BackUp.md",
     "Решения.md",
     "Решения.md.tmp.8976.ac201299e703",
-    "Структура БД.md",
     "Правила проекта.md",
     "План реализации.md",
     "Параметры проекта.md",
