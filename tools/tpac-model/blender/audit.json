@@ -1,0 +1,24 @@
+{
+  "source": "prototype-v02/tpac-study-v02.glb; does not include unsaved GUI edits",
+  "blender": "5.2.2 LTS",
+  "mesh_objects": 709,
+  "triangles": 25787,
+  "materials": 709,
+  "cameras": [
+    {
+      "name": "01_globe_street",
+      "reference": "03-taipei-performing-arts-center-c-oma-photography-by-chris-stowers.jpg",
+      "calibrated": false
+    },
+    {
+      "name": "02_blue_box",
+      "reference": "06-taipei-performing-arts-center-c-oma-photography-by-chris-stowers.jpg",
+      "calibrated": false
+    },
+    {
+      "name": "03_roof_site",
+      "reference": "07-taipei-performing-arts-center-c-oma-photography-by-chris-stowers.jpg",
+      "calibrated": false
+    }
+  ]
+}
