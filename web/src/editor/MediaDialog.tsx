@@ -1,21 +1,18 @@
 /**
  * Окно файла: загрузка нового и правка сведений (правило 15, решение Р-26).
  *
- * Одно окно на оба действия: при загрузке добавляется выбор файла, остальные
- * поля те же. Автор изображения, правообладатель и загрузивший — разные
- * сведения и разные поля.
+ * Зона файла принимает перетаскивание: брошенный файл загружается сразу,
+ * и окно переходит к правке созданной записи — сведения дописываются поверх.
+ * Кнопка выбора файла остаётся для тех, кому так привычнее.
+ *
+ * Переключателя доступа нет: файл виден настолько, насколько опубликован
+ * материал, к которому он относится (решение Р-28).
  */
 import { useEffect, useRef, useState } from "react";
 import { api, type Capabilities, type MediaAsset } from "../api";
 import { Modal } from "../ui/Modal";
 import { type Tag, TagsField } from "./TagsField";
 
-/**
- * Набор полей сокращён по решению пользователя: осталось то, без чего
- * нельзя честно опубликовать чужое изображение и найти своё.
- * Переключателя доступа нет: файл виден ровно настолько, насколько
- * опубликован материал, к которому он относится.
- */
 const EMPTY = {
   kind: "photo",
   caption: "",
@@ -46,14 +43,15 @@ function toDraft(asset?: MediaAsset | null): Draft {
 }
 
 export function MediaDialog({ asset, onSaved, onClose }: Props) {
+  const [current, setCurrent] = useState<MediaAsset | null>(asset ?? null);
   const [draft, setDraft] = useState<Draft>(() => toDraft(asset));
-  const [tags, setTags] = useState<Tag[]>(
-    () => ((asset as unknown as { tags?: Tag[] })?.tags ?? []),
-  );
+  const [tags, setTags] = useState<Tag[]>(() => (asset as unknown as { tags?: Tag[] })?.tags ?? []);
   const [kinds, setKinds] = useState<{ code: string; title_ru: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [chosen, setChosen] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -75,35 +73,54 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
     </label>
   );
 
-  const save = async () => {
+  /** Сведения, уже введённые в форме, уходят вместе с файлом — вводить дважды не нужно. */
+  const upload = async (file: File) => {
     setBusy(true);
     setError(null);
     try {
-      if (asset) {
-        await api.updateMedia(asset.id, {
-          kind: draft.kind,
-          caption: draft.caption || null,
-          author: draft.author || null,
-          source_url: draft.source_url || null,
-          license: draft.license || null,
-        });
-        await api.setMediaTags(asset.id, tags.map((tag) => tag.title));
-      } else {
-        const file = fileInput.current?.files?.[0];
-        if (!file) {
-          setError("Выберите файл");
-          setBusy(false);
-          return;
-        }
-        const form = new FormData();
-        form.append("file", file);
-        form.append("caption", draft.caption || file.name);
-        for (const [key, value] of Object.entries(draft)) {
-          if (key !== "caption" && value) form.append(key, value);
-        }
-        if (tags.length > 0) form.append("keywords", tags.map((tag) => tag.title).join(", "));
-        await api.uploadMedia(form);
+      const form = new FormData();
+      form.append("file", file);
+      form.append("caption", draft.caption || file.name);
+      for (const [key, value] of Object.entries(draft)) {
+        if (key !== "caption" && value) form.append(key, value);
       }
+      if (tags.length > 0) form.append("keywords", tags.map((tag) => tag.title).join(", "));
+
+      const created = await api.uploadMedia(form);
+      setCurrent(created);
+      setDraft(toDraft(created));
+      setChosen(null);
+      setDirty(false);
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = async () => {
+    if (!current) {
+      const file = chosen ?? fileInput.current?.files?.[0] ?? null;
+      if (!file) {
+        setError("Перетащите файл в зону или выберите его");
+        return;
+      }
+      await upload(file);
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      await api.updateMedia(current.id, {
+        kind: draft.kind,
+        caption: draft.caption || null,
+        author: draft.author || null,
+        source_url: draft.source_url || null,
+        license: draft.license || null,
+      });
+      await api.setMediaTags(current.id, tags.map((tag) => tag.title));
       setDirty(false);
       onSaved();
       onClose();
@@ -116,32 +133,66 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
 
   return (
     <Modal
-      title={asset ? "Редактирование файла" : "Загрузить файл"}
+      title={current ? "Редактирование файла" : "Загрузить файл"}
       dirty={dirty}
       onClose={onClose}
       footer={
         <>
           <button type="button" onClick={save} disabled={busy}>
-            {busy ? "Сохраняем…" : asset ? "Сохранить" : "Загрузить"}
+            {busy ? "Сохраняем…" : current ? "Сохранить" : "Загрузить"}
           </button>
-          <button type="button" className="ghost" onClick={onClose}>Отмена</button>
+          <button type="button" className="ghost" onClick={onClose}>
+            {current ? "Закрыть" : "Отмена"}
+          </button>
         </>
       }
     >
       <div className="form">
-        {asset
+        {current
           ? (
             <img
-              src={api.mediaFileUrl(asset.id, "screen")}
-              alt={draft.alt}
+              src={api.mediaFileUrl(current.id, "screen")}
+              alt={draft.caption}
               style={{ width: "100%", maxHeight: 280, objectFit: "contain", borderRadius: 8 }}
             />
           )
           : (
-            <label>
-              Файл
-              <input ref={fileInput} type="file" onChange={() => setDirty(true)} />
-            </label>
+            <div
+              className={`dropzone${dragOver ? " over" : ""}`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragOver(false);
+                const file = event.dataTransfer.files?.[0];
+                // Брошенный файл загружается сразу: подтверждение здесь лишнее.
+                if (file) upload(file);
+              }}
+            >
+              <p className="dropzone-title">
+                {busy
+                  ? "Загружаем и обрабатываем…"
+                  : chosen
+                  ? `Выбран файл: ${chosen.name}`
+                  : "Перетащите файл сюда — он загрузится сразу"}
+              </p>
+              <input
+                ref={fileInput}
+                type="file"
+                disabled={busy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  setChosen(file);
+                  setDirty(true);
+                }}
+              />
+              <span className="hint">
+                Изображения, PDF и видео. Оригинал сохраняется неизменным.
+              </span>
+            </div>
           )}
 
         <label>
@@ -169,9 +220,9 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
           />
         </label>
 
-        {asset && (
+        {current && (
           <p className="hint">
-            <a href={api.mediaFileUrl(asset.id, "original")} target="_blank" rel="noreferrer">
+            <a href={api.mediaFileUrl(current.id, "original")} target="_blank" rel="noreferrer">
               Открыть оригинал
             </a>
           </p>
