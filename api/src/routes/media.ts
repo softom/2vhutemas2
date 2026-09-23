@@ -84,7 +84,8 @@ media.get("/", async (c: Context<AppEnv>) => {
       and (${pattern}::text is null
            or a.caption_ru ilike ${pattern} or a.description ilike ${pattern}
            or a.author ilike ${pattern} or a.holder ilike ${pattern}
-           or exists (select 1 from unnest(a.keywords) k where k ilike ${pattern}))
+           or exists (select 1 from app.media_tags mt join app.tags t on t.id = mt.tag_id
+                       where mt.asset_id = a.id and t.title ilike ${pattern}))
     order by a.created_at
     limit ${limit + 1}
   `;
