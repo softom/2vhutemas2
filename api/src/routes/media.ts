@@ -308,11 +308,14 @@ media.post("/attachments", async (c: Context<AppEnv>) => {
     `;
     if (targets.length === 0) throw new ApiError("not_found", "Сущность не найдена");
 
+    // Новый файл встаёт в конец: порядок задаёт автор, а не случайность вставки.
     const attached = await tx<{ id: number }>`
-      insert into app.attachments (target_id, role_id, asset_id)
+      insert into app.attachments (target_id, role_id, asset_id, sort_order)
       values (${targets[0].id},
               (select id from app.attachment_roles where code = ${input.role ?? "gallery"}),
-              ${input.asset_id})
+              ${input.asset_id},
+              (select coalesce(max(a.sort_order), -1) + 1 from app.attachments a
+                where a.target_id = ${targets[0].id} and a.asset_id is not null))
       on conflict do nothing
       returning id
     `;
@@ -323,6 +326,39 @@ media.post("/attachments", async (c: Context<AppEnv>) => {
   });
 
   return c.json(result, 201);
+});
+
+/**
+ * Порядок изображений у объекта. Присылается весь список привязок в нужном
+ * порядке: так перестановка не зависит от того, что видел клиент раньше,
+ * и не оставляет дыр в нумерации.
+ */
+media.put("/attachments/order", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "edit");
+  const input = await c.req.json<{ entity_id: number; order: number[] }>();
+  if (!Number.isInteger(input.entity_id) || !Array.isArray(input.order)) {
+    throw new ApiError("validation_failed", "Нужны объект и порядок привязок");
+  }
+
+  const result = await transaction(principal.contributorId, async (tx) => {
+    const attachments = await tx<{ id: number }>`
+      select a.id from app.attachments a
+      join app.targets t on t.id = a.target_id
+      where t.entity_id = ${input.entity_id} and a.asset_id is not null
+    `;
+    const known = new Set(attachments.map((row) => Number(row.id)));
+    const unknown = input.order.filter((id) => !known.has(Number(id)));
+    if (unknown.length > 0) {
+      throw new ApiError("validation_failed", "В порядке есть чужие привязки", { unknown });
+    }
+
+    for (const [index, attachmentId] of input.order.entries()) {
+      await tx`update app.attachments set sort_order = ${index} where id = ${attachmentId}`;
+    }
+    return { entity_id: input.entity_id, ordered: input.order.length };
+  });
+
+  return c.json(result);
 });
 
 media.delete("/attachments/:id", async (c: Context<AppEnv>) => {

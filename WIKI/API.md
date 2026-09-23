@@ -164,7 +164,8 @@ POST /documents
 | `GET /media/{id}` | Сведения о файле |
 | `PATCH /media/{id}` | Правка сведений; файл не меняется |
 | `GET /media/{id}/file?variant=thumbnail\|screen\|original` | Выдача файла |
-| `POST /media/attachments` | Привязка файла к объекту с ролью |
+| `POST /media/attachments` | Привязка файла к объекту с ролью; файл встаёт в конец |
+| `PUT /media/attachments/order` | Порядок изображений у объекта: список привязок целиком |
 | `DELETE /media/attachments/{id}` | Отвязка |
 | `POST /media/{id}/derivatives` | Повтор обработки после ошибки |
 

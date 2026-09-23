@@ -132,7 +132,9 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
                 rel="noreferrer"
               >
                 <img src={api.mediaFileUrl(item.asset_id, "thumbnail")} alt="" />
-                <div className="kind">{item.role}</div>
+                <div className="kind">
+                  {(item as unknown as { caption?: string }).caption ?? item.role}
+                </div>
               </a>
             ))}
           </div>

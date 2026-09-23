@@ -90,6 +90,11 @@ check "приватный файл гостю" 404 "$(code "$API/media/$AID/file
 check "файл под входом" 200 "$(code -H "$AUTH" "$API/media/$AID/file?variant=thumbnail")"
 check "привязка файла к объекту" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"asset_id\":\"$AID\",\"role\":\"gallery\"}" $API/media/attachments)"
 check "повторная привязка" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"asset_id\":\"$AID\",\"role\":\"gallery\"}" $API/media/attachments)"
+ATT=$(curl -s -H "$AUTH" $API/entities/$EID | python3 -c "
+import json,sys
+print(json.load(sys.stdin)['media'][0]['attachment_id'])")
+check "порядок изображений" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"order\":[$ATT]}" $API/media/attachments/order)"
+check "чужая привязка в порядке" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"order\":[999999]}" $API/media/attachments/order)"
 
 echo "── Места"
 check "справочник мест гостю закрыт" 401 "$(code $API/places)"

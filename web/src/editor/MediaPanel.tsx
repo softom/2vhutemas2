@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { api, type MediaAsset } from "../api";
 import { MediaDialog } from "./MediaDialog";
+import { AttachedMedia } from "./AttachedMedia";
 
 interface Props {
   entityId: number | null;
@@ -93,49 +94,16 @@ export function MediaPanel({ entityId, attached, onInsert, onChanged }: Props) {
       />
       {error && <p className="error">{error}</p>}
 
-      {attached.length > 0 && (
-        <>
-          <h4>Прикреплённые</h4>
-          <ul className="panel-list media-list">
-            {attached.map((item) => {
-              const asset = items.find((candidate) => candidate.id === item.asset_id);
-              return (
-                <li key={item.attachment_id}>
-                  <button
-                    type="button"
-                    className="panel-item-main linklike"
-                    onClick={() =>
-                      onInsert(
-                        asset ??
-                          ({ id: item.asset_id, caption_ru: item.caption } as MediaAsset),
-                      )}
-                  >
-                    <img
-                      className="panel-thumb"
-                      src={api.mediaFileUrl(item.asset_id, "thumbnail")}
-                      alt={item.caption ?? ""}
-                    />
-                    <span className="panel-item-title">{item.caption ?? "без подписи"}</span>
-                    <span className="panel-item-sub">{item.role_title}</span>
-                  </button>
-                  <div className="panel-item-actions">
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={async () => {
-                        await api.detachMedia(item.attachment_id);
-                        onChanged();
-                      }}
-                    >
-                      Открепить
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
+      <AttachedMedia
+        entityId={entityId}
+        items={attached}
+        onInsert={(item) =>
+          onInsert(
+            items.find((candidate) => candidate.id === item.asset_id) ??
+              ({ id: item.asset_id, caption_ru: item.caption } as MediaAsset),
+          )}
+        onChanged={onChanged}
+      />
 
       <h4>Медиатека</h4>
       {items.length === 0 && <p className="hint">Ничего не нашлось.</p>}

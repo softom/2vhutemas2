@@ -132,7 +132,7 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                         'caption', ma.caption_ru, 'kind',
                         (select mk.code from app.media_kinds mk where mk.id = ma.kind_id),
                         'sort_order', a.sort_order)
-                        order by a.sort_order)
+                        order by a.sort_order, a.id)
                      from app.attachments a
                      join app.targets t on t.id = a.target_id
                      join app.attachment_roles ar on ar.id = a.role_id

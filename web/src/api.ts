@@ -218,6 +218,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  orderMedia: (entityId: number, order: number[]) =>
+    request<{ ordered: number }>("/media/attachments/order", {
+      method: "PUT",
+      body: JSON.stringify({ entity_id: entityId, order }),
+    }),
   detachMedia: (attachmentId: number) =>
     request<void>(`/media/attachments/${attachmentId}`, { method: "DELETE" }),
   uploadMedia: (form: FormData) =>
