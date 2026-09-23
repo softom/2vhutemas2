@@ -57,10 +57,13 @@ export interface EntityListItem {
   id: number;
   slug: string;
   kind: string;
+  kind_title: string | null;
   title_ru: string;
   title_en: string | null;
   is_published: boolean;
   material_status: string | null;
+  /** Первое по порядку прикреплённое изображение; пусто, если файлов нет. */
+  cover_asset_id: string | null;
 }
 
 export interface EntityCard extends EntityListItem {

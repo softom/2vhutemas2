@@ -93,6 +93,11 @@ check "повторная привязка" 409 "$(code -X POST -H "$AUTH" -H "$
 ATT=$(curl -s -H "$AUTH" $API/entities/$EID | python3 -c "
 import json,sys
 print(json.load(sys.stdin)['media'][0]['attachment_id'])")
+code -H "$AUTH" $API/entities >/dev/null
+COVER=$(body | python3 -c "
+import json,sys
+print(next((1 for i in json.load(sys.stdin)['items'] if str(i['id']) == '$EID' and i.get('cover_asset_id')), 0))")
+check "обложка в каталоге" 1 "$COVER"
 check "порядок изображений" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"order\":[$ATT]}" $API/media/attachments/order)"
 check "чужая привязка в порядке" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"order\":[999999]}" $API/media/attachments/order)"
 

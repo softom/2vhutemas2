@@ -175,3 +175,5 @@ button:disabled { opacity: .5; cursor: default; }
 .drag-handle:active { cursor: grabbing; }
 .order-number { color: var(--muted); font-size: 12px; }
 .panel-list li.drop-target { border-color: var(--accent); background: #211c17; }
+
+.card-no-cover { height: 150px; display: grid; place-items: center; border-radius: 8px; margin-bottom: 10px; background: #1f1d19; border: 1px dashed var(--line); color: var(--muted); font-size: 13px; }

@@ -66,7 +66,16 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
       <div className="grid">
         {items.map((item) => (
           <Link className="card" key={item.id} to={`/entities/${item.id}`}>
-            <div className="kind">{item.kind}</div>
+            {item.cover_asset_id
+              ? (
+                <img
+                  src={api.mediaFileUrl(item.cover_asset_id, "thumbnail")}
+                  alt=""
+                  loading="lazy"
+                />
+              )
+              : <div className="card-no-cover">без изображения</div>}
+            <div className="kind">{item.kind_title ?? item.kind}</div>
             <div className="title">{item.title_ru}</div>
             {item.title_en && <div className="kind">{item.title_en}</div>}
             <div style={{ marginTop: 8 }}>

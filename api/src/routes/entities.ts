@@ -79,8 +79,13 @@ entities.get("/", async (c: Context<AppEnv>) => {
 
   const rows = await sql`
     select e.id, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
-           k.code as kind, e.is_published, e.sort_order, e.cover_media_id,
-           m.status as material_status
+           k.code as kind, k.title_ru as kind_title, e.is_published, e.sort_order,
+           m.status as material_status,
+           -- Обложка — первое по порядку прикреплённое изображение (решение Р-36).
+           (select a.asset_id from app.attachments a
+              join app.targets t on t.id = a.target_id
+             where t.entity_id = e.id and a.asset_id is not null
+             order by a.sort_order, a.id limit 1) as cover_asset_id
     from app.entities e
     join app.entity_kinds k on k.id = e.kind_id
     left join app.materials m on m.entity_id = e.id
