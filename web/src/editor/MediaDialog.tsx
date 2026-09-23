@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type Capabilities, type MediaAsset } from "../api";
 import { Modal } from "../ui/Modal";
+import { type Tag, TagsField } from "./TagsField";
 
 /**
  * Набор полей сокращён по решению пользователя: осталось то, без чего
@@ -21,7 +22,6 @@ const EMPTY = {
   author: "",
   source_url: "",
   license: "",
-  keywords: "",
 };
 
 type Draft = typeof EMPTY;
@@ -42,12 +42,14 @@ function toDraft(asset?: MediaAsset | null): Draft {
     author: (extra.author as string) ?? "",
     source_url: (extra.source_url as string) ?? "",
     license: (extra.license_code as string) ?? "",
-    keywords: Array.isArray(extra.keywords) ? (extra.keywords as string[]).join(", ") : "",
   };
 }
 
 export function MediaDialog({ asset, onSaved, onClose }: Props) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(asset));
+  const [tags, setTags] = useState<Tag[]>(
+    () => ((asset as unknown as { tags?: Tag[] })?.tags ?? []),
+  );
   const [kinds, setKinds] = useState<{ code: string; title_ru: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,10 +86,8 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
           author: draft.author || null,
           source_url: draft.source_url || null,
           license: draft.license || null,
-          keywords: draft.keywords
-            ? draft.keywords.split(",").map((k) => k.trim()).filter(Boolean)
-            : null,
         });
+        await api.setMediaTags(asset.id, tags.map((tag) => tag.title));
       } else {
         const file = fileInput.current?.files?.[0];
         if (!file) {
@@ -101,6 +101,7 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
         for (const [key, value] of Object.entries(draft)) {
           if (key !== "caption" && value) form.append(key, value);
         }
+        if (tags.length > 0) form.append("keywords", tags.map((tag) => tag.title).join(", "));
         await api.uploadMedia(form);
       }
       setDirty(false);
@@ -156,7 +157,17 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
           {field("source_url", "Ссылка на источник")}
           {field("license", "Лицензия")}
         </div>
-        {field("keywords", "Ключевые слова", "Через запятую")}
+        <label>
+          Метки
+          <TagsField
+            value={tags}
+            onChange={(next) => {
+              setTags(next);
+              setDirty(true);
+            }}
+            hint="Наберите # и выберите слово из справочника или добавьте новое"
+          />
+        </label>
 
         {asset && (
           <p className="hint">

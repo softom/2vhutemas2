@@ -71,7 +71,11 @@ media.get("/", async (c: Context<AppEnv>) => {
            (select f.status from app.media_files f
              where f.asset_id = a.id and f.variant = 'thumbnail' and f.is_current) as thumbnail_status,
            (select k.code from app.media_kinds k where k.id = a.kind_id) as kind,
-           a.author, a.holder, a.keywords, a.created_year, a.description,
+           a.author, a.holder, a.created_year, a.description,
+           coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
+                        order by t.title)
+                     from app.media_tags mt join app.tags t on t.id = mt.tag_id
+                    where mt.asset_id = a.id), '[]'::jsonb) as tags,
            extract(epoch from a.created_at)::bigint as cursor_key
     from app.media_assets a
     where a.archived_at is null
@@ -111,7 +115,7 @@ media.post("/", async (c: Context<AppEnv>) => {
       insert into app.media_assets (asset_class, kind_id, caption_ru, alt_text, description,
                                     author, credit, source_url, license_code, created_year,
                                     created_note, holder, inventory_no, original_caption,
-                                    keywords, visibility, created_by)
+                                    visibility, created_by)
       values (${assetClassFor(mimeType)},
               (select id from app.media_kinds where code = ${text(form, "kind")}),
               ${text(form, "caption")}, ${text(form, "alt")}, ${text(form, "description")},
@@ -119,7 +123,6 @@ media.post("/", async (c: Context<AppEnv>) => {
               ${text(form, "license")}, ${number(form, "created_year")},
               ${text(form, "created_note")}, ${text(form, "holder")},
               ${text(form, "inventory_no")}, ${text(form, "original_caption")},
-              ${keywords(form)},
               ${String(form.get("visibility") ?? "private") === "public" ? "public" : "private"},
               ${principal.contributorId})
       returning id
@@ -149,6 +152,25 @@ media.post("/", async (c: Context<AppEnv>) => {
     `;
     return { assetId, materialId: materials[0].id };
   });
+
+  // Ключевые слова из формы становятся метками общего справочника.
+  const words = keywords(form);
+  if (words.length > 0) {
+    await transaction(principal.contributorId, async (tx) => {
+      for (const word of words) {
+        const existing = await tx<{ id: string }>`
+          select id from app.tags where lower(btrim(title)) = lower(btrim(${word}))
+        `;
+        const tagId = existing.length > 0 ? existing[0].id : (await tx<{ id: string }>`
+          insert into app.tags (title) values (${word}) returning id
+        `)[0].id;
+        await tx`
+          insert into app.media_tags (asset_id, tag_id) values (${created.assetId}, ${tagId})
+          on conflict do nothing
+        `;
+      }
+    });
+  }
 
   // Производные делаем сразу после регистрации: неудача не теряет оригинал.
   if (canDerive(mimeType)) {
@@ -202,6 +224,10 @@ async function generateDerivatives(assetId: string, originalKey: string, request
 async function assetView(assetId: string) {
   const rows = await sql<Record<string, unknown>>`
     select a.*,
+           coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
+                        order by t.title)
+                     from app.media_tags mt join app.tags t on t.id = mt.tag_id
+                    where mt.asset_id = a.id), '[]'::jsonb) as tags,
            (select jsonb_object_agg(f.variant, jsonb_build_object(
                      'status', f.status, 'width', f.width, 'height', f.height,
                      'size_bytes', f.size_bytes, 'mime_type', f.mime_type))
@@ -333,7 +359,6 @@ media.patch("/:id", async (c: Context<AppEnv>) => {
         holder           = coalesce(${value("holder")}, holder),
         inventory_no     = coalesce(${value("inventory_no")}, inventory_no),
         original_caption = coalesce(${value("original_caption")}, original_caption),
-        keywords         = coalesce(${(input.keywords ?? null) as string[]}, keywords),
         visibility       = coalesce(${value("visibility")}, visibility),
         updated_at       = now()
       where id = ${assetId} and archived_at is null

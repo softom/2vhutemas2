@@ -45,6 +45,7 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
   const media = (entity as unknown as { media?: { asset_id: string; role: string }[] }).media ?? [];
   const dates = (entity as unknown as { dates?: DateRow[] }).dates ?? [];
   const places = (entity as unknown as { places?: EntityPlace[] }).places ?? [];
+  const tags = (entity as unknown as { tags?: { id: string; title: string }[] }).tags ?? [];
 
   return (
     <article>
@@ -66,6 +67,12 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
           </Link>
         )}
       </div>
+
+      {tags.length > 0 && (
+        <p className="tags-line">
+          {tags.map((tag) => <span className="tag-chip" key={tag.id}>#{tag.title}</span>)}
+        </p>
+      )}
 
       <Facts profile={profile} />
 

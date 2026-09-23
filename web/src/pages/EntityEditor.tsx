@@ -20,6 +20,7 @@ import {
 } from "../editor/entityBlocks";
 import { EntityPanel } from "../editor/EntityPanel";
 import { PlacesField } from "../editor/PlacesField";
+import { type Tag, TagsField } from "../editor/TagsField";
 import { PlacesPanel } from "../editor/PlacesPanel";
 import { MediaPanel } from "../editor/MediaPanel";
 
@@ -75,6 +76,7 @@ export function EntityEditor({ mode }: Props) {
   const [documentRevision, setDocumentRevision] = useState<string | null>(null);
   const [initialBlocks, setInitialBlocks] = useState<PartialBlock[] | null>(null);
   const [places, setPlaces] = useState<EntityPlace[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [media, setMedia] = useState<
     { attachment_id: number; asset_id: string; caption: string | null; role_title: string }[]
   >([]);
@@ -113,6 +115,7 @@ export function EntityEditor({ mode }: Props) {
       setRevisionId(entity.latest_revision_id);
       setPlaces((entity as unknown as { places?: EntityPlace[] }).places ?? []);
       setMedia((entity as unknown as { media?: typeof media }).media ?? []);
+      setTags((entity as unknown as { tags?: Tag[] }).tags ?? []);
 
       const described = (entity as unknown as { description_document_id?: number })
         .description_document_id;
@@ -146,6 +149,8 @@ export function EntityEditor({ mode }: Props) {
       personTypes={personTypes}
       places={places}
       media={media}
+      tags={tags}
+      setTags={setTags}
       reloadAttachments={() => {
         if (entityId) {
           api.entity(entityId)
@@ -180,7 +185,7 @@ export function EntityEditor({ mode }: Props) {
 function EditorBody(props: any) {
   const {
     mode, entityId, form, setForm, slugTouched, setSlugTouched, kinds, objectTypes,
-    personTypes, places, media, reloadAttachments, initialBlocks,
+    personTypes, places, media, tags, setTags, reloadAttachments, initialBlocks,
     revisionId, setRevisionId, documentId, setDocumentId,
     documentRevision, setDocumentRevision, status, setStatus,
     error, setError, saving, setSaving, navigate,
@@ -256,6 +261,8 @@ function EditorBody(props: any) {
         });
         setRevisionId(updated.revision_id);
       }
+
+      if (id) await api.setEntityTags(id, tags.map((tag: Tag) => tag.title));
 
       const blocks = editor.document;
       if (documentId) {
@@ -340,6 +347,14 @@ function EditorBody(props: any) {
               </select>
             </label>
             {field("typology", "Типология", "Театр, жилой дом, павильон")}
+        <label>
+          Метки
+          <TagsField
+            value={tags}
+            onChange={setTags}
+            hint="Наберите # и выберите слово из справочника или добавьте новое"
+          />
+        </label>
           </>
         )}
 

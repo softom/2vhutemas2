@@ -147,6 +147,10 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                      join app.attachment_roles ar on ar.id = a.role_id
                      join app.places p on p.id = a.place_id
                     where t.entity_id = e.id), '[]'::jsonb) as places,
+           coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
+                        order by t.title)
+                     from app.entity_tags et join app.tags t on t.id = et.tag_id
+                    where et.entity_id = e.id), '[]'::jsonb) as tags,
            (select jsonb_agg(jsonb_build_object(
                       'kind', dk.code, 'title', dk.title_ru,
                       'start_year', d.start_year, 'end_year', d.end_year,

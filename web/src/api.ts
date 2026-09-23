@@ -170,6 +170,21 @@ export const api = {
   mentions: (entityId: number) =>
     request<{ items: Record<string, unknown>[] }>(`/links/mentions?entity_id=${entityId}`),
 
+  tags: (query: string) =>
+    request<{ items: { id: string; title: string; usages: number }[] }>(
+      `/tags?q=${encodeURIComponent(query)}`,
+    ),
+  setEntityTags: (entityId: number, titles: string[]) =>
+    request<{ items: { id: string; title: string }[] }>(`/tags/entities/${entityId}`, {
+      method: "PUT",
+      body: JSON.stringify({ tags: titles }),
+    }),
+  setMediaTags: (assetId: string, titles: string[]) =>
+    request<{ items: { id: string; title: string }[] }>(`/tags/media/${assetId}`, {
+      method: "PUT",
+      body: JSON.stringify({ tags: titles }),
+    }),
+
   createPlace: (body: unknown) =>
     request<{ id: string }>("/places", { method: "POST", body: JSON.stringify(body) }),
   updatePlace: (id: string, body: unknown) =>
