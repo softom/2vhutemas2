@@ -23,4 +23,3 @@ for name,pos,target,energy,size in [
     d=bpy.data.lights.new(name,'AREA');d.energy=energy;d.shape='DISK';d.size=size
     o=bpy.data.objects.new(name,d);s.collection.objects.link(o);o.location=pos;o.rotation_euler=(Vector(target)-o.location).to_track_quat('-Z','Y').to_euler()
 print({'removed_old_supports':removed,'lift_clear_of_stair':True})
-

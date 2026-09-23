@@ -142,4 +142,3 @@ s['lift_envelope_status']='Approximate external envelope; internal number and po
 s['v06_applied']=True
 bpy.context.view_layer.update()
 print(json.dumps({'scene':s.name,'objects':len(s.objects),'removed':removed,'entry_recess_from_cube_edge':15,'source_scene_objects':len(source.objects)}))
-
