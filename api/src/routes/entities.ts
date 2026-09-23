@@ -172,10 +172,11 @@ entities.post("/", async (c: Context<AppEnv>) => {
     if (input.kind === "object") {
       const profile = input.profile ?? {};
       await tx`
-        insert into app.object_profile (entity_id, object_type_id, city, country, lat, lon, typology)
+        insert into app.object_profile (entity_id, object_type_id, city, country, address,
+                                        lat, lon, typology)
         values (${entityId},
                 (select id from app.object_types where code = ${profile.object_type ?? null}),
-                ${profile.city ?? null}, ${profile.country ?? null},
+                ${profile.city ?? null}, ${profile.country ?? null}, ${profile.address ?? null},
                 ${profile.lat ?? null}, ${profile.lon ?? null}, ${profile.typology ?? null})
       `;
     } else if (input.kind === "person") {
@@ -251,6 +252,15 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
       );
     }
 
+    if (input.slug) {
+      await tx`
+        insert into app.slug_history (kind_id, slug, entity_id)
+        select e.kind_id, e.slug, e.id from app.entities e
+         where e.id = ${id} and e.slug <> ${input.slug}
+        on conflict (kind_id, slug) do nothing
+      `;
+    }
+
     await tx`
       update app.entities set
         slug              = coalesce(${input.slug ?? null}, slug),
@@ -263,6 +273,32 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
         sort_order        = coalesce(${input.sort_order ?? null}, sort_order)
       where id = ${id}
     `;
+
+    // Профиль тоже правится: без этого город, адрес и тип молча оставались прежними.
+    const profile = input.profile;
+    if (profile) {
+      await tx`
+        update app.object_profile set
+          object_type_id = coalesce(
+            (select id from app.object_types where code = ${profile.object_type ?? null}),
+            object_type_id),
+          city     = coalesce(${profile.city ?? null}, city),
+          country  = coalesce(${profile.country ?? null}, country),
+          address  = coalesce(${profile.address ?? null}, address),
+          typology = coalesce(${profile.typology ?? null}, typology),
+          lat      = coalesce(${profile.lat ?? null}, lat),
+          lon      = coalesce(${profile.lon ?? null}, lon)
+        where entity_id = ${id}
+      `;
+      await tx`
+        update app.person_profile set
+          person_type_id = coalesce(
+            (select id from app.person_types where code = ${profile.person_type ?? null}),
+            person_type_id),
+          full_name = coalesce(${profile.full_name ?? null}, full_name)
+        where entity_id = ${id}
+      `;
+    }
 
     const data = await snapshot(tx, id);
     const revisions = await tx`

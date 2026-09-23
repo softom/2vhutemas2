@@ -17,6 +17,28 @@ interface Props {
   mode: "create" | "edit";
 }
 
+/**
+ * Адрес страницы из названия: пользователь не должен придумывать его сам.
+ * Правило простое — кириллица переводится в латиницу, остальное в дефисы.
+ */
+const TRANSLIT: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i",
+  й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t",
+  у: "u", ф: "f", х: "h", ц: "c", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "",
+  э: "e", ю: "yu", я: "ya",
+};
+
+export function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .split("")
+    .map((char) => (char in TRANSLIT ? TRANSLIT[char] : char))
+    .join("")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
 export function EntityEditor({ mode }: Props) {
   const params = useParams();
   const navigate = useNavigate();
@@ -34,7 +56,9 @@ export function EntityEditor({ mode }: Props) {
     object_type: "",
     city: "",
     country: "",
+    address: "",
   });
+  const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [revisionId, setRevisionId] = useState<string | null>(null);
   const [documentId, setDocumentId] = useState<number | null>(null);
   const [documentRevision, setDocumentRevision] = useState<string | null>(null);
@@ -42,6 +66,7 @@ export function EntityEditor({ mode }: Props) {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const problemsState = useState<Record<string, string>>({});
 
   useEffect(() => {
     api.capabilities().then((caps: Capabilities) => {
@@ -67,6 +92,7 @@ export function EntityEditor({ mode }: Props) {
         object_type: (profile?.object_type as string) ?? "",
         city: profile?.city ?? "",
         country: profile?.country ?? "",
+        address: profile?.address ?? "",
       });
       setRevisionId(entity.latest_revision_id);
 
@@ -95,6 +121,8 @@ export function EntityEditor({ mode }: Props) {
       entityId={entityId}
       form={form}
       setForm={setForm}
+      slugTouched={slugTouched}
+      setSlugTouched={setSlugTouched}
       kinds={kinds}
       objectTypes={objectTypes}
       initialBlocks={editor}
@@ -110,6 +138,7 @@ export function EntityEditor({ mode }: Props) {
       setError={setError}
       saving={saving}
       setSaving={setSaving}
+      problemsState={problemsState}
       navigate={navigate}
     />
   );
@@ -118,7 +147,7 @@ export function EntityEditor({ mode }: Props) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function EditorBody(props: any) {
   const {
-    mode, entityId, form, setForm, kinds, objectTypes, initialBlocks,
+    mode, entityId, form, setForm, slugTouched, setSlugTouched, kinds, objectTypes, initialBlocks,
     revisionId, setRevisionId, documentId, setDocumentId,
     documentRevision, setDocumentRevision, status, setStatus,
     error, setError, saving, setSaving, navigate,
@@ -128,14 +157,29 @@ function EditorBody(props: any) {
     initialContent: initialBlocks.length > 0 ? initialBlocks : undefined,
   });
 
-  const field = (name: string, label: string, extra?: Record<string, unknown>) => (
+  const [problems, setProblems] = props.problemsState;
+
+  const field = (
+    name: string,
+    label: string,
+    hint?: string,
+    extra?: Record<string, unknown>,
+  ) => (
     <label>
       {label}
       <input
         value={form[name] ?? ""}
-        onChange={(e) => setForm({ ...form, [name]: e.target.value })}
+        onChange={(e) => {
+          const next = { ...form, [name]: e.target.value };
+          // Пока адрес страницы не правили руками, держим его в согласии с названием.
+          if (name === "title_ru" && !slugTouched) next.slug = slugify(e.target.value);
+          if (name === "slug") setSlugTouched(true);
+          setForm(next);
+        }}
         {...extra}
       />
+      {hint && !problems[name] && <span className="hint">{hint}</span>}
+      {problems[name] && <span className="field-error">{problems[name]}</span>}
     </label>
   );
 
@@ -144,8 +188,14 @@ function EditorBody(props: any) {
     setError(null);
     setStatus(null);
     try {
+      setProblems({});
       const profile = form.kind === "object"
-        ? { object_type: form.object_type || null, city: form.city || null, country: form.country || null }
+        ? {
+          object_type: form.object_type || null,
+          city: form.city || null,
+          country: form.country || null,
+          address: form.address || null,
+        }
         : undefined;
       const payload = {
         kind: form.kind,
@@ -192,6 +242,9 @@ function EditorBody(props: any) {
       if (mode === "create") navigate(`/entities/${id}`);
     } catch (e) {
       const apiError = e as ApiError;
+      if (apiError.code === "validation_failed" && apiError.details) {
+        setProblems(apiError.details as Record<string, string>);
+      }
       setError(
         apiError.code === "version_conflict"
           ? "Материал изменён другим редактором. Откройте карточку заново, чтобы не потерять чужую правку."
@@ -224,11 +277,16 @@ function EditorBody(props: any) {
           </select>
         </label>
         {field("title_ru", "Название по-русски")}
-        {field("slug", "Адрес (латиницей, через дефис)", { placeholder: "novat" })}
+        {field(
+          "slug",
+          "Адрес страницы",
+          "Часть ссылки на карточку, латиницей. Подставляется из названия, можно изменить.",
+          { placeholder: "muzey-terrakotovoy-armii" },
+        )}
         <div className="row">
           {field("title_en", "Название по-английски")}
           {field("title_original", "Название на языке оригинала")}
-          {field("title_la", "Латинское наименование")}
+          {field("title_la", "Латинское наименование", "Научное латинское имя, если оно есть")}
         </div>
         {form.kind === "object" && (
           <>
@@ -248,6 +306,7 @@ function EditorBody(props: any) {
               {field("city", "Город")}
               {field("country", "Страна")}
             </div>
+            {field("address", "Почтовый адрес", "Улица, дом, индекс — как указано в источнике")}
           </>
         )}
       </div>

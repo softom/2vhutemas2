@@ -84,3 +84,6 @@ button:disabled { opacity: .5; cursor: default; }
   main { padding: 16px 16px 48px; }
   h1 { font-size: 24px; }
 }
+
+.hint { color: var(--muted); font-size: 12px; }
+.field-error { color: #e3785a; font-size: 12px; }
