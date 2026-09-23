@@ -153,8 +153,10 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                     where et.entity_id = e.id), '[]'::jsonb) as tags,
            (select jsonb_agg(jsonb_build_object(
                       'kind', dk.code, 'title', dk.title_ru,
-                      'start_year', d.start_year, 'end_year', d.end_year,
-                      'is_approximate', d.is_approximate, 'is_ongoing', d.is_ongoing)
+                      'start_year', d.start_year, 'start_month', d.start_month,
+                      'start_day', d.start_day, 'end_year', d.end_year,
+                      'is_approximate', d.is_approximate, 'is_ongoing', d.is_ongoing,
+                      'note', d.note)
                       order by d.sort_order, d.start_year)
             from app.entity_dates d join app.date_kinds dk on dk.id = d.kind_id
            where d.entity_id = e.id) as dates

@@ -19,6 +19,7 @@ import { links } from "./routes/links.ts";
 import { places } from "./routes/places.ts";
 import { session } from "./routes/session.ts";
 import { tags } from "./routes/tags.ts";
+import { dates } from "./routes/dates.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -98,6 +99,7 @@ app.route("/api/v1/links", links);
 app.route("/api/v1/places", places);
 app.route("/api/v1/session", session);
 app.route("/api/v1/tags", tags);
+app.route("/api/v1/entities-dates", dates);
 
 const shutdown = async () => {
   log("info", "system", "остановка сервиса");

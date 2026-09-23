@@ -13,6 +13,9 @@ SPW=$(grep -E "^POSTGRES_PASSWORD=" /opt/2vhutemas/.env | cut -d= -f2-)
 PASS=0
 FAIL=0
 
+# Идентификатор берём разбором JSON: шаблоном легко схватить чужой.
+field() { python3 -c "import json,sys; print(json.load(sys.stdin).get('$1') or '')"; }
+
 check() { # имя, ожидаемое, полученное
   if [ "$2" = "$3" ]; then
     PASS=$((PASS+1)); printf '  ok   %s\n' "$1"
@@ -54,8 +57,8 @@ echo "── Объекты"
 check "каталог гостю" 200 "$(code $API/entities)"
 check "каталог под входом" 200 "$(code -H "$AUTH" $API/entities)"
 C=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"kind":"object","slug":"smoke-proverka","title_ru":"smoke: проверка"}' $API/entities)
-EID=$(echo "$C" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
-REV=$(echo "$C" | sed -n 's/.*"revision_id":"\([^"]*\)".*/\1/p')
+EID=$(echo "$C" | field id)
+REV=$(echo "$C" | field revision_id)
 check "создание объекта" "да" "$([ -n "$EID" ] && echo да || echo нет)"
 check "карточка под входом" 200 "$(code -H "$AUTH" $API/entities/$EID)"
 contains "карточка отдаёт места" '"places"' "$(body)"
@@ -66,13 +69,21 @@ check "повтор адреса отклоняется" 409 "$(code -X POST -H 
 check "правка от устаревшей версии" 409 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"title_ru":"smoke","base_revision_id":"00000000-0000-4000-8000-000000000000"}' $API/entities/$EID)"
 check "правка от текущей версии" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d "{\"title_ru\":\"smoke: правка\",\"base_revision_id\":\"$REV\"}" $API/entities/$EID)"
 
+echo "── Датировки"
+code -X PUT -H "$AUTH" -H "$JSON" -d '{"dates":[{"kind":"design","start_year":1929},{"kind":"opening","start_year":1945,"start_month":5,"start_day":12}]}' $API/entities-dates/$EID >/dev/null
+contains "датировки записаны" '"opening"' "$(body)"
+check "неизвестный вид даты отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d '{"dates":[{"kind":"нет-такого","start_year":1900}]}' $API/entities-dates/$EID)"
+check "конец раньше начала отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d '{"dates":[{"kind":"design","start_year":1930,"end_year":1920}]}' $API/entities-dates/$EID)"
+code -H "$AUTH" $API/entities/$EID >/dev/null
+contains "датировки в карточке" '"is_approximate"' "$(body)"
+
 echo "── Медиатека"
 check "список файлов" 200 "$(code -H "$AUTH" $API/media)"
 contains "состояние вариантов" '"files"' "$(body)"
 docker exec app_api /usr/local/bin/magickw -size 400x300 gradient:navy-orange /tmp/smoke.jpg >/dev/null 2>&1
 docker cp app_api:/tmp/smoke.jpg /tmp/smoke.jpg >/dev/null 2>&1
 A=$(curl -s -X POST -H "$AUTH" -F "file=@/tmp/smoke.jpg;type=image/jpeg" -F "caption=smoke: файл" $API/media)
-AID=$(echo "$A" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+AID=$(echo "$A" | field id)
 check "загрузка файла" "да" "$([ -n "$AID" ] && echo да || echo нет)"
 contains "превью готово" '"thumbnail"' "$A"
 check "приватный файл гостю" 404 "$(code "$API/media/$AID/file?variant=thumbnail")"
@@ -84,7 +95,7 @@ echo "── Места"
 check "справочник мест гостю закрыт" 401 "$(code $API/places)"
 check "справочник мест под входом" 200 "$(code -H "$AUTH" $API/places)"
 P=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"country":"smoke-страна","settlement":"smoke-город","precision":"settlement"}' $API/places)
-PID=$(echo "$P" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+PID=$(echo "$P" | field id)
 check "создание места" "да" "$([ -n "$PID" ] && echo да || echo нет)"
 check "пустое место отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/places)"
 check "широта без долготы отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"settlement":"smoke","lat":10}' $API/places)"
@@ -103,7 +114,7 @@ check "гость метки не меняет" 401 "$(code -X PUT -H "$JSON" -d
 
 echo "── Связи"
 C2=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"kind":"object","slug":"smoke-vtoroy","title_ru":"smoke: второй"}' $API/entities)
-EID2=$(echo "$C2" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+EID2=$(echo "$C2" | field id)
 check "связь без обоснования" 422 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$EID2,\"justification\":{}}" $API/links)"
 check "связь с обоснованием" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$EID2,\"justification\":{\"text\":\"smoke: обоснование\"}}" $API/links)"
 code -H "$AUTH" "$API/links?entity_id=$EID" >/dev/null
@@ -114,8 +125,8 @@ D=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: текст\",\
   {\"id\":\"s1\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"smoke проверка текста\",\"styles\":{}}]},
   {\"id\":\"s2\",\"type\":\"entityCard\",\"props\":{\"entityId\":\"$EID2\",\"occurrenceId\":\"s-c1\"}},
   {\"id\":\"s3\",\"type\":\"mediaImage\",\"props\":{\"assetId\":\"$AID\",\"caption\":\"smoke\"}}]}" $API/documents)
-DID=$(echo "$D" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
-DREV=$(echo "$D" | sed -n 's/.*"revision_id":"\([^"]*\)".*/\1/p')
+DID=$(echo "$D" | field id)
+DREV=$(echo "$D" | field revision_id)
 check "создание документа" "да" "$([ -n "$DID" ] && echo да || echo нет)"
 REFS=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -c "
 select count(*) from app.document_entity_refs where revision_id='$DREV'")
@@ -134,6 +145,7 @@ delete from app.document_entity_refs r using app.revisions rev, app.materials m
  where r.revision_id = rev.id and rev.material_id = m.id
    and (m.entity_id in ($EID,$EID2) or m.document_id = $DID);
 delete from app.entity_tags where entity_id in ($EID,$EID2);
+delete from app.entity_dates where entity_id in ($EID,$EID2);
 delete from app.media_tags where asset_id = '$AID';
 delete from app.revisions rev using app.materials m where rev.material_id = m.id
    and (m.entity_id in ($EID,$EID2) or m.document_id = $DID or m.asset_id = '$AID'
