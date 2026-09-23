@@ -50,8 +50,13 @@ function validate(input: PlaceInput): void {
   }
 }
 
-/** Поиск по справочнику: место переиспользуется, а не заводится заново. */
+/**
+ * Поиск по справочнику: место переиспользуется, а не заводится заново.
+ * Справочник — рабочий инструмент редактора, гостю он не нужен: места
+ * опубликованных объектов видны в их карточках.
+ */
 places.get("/", async (c: Context<AppEnv>) => {
+  requirePermission(c.get("principal"), "edit");
   const limit = pageSize(c.req.query("limit"));
   const search = c.req.query("q")?.trim() || null;
   const pattern = search ? `%${search}%` : null;
@@ -64,6 +69,21 @@ places.get("/", async (c: Context<AppEnv>) => {
        or street ilike ${pattern} or house ilike ${pattern}
     order by country nulls last, settlement nulls last, street nulls last, house nulls last
     limit ${limit}
+  `;
+  return c.json({ items: rows });
+});
+
+/** Где место используется: правка меняет сведения во всех этих карточках. */
+places.get("/:id/usage", async (c: Context<AppEnv>) => {
+  requirePermission(c.get("principal"), "edit");
+  const rows = await sql<Record<string, unknown>>`
+    select e.id, e.title_ru, ar.title_ru as role_title
+    from app.attachments a
+    join app.targets t on t.id = a.target_id
+    join app.entities e on e.id = t.entity_id
+    join app.attachment_roles ar on ar.id = a.role_id
+    where a.place_id = ${c.req.param("id")}
+    order by e.title_ru
   `;
   return c.json({ items: rows });
 });

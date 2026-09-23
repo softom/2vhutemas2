@@ -170,6 +170,13 @@ export const api = {
   mentions: (entityId: number) =>
     request<{ items: Record<string, unknown>[] }>(`/links/mentions?entity_id=${entityId}`),
 
+  createPlace: (body: unknown) =>
+    request<{ id: string }>("/places", { method: "POST", body: JSON.stringify(body) }),
+  updatePlace: (id: string, body: unknown) =>
+    request<{ id: string }>(`/places/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  placeUsage: (id: string) =>
+    request<{ items: Record<string, unknown>[] }>(`/places/${id}/usage`),
+
   places: (query: string) =>
     request<{ items: Place[] }>(`/places?q=${encodeURIComponent(query)}`),
   attachPlace: (body: unknown) =>
@@ -186,6 +193,8 @@ export const api = {
     ),
   uploadMedia: (form: FormData) =>
     request<MediaAsset>("/media", { method: "POST", body: form }),
+  updateMedia: (id: string, body: unknown) =>
+    request<MediaAsset>(`/media/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   mediaFileUrl: (id: string, variant: "thumbnail" | "screen" | "original") =>
     `${API_BASE}/media/${id}/file?variant=${variant}`,
 };
