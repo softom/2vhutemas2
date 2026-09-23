@@ -1,0 +1,32 @@
+#!/bin/bash
+# Выкладка нового контура и прогон проверок (решение Р-13).
+#
+# Один скрипт на время разработки: код на сервер, сборка клиента,
+# перезапуск API, миграции, прогон основных маршрутов. Если прогон
+# находит сбой, об этом видно сразу, а не через день от пользователя.
+set -e
+HOST="${1:-2vhutemas}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+echo "── Код на сервер"
+cd "$ROOT"
+tar -czf - api web | ssh -o BatchMode=yes "$HOST" '
+  cd /opt/2vhutemas-services && tar -xzf - &&
+  rsync -a --delete api/src/ app-api/src/ &&
+  cp api/Dockerfile api/deno.json app-api/ &&
+  rsync -a --exclude node_modules --exclude dist web/ app-web/ &&
+  rm -rf api web'
+
+echo "── Миграции"
+python "$ROOT/tools/migrate.py" --host "$HOST"
+
+echo "── Перезапуск API"
+ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services && docker compose restart api >/dev/null 2>&1'
+sleep 8
+
+echo "── Сборка клиента"
+ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services/app-web && npm run build 2>&1 | grep -E "error|built" | tail -2'
+
+echo "── Прогон маршрутов"
+ssh -o BatchMode=yes "$HOST" 'cat > /tmp/smoke.sh' < "$ROOT/tools/smoke.sh"
+ssh -o BatchMode=yes "$HOST" 'bash /tmp/smoke.sh; RESULT=$?; rm -f /tmp/smoke.sh; exit $RESULT'
