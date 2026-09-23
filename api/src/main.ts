@@ -15,6 +15,7 @@ import { type AppEnv, cors, handleError, log, requestContext } from "./lib/http.
 import { entities } from "./routes/entities.ts";
 import { media } from "./routes/media.ts";
 import { documents } from "./routes/documents.ts";
+import { links } from "./routes/links.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -89,6 +90,7 @@ app.get("/api/v1/me", (c: Context<AppEnv>) => {
 app.route("/api/v1/entities", entities);
 app.route("/api/v1/media", media);
 app.route("/api/v1/documents", documents);
+app.route("/api/v1/links", links);
 
 const shutdown = async () => {
   log("info", "system", "остановка сервиса");

@@ -87,6 +87,110 @@ function validateDocument(body: unknown): Block[] {
   return body as Block[];
 }
 
+/**
+ * Вхождения сущностей в документ: блок-карточка и упоминание в строке.
+ * Порядок берётся обходом документа — второго порядка не существует.
+ */
+export interface EntityRef {
+  occurrenceId: string;
+  blockId: string | null;
+  entityId: number;
+  displayMode: "card" | "inline";
+  mediaAssetId: string | null;
+  targetBlockId: string | null;
+  note: string | null;
+  ordinal: number;
+}
+
+export function extractRefs(blocks: unknown): EntityRef[] {
+  const refs: EntityRef[] = [];
+  let ordinal = 0;
+
+  const take = (
+    props: Record<string, unknown>,
+    blockId: string | null,
+    mode: "card" | "inline",
+  ) => {
+    const entityId = Number(props.entityId ?? props.entity_id);
+    if (!Number.isInteger(entityId) || entityId <= 0) return;
+    refs.push({
+      occurrenceId: String(props.occurrenceId ?? props.occurrence_id ?? crypto.randomUUID()),
+      blockId,
+      entityId,
+      displayMode: mode,
+      mediaAssetId: (props.mediaAssetId ?? props.media_asset_id ?? null) as string | null,
+      targetBlockId: (props.targetBlockId ?? props.target_block_id ?? null) as string | null,
+      note: (props.note ?? null) as string | null,
+      ordinal: ordinal++,
+    });
+  };
+
+  const walkInline = (content: unknown, blockId: string | null) => {
+    if (!Array.isArray(content)) return;
+    for (const item of content) {
+      if (!item || typeof item !== "object") continue;
+      const node = item as { type?: string; props?: Record<string, unknown>; content?: unknown };
+      if (node.type === "entityMention" && node.props) take(node.props, blockId, "inline");
+      if (node.content) walkInline(node.content, blockId);
+    }
+  };
+
+  const walk = (list: unknown) => {
+    if (!Array.isArray(list)) return;
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue;
+      const block = item as {
+        id?: string;
+        type?: string;
+        props?: Record<string, unknown>;
+        content?: unknown;
+        children?: unknown;
+      };
+      if (block.type === "entityCard" && block.props) {
+        take(block.props, block.id ?? null, "card");
+      }
+      walkInline(block.content, block.id ?? null);
+      if (block.children) walk(block.children);
+    }
+  };
+
+  walk(blocks);
+  return refs;
+}
+
+/**
+ * Записываем указатель вхождений в одной транзакции с версией и проверяем,
+ * что упомянутые сущности существуют: ссылка в никуда не сохраняется.
+ */
+async function saveRefs(tx: Tx, revisionId: string, blocks: unknown) {
+  const refs = extractRefs(blocks);
+  if (refs.length === 0) return;
+
+  const ids = [...new Set(refs.map((ref) => ref.entityId))];
+  const found = await tx<{ id: number }>`
+    select id from app.entities where id = any(${ids}::bigint[])
+  `;
+  const known = new Set(found.map((row) => Number(row.id)));
+  const missing = ids.filter((id) => !known.has(id));
+  if (missing.length > 0) {
+    throw new ApiError("validation_failed", "В тексте есть ссылки на несуществующие объекты", {
+      entity_ids: missing,
+    });
+  }
+
+  for (const ref of refs) {
+    await tx`
+      insert into app.document_entity_refs (revision_id, occurrence_id, block_id, entity_id,
+                                            display_mode, media_asset_id, target_block_id,
+                                            note, ordinal)
+      values (${revisionId}, ${ref.occurrenceId}, ${ref.blockId}, ${ref.entityId},
+              ${ref.displayMode}, ${ref.mediaAssetId}, ${ref.targetBlockId},
+              ${ref.note}, ${ref.ordinal})
+      on conflict (revision_id, occurrence_id) do nothing
+    `;
+  }
+}
+
 async function saveSearchText(tx: Tx, documentId: number, text: string) {
   await tx`
     update app.documents
@@ -135,6 +239,7 @@ documents.post("/", async (c: Context<AppEnv>) => {
               ${JSON.stringify({ title: input.title ?? null, body_json: blocks })}::jsonb)
       returning id
     `;
+    await saveRefs(tx, revisions[0].id, blocks);
 
     if (input.attach_to_entity_id) {
       const targets = await tx<{ id: number }>`
@@ -220,6 +325,7 @@ documents.patch("/:id", async (c: Context<AppEnv>) => {
               ${JSON.stringify({ title: updated[0].title, body_json: updated[0].body_json })}::jsonb)
       returning id
     `;
+    await saveRefs(tx, revisions[0].id, updated[0].body_json);
     return { id, material_id, revision_id: revisions[0].id };
   }));
 });

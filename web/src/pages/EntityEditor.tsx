@@ -12,6 +12,8 @@ import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { api, ApiError, type Capabilities } from "../api";
+import { insertEntityCard, insertEntityMention, schema } from "../editor/entityBlocks";
+import { EntityPanel } from "../editor/EntityPanel";
 
 interface Props {
   mode: "create" | "edit";
@@ -187,6 +189,7 @@ function EditorBody(props: any) {
   } = props;
 
   const editor = useCreateBlockNote({
+    schema,
     initialContent: initialBlocks.length > 0 ? initialBlocks : undefined,
   });
 
@@ -414,8 +417,24 @@ function EditorBody(props: any) {
       </div>
 
       <h2>Описание</h2>
-      <div className="editor-shell">
-        <BlockNoteView editor={editor} theme="light" />
+      <div className="editor-layout">
+        <div
+          className="editor-shell"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            const payload = event.dataTransfer.getData("application/x-2vhutemas-entity");
+            if (!payload) return;
+            event.preventDefault();
+            insertEntityCard(editor, JSON.parse(payload));
+          }}
+        >
+          <BlockNoteView editor={editor} theme="light" />
+        </div>
+        <EntityPanel
+          entityId={entityId}
+          onInsertCard={(entity) => insertEntityCard(editor, entity)}
+          onInsertMention={(entity) => insertEntityMention(editor, entity)}
+        />
       </div>
 
       <div className="row" style={{ marginTop: 18 }}>

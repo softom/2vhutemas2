@@ -82,6 +82,8 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         </>
       )}
 
+      <Relations entityId={entity.id} />
+
       <h2>Описание</h2>
       {blocks.length === 0
         ? <p className="notice">Описание пока не добавлено.</p>
@@ -107,6 +109,57 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         </>
       )}
     </article>
+  );
+}
+
+interface LinkRow {
+  id: number;
+  other_id: number;
+  other_title: string;
+  other_kind: string;
+  role: string | null;
+  direction: "incoming" | "outgoing";
+  justification: string | null;
+}
+
+/** Связи объекта вместе с обоснованиями и упоминания в опубликованных текстах. */
+function Relations({ entityId }: { entityId: number }) {
+  const [items, setItems] = useState<LinkRow[]>([]);
+  const [mentions, setMentions] = useState<Record<string, unknown>[]>([]);
+
+  useEffect(() => {
+    api.links(entityId).then((page) => setItems(page.items as unknown as LinkRow[])).catch(() => {});
+    api.mentions(entityId).then((page) => setMentions(page.items)).catch(() => {});
+  }, [entityId]);
+
+  if (items.length === 0 && mentions.length === 0) return null;
+  return (
+    <>
+      {items.length > 0 && (
+        <>
+          <h2>Связи</h2>
+          <ul className="relations">
+            {items.map((item) => (
+              <li key={item.id}>
+                <Link to={`/entities/${item.other_id}`}>{item.other_title}</Link>
+                {item.role && <span className="badge">{item.role}</span>}
+                {item.justification && <p className="notice">{item.justification}</p>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {mentions.length > 0 && (
+        <>
+          <h2>Упоминается в материалах</h2>
+          <ul>
+            {mentions.map((mention, index) => (
+              <li key={index}>{String(mention.document_title ?? "Материал")}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </>
   );
 }
 

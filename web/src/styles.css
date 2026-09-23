@@ -98,3 +98,33 @@ button:disabled { opacity: .5; cursor: default; }
 .uploader summary { cursor: pointer; color: var(--muted); margin-bottom: 12px; }
 .panel { position: fixed; inset: 10% 8%; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; z-index: 20; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
 @media (max-width: 640px) { .panel { inset: 4% 4%; padding: 14px; } }
+
+.editor-layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+.entity-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; position: sticky; top: 76px; max-height: calc(100vh - 100px); overflow: auto; }
+.entity-panel h3 { margin: 0 0 6px; font-size: 17px; font-weight: 500; }
+.entity-panel h4 { margin: 16px 0 6px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.entity-panel input { width: 100%; }
+.panel-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.panel-list li { border: 1px solid var(--line); border-radius: 8px; padding: 8px; cursor: grab; }
+.panel-list li:hover { border-color: var(--accent); }
+.panel-item-title { display: block; font-size: 14px; }
+.panel-item-sub { display: block; color: var(--muted); font-size: 12px; }
+.panel-item-actions { display: flex; gap: 6px; margin-top: 6px; }
+.panel-item-actions button { padding: 4px 8px; font-size: 12px; }
+
+.entity-card { display: flex; gap: 12px; align-items: center; border: 1px solid #d8d2c6; border-radius: 8px; padding: 10px; background: #faf7f2; margin: 6px 0; }
+.entity-card img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; }
+.entity-card a { color: #17140f; font-size: 17px; text-decoration: none; border-bottom: 1px solid var(--accent); }
+.entity-card-kind { color: #6f685c; font-size: 12px; margin-top: 2px; }
+.entity-card-note { color: #3f3a32; font-size: 13px; margin-top: 4px; }
+.entity-mention { color: #a8461c; text-decoration: none; border-bottom: 1px dotted #a8461c; }
+
+.relations { list-style: none; padding: 0; display: grid; gap: 12px; }
+.relations li { border-left: 2px solid var(--line); padding-left: 12px; }
+.relations .badge { margin-left: 8px; }
+.relations p { margin: 4px 0 0; }
+
+@media (max-width: 900px) {
+  .editor-layout { grid-template-columns: 1fr; }
+  .entity-panel { position: static; max-height: none; }
+}

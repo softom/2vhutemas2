@@ -127,6 +127,17 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  links: (entityId: number) =>
+    request<{ items: Record<string, unknown>[] }>(`/links?entity_id=${entityId}`),
+  createLink: (body: unknown) =>
+    request<{ id: number; document_id: number }>("/links", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteLink: (id: number) => request<void>(`/links/${id}`, { method: "DELETE" }),
+  mentions: (entityId: number) =>
+    request<{ items: Record<string, unknown>[] }>(`/links/mentions?entity_id=${entityId}`),
+
   media: (cursor?: string) =>
     request<{ items: MediaAsset[]; next_cursor: string | null }>(
       `/media${cursor ? `?cursor=${cursor}` : ""}`,
