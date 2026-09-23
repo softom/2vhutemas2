@@ -1,9 +1,13 @@
 /**
  * Окно файла: загрузка нового и правка сведений (правило 15, решение Р-26).
  *
- * Зона файла принимает перетаскивание: брошенный файл загружается сразу,
+ * Зона файла принимает перетаскивание: брошенные файлы загружаются сразу,
  * и окно переходит к правке созданной записи — сведения дописываются поверх.
  * Кнопка выбора файла остаётся для тех, кому так привычнее.
+ *
+ * Если окно открыто из редактора объекта, загруженные файлы сразу
+ * прикрепляются к нему (решение Р-31): именно поэтому можно бросать
+ * несколько файлов за раз — каждый окажется в карточке объекта.
  *
  * Переключателя доступа нет: файл виден настолько, насколько опубликован
  * материал, к которому он относится (решение Р-28).
@@ -26,6 +30,10 @@ type Draft = typeof EMPTY;
 interface Props {
   /** Пусто — загрузка нового файла. */
   asset?: MediaAsset | null;
+  /** Объект, из редактора которого открыто окно: файлы прикрепятся к нему. */
+  entityId?: number | null;
+  /** Роль прикрепления; по умолчанию галерея. */
+  role?: string;
   onSaved: () => void;
   onClose: () => void;
 }
@@ -42,7 +50,7 @@ function toDraft(asset?: MediaAsset | null): Draft {
   };
 }
 
-export function MediaDialog({ asset, onSaved, onClose }: Props) {
+export function MediaDialog({ asset, entityId, role, onSaved, onClose }: Props) {
   const [current, setCurrent] = useState<MediaAsset | null>(asset ?? null);
   const [draft, setDraft] = useState<Draft>(() => toDraft(asset));
   const [tags, setTags] = useState<Tag[]>(() => (asset as unknown as { tags?: Tag[] })?.tags ?? []);
@@ -51,7 +59,9 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [chosen, setChosen] = useState<File | null>(null);
+  const [chosen, setChosen] = useState<File[]>([]);
+  const [uploaded, setUploaded] = useState<MediaAsset[]>([]);
+  const [progress, setProgress] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -73,40 +83,70 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
     </label>
   );
 
-  /** Сведения, уже введённые в форме, уходят вместе с файлом — вводить дважды не нужно. */
-  const upload = async (file: File) => {
+  /**
+   * Сведения из формы уходят вместе с каждым файлом — вводить дважды не нужно.
+   * Подпись у одиночного файла берётся из формы, у пачки — из имени файла:
+   * одна подпись на десять разных изображений была бы неправдой.
+   */
+  const upload = async (files: File[]) => {
+    if (files.length === 0) return;
     setBusy(true);
     setError(null);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("caption", draft.caption || file.name);
-      for (const [key, value] of Object.entries(draft)) {
-        if (key !== "caption" && value) form.append(key, value);
-      }
-      if (tags.length > 0) form.append("keywords", tags.map((tag) => tag.title).join(", "));
+    const created: MediaAsset[] = [];
+    const failed: string[] = [];
 
-      const created = await api.uploadMedia(form);
-      setCurrent(created);
-      setDraft(toDraft(created));
-      setChosen(null);
-      setDirty(false);
+    for (const [index, file] of files.entries()) {
+      setProgress(`Загружаем ${index + 1} из ${files.length}: ${file.name}`);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("caption", files.length === 1 ? (draft.caption || file.name) : file.name);
+        for (const [key, value] of Object.entries(draft)) {
+          if (key !== "caption" && value) form.append(key, value);
+        }
+        if (tags.length > 0) form.append("keywords", tags.map((tag) => tag.title).join(", "));
+
+        const asset = await api.uploadMedia(form);
+        created.push(asset);
+
+        // Файл, загруженный из редактора объекта, сразу оказывается в карточке.
+        if (entityId) {
+          await api.attachMedia({
+            entity_id: entityId,
+            asset_id: asset.id,
+            role: role ?? "gallery",
+          });
+        }
+      } catch (e) {
+        failed.push(`${file.name}: ${(e as Error).message}`);
+      }
+    }
+
+    setProgress(null);
+    setBusy(false);
+    setChosen([]);
+    setUploaded(created);
+    if (failed.length > 0) setError(`Не загрузились — ${failed.join("; ")}`);
+    if (created.length > 0) {
       onSaved();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
+      if (created.length === 1) {
+        setCurrent(created[0]);
+        setDraft(toDraft(created[0]));
+        setDirty(false);
+      }
     }
   };
 
   const save = async () => {
     if (!current) {
-      const file = chosen ?? fileInput.current?.files?.[0] ?? null;
-      if (!file) {
-        setError("Перетащите файл в зону или выберите его");
+      const files = chosen.length > 0
+        ? chosen
+        : Array.from(fileInput.current?.files ?? []);
+      if (files.length === 0) {
+        setError("Перетащите файлы в зону или выберите их");
         return;
       }
-      await upload(file);
+      await upload(files);
       return;
     }
 
@@ -167,30 +207,30 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
               onDrop={(event) => {
                 event.preventDefault();
                 setDragOver(false);
-                const file = event.dataTransfer.files?.[0];
-                // Брошенный файл загружается сразу: подтверждение здесь лишнее.
-                if (file) upload(file);
+                // Брошенные файлы загружаются сразу: подтверждение здесь лишнее.
+                upload(Array.from(event.dataTransfer.files ?? []));
               }}
             >
               <p className="dropzone-title">
                 {busy
-                  ? "Загружаем и обрабатываем…"
-                  : chosen
-                  ? `Выбран файл: ${chosen.name}`
-                  : "Перетащите файл сюда — он загрузится сразу"}
+                  ? (progress ?? "Загружаем и обрабатываем…")
+                  : chosen.length > 0
+                  ? `Выбрано файлов: ${chosen.length}`
+                  : "Перетащите файлы сюда — они загрузятся сразу"}
               </p>
               <input
                 ref={fileInput}
                 type="file"
+                multiple
                 disabled={busy}
                 onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  setChosen(file);
+                  setChosen(Array.from(event.target.files ?? []));
                   setDirty(true);
                 }}
               />
               <span className="hint">
-                Изображения, PDF и видео. Оригинал сохраняется неизменным.
+                Изображения, PDF и видео. Можно выбрать несколько.
+                {entityId ? " Загруженные файлы сразу прикрепятся к объекту." : ""}
               </span>
             </div>
           )}
@@ -219,6 +259,36 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
             hint="Наберите # и выберите слово из справочника или добавьте новое"
           />
         </label>
+
+        {uploaded.length > 1 && (
+          <div>
+            <h4>Загружено файлов: {uploaded.length}</h4>
+            <ul className="panel-list media-list">
+              {uploaded.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className="panel-item-main linklike"
+                    onClick={() => {
+                      setCurrent(item);
+                      setDraft(toDraft(item));
+                      setUploaded([]);
+                    }}
+                  >
+                    <img
+                      className="panel-thumb"
+                      src={api.mediaFileUrl(item.id, "thumbnail")}
+                      alt={item.caption_ru ?? ""}
+                    />
+                    <span className="panel-item-title">{item.caption_ru ?? "без подписи"}</span>
+                    <span className="panel-item-sub">щелчок — дописать сведения</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {entityId && <p className="hint">Все файлы прикреплены к объекту.</p>}
+          </div>
+        )}
 
         {current && (
           <p className="hint">

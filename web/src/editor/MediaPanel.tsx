@@ -145,6 +145,7 @@ export function MediaPanel({ entityId, attached, onInsert, onChanged }: Props) {
 
       {uploading && (
         <MediaDialog
+          entityId={entityId}
           onSaved={() => {
             load(query.trim());
             onChanged();
