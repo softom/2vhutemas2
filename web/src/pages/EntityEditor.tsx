@@ -12,9 +12,16 @@ import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { api, ApiError, type Capabilities, type EntityPlace } from "../api";
-import { insertEntityCard, insertEntityMention, schema } from "../editor/entityBlocks";
+import {
+  insertEntityCard,
+  insertEntityMention,
+  insertMediaImage,
+  schema,
+} from "../editor/entityBlocks";
 import { EntityPanel } from "../editor/EntityPanel";
 import { PlacesField } from "../editor/PlacesField";
+import { PlacesPanel } from "../editor/PlacesPanel";
+import { MediaPanel } from "../editor/MediaPanel";
 
 interface Props {
   mode: "create" | "edit";
@@ -68,6 +75,9 @@ export function EntityEditor({ mode }: Props) {
   const [documentRevision, setDocumentRevision] = useState<string | null>(null);
   const [initialBlocks, setInitialBlocks] = useState<PartialBlock[] | null>(null);
   const [places, setPlaces] = useState<EntityPlace[]>([]);
+  const [media, setMedia] = useState<
+    { attachment_id: number; asset_id: string; caption: string | null; role_title: string }[]
+  >([]);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -102,6 +112,7 @@ export function EntityEditor({ mode }: Props) {
       });
       setRevisionId(entity.latest_revision_id);
       setPlaces((entity as unknown as { places?: EntityPlace[] }).places ?? []);
+      setMedia((entity as unknown as { media?: typeof media }).media ?? []);
 
       const described = (entity as unknown as { description_document_id?: number })
         .description_document_id;
@@ -134,12 +145,15 @@ export function EntityEditor({ mode }: Props) {
       objectTypes={objectTypes}
       personTypes={personTypes}
       places={places}
-      reloadPlaces={() => {
+      media={media}
+      reloadAttachments={() => {
         if (entityId) {
           api.entity(entityId)
-            .then((entity) =>
-              setPlaces((entity as unknown as { places?: EntityPlace[] }).places ?? [])
-            )
+            .then((entity) => {
+              const card = entity as unknown as { places?: EntityPlace[]; media?: typeof media };
+              setPlaces(card.places ?? []);
+              setMedia(card.media ?? []);
+            })
             .catch(() => {});
         }
       }}
@@ -166,7 +180,7 @@ export function EntityEditor({ mode }: Props) {
 function EditorBody(props: any) {
   const {
     mode, entityId, form, setForm, slugTouched, setSlugTouched, kinds, objectTypes,
-    personTypes, places, reloadPlaces, initialBlocks,
+    personTypes, places, media, reloadAttachments, initialBlocks,
     revisionId, setRevisionId, documentId, setDocumentId,
     documentRevision, setDocumentRevision, status, setStatus,
     error, setError, saving, setSaving, navigate,
@@ -348,7 +362,10 @@ function EditorBody(props: any) {
         )}
       </div>
 
-      <PlacesField entityId={entityId} places={places} onChanged={reloadPlaces} />
+      <div className="editor-layout">
+        <PlacesField entityId={entityId} places={places} onChanged={reloadAttachments} />
+        <PlacesPanel entityId={entityId} onChanged={reloadAttachments} />
+      </div>
 
       <h2>Описание</h2>
       <div className="editor-layout">
@@ -356,19 +373,29 @@ function EditorBody(props: any) {
           className="editor-shell"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
-            const payload = event.dataTransfer.getData("application/x-2vhutemas-entity");
-            if (!payload) return;
+            const entityPayload = event.dataTransfer.getData("application/x-2vhutemas-entity");
+            const mediaPayload = event.dataTransfer.getData("application/x-2vhutemas-media");
+            if (!entityPayload && !mediaPayload) return;
             event.preventDefault();
-            insertEntityCard(editor, JSON.parse(payload));
+            if (entityPayload) insertEntityCard(editor, JSON.parse(entityPayload));
+            if (mediaPayload) insertMediaImage(editor, JSON.parse(mediaPayload));
           }}
         >
           <BlockNoteView editor={editor} theme="light" />
         </div>
-        <EntityPanel
-          entityId={entityId}
-          onInsertCard={(entity) => insertEntityCard(editor, entity)}
-          onInsertMention={(entity) => insertEntityMention(editor, entity)}
-        />
+        <div className="editor-side">
+          <EntityPanel
+            entityId={entityId}
+            onInsertCard={(entity) => insertEntityCard(editor, entity)}
+            onInsertMention={(entity) => insertEntityMention(editor, entity)}
+          />
+          <MediaPanel
+            entityId={entityId}
+            attached={media}
+            onInsert={(asset) => insertMediaImage(editor, asset)}
+            onChanged={reloadAttachments}
+          />
+        </div>
       </div>
 
       <div className="row" style={{ marginTop: 18 }}>

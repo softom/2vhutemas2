@@ -17,6 +17,7 @@ import { media } from "./routes/media.ts";
 import { documents } from "./routes/documents.ts";
 import { links } from "./routes/links.ts";
 import { places } from "./routes/places.ts";
+import { session } from "./routes/session.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -94,6 +95,7 @@ app.route("/api/v1/media", media);
 app.route("/api/v1/documents", documents);
 app.route("/api/v1/links", links);
 app.route("/api/v1/places", places);
+app.route("/api/v1/session", session);
 
 const shutdown = async () => {
   log("info", "system", "остановка сервиса");

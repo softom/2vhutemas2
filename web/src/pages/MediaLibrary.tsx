@@ -16,7 +16,7 @@ export function MediaLibrary({ canUpload }: { canUpload: boolean }) {
   });
 
   const reload = () =>
-    api.media().then((page) => setItems(page.items)).catch((e) => setError(e.message));
+    api.media({}).then((page) => setItems(page.items)).catch((e) => setError(e.message));
 
   useEffect(() => {
     reload();

@@ -12,6 +12,7 @@ import { sql, transaction } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
 import { config } from "../lib/config.ts";
 import { can, canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
+import { contributorFromCookie } from "./session.ts";
 import { type AppEnv, decodeCursor, encodeCursor, log, pageSize } from "../lib/http.ts";
 import {
   assetClassFor,
@@ -57,6 +58,8 @@ media.get("/", async (c: Context<AppEnv>) => {
   const limit = pageSize(c.req.query("limit"));
   const after = decodeCursor(c.req.query("cursor"));
   const drafts = canSeeDrafts(principal);
+  const search = c.req.query("q")?.trim() || null;
+  const pattern = search ? `%${search}%` : null;
 
   const rows = await sql<Record<string, unknown>>`
     select a.id, a.asset_class, a.caption_ru, a.credit, a.visibility, a.is_published,
@@ -74,6 +77,10 @@ media.get("/", async (c: Context<AppEnv>) => {
     where a.archived_at is null
       and (${drafts} or (a.is_published and a.visibility = 'public'))
       and (${after}::bigint is null or extract(epoch from a.created_at)::bigint > ${after})
+      and (${pattern}::text is null
+           or a.caption_ru ilike ${pattern} or a.description ilike ${pattern}
+           or a.author ilike ${pattern} or a.holder ilike ${pattern}
+           or exists (select 1 from unnest(a.keywords) k where k ilike ${pattern}))
     order by a.created_at
     limit ${limit + 1}
   `;
@@ -243,8 +250,11 @@ media.get("/:id/file", async (c: Context<AppEnv>) => {
     throw new ApiError("not_found", "Файл ещё обрабатывается", { status: row.status });
   }
 
+  // Тег <img> не может приложить токен, поэтому принимается и сессионная кука.
   const publiclyVisible = row.is_published && row.visibility === "public";
-  if (!publiclyVisible && !can(principal, "view") && !canSeeDrafts(principal)) {
+  const allowed = publiclyVisible || can(principal, "view") || canSeeDrafts(principal) ||
+    (await contributorFromCookie(c.req.header("cookie"))) !== null;
+  if (!allowed) {
     throw new ApiError("not_found", "Файл не найден");
   }
 
@@ -253,6 +263,48 @@ media.get("/:id/file", async (c: Context<AppEnv>) => {
   c.header("content-length", String(size));
   c.header("cache-control", publiclyVisible ? "public, max-age=86400" : "private, no-store");
   return c.body(file.readable);
+});
+
+/** Прикрепление существующего файла к сущности с ролью: обложка, галерея. */
+media.post("/attachments", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "edit");
+  const input = await c.req.json<{ entity_id: number; asset_id: string; role?: string }>();
+  if (!Number.isInteger(input.entity_id) || !input.asset_id) {
+    throw new ApiError("validation_failed", "Не указаны сущность и файл");
+  }
+
+  const result = await transaction(principal.contributorId, async (tx) => {
+    const targets = await tx<{ id: number }>`
+      select id from app.targets where entity_id = ${input.entity_id}
+    `;
+    if (targets.length === 0) throw new ApiError("not_found", "Сущность не найдена");
+
+    const attached = await tx<{ id: number }>`
+      insert into app.attachments (target_id, role_id, asset_id)
+      values (${targets[0].id},
+              (select id from app.attachment_roles where code = ${input.role ?? "gallery"}),
+              ${input.asset_id})
+      on conflict do nothing
+      returning id
+    `;
+    if (attached.length === 0) {
+      throw new ApiError("duplicate", "Этот файл уже прикреплён с такой ролью");
+    }
+    return { attachment_id: Number(attached[0].id) };
+  });
+
+  return c.json(result, 201);
+});
+
+media.delete("/attachments/:id", async (c: Context<AppEnv>) => {
+  requirePermission(c.get("principal"), "edit");
+  const removed = await sql`
+    delete from app.attachments
+     where id = ${Number(c.req.param("id"))} and asset_id is not null
+    returning id
+  `;
+  if (removed.length === 0) throw new ApiError("not_found", "Привязка не найдена");
+  return c.body(null, 204);
 });
 
 /** Правка сведений об изображении. Файл при этом не меняется. */

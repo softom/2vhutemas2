@@ -187,10 +187,24 @@ export const api = {
   detachPlace: (attachmentId: number) =>
     request<void>(`/places/attachments/${attachmentId}`, { method: "DELETE" }),
 
-  media: (cursor?: string) =>
-    request<{ items: MediaAsset[]; next_cursor: string | null }>(
-      `/media${cursor ? `?cursor=${cursor}` : ""}`,
-    ),
+  /** Обмен токена на куку: без неё браузер не покажет приватные файлы. */
+  openMediaSession: () => request<{ expires_at: string }>("/session", { method: "POST" }),
+
+  media: (params: { q?: string; cursor?: string } = {}) => {
+    const search = new URLSearchParams();
+    if (params.q) search.set("q", params.q);
+    if (params.cursor) search.set("cursor", params.cursor);
+    return request<{ items: MediaAsset[]; next_cursor: string | null }>(
+      `/media?${search.toString()}`,
+    );
+  },
+  attachMedia: (body: unknown) =>
+    request<{ attachment_id: number }>("/media/attachments", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  detachMedia: (attachmentId: number) =>
+    request<void>(`/media/attachments/${attachmentId}`, { method: "DELETE" }),
   uploadMedia: (form: FormData) =>
     request<MediaAsset>("/media", { method: "POST", body: form }),
   updateMedia: (id: string, body: unknown) =>

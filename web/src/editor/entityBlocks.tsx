@@ -67,8 +67,43 @@ export const EntityMention = createReactInlineContentSpec(
   },
 );
 
+/**
+ * Изображение из медиатеки: в документе хранится идентификатор файла,
+ * а не адрес. Адрес доставки вычисляется при показе — так приватность
+ * и замена вариантов остаются на стороне сервера.
+ */
+export const MediaImageBlock = createReactBlockSpec(
+  {
+    type: "mediaImage",
+    propSchema: {
+      assetId: { default: "" },
+      caption: { default: "" },
+      variant: { default: "screen" },
+    },
+    content: "none",
+  },
+  {
+    render: ({ block }) => {
+      const props = block.props as Record<string, string>;
+      return (
+        <figure className="media-figure" contentEditable={false}>
+          <img
+            src={api.mediaFileUrl(props.assetId, (props.variant as "screen") || "screen")}
+            alt={props.caption}
+          />
+          {props.caption ? <figcaption>{props.caption}</figcaption> : null}
+        </figure>
+      );
+    },
+  },
+);
+
 export const schema = BlockNoteSchema.create({
-  blockSpecs: { ...defaultBlockSpecs, entityCard: EntityCardBlock },
+  blockSpecs: {
+    ...defaultBlockSpecs,
+    entityCard: EntityCardBlock,
+    mediaImage: MediaImageBlock,
+  },
   inlineContentSpecs: { ...defaultInlineContentSpecs, entityMention: EntityMention },
 });
 
@@ -95,6 +130,19 @@ export function insertEntityCard(editor: any, entity: InsertableEntity, note?: s
         mediaAssetId: entity.cover_media_id ?? "",
         note: note ?? "",
       },
+    }],
+    editor.getTextCursorPosition().block,
+    "after",
+  );
+}
+
+/** Вставка изображения из медиатеки в место курсора. */
+// deno-lint-ignore no-explicit-any
+export function insertMediaImage(editor: any, asset: { id: string; caption_ru?: string | null }) {
+  editor.insertBlocks(
+    [{
+      type: "mediaImage",
+      props: { assetId: asset.id, caption: asset.caption_ru ?? "", variant: "screen" },
     }],
     editor.getTextCursorPosition().block,
     "after",

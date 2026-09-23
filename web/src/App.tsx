@@ -24,6 +24,8 @@ export function App() {
   const refresh = async () => {
     try {
       const me = await api.me();
+      // Кука нужна, чтобы браузер показывал приватные файлы в тегах изображений.
+      if (me.authenticated) api.openMediaSession().catch(() => {});
       setViewer({
         authenticated: me.authenticated,
         displayName: me.display_name ?? "Гость",
