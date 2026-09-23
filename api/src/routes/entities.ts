@@ -129,6 +129,19 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                      join app.targets t on t.id = a.target_id
                      join app.attachment_roles ar on ar.id = a.role_id
                     where t.entity_id = e.id and a.asset_id is not null), '[]'::jsonb) as media,
+           coalesce((select jsonb_agg(jsonb_build_object(
+                        'attachment_id', a.id,
+                        'role', ar.code, 'role_title', ar.title_ru,
+                        'place_id', p.id, 'title', p.title,
+                        'address_line', p.address_line, 'settlement', p.settlement,
+                        'country', p.country, 'lat', p.lat, 'lon', p.lon,
+                        'precision', p.precision)
+                        order by a.sort_order, ar.sort_order)
+                     from app.attachments a
+                     join app.targets t on t.id = a.target_id
+                     join app.attachment_roles ar on ar.id = a.role_id
+                     join app.places p on p.id = a.place_id
+                    where t.entity_id = e.id), '[]'::jsonb) as places,
            (select jsonb_agg(jsonb_build_object(
                       'kind', dk.code, 'title', dk.title_ru,
                       'start_year', d.start_year, 'end_year', d.end_year,
@@ -177,11 +190,9 @@ entities.post("/", async (c: Context<AppEnv>) => {
     if (input.kind === "object") {
       const profile = input.profile ?? {};
       await tx`
-        insert into app.object_profile (entity_id, object_type_id, city, country, address,
-                                        lat, lon, typology)
+        insert into app.object_profile (entity_id, object_type_id, lat, lon, typology)
         values (${entityId},
                 (select id from app.object_types where code = ${profile.object_type ?? null}),
-                ${profile.city ?? null}, ${profile.country ?? null}, ${profile.address ?? null},
                 ${profile.lat ?? null}, ${profile.lon ?? null}, ${profile.typology ?? null})
       `;
     } else if (input.kind === "person") {
@@ -287,9 +298,6 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
           object_type_id = coalesce(
             (select id from app.object_types where code = ${profile.object_type ?? null}),
             object_type_id),
-          city     = coalesce(${profile.city ?? null}, city),
-          country  = coalesce(${profile.country ?? null}, country),
-          address  = coalesce(${profile.address ?? null}, address),
           typology = coalesce(${profile.typology ?? null}, typology),
           lat      = coalesce(${profile.lat ?? null}, lat),
           lon      = coalesce(${profile.lon ?? null}, lon)

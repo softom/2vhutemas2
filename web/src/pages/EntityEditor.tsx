@@ -11,9 +11,10 @@ import { useCreateBlockNote } from "@blocknote/react";
 import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { api, ApiError, type Capabilities } from "../api";
+import { api, ApiError, type Capabilities, type EntityPlace } from "../api";
 import { insertEntityCard, insertEntityMention, schema } from "../editor/entityBlocks";
 import { EntityPanel } from "../editor/EntityPanel";
+import { PlacesField } from "../editor/PlacesField";
 
 interface Props {
   mode: "create" | "edit";
@@ -57,9 +58,6 @@ export function EntityEditor({ mode }: Props) {
     title_original: "",
     title_la: "",
     object_type: "",
-    city: "",
-    country: "",
-    address: "",
     typology: "",
     person_type: "",
     full_name: "",
@@ -69,6 +67,7 @@ export function EntityEditor({ mode }: Props) {
   const [documentId, setDocumentId] = useState<number | null>(null);
   const [documentRevision, setDocumentRevision] = useState<string | null>(null);
   const [initialBlocks, setInitialBlocks] = useState<PartialBlock[] | null>(null);
+  const [places, setPlaces] = useState<EntityPlace[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -97,14 +96,12 @@ export function EntityEditor({ mode }: Props) {
         title_original: entity.title_original ?? "",
         title_la: entity.title_la ?? "",
         object_type: (profile?.object_type as string) ?? "",
-        city: profile?.city ?? "",
-        country: profile?.country ?? "",
-        address: profile?.address ?? "",
         typology: profile?.typology ?? "",
         person_type: (profile?.person_type as string) ?? "",
         full_name: profile?.full_name ?? "",
       });
       setRevisionId(entity.latest_revision_id);
+      setPlaces((entity as unknown as { places?: EntityPlace[] }).places ?? []);
 
       const described = (entity as unknown as { description_document_id?: number })
         .description_document_id;
@@ -136,6 +133,16 @@ export function EntityEditor({ mode }: Props) {
       kinds={kinds}
       objectTypes={objectTypes}
       personTypes={personTypes}
+      places={places}
+      reloadPlaces={() => {
+        if (entityId) {
+          api.entity(entityId)
+            .then((entity) =>
+              setPlaces((entity as unknown as { places?: EntityPlace[] }).places ?? [])
+            )
+            .catch(() => {});
+        }
+      }}
       initialBlocks={editor}
       revisionId={revisionId}
       setRevisionId={setRevisionId}
@@ -159,7 +166,7 @@ export function EntityEditor({ mode }: Props) {
 function EditorBody(props: any) {
   const {
     mode, entityId, form, setForm, slugTouched, setSlugTouched, kinds, objectTypes,
-    personTypes, initialBlocks,
+    personTypes, places, reloadPlaces, initialBlocks,
     revisionId, setRevisionId, documentId, setDocumentId,
     documentRevision, setDocumentRevision, status, setStatus,
     error, setError, saving, setSaving, navigate,
@@ -205,9 +212,6 @@ function EditorBody(props: any) {
       const profile = form.kind === "object"
         ? {
           object_type: form.object_type || null,
-          city: form.city || null,
-          country: form.country || null,
-          address: form.address || null,
           typology: form.typology || null,
         }
         : form.kind === "person"
@@ -321,11 +325,6 @@ function EditorBody(props: any) {
                 ))}
               </select>
             </label>
-            <div className="row">
-              {field("city", "Город")}
-              {field("country", "Страна")}
-            </div>
-            {field("address", "Почтовый адрес", "Улица, дом, индекс — как указано в источнике")}
             {field("typology", "Типология", "Театр, жилой дом, павильон")}
           </>
         )}
@@ -348,6 +347,8 @@ function EditorBody(props: any) {
           </>
         )}
       </div>
+
+      <PlacesField entityId={entityId} places={places} onChanged={reloadPlaces} />
 
       <h2>Описание</h2>
       <div className="editor-layout">

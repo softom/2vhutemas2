@@ -80,6 +80,24 @@ export interface MediaAsset {
   files: Record<string, { status: string; width: number | null; height: number | null }> | null;
 }
 
+export interface Place {
+  id: string;
+  title: string;
+  address_line: string | null;
+  settlement: string | null;
+  country: string | null;
+  lat: number | null;
+  lon: number | null;
+  precision: string;
+}
+
+export interface EntityPlace extends Place {
+  attachment_id: number;
+  place_id: string;
+  role: string;
+  role_title: string;
+}
+
 export interface Capabilities {
   contract_version: string;
   limits: Record<string, unknown>;
@@ -137,6 +155,16 @@ export const api = {
   deleteLink: (id: number) => request<void>(`/links/${id}`, { method: "DELETE" }),
   mentions: (entityId: number) =>
     request<{ items: Record<string, unknown>[] }>(`/links/mentions?entity_id=${entityId}`),
+
+  places: (query: string) =>
+    request<{ items: Place[] }>(`/places?q=${encodeURIComponent(query)}`),
+  attachPlace: (body: unknown) =>
+    request<{ attachment_id: number; place_id: string }>("/places/attachments", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  detachPlace: (attachmentId: number) =>
+    request<void>(`/places/attachments/${attachmentId}`, { method: "DELETE" }),
 
   media: (cursor?: string) =>
     request<{ items: MediaAsset[]; next_cursor: string | null }>(

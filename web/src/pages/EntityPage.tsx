@@ -6,7 +6,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { api, type EntityCard } from "../api";
+import { api, type EntityCard, type EntityPlace } from "../api";
 
 interface DateRow {
   kind: string;
@@ -44,6 +44,7 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
   const profile = entity.profile as Record<string, string | null>;
   const media = (entity as unknown as { media?: { asset_id: string; role: string }[] }).media ?? [];
   const dates = (entity as unknown as { dates?: DateRow[] }).dates ?? [];
+  const places = (entity as unknown as { places?: EntityPlace[] }).places ?? [];
 
   return (
     <article>
@@ -57,8 +58,8 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         <span className="badge">
           {entity.material_status === "published" ? "опубликовано" : "черновик"}
         </span>
-        {profile?.city && <span className="badge">{profile.city}</span>}
-        {profile?.country && <span className="badge">{profile.country}</span>}
+        {places[0]?.settlement && <span className="badge">{places[0].settlement}</span>}
+        {places[0]?.country && <span className="badge">{places[0].country}</span>}
         {canEdit && (
           <Link to={`/entities/${entity.id}/edit`}>
             <button type="button" className="ghost">Править</button>
@@ -67,6 +68,32 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
       </div>
 
       <Facts profile={profile} />
+
+      {places.length > 0 && (
+        <>
+          <h2>Места</h2>
+          <dl className="facts">
+            {places.map((place) => (
+              <div key={place.attachment_id}>
+                <dt>{place.role_title}</dt>
+                <dd>
+                  {place.title}
+                  {[place.address_line, place.settlement, place.country].filter(Boolean).length > 0
+                    && ` — ${
+                      [place.address_line, place.settlement, place.country].filter(Boolean)
+                        .join(", ")
+                    }`}
+                  {place.lat !== null && (
+                    <span className="notice">
+                      {" "}({place.lat?.toFixed(4)}, {place.lon?.toFixed(4)})
+                    </span>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </>
+      )}
 
       {dates.length > 0 && (
         <>
@@ -165,7 +192,6 @@ function Relations({ entityId }: { entityId: number }) {
 
 const FACT_LABELS: [string, string, string?][] = [
   ["typology", "Типология"],
-  ["address", "Адрес"],
   ["full_name", "Полное имя"],
 ];
 

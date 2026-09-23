@@ -16,6 +16,7 @@ import { entities } from "./routes/entities.ts";
 import { media } from "./routes/media.ts";
 import { documents } from "./routes/documents.ts";
 import { links } from "./routes/links.ts";
+import { places } from "./routes/places.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -55,6 +56,8 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
     union all select 'reference_kinds', code, title_ru from app.reference_kinds
     union all select 'link_roles', code, title_ru from app.link_roles
     union all select 'media_kinds', code, title_ru from app.media_kinds
+    union all select 'place_roles', code, title_ru from app.attachment_roles
+      where code in ('address', 'birthplace', 'burial', 'office')
     order by 1, 2
   `;
   const grouped: Record<string, { code: string; title_ru: string }[]> = {};
@@ -90,6 +93,7 @@ app.route("/api/v1/entities", entities);
 app.route("/api/v1/media", media);
 app.route("/api/v1/documents", documents);
 app.route("/api/v1/links", links);
+app.route("/api/v1/places", places);
 
 const shutdown = async () => {
   log("info", "system", "остановка сервиса");
