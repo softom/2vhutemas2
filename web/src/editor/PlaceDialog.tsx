@@ -114,7 +114,7 @@ export function PlaceDialog({ place, title, onSaved, onClose }: Props) {
 
   return (
     <Modal
-      title={title ?? (place?.id ? "Место" : "Новое место")}
+      title={title ?? (place?.id ? "Редактирование места" : "Новое место")}
       dirty={dirty}
       onClose={onClose}
       footer={

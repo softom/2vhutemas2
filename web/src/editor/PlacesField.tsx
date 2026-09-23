@@ -71,7 +71,13 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
             <button
               type="button"
               className="panel-item-main linklike"
-              onClick={() => setDialog({ kind: "edit", place: place as unknown as Place })}
+              onClick={() =>
+                // У прикреплённого места идентификатор лежит в place_id:
+                // без этого окно считало место новым и предлагало «Создать».
+                setDialog({
+                  kind: "edit",
+                  place: { ...(place as unknown as Place), id: place.place_id },
+                })}
             >
               <span className="panel-item-title">{place.role_title}: {placeLabel(place)}</span>
               <span className="panel-item-sub">

@@ -136,7 +136,7 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
 
   return (
     <Modal
-      title={asset ? "Файл" : "Загрузить файл"}
+      title={asset ? "Редактирование файла" : "Загрузить файл"}
       dirty={dirty}
       onClose={onClose}
       footer={
