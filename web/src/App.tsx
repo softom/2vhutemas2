@@ -10,6 +10,7 @@ import { EntityPage } from "./pages/EntityPage";
 import { EntityEditor } from "./pages/EntityEditor";
 import { MediaLibrary } from "./pages/MediaLibrary";
 import { Login } from "./pages/Login";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
 
 export interface Viewer {
   authenticated: boolean;
@@ -79,6 +80,7 @@ export function App() {
       </header>
 
       <main>
+        <ErrorBoundary key={location.pathname}>
         <Routes>
           <Route path="/" element={<Catalog canCreate={can("create_delete")} />} />
           <Route path="/entities/new" element={<EntityEditor mode="create" />} />
@@ -88,6 +90,7 @@ export function App() {
           <Route path="/login" element={<Login onDone={refresh} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
       </main>
 
       <footer>

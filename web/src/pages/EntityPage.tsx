@@ -7,6 +7,7 @@ import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { api, type EntityCard, type EntityPlace, placeLabel } from "../api";
+import { schema } from "../editor/entityBlocks";
 
 interface DateRow {
   kind: string;
@@ -219,7 +220,12 @@ function Facts({ profile }: { profile: Record<string, unknown> }) {
 }
 
 function ReadOnlyDocument({ blocks }: { blocks: PartialBlock[] }) {
-  const editor = useCreateBlockNote({ initialContent: blocks.length ? blocks : undefined });
+  // Схема та же, что в редакторе: иначе карточка объекта падает на карточке
+  // объекта внутри текста и на изображении из медиатеки.
+  const editor = useCreateBlockNote({
+    schema,
+    initialContent: blocks.length ? (blocks as never) : undefined,
+  });
   return (
     <div className="editor-shell">
       <BlockNoteView editor={editor} editable={false} theme="light" />
