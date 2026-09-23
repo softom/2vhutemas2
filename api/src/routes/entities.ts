@@ -132,10 +132,10 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            coalesce((select jsonb_agg(jsonb_build_object(
                         'attachment_id', a.id,
                         'role', ar.code, 'role_title', ar.title_ru,
-                        'place_id', p.id, 'title', p.title,
-                        'address_line', p.address_line, 'settlement', p.settlement,
-                        'country', p.country, 'lat', p.lat, 'lon', p.lon,
-                        'precision', p.precision)
+                        'place_id', p.id,
+                        'country', p.country, 'settlement', p.settlement,
+                        'street', p.street, 'house', p.house, 'unit', p.unit,
+                        'lat', p.lat, 'lon', p.lon, 'precision', p.precision)
                         order by a.sort_order, ar.sort_order)
                      from app.attachments a
                      join app.targets t on t.id = a.target_id

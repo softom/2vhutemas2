@@ -82,13 +82,27 @@ export interface MediaAsset {
 
 export interface Place {
   id: string;
-  title: string;
-  address_line: string | null;
-  settlement: string | null;
   country: string | null;
+  settlement: string | null;
+  street: string | null;
+  house: string | null;
+  unit: string | null;
   lat: number | null;
   lon: number | null;
   precision: string;
+}
+
+/**
+ * Подпись места собирается из элементов адреса и нигде не хранится:
+ * иначе получится второй источник одного сведения.
+ */
+export function placeLabel(place: Partial<Place>): string {
+  const line = [place.street, place.house, place.unit].filter(Boolean).join(", ");
+  const label = [place.country, place.settlement, line].filter(Boolean).join(", ");
+  if (label) return label;
+  return place.lat !== null && place.lat !== undefined
+    ? `${place.lat}, ${place.lon}`
+    : "место без сведений";
 }
 
 export interface EntityPlace extends Place {

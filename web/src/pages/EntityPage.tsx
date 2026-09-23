@@ -6,7 +6,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { api, type EntityCard, type EntityPlace } from "../api";
+import { api, type EntityCard, type EntityPlace, placeLabel } from "../api";
 
 interface DateRow {
   kind: string;
@@ -77,12 +77,7 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
               <div key={place.attachment_id}>
                 <dt>{place.role_title}</dt>
                 <dd>
-                  {place.title}
-                  {[place.address_line, place.settlement, place.country].filter(Boolean).length > 0
-                    && ` — ${
-                      [place.address_line, place.settlement, place.country].filter(Boolean)
-                        .join(", ")
-                    }`}
+                  {placeLabel(place)}
                   {place.lat !== null && (
                     <span className="notice">
                       {" "}({place.lat?.toFixed(4)}, {place.lon?.toFixed(4)})

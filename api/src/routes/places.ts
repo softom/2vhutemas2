@@ -17,10 +17,11 @@ export const places = new Hono<AppEnv>();
 const PRECISIONS = ["point", "building", "settlement", "region"];
 
 interface PlaceInput {
-  title?: string;
-  address_line?: string | null;
-  settlement?: string | null;
   country?: string | null;
+  settlement?: string | null;
+  street?: string | null;
+  house?: string | null;
+  unit?: string | null;
   lat?: number | null;
   lon?: number | null;
   precision?: string;
@@ -29,7 +30,13 @@ interface PlaceInput {
 
 function validate(input: PlaceInput): void {
   const problems: Record<string, string> = {};
-  if (!input.title?.trim()) problems.title = "Не указано название места";
+  const parts = [input.country, input.settlement, input.street, input.house, input.unit];
+  const hasAddress = parts.some((part) => part && part.trim() !== "");
+  const hasCoords = input.lat !== null && input.lat !== undefined;
+  // Пустая запись не создаётся: нет сведений — нет места (решение Р-25).
+  if (!hasAddress && !hasCoords) {
+    problems.country = "Укажите хотя бы часть адреса или координаты";
+  }
   if (input.precision && !PRECISIONS.includes(input.precision)) {
     problems.precision = "Неизвестный уровень точности";
   }
@@ -50,12 +57,12 @@ places.get("/", async (c: Context<AppEnv>) => {
   const pattern = search ? `%${search}%` : null;
 
   const rows = await sql<Record<string, unknown>>`
-    select id, title, address_line, settlement, country, lat, lon, precision, source_url
+    select id, country, settlement, street, house, unit, lat, lon, precision, source_url
     from app.places
     where ${pattern}::text is null
-       or title ilike ${pattern} or address_line ilike ${pattern}
        or settlement ilike ${pattern} or country ilike ${pattern}
-    order by title
+       or street ilike ${pattern} or house ilike ${pattern}
+    order by country nulls last, settlement nulls last, street nulls last, house nulls last
     limit ${limit}
   `;
   return c.json({ items: rows });
@@ -68,10 +75,10 @@ places.post("/", async (c: Context<AppEnv>) => {
 
   const created = await transaction(principal.contributorId, (tx) =>
     tx<{ id: string }>`
-      insert into app.places (title, address_line, settlement, country, lat, lon,
+      insert into app.places (country, settlement, street, house, unit, lat, lon,
                               precision, source_url)
-      values (${input.title!.trim()}, ${input.address_line ?? null},
-              ${input.settlement ?? null}, ${input.country ?? null},
+      values (${input.country ?? null}, ${input.settlement ?? null}, ${input.street ?? null},
+              ${input.house ?? null}, ${input.unit ?? null},
               ${input.lat ?? null}, ${input.lon ?? null},
               ${input.precision ?? "settlement"}, ${input.source_url ?? null})
       returning id
@@ -91,14 +98,15 @@ places.patch("/:id", async (c: Context<AppEnv>) => {
   const updated = await transaction(principal.contributorId, (tx) =>
     tx<{ id: string }>`
       update app.places set
-        title        = coalesce(${input.title ?? null}, title),
-        address_line = coalesce(${input.address_line ?? null}, address_line),
-        settlement   = coalesce(${input.settlement ?? null}, settlement),
-        country      = coalesce(${input.country ?? null}, country),
-        lat          = coalesce(${input.lat ?? null}, lat),
-        lon          = coalesce(${input.lon ?? null}, lon),
-        precision    = coalesce(${input.precision ?? null}, precision),
-        source_url   = coalesce(${input.source_url ?? null}, source_url)
+        country    = coalesce(${input.country ?? null}, country),
+        settlement = coalesce(${input.settlement ?? null}, settlement),
+        street     = coalesce(${input.street ?? null}, street),
+        house      = coalesce(${input.house ?? null}, house),
+        unit       = coalesce(${input.unit ?? null}, unit),
+        lat        = coalesce(${input.lat ?? null}, lat),
+        lon        = coalesce(${input.lon ?? null}, lon),
+        precision  = coalesce(${input.precision ?? null}, precision),
+        source_url = coalesce(${input.source_url ?? null}, source_url)
       where id = ${placeId}
       returning id
     `);
@@ -136,10 +144,10 @@ places.post("/attachments", async (c: Context<AppEnv>) => {
     if (!placeId) {
       const place = input.place!;
       const created = await tx<{ id: string }>`
-        insert into app.places (title, address_line, settlement, country, lat, lon,
+        insert into app.places (country, settlement, street, house, unit, lat, lon,
                                 precision, source_url)
-        values (${place.title!.trim()}, ${place.address_line ?? null},
-                ${place.settlement ?? null}, ${place.country ?? null},
+        values (${place.country ?? null}, ${place.settlement ?? null}, ${place.street ?? null},
+                ${place.house ?? null}, ${place.unit ?? null},
                 ${place.lat ?? null}, ${place.lon ?? null},
                 ${place.precision ?? "settlement"}, ${place.source_url ?? null})
         returning id

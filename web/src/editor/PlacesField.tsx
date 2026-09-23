@@ -6,7 +6,7 @@
  * не нашли, заводим новое.
  */
 import { useEffect, useState } from "react";
-import { api, type Capabilities, type EntityPlace, type Place } from "../api";
+import { api, type Capabilities, type EntityPlace, placeLabel, type Place } from "../api";
 
 interface Props {
   entityId: number | null;
@@ -28,10 +28,11 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
   const [found, setFound] = useState<Place[]>([]);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState({
-    title: "",
-    address_line: "",
-    settlement: "",
     country: "",
+    settlement: "",
+    street: "",
+    house: "",
+    unit: "",
     lat: "",
     lon: "",
     precision: "settlement",
@@ -69,10 +70,11 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
       setFound([]);
       setCreating(false);
       setDraft({
-        title: "",
-        address_line: "",
-        settlement: "",
         country: "",
+        settlement: "",
+        street: "",
+        house: "",
+        unit: "",
         lat: "",
         lon: "",
         precision: "settlement",
@@ -85,8 +87,7 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
     }
   };
 
-  const describe = (place: Place) =>
-    [place.address_line, place.settlement, place.country].filter(Boolean).join(", ");
+  const describe = (place: Partial<Place>) => placeLabel(place);
 
   return (
     <div className="places-field">
@@ -102,11 +103,10 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
             <li key={place.attachment_id}>
               <div className="panel-item-main">
                 <span className="panel-item-title">
-                  {place.role_title}: {place.title}
+                  {place.role_title}: {describe(place)}
                 </span>
                 <span className="panel-item-sub">
-                  {describe(place)}
-                  {place.lat !== null && ` · ${place.lat?.toFixed(4)}, ${place.lon?.toFixed(4)}`}
+                  {place.lat !== null ? `${place.lat?.toFixed(4)}, ${place.lon?.toFixed(4)}` : ""}
                 </span>
               </div>
               <div className="panel-item-actions">
@@ -140,7 +140,7 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
           Найти место
           <input
             value={query}
-            placeholder="Сиань, Красный проспект"
+            placeholder="Новосибирск, Красный проспект"
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
@@ -151,8 +151,10 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
           {found.map((place) => (
             <li key={place.id}>
               <div className="panel-item-main">
-                <span className="panel-item-title">{place.title}</span>
-                <span className="panel-item-sub">{describe(place)}</span>
+                <span className="panel-item-title">{describe(place)}</span>
+                <span className="panel-item-sub">
+                  {place.lat !== null ? `${place.lat}, ${place.lon}` : ""}
+                </span>
               </div>
               <div className="panel-item-actions">
                 <button
@@ -177,32 +179,24 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
             type="button"
             className="ghost"
             style={{ marginTop: 10 }}
-            onClick={() => {
-              setCreating(true);
-              setDraft({ ...draft, title: query });
-            }}
+            onClick={() => setCreating(true)}
           >
             Место не нашлось — создать новое
           </button>
         )
         : (
           <div className="form" style={{ marginTop: 12 }}>
-            <label>
-              Название места
-              <input
-                value={draft.title}
-                onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-              />
-              <span className="hint">«Сиань», «Новосибирский оперный театр»</span>
-            </label>
-            <label>
-              Адрес
-              <input
-                value={draft.address_line}
-                onChange={(event) => setDraft({ ...draft, address_line: event.target.value })}
-              />
-            </label>
+            <p className="hint">
+              Заполняется то, что известно. Пустая запись не создаётся.
+            </p>
             <div className="row">
+              <label>
+                Страна
+                <input
+                  value={draft.country}
+                  onChange={(event) => setDraft({ ...draft, country: event.target.value })}
+                />
+              </label>
               <label>
                 Населённый пункт
                 <input
@@ -210,11 +204,27 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
                   onChange={(event) => setDraft({ ...draft, settlement: event.target.value })}
                 />
               </label>
-              <label>
-                Страна
+            </div>
+            <div className="row">
+              <label style={{ flex: 2, minWidth: 220 }}>
+                Улица
                 <input
-                  value={draft.country}
-                  onChange={(event) => setDraft({ ...draft, country: event.target.value })}
+                  value={draft.street}
+                  onChange={(event) => setDraft({ ...draft, street: event.target.value })}
+                />
+              </label>
+              <label style={{ maxWidth: 120 }}>
+                Дом
+                <input
+                  value={draft.house}
+                  onChange={(event) => setDraft({ ...draft, house: event.target.value })}
+                />
+              </label>
+              <label style={{ maxWidth: 140 }}>
+                Помещение
+                <input
+                  value={draft.unit}
+                  onChange={(event) => setDraft({ ...draft, unit: event.target.value })}
                 />
               </label>
             </div>
@@ -257,10 +267,11 @@ export function PlacesField({ entityId, places, onChanged }: Props) {
                 onClick={() =>
                   attach({
                     place: {
-                      title: draft.title,
-                      address_line: draft.address_line || null,
-                      settlement: draft.settlement || null,
                       country: draft.country || null,
+                      settlement: draft.settlement || null,
+                      street: draft.street || null,
+                      house: draft.house || null,
+                      unit: draft.unit || null,
                       lat: draft.lat === "" ? null : Number(draft.lat),
                       lon: draft.lon === "" ? null : Number(draft.lon),
                       precision: draft.precision,
