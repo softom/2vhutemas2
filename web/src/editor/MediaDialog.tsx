@@ -9,22 +9,19 @@ import { useEffect, useRef, useState } from "react";
 import { api, type Capabilities, type MediaAsset } from "../api";
 import { Modal } from "../ui/Modal";
 
+/**
+ * Набор полей сокращён по решению пользователя: осталось то, без чего
+ * нельзя честно опубликовать чужое изображение и найти своё.
+ * Переключателя доступа нет: файл виден ровно настолько, насколько
+ * опубликован материал, к которому он относится.
+ */
 const EMPTY = {
   kind: "photo",
   caption: "",
-  description: "",
   author: "",
-  credit: "",
   source_url: "",
   license: "",
-  created_year: "",
-  created_note: "",
-  holder: "",
-  inventory_no: "",
-  original_caption: "",
   keywords: "",
-  alt: "",
-  visibility: "private",
 };
 
 type Draft = typeof EMPTY;
@@ -42,19 +39,10 @@ function toDraft(asset?: MediaAsset | null): Draft {
   return {
     kind: (extra.kind as string) ?? "photo",
     caption: asset.caption_ru ?? "",
-    description: (extra.description as string) ?? "",
     author: (extra.author as string) ?? "",
-    credit: asset.credit ?? "",
     source_url: (extra.source_url as string) ?? "",
     license: (extra.license_code as string) ?? "",
-    created_year: extra.created_year ? String(extra.created_year) : "",
-    created_note: (extra.created_note as string) ?? "",
-    holder: (extra.holder as string) ?? "",
-    inventory_no: (extra.inventory_no as string) ?? "",
-    original_caption: (extra.original_caption as string) ?? "",
     keywords: Array.isArray(extra.keywords) ? (extra.keywords as string[]).join(", ") : "",
-    alt: (extra.alt_text as string) ?? "",
-    visibility: asset.visibility ?? "private",
   };
 }
 
@@ -93,21 +81,12 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
         await api.updateMedia(asset.id, {
           kind: draft.kind,
           caption: draft.caption || null,
-          alt: draft.alt || null,
-          description: draft.description || null,
           author: draft.author || null,
-          credit: draft.credit || null,
           source_url: draft.source_url || null,
           license: draft.license || null,
-          created_year: draft.created_year === "" ? null : Number(draft.created_year),
-          created_note: draft.created_note || null,
-          holder: draft.holder || null,
-          inventory_no: draft.inventory_no || null,
-          original_caption: draft.original_caption || null,
           keywords: draft.keywords
             ? draft.keywords.split(",").map((k) => k.trim()).filter(Boolean)
             : null,
-          visibility: draft.visibility,
         });
       } else {
         const file = fileInput.current?.files?.[0];
@@ -164,43 +143,20 @@ export function MediaDialog({ asset, onSaved, onClose }: Props) {
             </label>
           )}
 
-        <div className="row">
-          <label>
-            Вид изображения
-            <select value={draft.kind} onChange={(event) => set("kind", event.target.value)}>
-              {kinds.map((item) => <option key={item.code} value={item.code}>{item.title_ru}</option>)}
-            </select>
-          </label>
-          <label>
-            Доступ
-            <select value={draft.visibility} onChange={(event) => set("visibility", event.target.value)}>
-              <option value="private">Приватный</option>
-              <option value="public">Публичный</option>
-            </select>
-          </label>
-        </div>
+        <label>
+          Вид изображения
+          <select value={draft.kind} onChange={(event) => set("kind", event.target.value)}>
+            {kinds.map((item) => <option key={item.code} value={item.code}>{item.title_ru}</option>)}
+          </select>
+        </label>
 
-        {field("caption", "Подпись", "Как подписываем изображение у себя")}
-        {field("description", "Описание", "Что именно изображено")}
-        <div className="row">
-          {field("author", "Автор изображения", "Фотограф, чертёжник")}
-          {field("credit", "Атрибуция", "Как требует указывать правообладатель")}
-        </div>
-        <div className="row">
-          {field("created_year", "Год съёмки")}
-          {field("created_note", "Уточнение даты", "«около 1930», «до перестройки»")}
-        </div>
-        <div className="row">
-          {field("holder", "Где хранится", "Архив, музей, собрание")}
-          {field("inventory_no", "Инвентарный номер")}
-        </div>
-        {field("original_caption", "Подпись источника", "Дословно, как в источнике")}
+        {field("caption", "Подпись", "Как подписываем изображение")}
+        {field("author", "Автор изображения", "Фотограф, чертёжник")}
         <div className="row">
           {field("source_url", "Ссылка на источник")}
           {field("license", "Лицензия")}
         </div>
         {field("keywords", "Ключевые слова", "Через запятую")}
-        {field("alt", "Альтернативный текст", "Для тех, кто не видит изображение")}
 
         {asset && (
           <p className="hint">

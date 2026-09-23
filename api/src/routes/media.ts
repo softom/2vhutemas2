@@ -75,7 +75,7 @@ media.get("/", async (c: Context<AppEnv>) => {
            extract(epoch from a.created_at)::bigint as cursor_key
     from app.media_assets a
     where a.archived_at is null
-      and (${drafts} or (a.is_published and a.visibility = 'public'))
+      and (${drafts} or a.is_published)
       and (${after}::bigint is null or extract(epoch from a.created_at)::bigint > ${after})
       and (${pattern}::text is null
            or a.caption_ru ilike ${pattern} or a.description ilike ${pattern}
@@ -251,7 +251,9 @@ media.get("/:id/file", async (c: Context<AppEnv>) => {
   }
 
   // Тег <img> не может приложить токен, поэтому принимается и сессионная кука.
-  const publiclyVisible = row.is_published && row.visibility === "public";
+  // Файл виден публично ровно тогда, когда опубликован его материал:
+  // отдельной ручки доступа у файла нет (решение пользователя 2026-09-23).
+  const publiclyVisible = row.is_published;
   const allowed = publiclyVisible || can(principal, "view") || canSeeDrafts(principal) ||
     (await contributorFromCookie(c.req.header("cookie"))) !== null;
   if (!allowed) {
