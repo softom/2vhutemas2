@@ -66,6 +66,8 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         )}
       </div>
 
+      <Facts profile={profile} />
+
       {dates.length > 0 && (
         <>
           <h2>Датировки</h2>
@@ -105,6 +107,42 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         </>
       )}
     </article>
+  );
+}
+
+const FACT_LABELS: [string, string, string?][] = [
+  ["status", "Сохранность"],
+  ["typology", "Типология"],
+  ["address", "Адрес"],
+  ["current_use", "Использование"],
+  ["materials", "Материалы"],
+  ["floors", "Этажей"],
+  ["height_m", "Высота", "м"],
+  ["area_sq_m", "Площадь", "м²"],
+  ["capacity", "Вместимость"],
+  ["heritage_status", "Охранный статус"],
+  ["known_for", "Чем известен"],
+  ["website_url", "Сайт"],
+];
+
+/** Сведения карточки: показываем только заполненное, пустое не выдумываем. */
+function Facts({ profile }: { profile: Record<string, unknown> }) {
+  const rows = FACT_LABELS
+    .map(([key, label, unit]) => ({ key, label, unit, value: profile?.[key] }))
+    .filter((row) => row.value !== null && row.value !== undefined && row.value !== "");
+  if (rows.length === 0) return null;
+  return (
+    <>
+      <h2>Сведения</h2>
+      <dl className="facts">
+        {rows.map((row) => (
+          <div key={row.key}>
+            <dt>{row.label}</dt>
+            <dd>{String(row.value)}{row.unit ? ` ${row.unit}` : ""}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
   );
 }
 

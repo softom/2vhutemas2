@@ -25,6 +25,25 @@ import {
 
 export const media = new Hono<AppEnv>();
 
+/** Пустое поле формы — это отсутствие сведений, а не пустая строка. */
+function text(form: FormData, name: string): string | null {
+  const value = form.get(name);
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+function number(form: FormData, name: string): number | null {
+  const value = text(form, name);
+  if (value === null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Ключевые слова перечисляются через запятую; повторы и пустые отбрасываются. */
+function keywords(form: FormData): string[] {
+  const value = text(form, "keywords");
+  return value ? [...new Set(value.split(",").map((k) => k.trim()).filter(Boolean))] : [];
+}
+
 interface AssetRow {
   id: string;
   visibility: "public" | "private";
@@ -48,6 +67,8 @@ media.get("/", async (c: Context<AppEnv>) => {
              where f.asset_id = a.id and f.variant = 'screen' and f.is_current) as screen_status,
            (select f.status from app.media_files f
              where f.asset_id = a.id and f.variant = 'thumbnail' and f.is_current) as thumbnail_status,
+           (select k.code from app.media_kinds k where k.id = a.kind_id) as kind,
+           a.author, a.holder, a.keywords, a.created_year, a.description,
            extract(epoch from a.created_at)::bigint as cursor_key
     from app.media_assets a
     where a.archived_at is null
@@ -80,12 +101,18 @@ media.post("/", async (c: Context<AppEnv>) => {
 
   const created = await transaction(principal.contributorId, async (tx) => {
     const assets = await tx<{ id: string }>`
-      insert into app.media_assets (asset_class, caption_ru, alt_text, credit, source_url,
-                                    license_code, visibility, created_by)
-      values (${assetClassFor(mimeType)}, ${String(form.get("caption") ?? "") || null},
-              ${String(form.get("alt") ?? "") || null}, ${String(form.get("credit") ?? "") || null},
-              ${String(form.get("source_url") ?? "") || null},
-              ${String(form.get("license") ?? "") || null},
+      insert into app.media_assets (asset_class, kind_id, caption_ru, alt_text, description,
+                                    author, credit, source_url, license_code, created_year,
+                                    created_note, holder, inventory_no, original_caption,
+                                    keywords, visibility, created_by)
+      values (${assetClassFor(mimeType)},
+              (select id from app.media_kinds where code = ${text(form, "kind")}),
+              ${text(form, "caption")}, ${text(form, "alt")}, ${text(form, "description")},
+              ${text(form, "author")}, ${text(form, "credit")}, ${text(form, "source_url")},
+              ${text(form, "license")}, ${number(form, "created_year")},
+              ${text(form, "created_note")}, ${text(form, "holder")},
+              ${text(form, "inventory_no")}, ${text(form, "original_caption")},
+              ${keywords(form)},
               ${String(form.get("visibility") ?? "private") === "public" ? "public" : "private"},
               ${principal.contributorId})
       returning id
@@ -226,6 +253,53 @@ media.get("/:id/file", async (c: Context<AppEnv>) => {
   c.header("content-length", String(size));
   c.header("cache-control", publiclyVisible ? "public, max-age=86400" : "private, no-store");
   return c.body(file.readable);
+});
+
+/** Правка сведений об изображении. Файл при этом не меняется. */
+media.patch("/:id", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "edit");
+  const assetId = c.req.param("id");
+  const input = await c.req.json<Record<string, unknown>>();
+  const value = (name: string) => (input[name] ?? null) as string | null;
+
+  await transaction(principal.contributorId, async (tx) => {
+    const updated = await tx`
+      update app.media_assets set
+        kind_id = coalesce(
+          (select id from app.media_kinds where code = ${value("kind")}), kind_id),
+        caption_ru       = coalesce(${value("caption")}, caption_ru),
+        alt_text         = coalesce(${value("alt")}, alt_text),
+        description      = coalesce(${value("description")}, description),
+        author           = coalesce(${value("author")}, author),
+        credit           = coalesce(${value("credit")}, credit),
+        source_url       = coalesce(${value("source_url")}, source_url),
+        license_code     = coalesce(${value("license")}, license_code),
+        created_year     = coalesce(${(input.created_year ?? null) as number}, created_year),
+        created_note     = coalesce(${value("created_note")}, created_note),
+        holder           = coalesce(${value("holder")}, holder),
+        inventory_no     = coalesce(${value("inventory_no")}, inventory_no),
+        original_caption = coalesce(${value("original_caption")}, original_caption),
+        keywords         = coalesce(${(input.keywords ?? null) as string[]}, keywords),
+        visibility       = coalesce(${value("visibility")}, visibility),
+        updated_at       = now()
+      where id = ${assetId} and archived_at is null
+      returning id
+    `;
+    if (updated.length === 0) throw new ApiError("not_found", "Файл не найден");
+
+    const materials = await tx<{ id: string }>`
+      select id from app.materials where asset_id = ${assetId}
+    `;
+    if (materials.length > 0) {
+      await tx`
+        insert into app.revisions (material_id, edited_by, operation, summary, snapshot)
+        values (${materials[0].id}, ${principal.contributorId}, 'edit',
+                'Правка сведений о файле', ${JSON.stringify(input)}::jsonb)
+      `;
+    }
+  });
+
+  return c.json(await assetView(assetId));
 });
 
 /** Повтор обработки после ошибки. */

@@ -87,3 +87,14 @@ button:disabled { opacity: .5; cursor: default; }
 
 .hint { color: var(--muted); font-size: 12px; }
 .field-error { color: #e3785a; font-size: 12px; }
+
+.facts { display: grid; gap: 8px; margin: 0 0 20px; }
+.facts > div { display: grid; grid-template-columns: 200px 1fr; gap: 12px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+@media (max-width: 640px) { .facts > div { grid-template-columns: 1fr; gap: 2px; } }
+
+.uploader { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 22px; background: var(--surface); }
+.uploader summary { cursor: pointer; color: var(--muted); margin-bottom: 12px; }
+.panel { position: fixed; inset: 10% 8%; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; z-index: 20; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+@media (max-width: 640px) { .panel { inset: 4% 4%; padding: 14px; } }

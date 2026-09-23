@@ -46,6 +46,8 @@ export function EntityEditor({ mode }: Props) {
 
   const [kinds, setKinds] = useState<{ code: string; title_ru: string }[]>([]);
   const [objectTypes, setObjectTypes] = useState<{ code: string; title_ru: string }[]>([]);
+  const [statuses, setStatuses] = useState<{ code: string; title_ru: string }[]>([]);
+  const [personTypes, setPersonTypes] = useState<{ code: string; title_ru: string }[]>([]);
   const [form, setForm] = useState({
     kind: "object",
     slug: "",
@@ -54,9 +56,22 @@ export function EntityEditor({ mode }: Props) {
     title_original: "",
     title_la: "",
     object_type: "",
+    status: "",
     city: "",
     country: "",
     address: "",
+    current_use: "",
+    materials: "",
+    floors: "",
+    area_sq_m: "",
+    height_m: "",
+    capacity: "",
+    heritage_status: "",
+    typology: "",
+    person_type: "",
+    full_name: "",
+    known_for: "",
+    website_url: "",
   });
   const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [revisionId, setRevisionId] = useState<string | null>(null);
@@ -72,6 +87,8 @@ export function EntityEditor({ mode }: Props) {
     api.capabilities().then((caps: Capabilities) => {
       setKinds(caps.dictionaries.entity_kinds ?? []);
       setObjectTypes(caps.dictionaries.object_types ?? []);
+      setStatuses(caps.dictionaries.object_statuses ?? []);
+      setPersonTypes(caps.dictionaries.person_types ?? []);
     }).catch(() => {});
   }, []);
 
@@ -90,9 +107,22 @@ export function EntityEditor({ mode }: Props) {
         title_original: entity.title_original ?? "",
         title_la: entity.title_la ?? "",
         object_type: (profile?.object_type as string) ?? "",
+        status: (profile?.status as string) ?? "",
         city: profile?.city ?? "",
         country: profile?.country ?? "",
         address: profile?.address ?? "",
+        current_use: profile?.current_use ?? "",
+        materials: profile?.materials ?? "",
+        floors: profile?.floors?.toString() ?? "",
+        area_sq_m: profile?.area_sq_m?.toString() ?? "",
+        height_m: profile?.height_m?.toString() ?? "",
+        capacity: profile?.capacity?.toString() ?? "",
+        heritage_status: profile?.heritage_status ?? "",
+        typology: profile?.typology ?? "",
+        person_type: (profile?.person_type as string) ?? "",
+        full_name: profile?.full_name ?? "",
+        known_for: profile?.known_for ?? "",
+        website_url: profile?.website_url ?? "",
       });
       setRevisionId(entity.latest_revision_id);
 
@@ -125,6 +155,8 @@ export function EntityEditor({ mode }: Props) {
       setSlugTouched={setSlugTouched}
       kinds={kinds}
       objectTypes={objectTypes}
+      statuses={statuses}
+      personTypes={personTypes}
       initialBlocks={editor}
       revisionId={revisionId}
       setRevisionId={setRevisionId}
@@ -147,7 +179,8 @@ export function EntityEditor({ mode }: Props) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function EditorBody(props: any) {
   const {
-    mode, entityId, form, setForm, slugTouched, setSlugTouched, kinds, objectTypes, initialBlocks,
+    mode, entityId, form, setForm, slugTouched, setSlugTouched, kinds, objectTypes,
+    statuses, personTypes, initialBlocks,
     revisionId, setRevisionId, documentId, setDocumentId,
     documentRevision, setDocumentRevision, status, setStatus,
     error, setError, saving, setSaving, navigate,
@@ -189,12 +222,30 @@ function EditorBody(props: any) {
     setStatus(null);
     try {
       setProblems({});
+      const num = (value: string) => (value.trim() === "" ? null : Number(value));
       const profile = form.kind === "object"
         ? {
           object_type: form.object_type || null,
+          status: form.status || null,
           city: form.city || null,
           country: form.country || null,
           address: form.address || null,
+          typology: form.typology || null,
+          current_use: form.current_use || null,
+          materials: form.materials || null,
+          floors: num(form.floors),
+          area_sq_m: num(form.area_sq_m),
+          height_m: num(form.height_m),
+          capacity: num(form.capacity),
+          heritage_status: form.heritage_status || null,
+        }
+        : form.kind === "person"
+        ? {
+          person_type: form.person_type || null,
+          full_name: form.full_name || null,
+          known_for: form.known_for || null,
+          country: form.country || null,
+          website_url: form.website_url || null,
         }
         : undefined;
       const payload = {
@@ -290,23 +341,74 @@ function EditorBody(props: any) {
         </div>
         {form.kind === "object" && (
           <>
-            <label>
-              Тип объекта
-              <select
-                value={form.object_type}
-                onChange={(e) => setForm({ ...form, object_type: e.target.value })}
-              >
-                <option value="">не указан</option>
-                {objectTypes.map((t: { code: string; title_ru: string }) => (
-                  <option key={t.code} value={t.code}>{t.title_ru}</option>
-                ))}
-              </select>
-            </label>
+            <div className="row">
+              <label>
+                Тип объекта
+                <select
+                  value={form.object_type}
+                  onChange={(e) => setForm({ ...form, object_type: e.target.value })}
+                >
+                  <option value="">не указан</option>
+                  {objectTypes.map((t: { code: string; title_ru: string }) => (
+                    <option key={t.code} value={t.code}>{t.title_ru}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Сохранность
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                >
+                  <option value="">не указана</option>
+                  {statuses.map((t: { code: string; title_ru: string }) => (
+                    <option key={t.code} value={t.code}>{t.title_ru}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div className="row">
               {field("city", "Город")}
               {field("country", "Страна")}
             </div>
             {field("address", "Почтовый адрес", "Улица, дом, индекс — как указано в источнике")}
+            <div className="row">
+              {field("typology", "Типология", "Театр, жилой дом, павильон")}
+              {field("current_use", "Использование сейчас")}
+            </div>
+            {field("materials", "Материалы и конструкции")}
+            <div className="row">
+              {field("floors", "Этажей", undefined, { type: "number", min: -5, max: 200 })}
+              {field("height_m", "Высота, м", undefined, { type: "number", step: "0.1" })}
+              {field("area_sq_m", "Площадь, м²", undefined, { type: "number", step: "0.01" })}
+              {field("capacity", "Вместимость", "Зрителей, жителей, посетителей", {
+                type: "number",
+              })}
+            </div>
+            {field("heritage_status", "Охранный статус", "Если объект под охраной")}
+          </>
+        )}
+
+        {form.kind === "person" && (
+          <>
+            <label>
+              Тип участника
+              <select
+                value={form.person_type}
+                onChange={(e) => setForm({ ...form, person_type: e.target.value })}
+              >
+                <option value="">не указан</option>
+                {personTypes.map((t: { code: string; title_ru: string }) => (
+                  <option key={t.code} value={t.code}>{t.title_ru}</option>
+                ))}
+              </select>
+            </label>
+            {field("full_name", "Полное имя")}
+            {field("known_for", "Чем известен", "Одной строкой для списков")}
+            <div className="row">
+              {field("country", "Страна")}
+              {field("website_url", "Сайт")}
+            </div>
           </>
         )}
       </div>
