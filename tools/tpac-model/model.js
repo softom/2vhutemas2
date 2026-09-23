@@ -68,6 +68,7 @@ blue.geometry=new T.BoxGeometry(29,15,28,12,6,12);
 const flatGrand=grand.geometry.toNonIndexed();const uv=[];const pa=flatGrand.attributes.position;
 for(let i=0;i<pa.count;i++)uv.push((pa.getX(i)+pa.getZ(i))/12,pa.getY(i)/12);
 flatGrand.setAttribute('uv',new T.Float32BufferAttribute(uv,2));flatGrand.computeVertexNormals();grand.geometry=flatGrand;
+model.children.filter(o=>o.name==='Grand Theater cladding seam'||o.name==='Blue Box cladding joint').forEach(o=>model.remove(o));
 // Replace the generic rectangular base and initial schematic ramp with a site outline.
 for(const name of ['Raised plaza','Service ramp']){const o=model.getObjectByName(name);if(o)model.remove(o);}
 model.children.filter(o=>o.name==='Ramp curb').forEach(o=>model.remove(o));
@@ -113,7 +114,7 @@ function softwareMaterial(meshObject){
  const canvas=original.map.image,ctx=canvas.getContext('2d'),pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data;
  const g=meshObject.geometry.index?meshObject.geometry.toNonIndexed():meshObject.geometry.clone();const uvs=g.attributes.uv;
  if(!uvs)return new T.MeshLambertMaterial({color:original.color});
- const colors=[];for(let i=0;i<uvs.count;i+=3){let u=0,v=0;for(let j=0;j<3;j++){u+=uvs.getX(i+j)/3;v+=uvs.getY(i+j)/3;}u=((u%1)+1)%1;v=((v%1)+1)%1;let p=(Math.min(canvas.height-1,Math.floor((1-v)*canvas.height))*canvas.width+Math.floor(u*canvas.width))*4;for(let j=0;j<3;j++)colors.push(pixels[p]/255,pixels[p+1]/255,pixels[p+2]/255);}
+ const colors=[];for(let i=0;i<uvs.count;i+=3){let u=0,v=0;for(let j=0;j<3;j++){u+=uvs.getX(i+j)/3;v+=uvs.getY(i+j)/3;}u=((u%1)+1)%1;v=((v%1)+1)%1;u=(Math.floor(u*24)+.5)/24;v=(Math.floor(v*16)+.5)/16;let p=(Math.min(canvas.height-1,Math.floor((1-v)*canvas.height))*canvas.width+Math.floor(u*canvas.width))*4;for(let j=0;j<3;j++)colors.push(pixels[p]/255,pixels[p+1]/255,pixels[p+2]/255);}
  g.setAttribute('color',new T.Float32BufferAttribute(colors,3));meshObject.geometry=g;
  return new T.MeshLambertMaterial({color:0xffffff,vertexColors:true,side:T.FrontSide});
 }
@@ -121,12 +122,12 @@ function softwareMaterial(meshObject){
 const stage=new T.Mesh(new T.PlaneGeometry(2000,2000),mat(0xe6e5df));stage.rotation.x=-Math.PI/2;stage.position.y=-.83;stage.receiveShadow=true;scene.add(stage);
 scene.add(new T.HemisphereLight(0xffffff,0x748077,1.2));const sun=new T.DirectionalLight(0xfff4de,2.3);sun.position.set(-60,110,-70);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-85,right:85,top:85,bottom:-85,near:1,far:250});sun.shadow.bias=-.0003;scene.add(sun);
 const fill=new T.DirectionalLight(0xd2eaff,.5);fill.position.set(70,40,50);scene.add(fill);
-const camera=new T.PerspectiveCamera(36,innerWidth/innerHeight,.1,3000);camera.position.set(135,90,-145);
+const camera=new T.PerspectiveCamera(36,innerWidth/innerHeight,.1,3000);camera.position.set(155,102,-165);
 let renderer;try{renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});}catch(e){document.getElementById('error').style.display='block';document.getElementById('error').textContent='Для просмотра нужен браузер с WebGL. '+e.message;throw e;}
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.outputEncoding=T.sRGBEncoding;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;document.getElementById('view').appendChild(renderer.domElement);
 const controls=new T.OrbitControls(camera,renderer.domElement);controls.target.set(0,21,0);controls.enableDamping=true;controls.minDistance=65;controls.maxDistance=360;controls.maxPolarAngle=Math.PI*.49;controls.autoRotateSpeed=.6;
 function view(pos){camera.position.set(...pos);controls.target.set(0,21,0);controls.update();}
-document.getElementById('home').onclick=()=>view([135,90,-145]);document.getElementById('front').onclick=()=>view([0,40,-180]);
+document.getElementById('home').onclick=()=>view([155,102,-165]);document.getElementById('front').onclick=()=>view([0,40,-180]);
 document.getElementById('top').onclick=()=>view([0,205,.1]);document.getElementById('rotate').onchange=e=>controls.autoRotate=e.target.checked;
 document.getElementById('scheme').onchange=e=>{const colors=[0xce765b,0x51869b,0xc6aa59];halls.forEach((m,i)=>{m.material=e.target.checked?mat(colors[i],.6,.2):silver;});};
 document.getElementById('wire').onchange=e=>model.traverse(m=>{if(m.isMesh)m.material.wireframe=e.target.checked;});
@@ -154,6 +155,7 @@ document.getElementById('scheme').onchange=e=>{oldScheme(e);if(softwareScene)hal
 const oldWire=document.getElementById('wire').onchange;
 document.getElementById('wire').onchange=e=>{oldWire(e);if(softwareScene)softwareScene.traverse(m=>{if(m.isMesh)m.material.wireframe=e.target.checked;});};
 function animate(time){requestAnimationFrame(animate);controls.update();if(software){if(time-lastFrame>80){software.render(softwareScene,camera);lastFrame=time;}}else renderer.render(scene,camera);}animate(0);
+
 
 
 

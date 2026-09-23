@@ -8,10 +8,13 @@ await page.goto('http://127.0.0.1:8766/prototype-v02/viewer.html?software=1');
 await page.waitForFunction(()=>document.querySelectorAll('#view svg path').length>100);
 await page.screenshot({path:path.join(__dirname,'preview.png')});
 const svg=await page.locator('#view svg').evaluate(el=>el.outerHTML);fs.writeFileSync(path.join(__dirname,'preview.svg'),svg);
+await page.locator('#top').click();await page.waitForTimeout(300);await page.screenshot({path:path.join(__dirname,'site-plan-v02.png')});await page.locator('#home').click();
+const textures=await page.evaluate(()=>{const out={};tpac.model.traverse(o=>{if(o.isMesh&&o.material.map)out[o.material.map.name]=o.material.map.image.toDataURL().split(',')[1];});return out;});fs.mkdirSync(path.join(__dirname,'textures'),{recursive:true});for(const [name,b64] of Object.entries(textures))fs.writeFileSync(path.join(__dirname,'textures',name+'.png'),Buffer.from(b64,'base64'));
 const bytes=await page.evaluate(async()=>Array.from(new Uint8Array(await exportGLB())));fs.writeFileSync(path.join(__dirname,'tpac-study-v02.glb'),Buffer.from(bytes));
 await page.locator('#scheme').check();await page.locator('#wire').check();await page.locator('#wire').uncheck();await page.locator('#top').click();await page.locator('#home').click();
 await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(__dirname,'preview-mobile.png')});
 console.log(JSON.stringify({errors,glbBytes:bytes.length,svgPaths:await page.locator('#view svg path').count(),mobileOverflow:await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)}));
 }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1)});
+
 
