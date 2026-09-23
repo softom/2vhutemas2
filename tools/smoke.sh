@@ -136,6 +136,16 @@ TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d pos
 select body_text from app.documents where id=$DID")
 contains "поисковый текст извлечён" 'smoke проверка текста' "$TEXT"
 
+echo "── Публикация"
+MID=$(echo "$C" | field material_id)
+check "публикация версии" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"note":"smoke"}' $API/materials/$MID/publish)"
+check "объект виден гостю после публикации" 200 "$(code $API/entities/$EID)"
+check "повторная публикация той же версии" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/materials/$MID/publish)"
+code -H "$AUTH" $API/materials/$MID >/dev/null
+contains "состояние материала" '"published"' "$(body)"
+check "архивирование" 204 "$(code -X DELETE -H "$AUTH" $API/materials/$MID)"
+check "архивный объект гостю не виден" 404 "$(code $API/entities/$EID)"
+
 echo "── Уборка"
 docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -q -c "
 delete from app.attachments a using app.targets t
@@ -144,6 +154,8 @@ delete from app.attachments a using app.targets t
 delete from app.document_entity_refs r using app.revisions rev, app.materials m
  where r.revision_id = rev.id and rev.material_id = m.id
    and (m.entity_id in ($EID,$EID2) or m.document_id = $DID);
+delete from app.revision_reviews rr using app.revisions r, app.materials m
+ where rr.revision_id = r.id and r.material_id = m.id and (m.entity_id in ($EID,$EID2) or m.document_id = $DID);
 delete from app.entity_tags where entity_id in ($EID,$EID2);
 delete from app.entity_dates where entity_id in ($EID,$EID2);
 delete from app.media_tags where asset_id = '$AID';
