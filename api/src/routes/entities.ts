@@ -109,10 +109,9 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            (select r.id from app.revisions r where r.material_id = m.id
              order by r.created_at desc limit 1) as latest_revision_id,
            coalesce(
-             to_jsonb(op) - 'entity_id' - 'kind_id' - 'object_type_id' - 'status_id'
+             to_jsonb(op) - 'entity_id' - 'kind_id' - 'object_type_id'
                || jsonb_build_object(
-                    'object_type', (select code from app.object_types t where t.id = op.object_type_id),
-                    'status', (select code from app.object_statuses st where st.id = op.status_id)),
+                    'object_type', (select code from app.object_types t where t.id = op.object_type_id)),
              to_jsonb(pp) - 'entity_id' - 'kind_id' - 'person_type_id'
                || jsonb_build_object(
                     'person_type', (select code from app.person_types t where t.id = pp.person_type_id)),
@@ -178,28 +177,20 @@ entities.post("/", async (c: Context<AppEnv>) => {
     if (input.kind === "object") {
       const profile = input.profile ?? {};
       await tx`
-        insert into app.object_profile (entity_id, object_type_id, status_id, city, country,
-                                        address, lat, lon, typology, current_use, materials,
-                                        floors, area_sq_m, height_m, capacity, heritage_status)
+        insert into app.object_profile (entity_id, object_type_id, city, country, address,
+                                        lat, lon, typology)
         values (${entityId},
                 (select id from app.object_types where code = ${profile.object_type ?? null}),
-                (select id from app.object_statuses where code = ${profile.status ?? null}),
                 ${profile.city ?? null}, ${profile.country ?? null}, ${profile.address ?? null},
-                ${profile.lat ?? null}, ${profile.lon ?? null}, ${profile.typology ?? null},
-                ${profile.current_use ?? null}, ${profile.materials ?? null},
-                ${profile.floors ?? null}, ${profile.area_sq_m ?? null},
-                ${profile.height_m ?? null}, ${profile.capacity ?? null},
-                ${profile.heritage_status ?? null})
+                ${profile.lat ?? null}, ${profile.lon ?? null}, ${profile.typology ?? null})
       `;
     } else if (input.kind === "person") {
       const profile = input.profile ?? {};
       await tx`
-        insert into app.person_profile (entity_id, person_type_id, full_name, known_for,
-                                        country, website_url)
+        insert into app.person_profile (entity_id, person_type_id, full_name)
         values (${entityId},
                 (select id from app.person_types where code = ${profile.person_type ?? null}),
-                ${profile.full_name ?? null}, ${profile.known_for ?? null},
-                ${profile.country ?? null}, ${profile.website_url ?? null})
+                ${profile.full_name ?? null})
       `;
     } else if (input.kind === "period") {
       await tx`insert into app.period_profile (entity_id) values (${entityId})`;
@@ -296,21 +287,12 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
           object_type_id = coalesce(
             (select id from app.object_types where code = ${profile.object_type ?? null}),
             object_type_id),
-          status_id = coalesce(
-            (select id from app.object_statuses where code = ${profile.status ?? null}), status_id),
-          city            = coalesce(${profile.city ?? null}, city),
-          country         = coalesce(${profile.country ?? null}, country),
-          address         = coalesce(${profile.address ?? null}, address),
-          typology        = coalesce(${profile.typology ?? null}, typology),
-          current_use     = coalesce(${profile.current_use ?? null}, current_use),
-          materials       = coalesce(${profile.materials ?? null}, materials),
-          floors          = coalesce(${profile.floors ?? null}, floors),
-          area_sq_m       = coalesce(${profile.area_sq_m ?? null}, area_sq_m),
-          height_m        = coalesce(${profile.height_m ?? null}, height_m),
-          capacity        = coalesce(${profile.capacity ?? null}, capacity),
-          heritage_status = coalesce(${profile.heritage_status ?? null}, heritage_status),
-          lat             = coalesce(${profile.lat ?? null}, lat),
-          lon             = coalesce(${profile.lon ?? null}, lon)
+          city     = coalesce(${profile.city ?? null}, city),
+          country  = coalesce(${profile.country ?? null}, country),
+          address  = coalesce(${profile.address ?? null}, address),
+          typology = coalesce(${profile.typology ?? null}, typology),
+          lat      = coalesce(${profile.lat ?? null}, lat),
+          lon      = coalesce(${profile.lon ?? null}, lon)
         where entity_id = ${id}
       `;
       await tx`
@@ -318,10 +300,7 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
           person_type_id = coalesce(
             (select id from app.person_types where code = ${profile.person_type ?? null}),
             person_type_id),
-          full_name   = coalesce(${profile.full_name ?? null}, full_name),
-          known_for   = coalesce(${profile.known_for ?? null}, known_for),
-          country     = coalesce(${profile.country ?? null}, country),
-          website_url = coalesce(${profile.website_url ?? null}, website_url)
+          full_name = coalesce(${profile.full_name ?? null}, full_name)
         where entity_id = ${id}
       `;
     }

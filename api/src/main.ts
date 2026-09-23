@@ -55,7 +55,6 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
     union all select 'reference_kinds', code, title_ru from app.reference_kinds
     union all select 'link_roles', code, title_ru from app.link_roles
     union all select 'media_kinds', code, title_ru from app.media_kinds
-    union all select 'object_statuses', code, title_ru from app.object_statuses
     order by 1, 2
   `;
   const grouped: Record<string, { code: string; title_ru: string }[]> = {};
