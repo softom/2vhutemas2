@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Схема этапа 1 — предложение.md",
+                "file": "Параметры проекта.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Схема этапа 1 — предложение"
+              "title": "Параметры проекта"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Схема этапа 1 — предложение.md",
+                "file": "Параметры проекта.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Схема этапа 1 — предложение.md",
+                "file": "Параметры проекта.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Схема этапа 1 — предложение.md",
+                "file": "Параметры проекта.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,16 +190,19 @@
   },
   "active": "a8f13fb08152fa66",
   "lastOpenFiles": [
+    "Архив решений.md",
+    "Схема данных.md",
+    "Схема данных.md.tmp.54512.686cecc9095c",
+    "Структура БД.md",
+    "Схема этапа 1 — предложение.md",
     "API.md.tmp.54512.f2879f994769",
     "Blender — анализ плагинов и установка.md",
     "Процесс архитектурных 3D-моделей.md",
     "TPAC — референсы модели.md",
     "Решения.md",
-    "Схема этапа 1 — предложение.md",
     "Схема этапа 1 — предложение.md.tmp.8976.15053113e2dc",
     "Готовность к разработке.md",
     "Готовность к разработке.md.tmp.8976.ff1558fb6f2d",
-    "Структура БД.md",
     "Техническое задание.md",
     "API.md",
     "BackUp.md",
