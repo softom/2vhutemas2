@@ -90,6 +90,9 @@ export function fromDatabaseError(error: unknown): ApiError {
   const constraint = pgError.constraint ?? "";
 
   if (pgError.code === "23505") {
+    if (constraint.includes("places_address_uniq")) {
+      return new ApiError("duplicate", "Место с таким адресом уже есть в справочнике");
+    }
     if (constraint.includes("slug")) {
       return new ApiError("duplicate", "Такой адрес уже занят в этом виде сущностей");
     }

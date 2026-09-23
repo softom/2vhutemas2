@@ -102,6 +102,8 @@ check "справочник мест под входом" 200 "$(code -H "$AUTH"
 P=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"country":"smoke-страна","settlement":"smoke-город","precision":"settlement"}' $API/places)
 PID=$(echo "$P" | field id)
 check "создание места" "да" "$([ -n "$PID" ] && echo да || echo нет)"
+SAME=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"country":"SMOKE-СТРАНА","settlement":" smoke-город "}' $API/places | field id)
+check "повтор адреса не плодит место" "$PID" "$SAME"
 check "пустое место отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/places)"
 check "широта без долготы отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"settlement":"smoke","lat":10}' $API/places)"
 check "привязка места" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"role\":\"address\",\"place_id\":\"$PID\"}" $API/places/attachments)"
