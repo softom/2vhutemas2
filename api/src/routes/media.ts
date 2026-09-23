@@ -64,12 +64,12 @@ media.get("/", async (c: Context<AppEnv>) => {
   const rows = await sql<Record<string, unknown>>`
     select a.id, a.asset_class, a.caption_ru, a.credit, a.visibility, a.is_published,
            a.created_at,
-           (select f.status from app.media_files f
-             where f.asset_id = a.id and f.variant = 'original' and f.is_current) as original_status,
-           (select f.status from app.media_files f
-             where f.asset_id = a.id and f.variant = 'screen' and f.is_current) as screen_status,
-           (select f.status from app.media_files f
-             where f.asset_id = a.id and f.variant = 'thumbnail' and f.is_current) as thumbnail_status,
+           -- Состав вариантов в том же виде, что и в карточке файла: иначе
+           -- список не знает, готово ли превью, и вечно показывает «обработка».
+           (select jsonb_object_agg(f.variant, jsonb_build_object(
+                     'status', f.status, 'width', f.width, 'height', f.height,
+                     'size_bytes', f.size_bytes, 'mime_type', f.mime_type))
+            from app.media_files f where f.asset_id = a.id and f.is_current) as files,
            (select k.code from app.media_kinds k where k.id = a.kind_id) as kind,
            a.author, a.holder, a.created_year, a.description,
            coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
