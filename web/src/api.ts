@@ -74,6 +74,9 @@ export interface EntityListItem {
   material_status: string | null;
   /** Первое по порядку прикреплённое изображение; пусто, если файлов нет. */
   cover_asset_id: string | null;
+  /** Значение величины, по которой шёл отбор; приходит только с ?parameter=. */
+  parameter_value?: number | string | null;
+  parameter_text?: string | null;
 }
 
 export interface EntityCard extends EntityListItem {
@@ -125,6 +128,68 @@ export interface EntityPlace extends Place {
   role_title: string;
 }
 
+/** Значение величины внутри показателей (Р-38). */
+export interface IndicatorValue {
+  parameter: string;
+  title?: string;
+  unit?: string | null;
+  value_type?: string;
+  num_value?: number | string | null;
+  text_value?: string | null;
+  bool_value?: boolean | null;
+  option?: string | null;
+  date_start_year?: number | null;
+  date_end_year?: number | null;
+  is_approximate?: boolean;
+  is_ongoing?: boolean;
+  note?: string | null;
+}
+
+/** Одно измерение целиком: «по проекту», «после реконструкции». */
+export interface Indicator {
+  id?: string;
+  title: string;
+  is_current: boolean;
+  measured_year?: number | null;
+  measured_by?: string | null;
+  note?: string | null;
+  values: IndicatorValue[];
+}
+
+/** Параметр, подсказанный записи её ветвью дерева и наборами. */
+export interface SuggestedParameter {
+  parameter: string;
+  title: string;
+  unit: string | null;
+  value_type: string;
+  definition: string | null;
+  set: string;
+  set_title: string;
+  hint: string | null;
+  options: { code: string; title: string }[];
+}
+
+export interface ParameterRow {
+  id: string;
+  code: string;
+  title_ru: string;
+  unit: string | null;
+  value_type: string;
+  definition: string | null;
+  sort_order: number;
+  options: { code: string; title: string }[];
+  used: number | string;
+}
+
+export interface ParameterSetRow {
+  id: string;
+  code: string;
+  title_ru: string;
+  note: string | null;
+  items: { code: string; title_ru: string; unit: string | null; value_type: string }[];
+  types: { code: string; title: string }[];
+}
+
 export interface Capabilities {
   contract_version: string;
   limits: Record<string, unknown>;
@@ -138,12 +203,29 @@ export const api = {
   me: () =>
     request<{ authenticated: boolean; display_name?: string; permissions: string[] }>("/me"),
 
-  entities: (params: { type?: string; q?: string; cursor?: string }) => {
+  entities: (
+    params: {
+      type?: string;
+      q?: string;
+      cursor?: string;
+      parameter?: string;
+      min?: string;
+      max?: string;
+      sort?: string;
+      order?: string;
+    },
+  ) => {
     const search = new URLSearchParams();
     // Отбор по ветви целиком: корневая ветвь — это прежний фильтр по виду.
     if (params.type) search.set("type", params.type);
     if (params.q) search.set("q", params.q);
     if (params.cursor) search.set("cursor", params.cursor);
+    // Отбор и сортировка по величине считаются по действующим показателям.
+    if (params.parameter) search.set("parameter", params.parameter);
+    if (params.min) search.set("min", params.min);
+    if (params.max) search.set("max", params.max);
+    if (params.sort) search.set("sort", params.sort);
+    if (params.order) search.set("order", params.order);
     return request<{ items: EntityListItem[]; next_cursor: string | null }>(
       `/entities?${search.toString()}`,
     );
@@ -159,6 +241,37 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+
+  saveIndicators: (id: number, items: Indicator[], baseRevisionId: string | null) =>
+    request<{ items: Indicator[]; revision_id: string | null }>(`/entities-indicators/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ indicators: items, base_revision_id: baseRevisionId }),
+    }),
+
+  parameters: () => request<{ items: ParameterRow[] }>("/parameters"),
+  parametersForType: (code: string) =>
+    request<{ items: SuggestedParameter[] }>(`/parameters/for-type/${code}`),
+  createParameter: (body: unknown) =>
+    request<{ id: string }>("/parameters", { method: "POST", body: JSON.stringify(body) }),
+  updateParameter: (id: string, body: unknown) =>
+    request<ParameterRow>(`/parameters/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteParameter: (id: string) =>
+    request<void>(`/parameters/${id}`, { method: "DELETE" }),
+  parameterSets: () => request<{ items: ParameterSetRow[] }>("/parameter-sets"),
+  createParameterSet: (body: unknown) =>
+    request<{ id: string }>("/parameter-sets", { method: "POST", body: JSON.stringify(body) }),
+  setParameterSetItems: (code: string, items: { parameter: string; hint?: string | null }[]) =>
+    request<{ set: string; items: number }>(`/parameter-sets/${code}/items`, {
+      method: "PUT",
+      body: JSON.stringify({ items }),
+    }),
+  attachParameterSet: (code: string, type: string) =>
+    request<{ set: string; type: string }>(`/parameter-sets/${code}/types`, {
+      method: "POST",
+      body: JSON.stringify({ type }),
+    }),
+  detachParameterSet: (code: string, type: string) =>
+    request<void>(`/parameter-sets/${code}/types/${type}`, { method: "DELETE" }),
 
   document: (id: number) =>
     request<{ id: number; title: string; body_json: unknown; latest_revision_id: string }>(

@@ -6,7 +6,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { api, type EntityCard, type EntityPlace, placeLabel } from "../api";
+import { api, type EntityCard, type EntityPlace, type Indicator, placeLabel } from "../api";
 import { schema } from "../editor/entityBlocks";
 
 interface DateRow {
@@ -42,7 +42,7 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
   if (error) return <p className="error">{error}</p>;
   if (!entity || blocks === null) return <p className="notice">Загружаем…</p>;
 
-  const profile = entity.profile as Record<string, string | null>;
+  const indicators = (entity as unknown as { indicators?: Indicator[] }).indicators ?? [];
   const media = (entity as unknown as { media?: { asset_id: string; role: string }[] }).media ?? [];
   const dates = (entity as unknown as { dates?: DateRow[] }).dates ?? [];
   const places = (entity as unknown as { places?: EntityPlace[] }).places ?? [];
@@ -75,7 +75,7 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         </p>
       )}
 
-      <Facts profile={profile} />
+      <Indicators items={indicators} />
 
       {places.length > 0 && (
         <>
@@ -195,27 +195,51 @@ function Relations({ entityId }: { entityId: number }) {
   );
 }
 
-const FACT_LABELS: [string, string, string?][] = [
-  ["typology", "Типология"],
-];
+/** Величина в человеческом виде: число с единицей, дата, да/нет. */
+function valueText(value: Indicator["values"][number]): string {
+  if (value.num_value !== null && value.num_value !== undefined && value.num_value !== "") {
+    return `${value.num_value}${value.unit ? " " + value.unit : ""}`;
+  }
+  if (value.text_value) return value.text_value;
+  if (value.bool_value !== null && value.bool_value !== undefined) {
+    return value.bool_value ? "да" : "нет";
+  }
+  if (value.option) return value.option;
+  if (value.date_start_year) {
+    const range = value.date_end_year
+      ? `${value.date_start_year}–${value.date_end_year}`
+      : value.is_ongoing
+      ? `с ${value.date_start_year}`
+      : String(value.date_start_year);
+    return value.is_approximate ? `около ${range}` : range;
+  }
+  return "";
+}
 
-/** Сведения карточки: показываем только заполненное, пустое не выдумываем. */
-function Facts({ profile }: { profile: Record<string, unknown> }) {
-  const rows = FACT_LABELS
-    .map(([key, label, unit]) => ({ key, label, unit, value: profile?.[key] }))
-    .filter((row) => row.value !== null && row.value !== undefined && row.value !== "");
-  if (rows.length === 0) return null;
+/** Показатели: несколько измерений, каждое со своими величинами (Р-38). */
+function Indicators({ items }: { items: Indicator[] }) {
+  const filled = items.filter((item) => item.values.length > 0);
+  if (filled.length === 0) return null;
   return (
     <>
-      <h2>Сведения</h2>
-      <dl className="facts">
-        {rows.map((row) => (
-          <div key={row.key}>
-            <dt>{row.label}</dt>
-            <dd>{String(row.value)}{row.unit ? ` ${row.unit}` : ""}</dd>
-          </div>
-        ))}
-      </dl>
+      <h2>Показатели</h2>
+      {filled.map((item, index) => (
+        <div key={item.id ?? index}>
+          <h3>
+            {item.title}
+            {item.measured_year ? ` · ${item.measured_year}` : ""}
+            {item.is_current ? "" : " · не действующие"}
+          </h3>
+          <dl className="facts">
+            {item.values.map((value) => (
+              <div key={value.parameter}>
+                <dt>{value.title ?? value.parameter}</dt>
+                <dd>{valueText(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
     </>
   );
 }

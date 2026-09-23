@@ -52,17 +52,37 @@ function validate(input: Partial<EntityInput>, isCreate: boolean): void {
   }
 }
 
-/** Снимок для версии: карточка вместе с типом и оставшимися свойствами. */
+/**
+ * Типология из прежнего профиля: теперь это значение параметра `typology`
+ * в показателях записи. Поле принимается ради выданных ранее сценариев.
+ */
+async function writeTypology(tx: Tx, entityId: number, typology: string | null): Promise<void> {
+  if (!typology) return;
+  const indicators = await tx<{ id: string }>`
+    select id from app.indicators where entity_id = ${entityId} order by sort_order, id limit 1
+  `;
+  const indicatorId = indicators.length > 0 ? indicators[0].id : (await tx<{ id: string }>`
+    insert into app.indicators (entity_id, title) values (${entityId}, 'Сведения') returning id
+  `)[0].id;
+  await tx`
+    insert into app.indicator_values (indicator_id, parameter_id, text_value)
+    select ${indicatorId}, p.id, ${typology} from app.parameters p where p.code = 'typology'
+    on conflict (indicator_id, parameter_id) do update set text_value = excluded.text_value
+  `;
+}
+
+/** Снимок для версии: карточка вместе с типом и показателями. */
 async function snapshot(tx: Tx, id: number) {
   const rows = await tx`
     select to_jsonb(e) ||
            jsonb_build_object(
              'type', ty.code,
              'type_path', app.entity_type_path(e.type_id),
-             'profile', coalesce(to_jsonb(op) - 'entity_id', '{}'::jsonb)) as data
+             'indicators', coalesce((select jsonb_agg(to_jsonb(i) order by i.sort_order)
+                                     from app.indicators i where i.entity_id = e.id),
+                                    '[]'::jsonb)) as data
     from app.entities e
     join app.entity_types ty on ty.id = e.type_id
-    left join app.object_profile op on op.entity_id = e.id
     where e.id = ${id}
   `;
   return (rows[0] as { data?: unknown })?.data ?? {};
@@ -76,6 +96,14 @@ entities.get("/", async (c: Context<AppEnv>) => {
   // фильтр по виду, «зрелищные здания» — ветвь ниже. Механизм один (Р-37).
   const type = resolveTypeCode(c.req.query("type"), c.req.query("kind"));
   const search = c.req.query("q")?.trim() || null;
+  // Сортировка и отбор по величине — то, ради чего заведены параметры (Р-38).
+  // Считаем по действующим показателям: иначе «по проекту» и «после
+  // реконструкции» дали бы два разных ответа на один вопрос.
+  const parameter = c.req.query("parameter") ?? null;
+  const min = c.req.query("min") ? Number(c.req.query("min")) : null;
+  const max = c.req.query("max") ? Number(c.req.query("max")) : null;
+  const sortByValue = c.req.query("sort") === "parameter" && parameter !== null;
+  const descending = c.req.query("order") === "desc";
   const drafts = canSeeDrafts(principal);
   // Архив в каталоге не показывается: он не «ещё не готово», а «убрано».
   // Найти убранное можно явным запросом ?archived=1 — для восстановления.
@@ -91,18 +119,32 @@ entities.get("/", async (c: Context<AppEnv>) => {
            (select a.asset_id from app.attachments a
               join app.targets t on t.id = a.target_id
              where t.entity_id = e.id and a.asset_id is not null
-             order by a.sort_order, a.id limit 1) as cover_asset_id
+             order by a.sort_order, a.id limit 1) as cover_asset_id,
+           pv.num_value as parameter_value, pv.text_value as parameter_text
     from app.entities e
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
+    left join lateral (
+        select iv.num_value, iv.text_value
+          from app.indicator_values iv
+          join app.indicators i on i.id = iv.indicator_id
+          join app.parameters p on p.id = iv.parameter_id
+         where i.entity_id = e.id and i.is_current and p.code = ${parameter}
+         order by i.sort_order limit 1) pv on ${parameter}::text is not null
     where (${drafts} or e.is_published)
       and (${archived} or coalesce(m.status, 'draft') <> 'archived')
       and (${type}::text is null
            or e.type_id in (select app.entity_type_subtree(${type})))
       and (${search}::text is null or e.title_ru ilike ${"%" + (search ?? "") + "%"}
            or e.title_en ilike ${"%" + (search ?? "") + "%"})
-      and (${after}::bigint is null or e.id > ${after})
-    order by e.id
+      and (${parameter}::text is null
+           or pv.num_value is not null or pv.text_value is not null)
+      and (${min}::numeric is null or pv.num_value >= ${min})
+      and (${max}::numeric is null or pv.num_value <= ${max})
+      and (${sortByValue} or ${after}::bigint is null or e.id > ${after})
+    order by case when ${sortByValue} and ${descending} then pv.num_value end desc nulls last,
+             case when ${sortByValue} and not ${descending} then pv.num_value end asc nulls last,
+             e.id
     limit ${limit + 1}
   `;
 
@@ -110,7 +152,9 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const items = hasMore ? rows.slice(0, limit) : rows;
   return c.json({
     items,
-    next_cursor: hasMore ? encodeCursor(Number(items[items.length - 1].id)) : null,
+    next_cursor: hasMore && !sortByValue
+      ? encodeCursor(Number(items[items.length - 1].id))
+      : null,
   });
 });
 
@@ -126,7 +170,6 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            m.published_revision_id,
            (select r.id from app.revisions r where r.material_id = m.id
              order by r.created_at desc limit 1) as latest_revision_id,
-           coalesce(to_jsonb(op) - 'entity_id', '{}'::jsonb) as profile,
            (select a.document_id from app.attachments a
               join app.targets t on t.id = a.target_id
               join app.attachment_roles ar on ar.id = a.role_id
@@ -162,6 +205,39 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                         order by t.title)
                      from app.entity_tags et join app.tags t on t.id = et.tag_id
                     where et.entity_id = e.id), '[]'::jsonb) as tags,
+           coalesce((select jsonb_agg(jsonb_build_object(
+                        'id', i.id, 'title', i.title, 'is_current', i.is_current,
+                        'measured_year', i.measured_year, 'measured_by', i.measured_by,
+                        'note', i.note,
+                        'values', coalesce((select jsonb_agg(jsonb_build_object(
+                               'parameter', p.code, 'title', p.title_ru, 'unit', p.unit,
+                               'value_type', p.value_type,
+                               'num_value', iv.num_value, 'text_value', iv.text_value,
+                               'bool_value', iv.bool_value,
+                               'option', (select o.code from app.parameter_options o
+                                           where o.id = iv.option_id),
+                               'date_start_year', iv.date_start_year,
+                               'date_end_year', iv.date_end_year,
+                               'is_approximate', iv.is_approximate,
+                               'is_ongoing', iv.is_ongoing, 'note', iv.note)
+                               order by p.sort_order, p.title_ru)
+                            from app.indicator_values iv
+                            join app.parameters p on p.id = iv.parameter_id
+                           where iv.indicator_id = i.id), '[]'::jsonb))
+                        order by i.sort_order, i.id)
+                     from app.indicators i where i.entity_id = e.id), '[]'::jsonb) as indicators,
+           -- Что подсказывает ветвь дерева и собственные наборы записи (Р-38).
+           coalesce((select jsonb_agg(jsonb_build_object(
+                        'parameter', ep.code, 'title', ep.title_ru, 'unit', ep.unit,
+                        'value_type', ep.value_type, 'definition', ep.definition,
+                        'set', ep.set_code, 'set_title', ep.set_title, 'hint', ep.hint,
+                        'options', coalesce((select jsonb_agg(jsonb_build_object(
+                                         'code', o.code, 'title', o.title_ru)
+                                         order by o.sort_order)
+                                      from app.parameter_options o
+                                     where o.parameter_id = ep.parameter_id), '[]'::jsonb))
+                        order by ep.sort_order, ep.title_ru)
+                     from app.entity_parameters(e.id) ep), '[]'::jsonb) as suggested_parameters,
            (select jsonb_agg(jsonb_build_object(
                       'kind', dk.code, 'title', dk.title_ru,
                       'start_year', d.start_year, 'start_month', d.start_month,
@@ -174,7 +250,6 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
     from app.entities e
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
-    left join app.object_profile op on op.entity_id = e.id
     where e.id = ${id}
   `;
   const entity = rows[0];
@@ -208,13 +283,9 @@ entities.post("/", async (c: Context<AppEnv>) => {
     `;
     const entityId = Number(inserted[0].id);
 
-    // Типология доживает до этапа Б, когда станет значением параметра.
-    const typology = (input.profile?.typology as string | undefined) ?? null;
-    if (typology) {
-      await tx`
-        insert into app.object_profile (entity_id, typology) values (${entityId}, ${typology})
-      `;
-    }
+    // Прежнее `profile.typology` принимается и ложится значением параметра:
+    // выданные сценарии наполнения продолжают работать (Р-38).
+    await writeTypology(tx, entityId, (input.profile?.typology as string | undefined) ?? null);
 
     const materials = await tx`
       insert into app.materials (kind, entity_id, created_by)
@@ -309,15 +380,7 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
       where id = ${id}
     `;
 
-    // Типология правится и тогда, когда её ещё не было: иначе введённое
-    // значение молча пропадало бы у записи без строки профиля.
-    const typology = (input.profile?.typology as string | undefined) ?? null;
-    if (typology) {
-      await tx`
-        insert into app.object_profile (entity_id, typology) values (${id}, ${typology})
-        on conflict (entity_id) do update set typology = excluded.typology
-      `;
-    }
+    await writeTypology(tx, id, (input.profile?.typology as string | undefined) ?? null);
 
     const data = await snapshot(tx, id);
     const revisions = await tx`

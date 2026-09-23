@@ -151,6 +151,7 @@ check "гость метки не меняет" 401 "$(code -X PUT -H "$JSON" -d
 echo "── Связи"
 C2=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"type":"architecture_object","slug":"smoke-vtoroy","title_ru":"smoke: второй"}' $API/entities)
 EID2=$(echo "$C2" | field id)
+REVB=$(echo "$C2" | field revision_id)
 check "связь без обоснования" 422 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$EID2,\"justification\":{}}" $API/links)"
 check "связь с обоснованием" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$EID2,\"justification\":{\"text\":\"smoke: обоснование\"}}" $API/links)"
 code -H "$AUTH" "$API/links?entity_id=$EID" >/dev/null
@@ -192,6 +193,36 @@ import json,sys
 print(sum(1 for i in json.load(sys.stdin)['items'] if str(i['id']) == '$EID'))")
 check "свой архив виден по запросу" 1 "$ARCHIVED_ON_DEMAND"
 
+echo "── Параметры и показатели"
+check "справочник параметров" 200 "$(code -H "$AUTH" $API/parameters)"
+contains "типология в справочнике" '"typology"' "$(body)"
+code -H "$AUTH" $API/parameters/for-type/architecture_object >/dev/null
+contains "набор подсказан ветвью" 'Типология' "$(body)"
+code -H "$AUTH" $API/parameters/for-type/who >/dev/null
+contains "у ветви «Кто» свой набор" 'full_name' "$(body)"
+
+# Величина заводится справочником, привязывается к ветви и заполняется у записи.
+P=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"code":"smoke_capacity","title_ru":"smoke: вместимость","unit":"мест","value_type":"integer","definition":"Только зал"}' $API/parameters)
+PID_PARAM=$(echo "$P" | field id)
+check "параметр заведён" "да" "$([ -n "$PID_PARAM" ] && echo да || echo нет)"
+curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"code":"smoke_set","title_ru":"smoke: набор"}' $API/parameter-sets >/dev/null
+check "состав набора" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d '{"items":[{"parameter":"smoke_capacity"}]}' $API/parameter-sets/smoke_set/items)"
+check "набор привязан к ветви" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"type":"architecture_object"}' $API/parameter-sets/smoke_set/types)"
+code -H "$AUTH" $API/parameters/for-type/architecture_object >/dev/null
+contains "величина подсказана ветви" 'smoke_capacity' "$(body)"
+
+check "запись показателей" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"по проекту\",\"is_current\":true,\"values\":[{\"parameter\":\"smoke_capacity\",\"num_value\":3000}]}],\"base_revision_id\":\"$REVB\"}" $API/entities-indicators/$EID2)"
+REV_IND=$(body | field revision_id)
+check "правка показателей создала версию" "да" "$([ -n "$REV_IND" ] && echo да || echo нет)"
+code -H "$AUTH" $API/entities/$EID2 >/dev/null
+contains "показатели в карточке" 'smoke_capacity' "$(body)"
+check "не то значение отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"smoke_capacity\",\"text_value\":\"много\"}]}]}" $API/entities-indicators/$EID2)"
+code -H "$AUTH" "$API/entities?parameter=smoke_capacity&min=1000" >/dev/null
+contains "отбор по величине" 'smoke-vtoroy' "$(body)"
+code -H "$AUTH" "$API/entities?parameter=smoke_capacity&min=5000" >/dev/null
+missing "запись вне диапазона не попала" 'smoke-vtoroy' "$(body)"
+check "занятый параметр не удаляется" 400 "$(code -X DELETE -H "$AUTH" $API/parameters/$PID_PARAM)"
+
 echo "── Уборка"
 docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -q -c "
 delete from app.attachments a using app.targets t
@@ -220,11 +251,14 @@ delete from app.media_files where asset_id = '$AID';
 delete from app.media_assets where id = '$AID';
 delete from app.places where id = '$PID';
 delete from app.tags where lower(title) like 'smoke-%';
+delete from app.parameter_sets where code like 'smoke%';
+delete from app.parameters where code like 'smoke%';
 " >/dev/null
 LEFT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -c "
 select (select count(*) from app.entities where slug like 'smoke-%')
      + (select count(*) from app.places where country like 'smoke-%')
-     + (select count(*) from app.tags where lower(title) like 'smoke-%')")
+     + (select count(*) from app.tags where lower(title) like 'smoke-%')
+     + (select count(*) from app.parameters where code like 'smoke%')")
 check "тестовые записи убраны" 0 "$LEFT"
 rm -f /tmp/smoke.jpg /tmp/smoke.out
 

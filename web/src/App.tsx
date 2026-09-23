@@ -9,6 +9,7 @@ import { Catalog } from "./pages/Catalog";
 import { EntityPage } from "./pages/EntityPage";
 import { EntityEditor } from "./pages/EntityEditor";
 import { MediaLibrary } from "./pages/MediaLibrary";
+import { Parameters } from "./pages/Parameters";
 import { Login } from "./pages/Login";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 
@@ -55,6 +56,11 @@ export function App() {
           <Link to="/media" className={location.pathname.startsWith("/media") ? "active" : ""}>
             Медиатека
           </Link>
+          {can("edit") && (
+            <Link to="/parameters" className={location.pathname === "/parameters" ? "active" : ""}>
+              Параметры
+            </Link>
+          )}
           {can("create_delete") && <Link to="/entities/new">Создать объект</Link>}
         </nav>
         <div className="viewer">
@@ -87,6 +93,7 @@ export function App() {
           <Route path="/entities/:id" element={<EntityPage canEdit={can("edit")} />} />
           <Route path="/entities/:id/edit" element={<EntityEditor mode="edit" />} />
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
+          <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
           <Route path="/login" element={<Login onDone={refresh} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

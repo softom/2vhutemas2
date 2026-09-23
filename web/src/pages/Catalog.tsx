@@ -1,13 +1,24 @@
 /** Каталог записей: поиск, отбор по ветви дерева типов, переход к карточке. */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type Capabilities, type EntityListItem, type EntityType } from "../api";
+import {
+  api,
+  type Capabilities,
+  type EntityListItem,
+  type EntityType,
+  type SuggestedParameter,
+} from "../api";
 
 export function Catalog({ canCreate }: { canCreate: boolean }) {
   const [items, setItems] = useState<EntityListItem[]>([]);
   const [types, setTypes] = useState<EntityType[]>([]);
   const [type, setType] = useState("");
   const [query, setQuery] = useState("");
+  const [parameters, setParameters] = useState<SuggestedParameter[]>([]);
+  const [parameter, setParameter] = useState("");
+  const [min, setMin] = useState("");
+  const [max, setMax] = useState("");
+  const [descending, setDescending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,11 +28,38 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
       .catch(() => setTypes([]));
   }, []);
 
+  // Сортировать можно по числовым величинам выбранной ветви: ради этого
+  // параметры и заведены (Р-38).
+  useEffect(() => {
+    setParameter("");
+    if (!type) {
+      setParameters([]);
+      return;
+    }
+    api.parametersForType(type)
+      .then((result) =>
+        setParameters(
+          (result.items ?? []).filter((item) =>
+            item.value_type === "number" || item.value_type === "integer"
+          ),
+        )
+      )
+      .catch(() => setParameters([]));
+  }, [type]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const timer = setTimeout(() => {
-      api.entities({ type: type || undefined, q: query || undefined })
+      api.entities({
+        type: type || undefined,
+        q: query || undefined,
+        parameter: parameter || undefined,
+        min: min || undefined,
+        max: max || undefined,
+        sort: parameter ? "parameter" : undefined,
+        order: descending ? "desc" : "asc",
+      })
         .then((page) => {
           if (!cancelled) {
             setItems(page.items);
@@ -35,7 +73,7 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [type, query]);
+  }, [type, query, parameter, min, max, descending]);
 
   return (
     <section>
@@ -59,6 +97,38 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
         {canCreate && <Link to="/entities/new"><button type="button">Создать объект</button></Link>}
       </div>
 
+      {parameters.length > 0 && (
+        <div className="filters">
+          <select value={parameter} onChange={(e) => setParameter(e.target.value)}>
+            <option value="">Без сортировки по величине</option>
+            {parameters.map((item) => (
+              <option key={item.parameter} value={item.parameter}>
+                {item.unit ? `${item.title}, ${item.unit}` : item.title}
+              </option>
+            ))}
+          </select>
+          {parameter && (
+            <>
+              <input
+                placeholder="от"
+                inputMode="numeric"
+                value={min}
+                onChange={(e) => setMin(e.target.value)}
+              />
+              <input
+                placeholder="до"
+                inputMode="numeric"
+                value={max}
+                onChange={(e) => setMax(e.target.value)}
+              />
+              <button type="button" className="ghost" onClick={() => setDescending(!descending)}>
+                {descending ? "по убыванию" : "по возрастанию"}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {error && <p className="error">{error}</p>}
       {loading && <p className="notice">Загружаем…</p>}
       {!loading && !error && items.length === 0 && (
@@ -81,6 +151,13 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
               : <div className="card-no-cover">без изображения</div>}
             <div className="kind">{item.type_title ?? item.type}</div>
             <div className="title">{item.title_ru}</div>
+            {parameter && item.parameter_value !== null &&
+              item.parameter_value !== undefined && (
+              <div className="badge">
+                {String(item.parameter_value)}
+                {parameters.find((p) => p.parameter === parameter)?.unit ?? ""}
+              </div>
+            )}
             {item.title_en && <div className="kind">{item.title_en}</div>}
             <div style={{ marginTop: 8 }}>
               <span className="badge">

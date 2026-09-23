@@ -11,7 +11,16 @@ import { useCreateBlockNote } from "@blocknote/react";
 import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { api, ApiError, type Capabilities, type EntityPlace, type EntityType } from "../api";
+import {
+  api,
+  ApiError,
+  type Capabilities,
+  type EntityPlace,
+  type EntityType,
+  type Indicator,
+  type SuggestedParameter,
+} from "../api";
+import { IndicatorsField } from "../editor/IndicatorsField";
 import {
   insertEntityCard,
   insertEntityMention,
@@ -64,7 +73,6 @@ export function EntityEditor({ mode }: Props) {
     title_en: "",
     title_original: "",
     title_la: "",
-    typology: "",
   });
   const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [revisionId, setRevisionId] = useState<string | null>(null);
@@ -72,6 +80,8 @@ export function EntityEditor({ mode }: Props) {
   const [documentRevision, setDocumentRevision] = useState<string | null>(null);
   const [initialBlocks, setInitialBlocks] = useState<PartialBlock[] | null>(null);
   const [places, setPlaces] = useState<EntityPlace[]>([]);
+  const [indicators, setIndicators] = useState<Indicator[]>([]);
+  const [suggested, setSuggested] = useState<SuggestedParameter[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [media, setMedia] = useState<
     { attachment_id: number; asset_id: string; caption: string | null; role_title: string }[]
@@ -87,13 +97,20 @@ export function EntityEditor({ mode }: Props) {
     }).catch(() => {});
   }, []);
 
+  // Что подсказывает выбранная ветвь: и для новой записи, и при смене типа.
+  useEffect(() => {
+    if (!form.type) return;
+    api.parametersForType(form.type)
+      .then((result) => setSuggested(result.items ?? []))
+      .catch(() => setSuggested([]));
+  }, [form.type]);
+
   useEffect(() => {
     if (mode !== "edit" || !entityId) {
       setInitialBlocks([]);
       return;
     }
     api.entity(entityId).then(async (entity) => {
-      const profile = entity.profile as Record<string, string | null>;
       setForm({
         type: entity.type,
         slug: entity.slug,
@@ -101,12 +118,12 @@ export function EntityEditor({ mode }: Props) {
         title_en: entity.title_en ?? "",
         title_original: entity.title_original ?? "",
         title_la: entity.title_la ?? "",
-        typology: profile?.typology ?? "",
       });
       setRevisionId(entity.latest_revision_id);
       setPlaces((entity as unknown as { places?: EntityPlace[] }).places ?? []);
       setMedia((entity as unknown as { media?: typeof media }).media ?? []);
       setTags((entity as unknown as { tags?: Tag[] }).tags ?? []);
+      setIndicators((entity as unknown as { indicators?: Indicator[] }).indicators ?? []);
 
       const described = (entity as unknown as { description_document_id?: number })
         .description_document_id;
@@ -136,6 +153,9 @@ export function EntityEditor({ mode }: Props) {
       slugTouched={slugTouched}
       setSlugTouched={setSlugTouched}
       types={types}
+      indicators={indicators}
+      setIndicators={setIndicators}
+      suggested={suggested}
       places={places}
       media={media}
       tags={tags}
@@ -174,6 +194,7 @@ export function EntityEditor({ mode }: Props) {
 function EditorBody(props: any) {
   const {
     mode, entityId, form, setForm, slugTouched, setSlugTouched, types,
+    indicators, setIndicators, suggested,
     places, media, tags, setTags, reloadAttachments, initialBlocks,
     revisionId, setRevisionId, documentId, setDocumentId,
     documentRevision, setDocumentRevision, status, setStatus,
@@ -217,7 +238,6 @@ function EditorBody(props: any) {
     setStatus(null);
     try {
       setProblems({});
-      const profile = { typology: form.typology || null };
       const payload = {
         type: form.type,
         slug: form.slug.trim(),
@@ -225,7 +245,6 @@ function EditorBody(props: any) {
         title_en: form.title_en || null,
         title_original: form.title_original || null,
         title_la: form.title_la || null,
-        profile,
       };
 
       let id = entityId;
@@ -242,6 +261,14 @@ function EditorBody(props: any) {
       }
 
       if (id) await api.setEntityTags(id, tags.map((tag: Tag) => tag.title));
+
+      // Показатели — часть материала записи, поэтому пишутся после неё
+      // и от её же версии (Р-38).
+      if (id && indicators.length > 0) {
+        const saved = await api.saveIndicators(id, indicators, revisionId);
+        if (saved.revision_id) setRevisionId(saved.revision_id);
+        setIndicators(saved.items ?? indicators);
+      }
 
       const blocks = editor.document;
       if (documentId) {
@@ -315,7 +342,6 @@ function EditorBody(props: any) {
           {field("title_original", "Название на языке оригинала")}
           {field("title_la", "Латинское наименование", "Научное латинское имя, если оно есть")}
         </div>
-        {field("typology", "Типология", "Театр, жилой дом, павильон")}
         <label>
           Метки
           <TagsField
@@ -325,6 +351,12 @@ function EditorBody(props: any) {
           />
         </label>
       </div>
+
+      <IndicatorsField
+        indicators={indicators}
+        suggested={suggested}
+        onChange={setIndicators}
+      />
 
       <div className="editor-layout">
         <PlacesField entityId={entityId} places={places} onChanged={reloadAttachments} />

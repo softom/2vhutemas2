@@ -110,6 +110,11 @@ export function fromDatabaseError(error: unknown): ApiError {
   if (pgError.code === "23514" && constraint.includes("media_files")) {
     return new ApiError("validation_failed", "Недопустимое состояние файла", { constraint });
   }
+  // Проверки значений параметров сообщают причину сами: в них уже сказано,
+  // какого ответа ждёт параметр (Р-38).
+  if (pgError.code === "23514" && pgError.message?.startsWith("Параметр")) {
+    return new ApiError("validation_failed", pgError.message);
+  }
   if (pgError.message?.includes("не имеет обоснования")) {
     return new ApiError(
       "link_requires_justification",
