@@ -16,7 +16,7 @@ import type { InsertableEntity } from "./entityBlocks";
 interface LinkedItem {
   other_id: number;
   other_title: string;
-  other_kind: string;
+  other_type_title: string | null;
   other_cover_media_id: string | null;
   role: string | null;
   direction: "incoming" | "outgoing";
@@ -122,8 +122,8 @@ export function EntityPanel({ entityId, onInsertCard, onInsertMention }: Props) 
           <ul className="panel-list">
             {found.map((item) =>
               row(
-                { id: item.id, title_ru: item.title_ru, kind: item.kind },
-                item.title_en ?? item.kind,
+                { id: item.id, title_ru: item.title_ru, kind: item.type_title ?? item.type },
+                item.title_en ?? item.type_title ?? item.type,
               )
             )}
           </ul>
@@ -153,7 +153,7 @@ export function EntityPanel({ entityId, onInsertCard, onInsertMention }: Props) 
                 {
                   id: item.other_id,
                   title_ru: item.other_title,
-                  kind: item.other_kind,
+                  kind: item.other_type_title ?? "",
                   cover_media_id: item.other_cover_media_id,
                 },
                 item.role ?? (item.direction === "outgoing" ? "связан" : "ссылается сюда"),

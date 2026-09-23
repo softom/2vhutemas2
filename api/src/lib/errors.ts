@@ -94,12 +94,12 @@ export function fromDatabaseError(error: unknown): ApiError {
       return new ApiError("duplicate", "Место с таким адресом уже есть в справочнике");
     }
     if (constraint.includes("slug")) {
-      return new ApiError("duplicate", "Такой адрес уже занят в этом виде сущностей");
+      return new ApiError("duplicate", "Такой адрес уже занят");
     }
     return new ApiError("duplicate", "Такая запись уже существует");
   }
-  if (pgError.code === "23503" && constraint.includes("kind_id")) {
-    return new ApiError("validation_failed", "Профиль не соответствует виду сущности");
+  if (pgError.code === "23503" && constraint.includes("type_id")) {
+    return new ApiError("validation_failed", "Неизвестный тип записи");
   }
   if (pgError.code === "23514" && constraint.includes("slug_format")) {
     return new ApiError(

@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Параметры проекта.md",
+                "file": "Схема данных.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Параметры проекта"
+              "title": "Схема данных"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Параметры проекта.md",
+                "file": "Схема данных.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Параметры проекта.md",
+                "file": "Схема данных.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Параметры проекта.md",
+                "file": "Схема данных.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,6 +190,7 @@
   },
   "active": "a8f13fb08152fa66",
   "lastOpenFiles": [
+    "Параметры проекта.md",
     "Архив решений.md",
     "Схема данных.md",
     "Схема данных.md.tmp.54512.686cecc9095c",
@@ -209,7 +210,6 @@
     "Решения.md.tmp.8976.ac201299e703",
     "Правила проекта.md",
     "План реализации.md",
-    "Параметры проекта.md",
     "Описание проекта.md",
     "Инвентаризация сервера.md",
     "Инвентаризация сервера.md.tmp.8976.d547b279588b",

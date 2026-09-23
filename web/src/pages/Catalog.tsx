@@ -1,27 +1,27 @@
-/** Каталог объектов: поиск, фильтр по виду, переход к карточке. */
+/** Каталог записей: поиск, отбор по ветви дерева типов, переход к карточке. */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type Capabilities, type EntityListItem } from "../api";
+import { api, type Capabilities, type EntityListItem, type EntityType } from "../api";
 
 export function Catalog({ canCreate }: { canCreate: boolean }) {
   const [items, setItems] = useState<EntityListItem[]>([]);
-  const [kinds, setKinds] = useState<{ code: string; title_ru: string }[]>([]);
-  const [kind, setKind] = useState("");
+  const [types, setTypes] = useState<EntityType[]>([]);
+  const [type, setType] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.capabilities()
-      .then((caps: Capabilities) => setKinds(caps.dictionaries.entity_kinds ?? []))
-      .catch(() => setKinds([]));
+      .then((caps: Capabilities) => setTypes(caps.entity_types ?? []))
+      .catch(() => setTypes([]));
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const timer = setTimeout(() => {
-      api.entities({ kind: kind || undefined, q: query || undefined })
+      api.entities({ type: type || undefined, q: query || undefined })
         .then((page) => {
           if (!cancelled) {
             setItems(page.items);
@@ -35,7 +35,7 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [kind, query]);
+  }, [type, query]);
 
   return (
     <section>
@@ -48,9 +48,13 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <select value={kind} onChange={(e) => setKind(e.target.value)}>
-          <option value="">Все виды</option>
-          {kinds.map((k) => <option key={k.code} value={k.code}>{k.title_ru}</option>)}
+        <select value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="">Все типы</option>
+          {types.map((t) => (
+            <option key={t.code} value={t.code}>
+              {"  ".repeat(t.depth) + (t.depth > 0 ? "– " : "") + t.title_ru}
+            </option>
+          ))}
         </select>
         {canCreate && <Link to="/entities/new"><button type="button">Создать объект</button></Link>}
       </div>
@@ -75,7 +79,7 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
                 />
               )
               : <div className="card-no-cover">без изображения</div>}
-            <div className="kind">{item.kind_title ?? item.kind}</div>
+            <div className="kind">{item.type_title ?? item.type}</div>
             <div className="title">{item.title_ru}</div>
             {item.title_en && <div className="kind">{item.title_en}</div>}
             <div style={{ marginTop: 8 }}>

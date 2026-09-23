@@ -11,7 +11,7 @@ import { useCreateBlockNote } from "@blocknote/react";
 import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { api, ApiError, type Capabilities, type EntityPlace } from "../api";
+import { api, ApiError, type Capabilities, type EntityPlace, type EntityType } from "../api";
 import {
   insertEntityCard,
   insertEntityMention,
@@ -56,20 +56,15 @@ export function EntityEditor({ mode }: Props) {
   const navigate = useNavigate();
   const entityId = params.id ? Number(params.id) : null;
 
-  const [kinds, setKinds] = useState<{ code: string; title_ru: string }[]>([]);
-  const [objectTypes, setObjectTypes] = useState<{ code: string; title_ru: string }[]>([]);
-  const [personTypes, setPersonTypes] = useState<{ code: string; title_ru: string }[]>([]);
+  const [types, setTypes] = useState<EntityType[]>([]);
   const [form, setForm] = useState({
-    kind: "object",
+    type: "what",
     slug: "",
     title_ru: "",
     title_en: "",
     title_original: "",
     title_la: "",
-    object_type: "",
     typology: "",
-    person_type: "",
-    full_name: "",
   });
   const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [revisionId, setRevisionId] = useState<string | null>(null);
@@ -88,9 +83,7 @@ export function EntityEditor({ mode }: Props) {
 
   useEffect(() => {
     api.capabilities().then((caps: Capabilities) => {
-      setKinds(caps.dictionaries.entity_kinds ?? []);
-      setObjectTypes(caps.dictionaries.object_types ?? []);
-      setPersonTypes(caps.dictionaries.person_types ?? []);
+      setTypes(caps.entity_types ?? []);
     }).catch(() => {});
   }, []);
 
@@ -102,16 +95,13 @@ export function EntityEditor({ mode }: Props) {
     api.entity(entityId).then(async (entity) => {
       const profile = entity.profile as Record<string, string | null>;
       setForm({
-        kind: entity.kind,
+        type: entity.type,
         slug: entity.slug,
         title_ru: entity.title_ru,
         title_en: entity.title_en ?? "",
         title_original: entity.title_original ?? "",
         title_la: entity.title_la ?? "",
-        object_type: (profile?.object_type as string) ?? "",
         typology: profile?.typology ?? "",
-        person_type: (profile?.person_type as string) ?? "",
-        full_name: profile?.full_name ?? "",
       });
       setRevisionId(entity.latest_revision_id);
       setPlaces((entity as unknown as { places?: EntityPlace[] }).places ?? []);
@@ -145,9 +135,7 @@ export function EntityEditor({ mode }: Props) {
       setForm={setForm}
       slugTouched={slugTouched}
       setSlugTouched={setSlugTouched}
-      kinds={kinds}
-      objectTypes={objectTypes}
-      personTypes={personTypes}
+      types={types}
       places={places}
       media={media}
       tags={tags}
@@ -185,8 +173,8 @@ export function EntityEditor({ mode }: Props) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function EditorBody(props: any) {
   const {
-    mode, entityId, form, setForm, slugTouched, setSlugTouched, kinds, objectTypes,
-    personTypes, places, media, tags, setTags, reloadAttachments, initialBlocks,
+    mode, entityId, form, setForm, slugTouched, setSlugTouched, types,
+    places, media, tags, setTags, reloadAttachments, initialBlocks,
     revisionId, setRevisionId, documentId, setDocumentId,
     documentRevision, setDocumentRevision, status, setStatus,
     error, setError, saving, setSaving, navigate,
@@ -229,19 +217,9 @@ function EditorBody(props: any) {
     setStatus(null);
     try {
       setProblems({});
-      const profile = form.kind === "object"
-        ? {
-          object_type: form.object_type || null,
-          typology: form.typology || null,
-        }
-        : form.kind === "person"
-        ? {
-          person_type: form.person_type || null,
-          full_name: form.full_name || null,
-        }
-        : undefined;
+      const profile = { typology: form.typology || null };
       const payload = {
-        kind: form.kind,
+        type: form.type,
         slug: form.slug.trim(),
         title_ru: form.title_ru.trim(),
         title_en: form.title_en || null,
@@ -310,16 +288,20 @@ function EditorBody(props: any) {
 
       <div className="form">
         <label>
-          Вид
+          Тип
           <select
-            value={form.kind}
-            disabled={mode === "edit"}
-            onChange={(e) => setForm({ ...form, kind: e.target.value })}
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
           >
-            {kinds.map((k: { code: string; title_ru: string }) => (
-              <option key={k.code} value={k.code}>{k.title_ru}</option>
+            {types.map((t: EntityType) => (
+              <option key={t.code} value={t.code}>
+                {"  ".repeat(t.depth) + (t.depth > 0 ? "– " : "") + t.title_ru}
+              </option>
             ))}
           </select>
+          <span className="hint">
+            Верхние ветви — кто, что и когда; ниже — тип записи
+          </span>
         </label>
         {field("title_ru", "Название по-русски")}
         {field(
@@ -333,21 +315,7 @@ function EditorBody(props: any) {
           {field("title_original", "Название на языке оригинала")}
           {field("title_la", "Латинское наименование", "Научное латинское имя, если оно есть")}
         </div>
-        {form.kind === "object" && (
-          <>
-            <label>
-              Тип объекта
-              <select
-                value={form.object_type}
-                onChange={(e) => setForm({ ...form, object_type: e.target.value })}
-              >
-                <option value="">не указан</option>
-                {objectTypes.map((t: { code: string; title_ru: string }) => (
-                  <option key={t.code} value={t.code}>{t.title_ru}</option>
-                ))}
-              </select>
-            </label>
-            {field("typology", "Типология", "Театр, жилой дом, павильон")}
+        {field("typology", "Типология", "Театр, жилой дом, павильон")}
         <label>
           Метки
           <TagsField
@@ -356,26 +324,6 @@ function EditorBody(props: any) {
             hint="Наберите # и выберите слово из справочника или добавьте новое"
           />
         </label>
-          </>
-        )}
-
-        {form.kind === "person" && (
-          <>
-            <label>
-              Тип участника
-              <select
-                value={form.person_type}
-                onChange={(e) => setForm({ ...form, person_type: e.target.value })}
-              >
-                <option value="">не указан</option>
-                {personTypes.map((t: { code: string; title_ru: string }) => (
-                  <option key={t.code} value={t.code}>{t.title_ru}</option>
-                ))}
-              </select>
-            </label>
-            {field("full_name", "Полное имя")}
-          </>
-        )}
       </div>
 
       <div className="editor-layout">

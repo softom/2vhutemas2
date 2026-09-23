@@ -121,8 +121,14 @@ links.get("/", async (c: Context<AppEnv>) => {
            other.id   as other_id,
            other.slug as other_slug,
            other.title_ru as other_title,
-           (select k.code from app.entity_kinds k where k.id = other.kind_id) as other_kind,
-           other.cover_media_id as other_cover_media_id,
+           (select ty.code from app.entity_types ty where ty.id = other.type_id) as other_type,
+           (select ty.title_ru from app.entity_types ty where ty.id = other.type_id)
+             as other_type_title,
+           -- Обложка связанной записи — её первое прикреплённое изображение (Р-36).
+           (select a.asset_id from app.attachments a
+              join app.targets t on t.id = a.target_id
+             where t.entity_id = other.id and a.asset_id is not null
+             order by a.sort_order, a.id limit 1) as other_cover_media_id,
            (select d.body_text from app.attachments a
               join app.targets t on t.id = a.target_id
               join app.attachment_roles ar on ar.id = a.role_id

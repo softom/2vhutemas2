@@ -53,11 +53,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload as T;
 }
 
+/** Узел дерева типов: вид записи — его корневая ветвь (Р-37). */
+export interface EntityType {
+  code: string;
+  title_ru: string;
+  depth: number;
+  parent: string | null;
+}
+
 export interface EntityListItem {
   id: number;
   slug: string;
-  kind: string;
-  kind_title: string | null;
+  type: string;
+  type_title: string | null;
+  /** Путь по дереву от корневой ветви вниз. */
+  type_path: { code: string; title: string }[];
   title_ru: string;
   title_en: string | null;
   is_published: boolean;
@@ -118,6 +128,8 @@ export interface EntityPlace extends Place {
 export interface Capabilities {
   contract_version: string;
   limits: Record<string, unknown>;
+  /** Дерево типов в порядке обхода сверху вниз. */
+  entity_types: EntityType[];
   dictionaries: Record<string, { code: string; title_ru: string }[]>;
 }
 
@@ -126,9 +138,10 @@ export const api = {
   me: () =>
     request<{ authenticated: boolean; display_name?: string; permissions: string[] }>("/me"),
 
-  entities: (params: { kind?: string; q?: string; cursor?: string }) => {
+  entities: (params: { type?: string; q?: string; cursor?: string }) => {
     const search = new URLSearchParams();
-    if (params.kind) search.set("kind", params.kind);
+    // Отбор по ветви целиком: корневая ветвь — это прежний фильтр по виду.
+    if (params.type) search.set("type", params.type);
     if (params.q) search.set("q", params.q);
     if (params.cursor) search.set("cursor", params.cursor);
     return request<{ items: EntityListItem[]; next_cursor: string | null }>(

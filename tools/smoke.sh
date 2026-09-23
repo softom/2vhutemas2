@@ -31,6 +31,13 @@ contains() { # имя, что искать, где искать
   esac
 }
 
+missing() { # имя, чего быть не должно, где искать
+  case "$3" in
+    *"$2"*) FAIL=$((FAIL+1)); printf '  СБОЙ %s: в ответе оказалось «%s»\n' "$1" "$2" ;;
+    *) PASS=$((PASS+1)); printf '  ok   %s\n' "$1" ;;
+  esac
+}
+
 TOKEN=$(docker exec -i -e JWT_SECRET="$(grep -E '^JWT_SECRET=' /opt/2vhutemas/.env | cut -d= -f2-)" -e SUBJ="$UID_T" app_api deno eval --quiet '
 const enc = new TextEncoder();
 const b64 = (o: unknown) => btoa(String.fromCharCode(...enc.encode(JSON.stringify(o)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
@@ -49,13 +56,16 @@ echo "── Служебные маршруты"
 check "проверка живости" 200 "$(code $API/health)"
 contains "версия контракта" '"version"' "$(body)"
 code -H "$AUTH" $API/capabilities >/dev/null
-contains "словарь видов сущностей" 'entity_kinds' "$(body)"
+contains "дерево типов" '"entity_types"' "$(body)"
+contains "корневая ветвь в дереве" '"who"' "$(body)"
+contains "ветвь ниже корня" '"architecture_object"' "$(body)"
 contains "словарь видов изображений" 'media_kinds' "$(body)"
 contains "словарь ролей мест" 'place_roles' "$(body)"
 
 echo "── Объекты"
 check "каталог гостю" 200 "$(code $API/entities)"
 check "каталог под входом" 200 "$(code -H "$AUTH" $API/entities)"
+# Прежнее имя поля принимается как псевдоним корневой ветви (Р-37).
 C=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"kind":"object","slug":"smoke-proverka","title_ru":"smoke: проверка"}' $API/entities)
 EID=$(echo "$C" | field id)
 REV=$(echo "$C" | field revision_id)
@@ -64,10 +74,24 @@ check "карточка под входом" 200 "$(code -H "$AUTH" $API/entitie
 contains "карточка отдаёт места" '"places"' "$(body)"
 contains "карточка отдаёт файлы" '"media"' "$(body)"
 contains "карточка отдаёт метки" '"tags"' "$(body)"
+contains "карточка отдаёт путь по дереву" '"type_path"' "$(body)"
 check "черновик гостю не виден" 404 "$(code $API/entities/$EID)"
+check "неизвестный тип отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"type":"net-takogo","slug":"smoke-net-tipa","title_ru":"smoke: нет типа"}' $API/entities)"
+code -H "$AUTH" "$API/entities?type=what" >/dev/null
+contains "отбор по корневой ветви" 'smoke-proverka' "$(body)"
+code -H "$AUTH" "$API/entities?type=who" >/dev/null
+missing "запись не попала в чужую ветвь" 'smoke-proverka' "$(body)"
+code -H "$AUTH" "$API/entities?kind=object" >/dev/null
+contains "прежний фильтр по виду работает" 'smoke-proverka' "$(body)"
 check "повтор адреса отклоняется" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"kind":"object","slug":"smoke-proverka","title_ru":"smoke: повтор"}' $API/entities)"
 check "правка от устаревшей версии" 409 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"title_ru":"smoke","base_revision_id":"00000000-0000-4000-8000-000000000000"}' $API/entities/$EID)"
 check "правка от текущей версии" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d "{\"title_ru\":\"smoke: правка\",\"base_revision_id\":\"$REV\"}" $API/entities/$EID)"
+REV2=$(body | field revision_id)
+# Тип меняется правкой: запись одна, меняется только ветвь дерева (Р-37).
+check "смена типа" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d "{\"type\":\"performance\",\"base_revision_id\":\"$REV2\"}" $API/entities/$EID)"
+REV=$(body | field revision_id)
+code -H "$AUTH" $API/entities/$EID >/dev/null
+contains "тип сменился" '"type":"performance"' "$(body)"
 
 echo "── Датировки"
 code -X PUT -H "$AUTH" -H "$JSON" -d '{"dates":[{"kind":"design","start_year":1929},{"kind":"opening","start_year":1945,"start_month":5,"start_day":12}]}' $API/entities-dates/$EID >/dev/null
@@ -125,7 +149,7 @@ check "регистр не плодит метки" 2 "$DOUBLES"
 check "гость метки не меняет" 401 "$(code -X PUT -H "$JSON" -d '{"tags":["взлом"]}' $API/tags/entities/$EID)"
 
 echo "── Связи"
-C2=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"kind":"object","slug":"smoke-vtoroy","title_ru":"smoke: второй"}' $API/entities)
+C2=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"type":"architecture_object","slug":"smoke-vtoroy","title_ru":"smoke: второй"}' $API/entities)
 EID2=$(echo "$C2" | field id)
 check "связь без обоснования" 422 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$EID2,\"justification\":{}}" $API/links)"
 check "связь с обоснованием" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$EID2,\"justification\":{\"text\":\"smoke: обоснование\"}}" $API/links)"

@@ -12,13 +12,17 @@ import { sql, transaction, type Tx } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
 import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import { type AppEnv, decodeCursor, encodeCursor, pageSize } from "../lib/http.ts";
+import { resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../lib/entityTypes.ts";
 
 export const entities = new Hono<AppEnv>();
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 interface EntityInput {
-  kind: string;
+  /** Код типа — узла дерева любой глубины (Р-37). */
+  type?: string;
+  /** Прежнее имя того же поля; принимается как псевдоним корневой ветви. */
+  kind?: string;
   slug: string;
   title_ru: string;
   title_original?: string | null;
@@ -33,7 +37,7 @@ interface EntityInput {
 function validate(input: Partial<EntityInput>, isCreate: boolean): void {
   const problems: Record<string, string> = {};
   if (isCreate) {
-    if (!input.kind) problems.kind = "Не указан вид сущности";
+    if (!input.type && !input.kind) problems.type = "Не указан тип записи";
     if (!input.slug) problems.slug = "Не указан адрес";
     if (!input.title_ru) problems.title_ru = "Не указано название";
   }
@@ -48,19 +52,17 @@ function validate(input: Partial<EntityInput>, isCreate: boolean): void {
   }
 }
 
-/** Снимок для версии: карточка вместе с профилем. */
+/** Снимок для версии: карточка вместе с типом и оставшимися свойствами. */
 async function snapshot(tx: Tx, id: number) {
   const rows = await tx`
     select to_jsonb(e) ||
-           jsonb_build_object('profile', coalesce(
-               to_jsonb(op) - 'entity_id' - 'kind_id',
-               to_jsonb(pp) - 'entity_id' - 'kind_id',
-               to_jsonb(rp) - 'entity_id' - 'kind_id',
-               '{}'::jsonb)) as data
+           jsonb_build_object(
+             'type', ty.code,
+             'type_path', app.entity_type_path(e.type_id),
+             'profile', coalesce(to_jsonb(op) - 'entity_id', '{}'::jsonb)) as data
     from app.entities e
+    join app.entity_types ty on ty.id = e.type_id
     left join app.object_profile op on op.entity_id = e.id
-    left join app.person_profile pp on pp.entity_id = e.id
-    left join app.period_profile rp on rp.entity_id = e.id
     where e.id = ${id}
   `;
   return (rows[0] as { data?: unknown })?.data ?? {};
@@ -70,7 +72,9 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const principal = c.get("principal");
   const limit = pageSize(c.req.query("limit"));
   const after = decodeCursor(c.req.query("cursor"));
-  const kind = c.req.query("kind") ?? null;
+  // Отбор идёт по ветви дерева целиком: «всё под ветвью Кто» — это прежний
+  // фильтр по виду, «зрелищные здания» — ветвь ниже. Механизм один (Р-37).
+  const type = resolveTypeCode(c.req.query("type"), c.req.query("kind"));
   const search = c.req.query("q")?.trim() || null;
   const drafts = canSeeDrafts(principal);
   // Архив в каталоге не показывается: он не «ещё не готово», а «убрано».
@@ -79,7 +83,9 @@ entities.get("/", async (c: Context<AppEnv>) => {
 
   const rows = await sql`
     select e.id, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
-           k.code as kind, k.title_ru as kind_title, e.is_published, e.sort_order,
+           ty.code as type, ty.title_ru as type_title,
+           app.entity_type_path(e.type_id) as type_path,
+           e.is_published, e.sort_order,
            m.status as material_status,
            -- Обложка — первое по порядку прикреплённое изображение (решение Р-36).
            (select a.asset_id from app.attachments a
@@ -87,11 +93,12 @@ entities.get("/", async (c: Context<AppEnv>) => {
              where t.entity_id = e.id and a.asset_id is not null
              order by a.sort_order, a.id limit 1) as cover_asset_id
     from app.entities e
-    join app.entity_kinds k on k.id = e.kind_id
+    join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
     where (${drafts} or e.is_published)
       and (${archived} or coalesce(m.status, 'draft') <> 'archived')
-      and (${kind}::text is null or k.code = ${kind})
+      and (${type}::text is null
+           or e.type_id in (select app.entity_type_subtree(${type})))
       and (${search}::text is null or e.title_ru ilike ${"%" + (search ?? "") + "%"}
            or e.title_en ilike ${"%" + (search ?? "") + "%"})
       and (${after}::bigint is null or e.id > ${after})
@@ -113,18 +120,13 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
   if (!Number.isInteger(id)) throw new ApiError("validation_failed", "Неверный идентификатор");
 
   const rows = await sql`
-    select e.*, k.code as kind, m.id as material_id, m.status as material_status,
+    select e.*, ty.code as type, ty.title_ru as type_title,
+           app.entity_type_path(e.type_id) as type_path,
+           m.id as material_id, m.status as material_status,
            m.published_revision_id,
            (select r.id from app.revisions r where r.material_id = m.id
              order by r.created_at desc limit 1) as latest_revision_id,
-           coalesce(
-             to_jsonb(op) - 'entity_id' - 'kind_id' - 'object_type_id'
-               || jsonb_build_object(
-                    'object_type', (select code from app.object_types t where t.id = op.object_type_id)),
-             to_jsonb(pp) - 'entity_id' - 'kind_id' - 'person_type_id'
-               || jsonb_build_object(
-                    'person_type', (select code from app.person_types t where t.id = pp.person_type_id)),
-             to_jsonb(rp) - 'entity_id' - 'kind_id', '{}'::jsonb) as profile,
+           coalesce(to_jsonb(op) - 'entity_id', '{}'::jsonb) as profile,
            (select a.document_id from app.attachments a
               join app.targets t on t.id = a.target_id
               join app.attachment_roles ar on ar.id = a.role_id
@@ -170,11 +172,9 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
             from app.entity_dates d join app.date_kinds dk on dk.id = d.kind_id
            where d.entity_id = e.id) as dates
     from app.entities e
-    join app.entity_kinds k on k.id = e.kind_id
+    join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
     left join app.object_profile op on op.entity_id = e.id
-    left join app.person_profile pp on pp.entity_id = e.id
-    left join app.period_profile rp on rp.entity_id = e.id
     where e.id = ${id}
   `;
   const entity = rows[0];
@@ -191,40 +191,29 @@ entities.post("/", async (c: Context<AppEnv>) => {
   validate(input, true);
 
   const result = await transaction(principal.contributorId, async (tx) => {
-    const kinds = await tx`select id, code from app.entity_kinds where code = ${input.kind}`;
-    if (kinds.length === 0) {
-      throw new ApiError("validation_failed", "Неизвестный вид сущности", { kind: input.kind });
+    const typeCode = resolveTypeCode(input.type, input.kind);
+    const types = await tx`select id, code from app.entity_types where code = ${typeCode}`;
+    if (types.length === 0) {
+      throw new ApiError("validation_failed", "Неизвестный тип записи", { type: typeCode });
     }
-    const kindId = kinds[0].id;
+    const typeId = types[0].id;
 
     const inserted = await tx`
-      insert into app.entities (kind_id, slug, title_ru, title_original, original_language,
+      insert into app.entities (type_id, slug, title_ru, title_original, original_language,
                                 title_la, title_en, color, sort_order)
-      values (${kindId}, ${input.slug}, ${input.title_ru}, ${input.title_original ?? null},
+      values (${typeId}, ${input.slug}, ${input.title_ru}, ${input.title_original ?? null},
               ${input.original_language ?? null}, ${input.title_la ?? null},
               ${input.title_en ?? null}, ${input.color ?? null}, ${input.sort_order ?? 0})
       returning id
     `;
     const entityId = Number(inserted[0].id);
 
-    if (input.kind === "object") {
-      const profile = input.profile ?? {};
+    // Типология доживает до этапа Б, когда станет значением параметра.
+    const typology = (input.profile?.typology as string | undefined) ?? null;
+    if (typology) {
       await tx`
-        insert into app.object_profile (entity_id, object_type_id, lat, lon, typology)
-        values (${entityId},
-                (select id from app.object_types where code = ${profile.object_type ?? null}),
-                ${profile.lat ?? null}, ${profile.lon ?? null}, ${profile.typology ?? null})
+        insert into app.object_profile (entity_id, typology) values (${entityId}, ${typology})
       `;
-    } else if (input.kind === "person") {
-      const profile = input.profile ?? {};
-      await tx`
-        insert into app.person_profile (entity_id, person_type_id, full_name)
-        values (${entityId},
-                (select id from app.person_types where code = ${profile.person_type ?? null}),
-                ${profile.full_name ?? null})
-      `;
-    } else if (input.kind === "period") {
-      await tx`insert into app.period_profile (entity_id) values (${entityId})`;
     }
 
     const materials = await tx`
@@ -290,11 +279,21 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
 
     if (input.slug) {
       await tx`
-        insert into app.slug_history (kind_id, slug, entity_id)
-        select e.kind_id, e.slug, e.id from app.entities e
+        insert into app.slug_history (slug, entity_id)
+        select e.slug, e.id from app.entities e
          where e.id = ${id} and e.slug <> ${input.slug}
-        on conflict (kind_id, slug) do nothing
+        on conflict (slug) do nothing
       `;
+    }
+
+    // Тип можно сменить: запись одна, меняется только ветвь дерева (Р-37).
+    const typeCode = resolveTypeCode(input.type, input.kind);
+    if (typeCode) {
+      const types = await tx`select id from app.entity_types where code = ${typeCode}`;
+      if (types.length === 0) {
+        throw new ApiError("validation_failed", "Неизвестный тип записи", { type: typeCode });
+      }
+      await tx`update app.entities set type_id = ${types[0].id} where id = ${id}`;
     }
 
     await tx`
@@ -310,26 +309,13 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
       where id = ${id}
     `;
 
-    // Профиль тоже правится: без этого город, адрес и тип молча оставались прежними.
-    const profile = input.profile;
-    if (profile) {
+    // Типология правится и тогда, когда её ещё не было: иначе введённое
+    // значение молча пропадало бы у записи без строки профиля.
+    const typology = (input.profile?.typology as string | undefined) ?? null;
+    if (typology) {
       await tx`
-        update app.object_profile set
-          object_type_id = coalesce(
-            (select id from app.object_types where code = ${profile.object_type ?? null}),
-            object_type_id),
-          typology = coalesce(${profile.typology ?? null}, typology),
-          lat      = coalesce(${profile.lat ?? null}, lat),
-          lon      = coalesce(${profile.lon ?? null}, lon)
-        where entity_id = ${id}
-      `;
-      await tx`
-        update app.person_profile set
-          person_type_id = coalesce(
-            (select id from app.person_types where code = ${profile.person_type ?? null}),
-            person_type_id),
-          full_name = coalesce(${profile.full_name ?? null}, full_name)
-        where entity_id = ${id}
+        insert into app.object_profile (entity_id, typology) values (${id}, ${typology})
+        on conflict (entity_id) do update set typology = excluded.typology
       `;
     }
 

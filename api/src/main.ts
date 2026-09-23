@@ -52,10 +52,7 @@ app.get("/api/v1/health", async (c: Context<AppEnv>) => {
 
 app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
   const dictionaries = await sql`
-    select 'entity_kinds' as dictionary, code, title_ru from app.entity_kinds
-    union all select 'object_types', code, title_ru from app.object_types
-    union all select 'person_types', code, title_ru from app.person_types
-    union all select 'date_kinds', code, title_ru from app.date_kinds
+    select 'date_kinds' as dictionary, code, title_ru from app.date_kinds
     union all select 'attachment_roles', code, title_ru from app.attachment_roles
     union all select 'reference_kinds', code, title_ru from app.reference_kinds
     union all select 'link_roles', code, title_ru from app.link_roles
@@ -68,6 +65,26 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
   for (const row of dictionaries) {
     (grouped[row.dictionary] ??= []).push({ code: row.code, title_ru: row.title_ru });
   }
+
+  // Дерево типов отдаётся в порядке обхода сверху вниз: код, название,
+  // родитель и глубина. Вид записи — это его корневая ветвь (Р-37).
+  const types = await sql`
+    with recursive tree as (
+        select ty.id, ty.parent_id, ty.code, ty.title_ru, ty.sort_order,
+               0 as depth, array[ty.sort_order, 0] as path
+          from app.entity_types ty
+         where ty.parent_id is null
+        union all
+        select ch.id, ch.parent_id, ch.code, ch.title_ru, ch.sort_order,
+               t.depth + 1, t.path || array[ch.sort_order, 0]
+          from app.entity_types ch
+          join tree t on ch.parent_id = t.id)
+    select t.code, t.title_ru, t.depth,
+           (select p.code from app.entity_types p where p.id = t.parent_id) as parent
+      from tree t
+     order by t.path, t.title_ru
+  `;
+
   return c.json({
     contract_version: config.contractVersion,
     blocknote_schema_version: config.blockNoteSchemaVersion,
@@ -77,6 +94,7 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
       media_max_bytes: config.media.maxBytes,
       media_allowed_mime_types: config.media.allowedMimeTypes,
     },
+    entity_types: types,
     dictionaries: grouped,
   });
 });

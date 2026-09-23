@@ -56,7 +56,7 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
       </p>
 
       <div className="row" style={{ marginBottom: 18 }}>
-        <span className="badge">{entity.kind}</span>
+        <span className="badge">{entity.type_title ?? entity.type}</span>
         <span className="badge">
           {entity.material_status === "published" ? "опубликовано" : "черновик"}
         </span>
@@ -148,7 +148,7 @@ interface LinkRow {
   id: number;
   other_id: number;
   other_title: string;
-  other_kind: string;
+  other_type_title: string | null;
   role: string | null;
   direction: "incoming" | "outgoing";
   justification: string | null;
@@ -197,7 +197,6 @@ function Relations({ entityId }: { entityId: number }) {
 
 const FACT_LABELS: [string, string, string?][] = [
   ["typology", "Типология"],
-  ["full_name", "Полное имя"],
 ];
 
 /** Сведения карточки: показываем только заполненное, пустое не выдумываем. */
