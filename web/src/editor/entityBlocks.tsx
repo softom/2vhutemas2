@@ -29,7 +29,7 @@ export const EntityCardBlock = createReactBlockSpec(
       const props = block.props as Record<string, string>;
       const href = `/new/entities/${props.entityId}`;
       return (
-        <div className="entity-card" contentEditable={false}>
+        <div className="entity-card">
           {props.mediaAssetId
             ? <img src={api.mediaFileUrl(props.mediaAssetId, "thumbnail")} alt="" />
             : null}
@@ -85,8 +85,11 @@ export const MediaImageBlock = createReactBlockSpec(
   {
     render: ({ block }) => {
       const props = block.props as Record<string, string>;
+      // Пометку contentEditable={false} здесь ставить нельзя: она ломает
+      // расчёт положения блоков, и при трёх и более изображениях подряд
+      // страница падает с «Position undefined out of range».
       return (
-        <figure className="media-figure" contentEditable={false}>
+        <figure className="media-figure">
           <img
             src={api.mediaFileUrl(props.assetId, (props.variant as "screen") || "screen")}
             alt={props.caption}
@@ -108,6 +111,24 @@ export const schema = BlockNoteSchema.create({
 });
 
 export type AppSchema = typeof schema;
+
+/** Блоки без собственного текста: курсор внутрь них поставить нельзя. */
+const VOID_BLOCKS = new Set(["entityCard", "mediaImage"]);
+
+/**
+ * Пустой абзац по краям документа, если с края стоит блок без текста.
+ * Иначе после последнего изображения некуда поставить курсор и текст
+ * невозможно продолжить. Содержимое от этого не меняется.
+ */
+// deno-lint-ignore no-explicit-any
+export function withEditableEdges(blocks: any[]): any[] {
+  if (!Array.isArray(blocks) || blocks.length === 0) return blocks;
+  const paragraph = () => ({ type: "paragraph", content: [] });
+  const result = [...blocks];
+  if (VOID_BLOCKS.has(result[result.length - 1]?.type)) result.push(paragraph());
+  if (VOID_BLOCKS.has(result[0]?.type)) result.unshift(paragraph());
+  return result;
+}
 
 export interface InsertableEntity {
   id: number;

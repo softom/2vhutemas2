@@ -17,6 +17,7 @@ import {
   insertEntityMention,
   insertMediaImage,
   schema,
+  withEditableEdges,
 } from "../editor/entityBlocks";
 import { EntityPanel } from "../editor/EntityPanel";
 import { PlacesField } from "../editor/PlacesField";
@@ -193,7 +194,7 @@ function EditorBody(props: any) {
 
   const editor = useCreateBlockNote({
     schema,
-    initialContent: initialBlocks.length > 0 ? initialBlocks : undefined,
+    initialContent: initialBlocks.length > 0 ? withEditableEdges(initialBlocks) : undefined,
   });
 
   const [problems, setProblems] = props.problemsState;
