@@ -73,6 +73,9 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const kind = c.req.query("kind") ?? null;
   const search = c.req.query("q")?.trim() || null;
   const drafts = canSeeDrafts(principal);
+  // Архив в каталоге не показывается: он не «ещё не готово», а «убрано».
+  // Найти убранное можно явным запросом ?archived=1 — для восстановления.
+  const archived = c.req.query("archived") === "1" && drafts;
 
   const rows = await sql`
     select e.id, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
@@ -82,6 +85,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
     join app.entity_kinds k on k.id = e.kind_id
     left join app.materials m on m.entity_id = e.id
     where (${drafts} or e.is_published)
+      and (${archived} or coalesce(m.status, 'draft') <> 'archived')
       and (${kind}::text is null or k.code = ${kind})
       and (${search}::text is null or e.title_ru ilike ${"%" + (search ?? "") + "%"}
            or e.title_en ilike ${"%" + (search ?? "") + "%"})

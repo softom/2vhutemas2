@@ -145,6 +145,16 @@ code -H "$AUTH" $API/materials/$MID >/dev/null
 contains "состояние материала" '"published"' "$(body)"
 check "архивирование" 204 "$(code -X DELETE -H "$AUTH" $API/materials/$MID)"
 check "архивный объект гостю не виден" 404 "$(code $API/entities/$EID)"
+code -H "$AUTH" $API/entities >/dev/null
+ARCHIVED_IN_LIST=$(body | python3 -c "
+import json,sys
+print(sum(1 for i in json.load(sys.stdin)['items'] if i.get('material_status') == 'archived'))")
+check "архива нет в каталоге" 0 "$ARCHIVED_IN_LIST"
+code -H "$AUTH" "$API/entities?archived=1" >/dev/null
+ARCHIVED_ON_DEMAND=$(body | python3 -c "
+import json,sys
+print(sum(1 for i in json.load(sys.stdin)['items'] if str(i['id']) == '$EID'))")
+check "свой архив виден по запросу" 1 "$ARCHIVED_ON_DEMAND"
 
 echo "── Уборка"
 docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -q -c "
