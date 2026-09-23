@@ -1,0 +1,49 @@
+{
+  "master": {
+    "mesh_objects": 708,
+    "triangles": 40439,
+    "bounds_min": [
+      -74.19623565673828,
+      -76.55000305175781,
+      -0.32499998807907104
+    ],
+    "bounds_max": [
+      80.19623565673828,
+      84.58360290527344,
+      56.0
+    ]
+  },
+  "export": {
+    "mesh_objects": 34,
+    "triangles": 40439,
+    "bounds_min": [
+      -74.19623565673828,
+      -76.55000305175781,
+      -0.32499998807907104
+    ],
+    "bounds_max": [
+      80.19622802734375,
+      84.58360290527344,
+      56.0
+    ]
+  },
+  "roundtrip": {
+    "mesh_objects": 34,
+    "triangles": 40439,
+    "bounds_min": [
+      -74.19624328613281,
+      -76.55000305175781,
+      -0.32499998807907104
+    ],
+    "bounds_max": [
+      80.19623565673828,
+      84.58358764648438,
+      56.0
+    ]
+  },
+  "bytes": 1611720,
+  "materials": 19,
+  "roundtrip_passed": true,
+  "cameras_calibrated": false,
+  "independent_backup_verified": false
+}

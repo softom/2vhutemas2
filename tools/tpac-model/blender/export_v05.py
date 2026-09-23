@@ -12,7 +12,7 @@ def stats(scene):
         eo=ob.evaluated_get(deps);me=eo.to_mesh();me.calc_loop_triangles()
         if not me.polygons:eo.to_mesh_clear();continue
         mesh_count+=1;tris+=len(me.loop_triangles)
-        bounds.extend([ob.matrix_world@Vector(p) for p in ob.bound_box])
+        bounds.extend([ob.matrix_world@v.co for v in me.vertices])
         eo.to_mesh_clear()
     return {'mesh_objects':mesh_count,'triangles':tris,'bounds_min':[min(v[i] for v in bounds) for i in range(3)],'bounds_max':[max(v[i] for v in bounds) for i in range(3)]}
 master.camera=master.objects['02_blue_box']
@@ -44,7 +44,7 @@ for (category,materials),objects in groups.items():
 export_metrics=stats(export_scene)
 assert export_metrics['triangles']==master_metrics['triangles'],(export_metrics,master_metrics)
 bpy.ops.object.select_all(action='SELECT')
-bpy.ops.export_scene.gltf(filepath=str(out/'tpac-v05.glb'),export_format='GLB',use_selection=True,export_apply=True,export_cameras=False,export_lights=False)
+bpy.ops.export_scene.gltf(filepath=str(out/'tpac-v05.glb'),export_format='GLB',use_active_scene=True,use_selection=True,export_apply=True,export_cameras=False,export_lights=False)
 check=bpy.data.scenes.new('TPAC_GL B_check_v05');bpy.context.window.scene=check
 bpy.ops.import_scene.gltf(filepath=str(out/'tpac-v05.glb'))
 import_metrics=stats(check)
@@ -62,4 +62,3 @@ for scene in [export_scene,check]:
     for ob in list(scene.objects):bpy.data.objects.remove(ob,do_unlink=True)
     bpy.data.scenes.remove(scene)
 print(json.dumps(report))
-
