@@ -1,6 +1,11 @@
 /**
- * Просмотр изображений карточки: одно изображение во весь экран и переход
+ * Просмотр изображений карточки: изображение во весь экран и переход
  * к следующему по порядку прикрепления — по кругу.
+ *
+ * Изображение растягивается по длинной стороне: вертикальное упирается
+ * в высоту, горизонтальное — в ширину. Полоса навигации прижата к низу
+ * окна, а не приклеена к изображению: иначе при узком снимке кнопки
+ * оказывались посреди экрана.
  *
  * Порядок здесь тот же, что в карточке: его задаёт автор перетаскиванием
  * ([Р-34]). Поэтому «следующее» — это следующее по замыслу, а не по дате
@@ -51,14 +56,18 @@ export function MediaViewer({ items, index, onMove, onClose }: Props) {
       className="media-viewer-backdrop"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
-      <div className="media-viewer">
+      <div
+        className="media-viewer-stage"
+        onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+      >
         <img
           className="media-viewer-image"
           src={api.mediaFileUrl(item.asset_id, "screen")}
           alt={item.caption ?? ""}
         />
+      </div>
 
-        <div className="media-viewer-bar">
+      <div className="media-viewer-bar">
           <button
             type="button"
             className="ghost"
@@ -93,10 +102,9 @@ export function MediaViewer({ items, index, onMove, onClose }: Props) {
             →
           </button>
 
-          <button type="button" className="ghost" aria-label="Закрыть" onClick={onClose}>
-            ✕
-          </button>
-        </div>
+        <button type="button" className="ghost" aria-label="Закрыть" onClick={onClose}>
+          ✕
+        </button>
       </div>
     </div>
   );
