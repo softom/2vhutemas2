@@ -147,12 +147,12 @@ places.get("/", async (c: Context<AppEnv>) => {
 places.get("/:id/usage", async (c: Context<AppEnv>) => {
   requirePermission(c.get("principal"), "edit");
   const rows = await sql<Record<string, unknown>>`
-    select e.id, e.title_ru, ar.title_ru as role_title
-    from app.attachments a
-    join app.targets t on t.id = a.target_id
-    join app.entities e on e.id = t.entity_id
-    join app.attachment_roles ar on ar.id = a.role_id
-    where a.place_id = ${c.req.param("id")}
+    select e.id, e.title_ru, p.title_ru as role_title
+    from app.indicator_values iv
+    join app.indicators i on i.id = iv.indicator_id
+    join app.entities e on e.id = i.entity_id
+    join app.parameters p on p.id = iv.parameter_id
+    where iv.place_id = ${c.req.param("id")}
     order by e.title_ru
   `;
   return c.json({ items: rows });
@@ -194,65 +194,3 @@ places.patch("/:id", async (c: Context<AppEnv>) => {
   return c.json({ id: placeId });
 });
 
-/**
- * Привязка места к сущности с ролью. Можно передать существующее место
- * по идентификатору либо описать новое — тогда оно создаётся в той же
- * транзакции. Обоснование здесь не требуется: правило обязательного
- * обоснования относится к содержательным связям культурных сущностей.
- */
-places.post("/attachments", async (c: Context<AppEnv>) => {
-  const principal = requirePermission(c.get("principal"), "edit");
-  const input = await c.req.json<{
-    entity_id: number;
-    role: string;
-    place_id?: string;
-    place?: PlaceInput;
-    note?: string | null;
-  }>();
-
-  if (!Number.isInteger(input.entity_id)) {
-    throw new ApiError("validation_failed", "Не указана сущность");
-  }
-  if (!input.role) throw new ApiError("validation_failed", "Не указана роль места");
-  if (!input.place_id && !input.place) {
-    throw new ApiError("validation_failed", "Выберите место или опишите новое");
-  }
-  if (input.place) validate(input.place);
-
-  const result = await transaction(principal.contributorId, async (tx) => {
-    let placeId = input.place_id ?? null;
-    if (!placeId) {
-      placeId = (await createOrReuse(tx, input.place!)).id;
-    }
-
-    const targets = await tx<{ id: number }>`
-      select id from app.targets where entity_id = ${input.entity_id}
-    `;
-    if (targets.length === 0) throw new ApiError("not_found", "Сущность не найдена");
-
-    const attached = await tx<{ id: number }>`
-      insert into app.attachments (target_id, role_id, place_id, note)
-      values (${targets[0].id},
-              (select id from app.attachment_roles where code = ${input.role}),
-              ${placeId}, ${input.note ?? null})
-      on conflict do nothing
-      returning id
-    `;
-    if (attached.length === 0) {
-      throw new ApiError("duplicate", "Это место уже привязано к сущности с такой ролью");
-    }
-    return { attachment_id: Number(attached[0].id), place_id: placeId };
-  });
-
-  return c.json(result, 201);
-});
-
-places.delete("/attachments/:id", async (c: Context<AppEnv>) => {
-  requirePermission(c.get("principal"), "edit");
-  const attachmentId = Number(c.req.param("id"));
-  const removed = await sql`
-    delete from app.attachments where id = ${attachmentId} and place_id is not null returning id
-  `;
-  if (removed.length === 0) throw new ApiError("not_found", "Привязка не найдена");
-  return c.body(null, 204);
-});

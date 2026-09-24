@@ -121,12 +121,6 @@ export function placeLabel(place: Partial<Place>): string {
     : "место без сведений";
 }
 
-export interface EntityPlace extends Place {
-  attachment_id: number;
-  place_id: string;
-  role: string;
-  role_title: string;
-}
 
 /** Значение величины внутри показателей (Р-38). */
 export interface IndicatorValue {
@@ -138,6 +132,9 @@ export interface IndicatorValue {
   text_value?: string | null;
   bool_value?: boolean | null;
   option?: string | null;
+  /** Место из справочника: величина с типом «место» (Р-39). */
+  place_id?: string | null;
+  place?: Place | null;
   date_start_year?: number | null;
   date_end_year?: number | null;
   is_approximate?: boolean;
@@ -166,6 +163,8 @@ export interface SuggestedParameter {
   set: string;
   set_title: string;
   hint: string | null;
+  /** У вопроса бывает несколько ответов: две реконструкции, два адреса. */
+  is_repeatable?: boolean;
   options: { code: string; title: string }[];
 }
 
@@ -323,13 +322,6 @@ export const api = {
 
   places: (query: string) =>
     request<{ items: Place[] }>(`/places?q=${encodeURIComponent(query)}`),
-  attachPlace: (body: unknown) =>
-    request<{ attachment_id: number; place_id: string }>("/places/attachments", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  detachPlace: (attachmentId: number) =>
-    request<void>(`/places/attachments/${attachmentId}`, { method: "DELETE" }),
 
   /** Обмен токена на куку: без неё браузер не покажет приватные файлы. */
   openMediaSession: () => request<{ expires_at: string }>("/session", { method: "POST" }),

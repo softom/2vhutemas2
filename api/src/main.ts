@@ -53,14 +53,13 @@ app.get("/api/v1/health", async (c: Context<AppEnv>) => {
 });
 
 app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
+  // Виды дат больше не словарь: дата — такая же величина, и её вид стал
+  // параметром (Р-39). Их отдаёт `GET /parameters`.
   const dictionaries = await sql`
-    select 'date_kinds' as dictionary, code, title_ru from app.date_kinds
-    union all select 'attachment_roles', code, title_ru from app.attachment_roles
+    select 'attachment_roles' as dictionary, code, title_ru from app.attachment_roles
     union all select 'reference_kinds', code, title_ru from app.reference_kinds
     union all select 'link_roles', code, title_ru from app.link_roles
     union all select 'media_kinds', code, title_ru from app.media_kinds
-    union all select 'place_roles', code, title_ru from app.attachment_roles
-      where code in ('address', 'birthplace', 'burial', 'office')
     order by 1, 2
   `;
   const grouped: Record<string, { code: string; title_ru: string }[]> = {};

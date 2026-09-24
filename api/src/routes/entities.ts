@@ -188,19 +188,6 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                      join app.attachment_roles ar on ar.id = a.role_id
                      join app.media_assets ma on ma.id = a.asset_id
                     where t.entity_id = e.id and a.asset_id is not null), '[]'::jsonb) as media,
-           coalesce((select jsonb_agg(jsonb_build_object(
-                        'attachment_id', a.id,
-                        'role', ar.code, 'role_title', ar.title_ru,
-                        'place_id', p.id,
-                        'country', p.country, 'settlement', p.settlement,
-                        'street', p.street, 'house', p.house, 'unit', p.unit,
-                        'lat', p.lat, 'lon', p.lon, 'precision', p.precision)
-                        order by a.sort_order, ar.sort_order)
-                     from app.attachments a
-                     join app.targets t on t.id = a.target_id
-                     join app.attachment_roles ar on ar.id = a.role_id
-                     join app.places p on p.id = a.place_id
-                    where t.entity_id = e.id), '[]'::jsonb) as places,
            coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
                         order by t.title)
                      from app.entity_tags et join app.tags t on t.id = et.tag_id
@@ -216,11 +203,13 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                                'bool_value', iv.bool_value,
                                'option', (select o.code from app.parameter_options o
                                            where o.id = iv.option_id),
+                               'place', (select to_jsonb(pl) from app.places pl
+                                          where pl.id = iv.place_id),
                                'date_start_year', iv.date_start_year,
                                'date_end_year', iv.date_end_year,
                                'is_approximate', iv.is_approximate,
                                'is_ongoing', iv.is_ongoing, 'note', iv.note)
-                               order by p.sort_order, p.title_ru)
+                               order by p.sort_order, p.title_ru, iv.sort_order)
                             from app.indicator_values iv
                             join app.parameters p on p.id = iv.parameter_id
                            where iv.indicator_id = i.id), '[]'::jsonb))
@@ -230,6 +219,8 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            coalesce((select jsonb_agg(jsonb_build_object(
                         'parameter', ep.code, 'title', ep.title_ru, 'unit', ep.unit,
                         'value_type', ep.value_type, 'definition', ep.definition,
+                        'is_repeatable', (select pr.is_repeatable from app.parameters pr
+                                           where pr.id = ep.parameter_id),
                         'set', ep.set_code, 'set_title', ep.set_title, 'hint', ep.hint,
                         'options', coalesce((select jsonb_agg(jsonb_build_object(
                                          'code', o.code, 'title', o.title_ru)
@@ -237,16 +228,7 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                                       from app.parameter_options o
                                      where o.parameter_id = ep.parameter_id), '[]'::jsonb))
                         order by ep.sort_order, ep.title_ru)
-                     from app.entity_parameters(e.id) ep), '[]'::jsonb) as suggested_parameters,
-           (select jsonb_agg(jsonb_build_object(
-                      'kind', dk.code, 'title', dk.title_ru,
-                      'start_year', d.start_year, 'start_month', d.start_month,
-                      'start_day', d.start_day, 'end_year', d.end_year,
-                      'is_approximate', d.is_approximate, 'is_ongoing', d.is_ongoing,
-                      'note', d.note)
-                      order by d.sort_order, d.start_year)
-            from app.entity_dates d join app.date_kinds dk on dk.id = d.kind_id
-           where d.entity_id = e.id) as dates
+                     from app.entity_parameters(e.id) ep), '[]'::jsonb) as suggested_parameters
     from app.entities e
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id

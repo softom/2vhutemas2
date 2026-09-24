@@ -6,16 +6,17 @@ import { useCreateBlockNote } from "@blocknote/react";
 import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { api, type EntityCard, type EntityPlace, type Indicator, placeLabel } from "../api";
+import { api, type EntityCard, type Indicator, placeLabel } from "../api";
 import { schema } from "../editor/entityBlocks";
 
-interface DateRow {
-  kind: string;
-  title: string;
-  start_year: number;
-  end_year: number | null;
-  is_approximate: boolean;
-  is_ongoing: boolean;
+/** Первое место записи: им подписывается карточка сверху. */
+function firstPlace(indicators: Indicator[]) {
+  for (const indicator of indicators) {
+    for (const value of indicator.values) {
+      if (value.value_type === "place" && value.place) return value.place;
+    }
+  }
+  return null;
 }
 
 export function EntityPage({ canEdit }: { canEdit: boolean }) {
@@ -44,8 +45,6 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
 
   const indicators = (entity as unknown as { indicators?: Indicator[] }).indicators ?? [];
   const media = (entity as unknown as { media?: { asset_id: string; role: string }[] }).media ?? [];
-  const dates = (entity as unknown as { dates?: DateRow[] }).dates ?? [];
-  const places = (entity as unknown as { places?: EntityPlace[] }).places ?? [];
   const tags = (entity as unknown as { tags?: { id: string; title: string }[] }).tags ?? [];
 
   return (
@@ -60,8 +59,12 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         <span className="badge">
           {entity.material_status === "published" ? "опубликовано" : "черновик"}
         </span>
-        {places[0]?.settlement && <span className="badge">{places[0].settlement}</span>}
-        {places[0]?.country && <span className="badge">{places[0].country}</span>}
+        {firstPlace(indicators)?.settlement && (
+          <span className="badge">{firstPlace(indicators)?.settlement}</span>
+        )}
+        {firstPlace(indicators)?.country && (
+          <span className="badge">{firstPlace(indicators)?.country}</span>
+        )}
         {canEdit && (
           <Link to={`/entities/${entity.id}/edit`}>
             <button type="button" className="ghost">Править</button>
@@ -76,41 +79,6 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
       )}
 
       <Indicators items={indicators} />
-
-      {places.length > 0 && (
-        <>
-          <h2>Места</h2>
-          <dl className="facts">
-            {places.map((place) => (
-              <div key={place.attachment_id}>
-                <dt>{place.role_title}</dt>
-                <dd>
-                  {placeLabel(place)}
-                  {place.lat !== null && (
-                    <span className="notice">
-                      {" "}({place.lat?.toFixed(4)}, {place.lon?.toFixed(4)})
-                    </span>
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </>
-      )}
-
-      {dates.length > 0 && (
-        <>
-          <h2>Датировки</h2>
-          <ul>
-            {dates.map((d, index) => (
-              <li key={index}>
-                {d.title}: {d.is_approximate ? "около " : ""}{d.start_year}
-                {d.end_year ? `—${d.end_year}` : d.is_ongoing ? " — по настоящее время" : ""}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
 
       <Relations entityId={entity.id} />
 
@@ -195,7 +163,7 @@ function Relations({ entityId }: { entityId: number }) {
   );
 }
 
-/** Величина в человеческом виде: число с единицей, дата, да/нет. */
+/** Величина в человеческом виде: число с единицей, дата, место, да/нет. */
 function valueText(value: Indicator["values"][number]): string {
   if (value.num_value !== null && value.num_value !== undefined && value.num_value !== "") {
     return `${value.num_value}${value.unit ? " " + value.unit : ""}`;
@@ -205,6 +173,7 @@ function valueText(value: Indicator["values"][number]): string {
     return value.bool_value ? "да" : "нет";
   }
   if (value.option) return value.option;
+  if (value.place) return placeLabel(value.place);
   if (value.date_start_year) {
     const range = value.date_end_year
       ? `${value.date_start_year}–${value.date_end_year}`
@@ -216,30 +185,87 @@ function valueText(value: Indicator["values"][number]): string {
   return "";
 }
 
-/** Показатели: несколько измерений, каждое со своими величинами (Р-38). */
+/**
+ * Показатели записи (Р-38). Даты и места — такие же величины (Р-39),
+ * но у них своё место в карточке: читателю привычнее видеть их отдельно.
+ */
 function Indicators({ items }: { items: Indicator[] }) {
-  const filled = items.filter((item) => item.values.length > 0);
-  if (filled.length === 0) return null;
+  const rows = items.flatMap((item) =>
+    item.values.map((value) => ({ value, group: item }))
+  );
+  const places = rows.filter((row) => row.value.value_type === "place");
+  const dates = rows.filter((row) => row.value.value_type === "date");
+  const rest = items
+    .map((item) => ({
+      item,
+      values: item.values.filter((value) =>
+        value.value_type !== "place" && value.value_type !== "date"
+      ),
+    }))
+    .filter((group) => group.values.length > 0);
+
+  if (rows.length === 0) return null;
+
   return (
     <>
-      <h2>Показатели</h2>
-      {filled.map((item, index) => (
-        <div key={item.id ?? index}>
-          <h3>
-            {item.title}
-            {item.measured_year ? ` · ${item.measured_year}` : ""}
-            {item.is_current ? "" : " · не действующие"}
-          </h3>
+      {rest.length > 0 && (
+        <>
+          <h2>Показатели</h2>
+          {rest.map((group, index) => (
+            <div key={group.item.id ?? index}>
+              {rest.length > 1 && (
+                <h3>
+                  {group.item.title}
+                  {group.item.measured_year ? ` · ${group.item.measured_year}` : ""}
+                  {group.item.is_current ? "" : " · не действующие"}
+                </h3>
+              )}
+              <dl className="facts">
+                {group.values.map((value, at) => (
+                  <div key={`${value.parameter}-${at}`}>
+                    <dt>{value.title ?? value.parameter}</dt>
+                    <dd>{valueText(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))}
+        </>
+      )}
+
+      {places.length > 0 && (
+        <>
+          <h2>Места</h2>
           <dl className="facts">
-            {item.values.map((value) => (
-              <div key={value.parameter}>
-                <dt>{value.title ?? value.parameter}</dt>
-                <dd>{valueText(value)}</dd>
+            {places.map((row, index) => (
+              <div key={index}>
+                <dt>{row.value.title ?? row.value.parameter}</dt>
+                <dd>
+                  {valueText(row.value)}
+                  {row.value.place?.lat !== null && row.value.place?.lat !== undefined && (
+                    <span className="notice">
+                      {" "}({row.value.place.lat.toFixed(4)}, {row.value.place.lon?.toFixed(4)})
+                    </span>
+                  )}
+                </dd>
               </div>
             ))}
           </dl>
-        </div>
-      ))}
+        </>
+      )}
+
+      {dates.length > 0 && (
+        <>
+          <h2>Датировки</h2>
+          <ul>
+            {dates.map((row, index) => (
+              <li key={index}>
+                {row.value.title ?? row.value.parameter}: {valueText(row.value)}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </>
   );
 }

@@ -15,7 +15,6 @@ import {
   api,
   ApiError,
   type Capabilities,
-  type EntityPlace,
   type EntityType,
   type Indicator,
   type SuggestedParameter,
@@ -29,9 +28,7 @@ import {
   withEditableEdges,
 } from "../editor/entityBlocks";
 import { EntityPanel } from "../editor/EntityPanel";
-import { PlacesField } from "../editor/PlacesField";
 import { type Tag, TagsField } from "../editor/TagsField";
-import { PlacesPanel } from "../editor/PlacesPanel";
 import { MediaPanel } from "../editor/MediaPanel";
 
 interface Props {
@@ -79,7 +76,6 @@ export function EntityEditor({ mode }: Props) {
   const [documentId, setDocumentId] = useState<number | null>(null);
   const [documentRevision, setDocumentRevision] = useState<string | null>(null);
   const [initialBlocks, setInitialBlocks] = useState<PartialBlock[] | null>(null);
-  const [places, setPlaces] = useState<EntityPlace[]>([]);
   const [indicators, setIndicators] = useState<Indicator[]>([]);
   const [suggested, setSuggested] = useState<SuggestedParameter[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -120,7 +116,6 @@ export function EntityEditor({ mode }: Props) {
         title_la: entity.title_la ?? "",
       });
       setRevisionId(entity.latest_revision_id);
-      setPlaces((entity as unknown as { places?: EntityPlace[] }).places ?? []);
       setMedia((entity as unknown as { media?: typeof media }).media ?? []);
       setTags((entity as unknown as { tags?: Tag[] }).tags ?? []);
       setIndicators((entity as unknown as { indicators?: Indicator[] }).indicators ?? []);
@@ -156,7 +151,6 @@ export function EntityEditor({ mode }: Props) {
       indicators={indicators}
       setIndicators={setIndicators}
       suggested={suggested}
-      places={places}
       media={media}
       tags={tags}
       setTags={setTags}
@@ -164,8 +158,7 @@ export function EntityEditor({ mode }: Props) {
         if (entityId) {
           api.entity(entityId)
             .then((entity) => {
-              const card = entity as unknown as { places?: EntityPlace[]; media?: typeof media };
-              setPlaces(card.places ?? []);
+              const card = entity as unknown as { media?: typeof media };
               setMedia(card.media ?? []);
             })
             .catch(() => {});
@@ -195,7 +188,7 @@ function EditorBody(props: any) {
   const {
     mode, entityId, form, setForm, slugTouched, setSlugTouched, types,
     indicators, setIndicators, suggested,
-    places, media, tags, setTags, reloadAttachments, initialBlocks,
+    media, tags, setTags, reloadAttachments, initialBlocks,
     revisionId, setRevisionId, documentId, setDocumentId,
     documentRevision, setDocumentRevision, status, setStatus,
     error, setError, saving, setSaving, navigate,
@@ -357,11 +350,6 @@ function EditorBody(props: any) {
         suggested={suggested}
         onChange={setIndicators}
       />
-
-      <div className="editor-layout">
-        <PlacesField entityId={entityId} places={places} onChanged={reloadAttachments} />
-        <PlacesPanel entityId={entityId} onChanged={reloadAttachments} />
-      </div>
 
       <h2>Описание</h2>
       <div className="editor-layout">

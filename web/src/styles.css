@@ -190,3 +190,8 @@ button:disabled { opacity: .5; cursor: default; }
 .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
 .grid-table th, .grid-table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .set-items { margin: 8px 0; padding-left: 20px; }
+.value-field { display: grid; gap: 6px; margin-bottom: 10px; }
+.value-label { color: var(--muted); font-size: 13px; }
+.value-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.value-row input.year { width: 110px; }
+.value-place { flex: 1; min-width: 200px; }

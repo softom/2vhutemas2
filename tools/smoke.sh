@@ -60,7 +60,7 @@ contains "дерево типов" '"entity_types"' "$(body)"
 contains "корневая ветвь в дереве" '"who"' "$(body)"
 contains "ветвь ниже корня" '"architecture_object"' "$(body)"
 contains "словарь видов изображений" 'media_kinds' "$(body)"
-contains "словарь ролей мест" 'place_roles' "$(body)"
+contains "виды изображений на месте" 'media_kinds' "$(body)"
 
 echo "── Объекты"
 check "каталог гостю" 200 "$(code $API/entities)"
@@ -71,7 +71,7 @@ EID=$(echo "$C" | field id)
 REV=$(echo "$C" | field revision_id)
 check "создание объекта" "да" "$([ -n "$EID" ] && echo да || echo нет)"
 check "карточка под входом" 200 "$(code -H "$AUTH" $API/entities/$EID)"
-contains "карточка отдаёт места" '"places"' "$(body)"
+contains "карточка отдаёт показатели" '"indicators"' "$(body)"
 contains "карточка отдаёт файлы" '"media"' "$(body)"
 contains "карточка отдаёт метки" '"tags"' "$(body)"
 contains "карточка отдаёт путь по дереву" '"type_path"' "$(body)"
@@ -135,8 +135,8 @@ SAME=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"country":"SMOKE-СТРАНА"
 check "повтор адреса не плодит место" "$PID" "$SAME"
 check "пустое место отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/places)"
 check "широта без долготы отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"settlement":"smoke","lat":10}' $API/places)"
-check "привязка места" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"role\":\"address\",\"place_id\":\"$PID\"}" $API/places/attachments)"
-check "где используется место" 200 "$(code -H "$AUTH" $API/places/$PID/usage)"
+# Привязка места — теперь значение параметра, проверяется ниже вместе с величинами.
+check "справочник мест отвечает" 200 "$(code -H "$AUTH" $API/places/$PID/usage)"
 
 echo "── Метки"
 check "справочник меток" 200 "$(code -H "$AUTH" $API/tags)"
@@ -223,6 +223,18 @@ code -H "$AUTH" "$API/entities?parameter=smoke_capacity&min=5000" >/dev/null
 missing "запись вне диапазона не попала" 'smoke-vtoroy' "$(body)"
 check "занятый параметр не удаляется" 400 "$(code -X DELETE -H "$AUTH" $API/parameters/$PID_PARAM)"
 
+# Место — такая же величина, как вместимость: роль стала параметром (Р-39).
+code -H "$AUTH" $API/parameters/for-type/architecture_object >/dev/null
+contains "адрес среди величин" 'Адрес объекта' "$(body)"
+contains "открытие среди величин" 'Открытие' "$(body)"
+check "место значением параметра" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"address\",\"place_id\":\"$PID\"},{\"parameter\":\"opening\",\"date_start_year\":1945}]}]}" $API/entities-indicators/$EID)"
+code -H "$AUTH" $API/entities/$EID >/dev/null
+contains "место в карточке" '"value_type":"place"' "$(body)"
+contains "дата в карточке" '"value_type":"date"' "$(body)"
+code -H "$AUTH" $API/places/$PID/usage >/dev/null
+contains "где используется место" 'Адрес объекта' "$(body)"
+check "место без ссылки отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"address\",\"text_value\":\"где\"}]}]}" $API/entities-indicators/$EID)"
+
 echo "── Уборка"
 docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -q -c "
 delete from app.attachments a using app.targets t
@@ -234,7 +246,6 @@ delete from app.document_entity_refs r using app.revisions rev, app.materials m
 delete from app.revision_reviews rr using app.revisions r, app.materials m
  where rr.revision_id = r.id and r.material_id = m.id and (m.entity_id in ($EID,$EID2) or m.document_id = $DID);
 delete from app.entity_tags where entity_id in ($EID,$EID2);
-delete from app.entity_dates where entity_id in ($EID,$EID2);
 delete from app.media_tags where asset_id = '$AID';
 delete from app.revisions rev using app.materials m where rev.material_id = m.id
    and (m.entity_id in ($EID,$EID2) or m.document_id = $DID or m.asset_id = '$AID'

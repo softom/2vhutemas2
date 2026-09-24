@@ -19,11 +19,12 @@ import type { AppEnv } from "../lib/http.ts";
 export const parameters = new Hono<AppEnv>();
 export const parameterSets = new Hono<AppEnv>();
 
-const VALUE_TYPES = ["number", "integer", "text", "boolean", "option", "date"];
+const VALUE_TYPES = ["number", "integer", "text", "boolean", "option", "date", "place"];
 const CODE = /^[a-z0-9]+(_[a-z0-9]+)*$/;
 
 interface ParameterInput {
   code?: string;
+  is_repeatable?: boolean;
   title_ru?: string;
   unit?: string | null;
   value_type?: string;
@@ -59,6 +60,7 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
   const rows = await sql`
     select distinct on (p.id)
            p.code as parameter, p.title_ru as title, p.unit, p.value_type, p.definition,
+           p.is_repeatable,
            ps.code as set, ps.title_ru as set_title, i.hint, i.sort_order,
            coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru)
                         order by o.sort_order)
@@ -85,6 +87,7 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
 parameters.get("/", async (c: Context<AppEnv>) => {
   const rows = await sql`
     select p.id, p.code, p.title_ru, p.unit, p.value_type, p.definition, p.sort_order,
+           p.is_repeatable,
            coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru)
                         order by o.sort_order)
                      from app.parameter_options o where o.parameter_id = p.id), '[]'::jsonb)
@@ -103,9 +106,11 @@ parameters.post("/", async (c: Context<AppEnv>) => {
 
   const result = await transaction(principal.contributorId, async (tx) => {
     const rows = await tx<{ id: string }>`
-      insert into app.parameters (code, title_ru, unit, value_type, definition, sort_order)
+      insert into app.parameters (code, title_ru, unit, value_type, definition, sort_order,
+                                  is_repeatable)
       values (${input.code}, ${input.title_ru}, ${input.unit ?? null}, ${input.value_type},
-              ${input.definition ?? null}, ${input.sort_order ?? 0})
+              ${input.definition ?? null}, ${input.sort_order ?? 0},
+              ${input.is_repeatable ?? false})
       returning id
     `;
     const id = rows[0].id;

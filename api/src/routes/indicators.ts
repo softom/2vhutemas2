@@ -23,6 +23,8 @@ interface ValueInput {
   text_value?: string | null;
   bool_value?: boolean | null;
   option?: string | null;
+  /** Место из справочника: для параметров с типом «место» (Р-39). */
+  place_id?: string | null;
   date_start_year?: number | null;
   date_start_month?: number | null;
   date_start_day?: number | null;
@@ -49,7 +51,7 @@ function filled(value: ValueInput): boolean {
   return value.num_value !== null && value.num_value !== undefined && value.num_value !== "" ||
     !!value.text_value?.trim() ||
     value.bool_value !== null && value.bool_value !== undefined ||
-    !!value.option ||
+    !!value.option || !!value.place_id ||
     value.date_start_year !== null && value.date_start_year !== undefined;
 }
 
@@ -63,11 +65,14 @@ async function readAll(tx: Tx, entityId: number) {
                         'bool_value', iv.bool_value,
                         'option', (select o.code from app.parameter_options o
                                     where o.id = iv.option_id),
+                        'place_id', iv.place_id,
+                        'place', (select to_jsonb(pl) from app.places pl
+                                   where pl.id = iv.place_id),
                         'date_start_year', iv.date_start_year,
                         'date_end_year', iv.date_end_year,
                         'is_approximate', iv.is_approximate, 'is_ongoing', iv.is_ongoing,
                         'note', iv.note)
-                        order by p.sort_order, p.title_ru)
+                        order by p.sort_order, p.title_ru, iv.sort_order)
                      from app.indicator_values iv
                      join app.parameters p on p.id = iv.parameter_id
                     where iv.indicator_id = i.id), '[]'::jsonb) as values
@@ -126,7 +131,7 @@ indicators.put("/:id", async (c: Context<AppEnv>) => {
       `;
       const indicatorId = inserted[0].id;
 
-      for (const value of item.values ?? []) {
+      for (const [position, value] of (item.values ?? []).entries()) {
         if (!filled(value)) continue;
         const parameters = await tx<{ id: string; value_type: string }>`
           select id, value_type from app.parameters where code = ${value.parameter}
@@ -148,18 +153,19 @@ indicators.put("/:id", async (c: Context<AppEnv>) => {
         await tx`
           insert into app.indicator_values (
               indicator_id, parameter_id, num_value, text_value, bool_value, option_id,
-              date_start_year, date_start_month, date_start_day,
+              place_id, date_start_year, date_start_month, date_start_day,
               date_end_year, date_end_month, date_end_day,
-              is_approximate, is_ongoing, note)
+              is_approximate, is_ongoing, note, sort_order)
           values (${indicatorId}, ${parameter.id}, ${numeric},
                   ${value.text_value ?? null}, ${value.bool_value ?? null},
                   (select o.id from app.parameter_options o
                     where o.parameter_id = ${parameter.id} and o.code = ${value.option ?? null}),
+                  ${value.place_id ?? null},
                   ${value.date_start_year ?? null}, ${value.date_start_month ?? null},
                   ${value.date_start_day ?? null}, ${value.date_end_year ?? null},
                   ${value.date_end_month ?? null}, ${value.date_end_day ?? null},
                   ${value.is_approximate ?? false}, ${value.is_ongoing ?? false},
-                  ${value.note ?? null})
+                  ${value.note ?? null}, ${position})
         `;
       }
     }
