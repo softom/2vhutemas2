@@ -260,6 +260,29 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
   return c.json(entity);
 });
 
+/**
+ * Что подсказано этой записи: наборы её ветви плюс прикреплённые лично ей.
+ * Для новой записи подсказки берутся по типу — `/parameters/for-type/{код}`.
+ */
+entities.get("/:id/parameters", async (c: Context<AppEnv>) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) throw new ApiError("validation_failed", "Неверный идентификатор");
+
+  const rows = await sql`
+    select ep.code as parameter, ep.title_ru as title, ep.unit, ep.value_type, ep.definition,
+           ep.set_code as set, ep.set_title, ep.hint, ep.sort_order,
+           (select pr.is_repeatable from app.parameters pr where pr.id = ep.parameter_id)
+             as is_repeatable,
+           coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru)
+                        order by o.sort_order)
+                     from app.parameter_options o where o.parameter_id = ep.parameter_id),
+                    '[]'::jsonb) as options
+      from app.entity_parameters(${id}) ep
+     order by ep.sort_order, ep.title_ru
+  `;
+  return c.json({ items: rows });
+});
+
 entities.post("/", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "create_delete");
   const input = await c.req.json<EntityInput>();

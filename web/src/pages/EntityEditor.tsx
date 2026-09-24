@@ -95,13 +95,20 @@ export function EntityEditor({ mode }: Props) {
     }).catch(() => {});
   }, []);
 
-  // Что подсказывает выбранная ветвь: и для новой записи, и при смене типа.
+  // Что подсказано: у сохранённой записи — её ветвь вместе с наборами,
+  // прикреплёнными лично ей; у новой — выбранная ветвь.
   useEffect(() => {
+    if (mode === "edit" && entityId) {
+      api.parametersForEntity(entityId)
+        .then((result) => setSuggested(result.items ?? []))
+        .catch(() => setSuggested([]));
+      return;
+    }
     if (!form.type) return;
     api.parametersForType(form.type)
       .then((result) => setSuggested(result.items ?? []))
       .catch(() => setSuggested([]));
-  }, [form.type]);
+  }, [form.type, mode, entityId]);
 
   useEffect(() => {
     if (mode !== "edit" || !entityId) {

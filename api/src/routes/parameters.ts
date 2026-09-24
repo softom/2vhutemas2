@@ -343,6 +343,53 @@ parameterSets.post("/:code/types", async (c: Context<AppEnv>) => {
   return c.json(result);
 });
 
+/**
+ * Набор у отдельной записи — исключение из наследования по дереву (Р-38):
+ * музей в бывшем вокзале получает набор «Вокзал» вдобавок к своему,
+ * а здание с большепролётным покрытием — набор покрытия, хотя тип у него
+ * общий с домом без больших пролётов.
+ */
+parameterSets.post("/:code/entities", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "edit");
+  const code = c.req.param("code");
+  const input = await c.req.json<{ entity_id: number }>();
+  if (!Number.isInteger(input.entity_id)) {
+    throw new ApiError("validation_failed", "Не указана запись");
+  }
+
+  const result = await transaction(principal.contributorId, async (tx) => {
+    const sets = await tx<{ id: string }>`select id from app.parameter_sets where code = ${code}`;
+    if (sets.length === 0) throw new ApiError("not_found", "Набор не найден");
+    const found = await tx<{ id: number }>`
+      select id from app.entities where id = ${input.entity_id}
+    `;
+    if (found.length === 0) throw new ApiError("not_found", "Запись не найдена");
+
+    await tx`
+      insert into app.entity_parameter_sets (entity_id, set_id)
+      values (${input.entity_id}, ${sets[0].id})
+      on conflict do nothing
+    `;
+    return { set: code, entity_id: input.entity_id };
+  });
+
+  return c.json(result);
+});
+
+parameterSets.delete("/:code/entities/:id", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "edit");
+  const code = c.req.param("code");
+  const entityId = Number(c.req.param("id"));
+
+  await transaction(principal.contributorId, (tx) =>
+    tx`
+      delete from app.entity_parameter_sets eps
+       using app.parameter_sets s
+       where eps.set_id = s.id and s.code = ${code} and eps.entity_id = ${entityId}
+    `);
+  return c.body(null, 204);
+});
+
 parameterSets.delete("/:code/types/:type", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "su");
   const code = c.req.param("code");

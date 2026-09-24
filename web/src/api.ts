@@ -266,6 +266,15 @@ export const api = {
   parameters: () => request<{ items: ParameterRow[] }>("/parameters"),
   parametersForType: (code: string) =>
     request<{ items: SuggestedParameter[] }>(`/parameters/for-type/${code}`),
+  parametersForEntity: (id: number) =>
+    request<{ items: SuggestedParameter[] }>(`/entities/${id}/parameters`),
+  attachParameterSetToEntity: (code: string, entityId: number) =>
+    request<{ set: string; entity_id: number }>(`/parameter-sets/${code}/entities`, {
+      method: "POST",
+      body: JSON.stringify({ entity_id: entityId }),
+    }),
+  detachParameterSetFromEntity: (code: string, entityId: number) =>
+    request<void>(`/parameter-sets/${code}/entities/${entityId}`, { method: "DELETE" }),
   createParameter: (body: unknown) =>
     request<{ id: string }>("/parameters", { method: "POST", body: JSON.stringify(body) }),
   updateParameter: (id: string, body: unknown) =>

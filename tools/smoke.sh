@@ -243,6 +243,18 @@ check "несколько ответов из списка" 200 "$(code -X PUT -
 code -H "$AUTH" $API/entities/$EID2 >/dev/null
 contains "оба значения списка в карточке" 'кольцо' "$(body)"
 
+# Набор можно прикрепить не только к ветви дерева, но и к отдельной записи:
+# большепролётное покрытие есть у вокзала и у рынка, а не у типа (Р-38).
+check "набор прикреплён к записи" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID2}" $API/parameter-sets/large_span_roof/entities)"
+code -H "$AUTH" $API/entities/$EID2/parameters >/dev/null
+contains "величины набора подсказаны записи" 'clear_span' "$(body)"
+check "величина из набора заполнена" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"проект\",\"values\":[{\"parameter\":\"clear_span\",\"num_value\":55.5},{\"parameter\":\"bearing_system\",\"option\":\"dome\"},{\"parameter\":\"bearing_system\",\"option\":\"shell\"}]}]}" $API/entities-indicators/$EID2)"
+code -H "$AUTH" "$API/entities?parameter=clear_span&sort=parameter&values=clear_span" >/dev/null
+contains "отбор по величине набора" 'smoke-vtoroy' "$(body)"
+check "набор отвязан от записи" 204 "$(code -X DELETE -H "$AUTH" $API/parameter-sets/large_span_roof/entities/$EID2)"
+code -H "$AUTH" $API/entities/$EID2/parameters >/dev/null
+missing "после отвязки величина не подсказывается" 'clear_span' "$(body)"
+
 
 # Место — такая же величина, как вместимость: роль стала параметром (Р-39).
 code -H "$AUTH" $API/parameters/for-type/architecture_object >/dev/null
