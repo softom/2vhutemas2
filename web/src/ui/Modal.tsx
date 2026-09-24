@@ -5,7 +5,13 @@
  * Закрывается по Esc и по щелчку вне окна; случайное закрытие с потерей
  * введённого недопустимо, поэтому при наличии изменений спрашиваем.
  */
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
+
+/**
+ * Открытые окна по порядку: окно может открыться поверх другого — например,
+ * параметр заводится прямо из набора. Esc закрывает верхнее, а не все сразу.
+ */
+const stack: symbol[] = [];
 
 interface Props {
   title: string;
@@ -21,9 +27,22 @@ export function Modal({ title, children, footer, dirty, onClose }: Props) {
     onClose();
   };
 
+  const id = useRef(Symbol("modal"));
+
+  useEffect(() => {
+    const self = id.current;
+    stack.push(self);
+    return () => {
+      const at = stack.indexOf(self);
+      if (at >= 0) stack.splice(at, 1);
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key !== "Escape") return;
+      if (stack[stack.length - 1] !== id.current) return;
+      close();
     };
     document.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;

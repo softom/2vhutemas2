@@ -195,3 +195,7 @@ button:disabled { opacity: .5; cursor: default; }
 .value-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .value-row input.year { width: 110px; }
 .value-place { flex: 1; min-width: 200px; }
+.chip-remove { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 2px; }
+.chip-remove:hover { color: var(--accent); }
+.set-items li { margin-bottom: 10px; }
+.set-items .hint { display: block; }

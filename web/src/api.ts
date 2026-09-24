@@ -176,6 +176,8 @@ export interface ParameterRow {
   value_type: string;
   definition: string | null;
   sort_order: number;
+  /** У вопроса бывает несколько ответов: две реконструкции, два адреса. */
+  is_repeatable: boolean;
   options: { code: string; title: string }[];
   used: number | string;
 }
@@ -185,7 +187,15 @@ export interface ParameterSetRow {
   code: string;
   title_ru: string;
   note: string | null;
-  items: { code: string; title_ru: string; unit: string | null; value_type: string }[];
+  items: {
+    code: string;
+    title_ru: string;
+    unit: string | null;
+    value_type: string;
+    definition: string | null;
+    is_repeatable: boolean;
+    hint: string | null;
+  }[];
   types: { code: string; title: string }[];
 }
 
@@ -257,9 +267,19 @@ export const api = {
   deleteParameter: (id: string) =>
     request<void>(`/parameters/${id}`, { method: "DELETE" }),
   parameterSets: () => request<{ items: ParameterSetRow[] }>("/parameter-sets"),
+  updateParameterSet: (code: string, body: unknown) =>
+    request<{ code: string; title_ru: string }>(`/parameter-sets/${code}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteParameterSet: (code: string) =>
+    request<void>(`/parameter-sets/${code}`, { method: "DELETE" }),
   createParameterSet: (body: unknown) =>
     request<{ id: string }>("/parameter-sets", { method: "POST", body: JSON.stringify(body) }),
-  setParameterSetItems: (code: string, items: { parameter: string; hint?: string | null }[]) =>
+  setParameterSetItems: (
+    code: string,
+    items: { parameter: string; hint?: string | null }[],
+  ) =>
     request<{ set: string; items: number }>(`/parameter-sets/${code}/items`, {
       method: "PUT",
       body: JSON.stringify({ items }),

@@ -208,6 +208,10 @@ check "параметр заведён" "да" "$([ -n "$PID_PARAM" ] && echo д
 curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"code":"smoke_set","title_ru":"smoke: набор"}' $API/parameter-sets >/dev/null
 check "состав набора" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d '{"items":[{"parameter":"smoke_capacity"}]}' $API/parameter-sets/smoke_set/items)"
 check "набор привязан к ветви" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"type":"architecture_object"}' $API/parameter-sets/smoke_set/types)"
+check "переименование набора" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"title_ru":"smoke: набор правленый"}' $API/parameter-sets/smoke_set)"
+code -H "$AUTH" $API/parameter-sets >/dev/null
+contains "правка набора видна" 'smoke: набор правленый' "$(body)"
+contains "состав набора с подсказкой" 'smoke_capacity' "$(body)"
 code -H "$AUTH" $API/parameters/for-type/architecture_object >/dev/null
 contains "величина подсказана ветви" 'smoke_capacity' "$(body)"
 

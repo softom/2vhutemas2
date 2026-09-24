@@ -142,7 +142,8 @@ POST /entities
 | `GET /parameters/for-type/{код}` | Что подсказано этому типу: наборы его ветви сверху вниз |
 | `POST /parameters`, `PATCH /parameters/{id}`, `DELETE /parameters/{id}` | Ведение справочника; требует `su`. Тип значения у заполненного параметра не меняется, заполненный параметр не удаляется |
 | `GET /parameter-sets` | Наборы с составом и ветвями, к которым привязаны |
-| `POST /parameter-sets`, `PUT /parameter-sets/{код}/items` | Завести набор и задать его состав целиком; требует `su` |
+| `POST /parameter-sets`, `PATCH /parameter-sets/{код}`, `DELETE /parameter-sets/{код}` | Завести набор, переименовать, убрать; требует `su` |
+| `PUT /parameter-sets/{код}/items` | Состав набора целиком: список параметров с подсказками; требует `su` |
 | `POST /parameter-sets/{код}/types`, `DELETE /parameter-sets/{код}/types/{тип}` | Привязать набор к узлу дерева и отвязать; требует `su` |
 | `PUT /entities-indicators/{id}` | Показатели записи целиком; требует `edit` и создаёт версию записи |
 

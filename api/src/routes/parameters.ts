@@ -195,7 +195,8 @@ parameterSets.get("/", async (c: Context<AppEnv>) => {
     select s.id, s.code, s.title_ru, s.note, s.sort_order,
            coalesce((select jsonb_agg(jsonb_build_object(
                         'code', p.code, 'title_ru', p.title_ru, 'unit', p.unit,
-                        'value_type', p.value_type, 'hint', i.hint)
+                        'value_type', p.value_type, 'definition', p.definition,
+                        'is_repeatable', p.is_repeatable, 'hint', i.hint)
                         order by i.sort_order)
                      from app.parameter_set_items i
                      join app.parameters p on p.id = i.parameter_id
@@ -226,6 +227,25 @@ parameterSets.post("/", async (c: Context<AppEnv>) => {
       returning id, code, title_ru
     `);
   return c.json(rows[0], 201);
+});
+
+/** Название и пояснение набора правятся тем же окном, что и создание. */
+parameterSets.patch("/:code", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const code = c.req.param("code");
+  const input = await c.req.json<{ title_ru?: string; note?: string | null; sort_order?: number }>();
+
+  const rows = await transaction(principal.contributorId, (tx) =>
+    tx`
+      update app.parameter_sets set
+        title_ru   = coalesce(${input.title_ru ?? null}, title_ru),
+        note       = coalesce(${input.note ?? null}, note),
+        sort_order = coalesce(${input.sort_order ?? null}, sort_order)
+      where code = ${code}
+      returning id, code, title_ru, note
+    `);
+  if (rows.length === 0) throw new ApiError("not_found", "Набор не найден");
+  return c.json(rows[0]);
 });
 
 /** Состав набора задаётся целиком: что прислали, то и осталось. */

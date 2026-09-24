@@ -14,7 +14,7 @@ tar -czf - api web | ssh -o BatchMode=yes "$HOST" '
   cd /opt/2vhutemas-services && tar -xzf - &&
   rsync -a --delete api/src/ app-api/src/ &&
   cp api/Dockerfile api/deno.json app-api/ &&
-  rsync -a --exclude node_modules --exclude dist web/ app-web/ &&
+  rsync -a --delete --exclude node_modules --exclude dist web/ app-web/ &&
   rm -rf api web'
 
 echo "── Миграции"
@@ -26,6 +26,13 @@ sleep 8
 
 echo "── Сборка клиента"
 ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services/app-web && npm run build 2>&1 | grep -E "error|built" | tail -2'
+
+echo "── Проверка типов клиента"
+# Сборка идёт с --noCheck ради скорости, поэтому типы проверяем отдельно:
+# именно так нашлись обращения к маршрутам, которых уже нет.
+ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services/app-web && npx tsc -b --force' || {
+  echo "Проверка типов не прошла — выкладка не считается состоявшейся"; exit 1; }
+echo "  ok"
 
 echo "── Прогон маршрутов"
 ssh -o BatchMode=yes "$HOST" 'cat > /tmp/smoke.sh' < "$ROOT/tools/smoke.sh"
