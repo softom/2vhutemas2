@@ -217,7 +217,9 @@ button:disabled { opacity: .5; cursor: default; }
 .card-button { text-align: left; background: var(--surface); color: var(--text); cursor: pointer; padding: 0; }
 .card-button .kind { padding: 0 10px 10px; }
 .media-viewer-backdrop {
-  position: fixed; inset: 0; background: rgba(8,7,6,.94); z-index: 60;
+  /* Непрозрачный фон: сквозь полупрозрачный просвечивала страница
+     и мешала смотреть снимок. */
+  position: fixed; inset: 0; background: #0b0a09; z-index: 60;
   display: flex; flex-direction: column;
 }
 /* Изображение занимает всё, что выше полосы, и растягивается по длинной стороне. */
@@ -234,3 +236,5 @@ button:disabled { opacity: .5; cursor: default; }
 .media-viewer-bar button { min-width: 48px; font-size: 18px; line-height: 1; }
 .media-viewer-caption { flex: 1; display: flex; flex-direction: column; gap: 2px; text-align: center; }
 .media-viewer-caption a { color: var(--accent); }
+.list-count { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin: 12px 0; }
+.list-count .hint { margin: 0; }

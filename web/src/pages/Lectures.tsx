@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ListCount } from "../ui/ListCount";
 import { api, type EntityListItem } from "../api";
 
 export function Lectures({ canCreate }: { canCreate: boolean }) {
@@ -46,6 +47,10 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
       )}
 
       {items.length > 0 && (
+        <ListCount shown={items.length} word={["лекция", "лекции", "лекций"]} hasMore={false} />
+      )}
+
+      {items.length > 0 && (
         <table className="grid-table">
           <thead>
             <tr>
@@ -75,6 +80,10 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
             ))}
           </tbody>
         </table>
+      )}
+
+      {items.length > 0 && (
+        <ListCount shown={items.length} word={["лекция", "лекции", "лекций"]} hasMore={false} />
       )}
 
       {canCreate && (

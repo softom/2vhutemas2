@@ -1,6 +1,7 @@
 /** Каталог записей: поиск, отбор по ветви дерева типов, переход к карточке. */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ListCount } from "../ui/ListCount";
 import {
   api,
   type Capabilities,
@@ -167,7 +168,13 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
         </p>
       )}
 
-      <p className="hint">Показано записей: {items.length}{cursor ? " — есть ещё" : ""}</p>
+      <ListCount
+        shown={items.length}
+        word={["запись", "записи", "записей"]}
+        hasMore={!!cursor}
+        onMore={loadMore}
+        loading={loadingMore}
+      />
 
       <div className="grid">
         {items.map((item) => (
@@ -200,10 +207,14 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
         ))}
       </div>
 
-      {cursor && (
-        <button type="button" className="ghost" disabled={loadingMore} onClick={loadMore}>
-          {loadingMore ? "Загружаем…" : "Показать ещё"}
-        </button>
+      {items.length > 0 && (
+        <ListCount
+          shown={items.length}
+          word={["запись", "записи", "записей"]}
+          hasMore={!!cursor}
+          onMore={loadMore}
+          loading={loadingMore}
+        />
       )}
     </section>
   );

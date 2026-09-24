@@ -4,11 +4,16 @@
  * Щелчок по файлу открывает то же окно, что и загрузка, — в режиме правки.
  */
 import { useEffect, useState } from "react";
+import { ListCount } from "../ui/ListCount";
 import { api, type MediaAsset } from "../api";
 import { MediaDialog } from "../editor/MediaDialog";
 
 export function MediaLibrary({ canUpload }: { canUpload: boolean }) {
   const [items, setItems] = useState<MediaAsset[]>([]);
+  // Медиатека переросла страницу: без подгрузки файлы за первой двадцаткой
+  // были недоступны совсем.
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ open: boolean; asset: MediaAsset | null }>({
     open: false,
@@ -16,11 +21,28 @@ export function MediaLibrary({ canUpload }: { canUpload: boolean }) {
   });
 
   const reload = () =>
-    api.media({}).then((page) => setItems(page.items)).catch((e) => setError(e.message));
+    api.media({})
+      .then((page) => {
+        setItems(page.items);
+        setCursor(page.next_cursor);
+      })
+      .catch((e) => setError(e.message));
 
   useEffect(() => {
     reload();
   }, []);
+
+  const loadMore = () => {
+    if (!cursor) return;
+    setLoadingMore(true);
+    api.media({ cursor })
+      .then((page) => {
+        setItems((current) => [...current, ...page.items]);
+        setCursor(page.next_cursor);
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoadingMore(false));
+  };
 
   return (
     <section>
@@ -39,6 +61,16 @@ export function MediaLibrary({ canUpload }: { canUpload: boolean }) {
 
       {error && <p className="error">{error}</p>}
       {items.length === 0 && <p className="notice">Файлов пока нет.</p>}
+
+      {items.length > 0 && (
+        <ListCount
+          shown={items.length}
+          word={["файл", "файла", "файлов"]}
+          hasMore={!!cursor}
+          onMore={loadMore}
+          loading={loadingMore}
+        />
+      )}
 
       <div className="grid">
         {items.map((asset) => {
@@ -77,6 +109,15 @@ export function MediaLibrary({ canUpload }: { canUpload: boolean }) {
           asset={dialog.asset}
           onSaved={reload}
           onClose={() => setDialog({ open: false, asset: null })}
+        />
+      )}
+    {items.length > 0 && (
+        <ListCount
+          shown={items.length}
+          word={["файл", "файла", "файлов"]}
+          hasMore={!!cursor}
+          onMore={loadMore}
+          loading={loadingMore}
         />
       )}
     </section>
