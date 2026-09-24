@@ -199,3 +199,8 @@ button:disabled { opacity: .5; cursor: default; }
 .chip-remove:hover { color: var(--accent); }
 .set-items li { margin-bottom: 10px; }
 .set-items .hint { display: block; }
+.panel-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.panel-tabs button { flex: 1; padding: 6px 10px; font-size: 13px; }
+.panel-tabs button.active { border-color: var(--accent); color: var(--accent); }
+.chips button.chip { cursor: pointer; background: none; font-size: 12px; }
+.chips button.chip.active { border-color: var(--accent); color: var(--accent); }

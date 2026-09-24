@@ -78,10 +78,11 @@ export function MediaPanel({ entityId, attached, onInsert, onChanged }: Props) {
   const attachedIds = new Set(attached.map((item) => item.asset_id));
 
   return (
-    <aside className="entity-panel">
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-        <h3>Файлы</h3>
-        <button type="button" className="ghost" onClick={() => setUploading(true)}>Создать</button>
+    <div>
+      <div className="row" style={{ justifyContent: "flex-end" }}>
+        <button type="button" className="ghost" onClick={() => setUploading(true)}>
+          Загрузить файл
+        </button>
       </div>
       <p className="hint">
         Перетащите файл в текст или щёлкните по нему. «Прикрепить» добавляет файл в карточку объекта.
@@ -121,6 +122,6 @@ export function MediaPanel({ entityId, attached, onInsert, onChanged }: Props) {
           onClose={() => setUploading(false)}
         />
       )}
-    </aside>
+    </div>
   );
 }

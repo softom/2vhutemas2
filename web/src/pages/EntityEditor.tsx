@@ -27,9 +27,8 @@ import {
   schema,
   withEditableEdges,
 } from "../editor/entityBlocks";
-import { EntityPanel } from "../editor/EntityPanel";
+import { InsertPanel } from "../editor/InsertPanel";
 import { type Tag, TagsField } from "../editor/TagsField";
-import { MediaPanel } from "../editor/MediaPanel";
 
 interface Props {
   mode: "create" | "edit";
@@ -378,15 +377,13 @@ function EditorBody(props: any) {
           <BlockNoteView editor={editor} theme="light" />
         </div>
         <div className="editor-side">
-          <EntityPanel
+          <InsertPanel
             entityId={entityId}
+            types={types}
+            attached={media}
             onInsertCard={(entity) => insertEntityCard(editor, entity)}
             onInsertMention={(entity) => insertEntityMention(editor, entity)}
-          />
-          <MediaPanel
-            entityId={entityId}
-            attached={media}
-            onInsert={(asset) => insertMediaImage(editor, asset)}
+            onInsertMedia={(asset) => insertMediaImage(editor, asset)}
             onChanged={reloadAttachments}
           />
         </div>

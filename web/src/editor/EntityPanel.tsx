@@ -1,17 +1,19 @@
 /**
- * Панель сбоку от редактора: откуда берут объекты для вставки в текст.
+ * Раздел «Записи» панели вставки: откуда берут записи для текста.
  *
  * Три источника, в порядке полезности при письме:
- *   1. связанные с этим объектом — то, что автор уже обосновал;
- *   2. поиск по каталогу — когда нужен объект из другой части базы;
+ *   1. связанные с этой записью — то, что автор уже обосновал;
+ *   2. поиск по каталогу с отбором по ветви дерева;
  *   3. недавние — то, что уже вставляли в этот текст.
  *
- * Вставка щелчком по кнопке. Перетаскивание работает там, где браузер
- * отдаёт позицию курсора под мышью, и не заменяет собой щелчок.
+ * **Вставка в текст связью не является** (Р-23): в тексте остаётся ссылка
+ * на запись и её отображение. Связь — утверждение об отношении двух
+ * записей, и она требует обоснования, поэтому у неё отдельная кнопка.
  */
 import { useEffect, useState } from "react";
-import { api, type EntityListItem } from "../api";
+import { api, type EntityListItem, type EntityType } from "../api";
 import type { InsertableEntity } from "./entityBlocks";
+import { LinkDialog } from "./LinkDialog";
 
 interface LinkedItem {
   other_id: number;
@@ -25,22 +27,29 @@ interface LinkedItem {
 
 interface Props {
   entityId: number | null;
+  types: EntityType[];
   onInsertCard: (entity: InsertableEntity) => void;
   onInsertMention: (entity: InsertableEntity) => void;
 }
 
-export function EntityPanel({ entityId, onInsertCard, onInsertMention }: Props) {
+export function EntityPanel({ entityId, types, onInsertCard, onInsertMention }: Props) {
   const [linked, setLinked] = useState<LinkedItem[]>([]);
   const [found, setFound] = useState<EntityListItem[]>([]);
   const [query, setQuery] = useState("");
+  const [branch, setBranch] = useState("");
   const [recent, setRecent] = useState<InsertableEntity[]>([]);
+  const [linking, setLinking] = useState<{ id: number; title: string } | null>(null);
 
-  useEffect(() => {
+  const roots = types.filter((type) => type.depth === 0);
+
+  const reloadLinks = () => {
     if (!entityId) return;
     api.links(entityId)
       .then((page) => setLinked(page.items as unknown as LinkedItem[]))
       .catch(() => setLinked([]));
-  }, [entityId]);
+  };
+
+  useEffect(reloadLinks, [entityId]);
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -48,12 +57,12 @@ export function EntityPanel({ entityId, onInsertCard, onInsertMention }: Props) 
       return;
     }
     const timer = setTimeout(() => {
-      api.entities({ q: query.trim() })
+      api.entities({ q: query.trim(), type: branch || undefined })
         .then((page) => setFound(page.items.filter((item) => item.id !== entityId)))
         .catch(() => setFound([]));
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, entityId]);
+  }, [query, branch, entityId]);
 
   const remember = (entity: InsertableEntity) => {
     setRecent((previous) => [
@@ -62,7 +71,9 @@ export function EntityPanel({ entityId, onInsertCard, onInsertMention }: Props) 
     ].slice(0, 8));
   };
 
-  const row = (entity: InsertableEntity, subtitle?: string | null) => (
+  const isLinked = (id: number) => linked.some((item) => item.other_id === id);
+
+  const row = (entity: InsertableEntity, subtitle?: string | null, canLink = true) => (
     <li
       key={`${entity.id}-${subtitle ?? ""}`}
       draggable
@@ -98,16 +109,30 @@ export function EntityPanel({ entityId, onInsertCard, onInsertMention }: Props) 
         >
           В строку
         </button>
+        {canLink && entityId && (
+          isLinked(entity.id)
+            ? <span className="panel-item-sub">связан</span>
+            : (
+              <button
+                type="button"
+                className="ghost"
+                title="Связать записи: потребуется объяснить основание"
+                onClick={() => setLinking({ id: entity.id, title: entity.title_ru })}
+              >
+                Связать
+              </button>
+            )
+        )}
       </div>
     </li>
   );
 
   return (
-    <aside className="entity-panel">
-      <h3>Объекты</h3>
+    <div>
       <p className="hint">
-        Вставьте объект в текст: карточкой отдельным блоком или ссылкой внутри строки.
-        Объект не копируется — в тексте остаётся ссылка на него.
+        Вставьте запись в текст: карточкой отдельным блоком или ссылкой внутри строки.
+        Запись не копируется — в тексте остаётся ссылка на неё. Это не связь:
+        связь утверждает отношение и требует основания.
       </p>
 
       <input
@@ -115,6 +140,26 @@ export function EntityPanel({ entityId, onInsertCard, onInsertMention }: Props) 
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
+
+      <div className="chips">
+        <button
+          type="button"
+          className={branch === "" ? "chip active" : "chip"}
+          onClick={() => setBranch("")}
+        >
+          Все
+        </button>
+        {roots.map((root) => (
+          <button
+            type="button"
+            key={root.code}
+            className={branch === root.code ? "chip active" : "chip"}
+            onClick={() => setBranch(root.code)}
+          >
+            {root.title_ru}
+          </button>
+        ))}
+      </div>
 
       {found.length > 0 && (
         <>
@@ -142,8 +187,8 @@ export function EntityPanel({ entityId, onInsertCard, onInsertMention }: Props) 
         ? (
           <p className="hint">
             {entityId
-              ? "Связей пока нет. Свяжите объекты на карточке — связь требует обоснования."
-              : "Сохраните объект, чтобы увидеть его связи."}
+              ? "Связей пока нет. Найдите запись поиском и нажмите «Связать»."
+              : "Сохраните запись, чтобы увидеть её связи."}
           </p>
         )
         : (
@@ -157,10 +202,21 @@ export function EntityPanel({ entityId, onInsertCard, onInsertMention }: Props) 
                   cover_media_id: item.other_cover_media_id,
                 },
                 item.role ?? (item.direction === "outgoing" ? "связан" : "ссылается сюда"),
+                false,
               )
             )}
           </ul>
         )}
-    </aside>
+
+      {linking && entityId && (
+        <LinkDialog
+          fromEntityId={entityId}
+          toEntityId={linking.id}
+          toTitle={linking.title}
+          onLinked={reloadLinks}
+          onClose={() => setLinking(null)}
+        />
+      )}
+    </div>
   );
 }
