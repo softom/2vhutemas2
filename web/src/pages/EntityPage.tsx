@@ -1,5 +1,5 @@
 /** Карточка объекта: свойства, датировки, описание и медиа. */
-import { useEffect, useMemo, useState } from "react";
+import { Component, type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -7,7 +7,7 @@ import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { api, type EntityCard, type Indicator, placeLabel } from "../api";
-import { createSchema } from "../editor/entityBlocks";
+import { createSchema, withEditableEdges } from "../editor/entityBlocks";
 
 /** Первое место записи: им подписывается карточка сверху. */
 function firstPlace(indicators: Indicator[]) {
@@ -289,7 +289,63 @@ function ReadOnlyDocument({ blocks }: { blocks: PartialBlock[] }) {
   }, [blocks]);
 
   if (!ready) return <p className="notice">Готовим текст…</p>;
-  return <DocumentView blocks={blocks} />;
+  // Если показ всё же споткнётся, читателю остаётся текст, а не пустая
+  // страница с ошибкой: материал важнее оформления.
+  return (
+    <DocumentBoundary blocks={blocks}>
+      <DocumentView blocks={blocks} />
+    </DocumentBoundary>
+  );
+}
+
+/** Простой вид текста: заголовки, абзацы и подписи к изображениям. */
+function PlainDocument({ blocks }: { blocks: PartialBlock[] }) {
+  const lines = blocks.flatMap((block) => {
+    const record = block as unknown as {
+      type?: string;
+      content?: { text?: string }[];
+      props?: { caption?: string };
+    };
+    if (record.type === "mediaImage") {
+      return record.props?.caption ? [record.props.caption] : [];
+    }
+    const text = (record.content ?? []).map((part) => part.text ?? "").join("").trim();
+    return text ? [text] : [];
+  });
+  return (
+    <div className="editor-shell plain-document">
+      {lines.map((line, index) => <p key={index}>{line}</p>)}
+    </div>
+  );
+}
+
+class DocumentBoundary extends Component<
+  { blocks: PartialBlock[]; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error("Показ текста не удался, показываем простым видом", error);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <>
+          <p className="notice">
+            Оформление текста показать не удалось — ниже сам текст.
+          </p>
+          <PlainDocument blocks={this.props.blocks} />
+        </>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function DocumentView({ blocks }: { blocks: PartialBlock[] }) {
@@ -298,7 +354,9 @@ function DocumentView({ blocks }: { blocks: PartialBlock[] }) {
   const schema = useMemo(() => createSchema(), []);
   const editor = useCreateBlockNote({
     schema,
-    initialContent: blocks.length ? (blocks as never) : undefined,
+    // Края подбиваются пустым абзацем: текст, заканчивающийся изображением,
+    // ронял показ с «Position undefined out of range» (Р-46).
+    initialContent: blocks.length ? (withEditableEdges(blocks) as never) : undefined,
   });
   return (
     <div className="editor-shell">

@@ -210,3 +210,5 @@ button:disabled { opacity: .5; cursor: default; }
   border: 1px solid var(--line); font-size: 12px;
 }
 .chips button.chip.active { background: var(--accent); color: #17140f; border-color: var(--accent); }
+.plain-document { padding: 12px 16px; }
+.plain-document p { margin: 0 0 10px; }

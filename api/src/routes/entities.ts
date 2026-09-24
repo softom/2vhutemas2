@@ -186,12 +186,17 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            m.published_revision_id,
            (select r.id from app.revisions r where r.material_id = m.id
              order by r.created_at desc limit 1) as latest_revision_id,
+           -- Описаний может оказаться несколько: архивное не показываем,
+           -- даже если оно прикреплено первым.
            (select a.document_id from app.attachments a
               join app.targets t on t.id = a.target_id
               join app.attachment_roles ar on ar.id = a.role_id
+              left join app.materials dm on dm.document_id = a.document_id
              where t.entity_id = e.id and a.document_id is not null
                and ar.code in ('description', 'wiki')
-             order by a.sort_order limit 1) as description_document_id,
+             order by case when dm.status = 'archived' then 1 else 0 end,
+                      a.sort_order, a.id
+             limit 1) as description_document_id,
            coalesce((select jsonb_agg(jsonb_build_object(
                         'attachment_id', a.id, 'asset_id', a.asset_id,
                         'role', ar.code, 'role_title', ar.title_ru,
