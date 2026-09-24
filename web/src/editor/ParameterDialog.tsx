@@ -13,11 +13,32 @@ export const VALUE_TYPES: { code: string; title: string }[] = [
   { code: "number", title: "число" },
   { code: "integer", title: "целое число" },
   { code: "text", title: "текст" },
+  { code: "option", title: "список" },
   { code: "boolean", title: "да или нет" },
-  { code: "option", title: "выбор из списка" },
   { code: "date", title: "дата" },
   { code: "place", title: "место" },
 ];
+
+/**
+ * В окне список — два отдельных вида: один выбор и несколько. В модели это
+ * один тип значения с признаком «несколько ответов»: хранится одинаково,
+ * различается только тем, сколько ответов допустимо (Р-38).
+ */
+const KINDS: { code: string; title: string; value_type: string; many: boolean }[] = [
+  { code: "number", title: "число", value_type: "number", many: false },
+  { code: "integer", title: "целое число", value_type: "integer", many: false },
+  { code: "text", title: "текст", value_type: "text", many: false },
+  { code: "option_one", title: "список: один выбор", value_type: "option", many: false },
+  { code: "option_many", title: "список: несколько", value_type: "option", many: true },
+  { code: "boolean", title: "да или нет", value_type: "boolean", many: false },
+  { code: "date", title: "дата", value_type: "date", many: false },
+  { code: "place", title: "место", value_type: "place", many: false },
+];
+
+function kindOf(valueType: string, repeatable: boolean): string {
+  if (valueType === "option") return repeatable ? "option_many" : "option_one";
+  return valueType;
+}
 
 /** Код из названия: латиницей, потому что по нему обращаются в API. */
 function codeFrom(title: string): string {
@@ -45,11 +66,14 @@ export function ParameterDialog({ parameter, onSaved, onClose }: Props) {
     code: parameter?.code ?? "",
     title_ru: parameter?.title_ru ?? "",
     unit: parameter?.unit ?? "",
-    value_type: parameter?.value_type ?? "number",
+    kind: kindOf(parameter?.value_type ?? "number", parameter?.is_repeatable ?? false),
     definition: parameter?.definition ?? "",
     is_repeatable: parameter?.is_repeatable ?? false,
-    options: (parameter?.options ?? []).map((option) => option.title).join(", "),
   });
+  const [options, setOptions] = useState<{ code: string; title: string }[]>(
+    parameter?.options ?? [],
+  );
+  const [adding, setAdding] = useState("");
   const [codeTouched, setCodeTouched] = useState(editing);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -57,20 +81,33 @@ export function ParameterDialog({ parameter, onSaved, onClose }: Props) {
 
   const set = (patch: Partial<typeof draft>) => setDraft({ ...draft, ...patch });
 
+  /** Значение списка заводится по Enter или кнопкой; повтор не добавляется. */
+  const addOption = () => {
+    const title = adding.trim();
+    const code = codeFrom(title);
+    if (!title || options.some((item) => item.code === code)) return;
+    setOptions([...options, { code, title }]);
+    setAdding("");
+  };
+
   const save = async () => {
     setSaving(true);
     setError(null);
     try {
+      const kind = KINDS.find((item) => item.code === draft.kind)!;
+      if (kind.value_type === "option" && options.length === 0) {
+        throw new Error("У списка должны быть значения");
+      }
       const body = {
         code: draft.code.trim(),
         title_ru: draft.title_ru.trim(),
         unit: draft.unit.trim() || null,
-        value_type: draft.value_type,
+        value_type: kind.value_type,
         definition: draft.definition.trim() || null,
-        is_repeatable: draft.is_repeatable,
-        options: draft.value_type === "option"
-          ? draft.options.split(",").map((title) => title.trim()).filter(Boolean)
-            .map((title) => ({ code: codeFrom(title), title_ru: title }))
+        // «Несколько» у списка — это и есть повторяемость ответа.
+        is_repeatable: kind.value_type === "option" ? kind.many : draft.is_repeatable,
+        options: kind.value_type === "option"
+          ? options.map((option) => ({ code: option.code, title_ru: option.title }))
           : undefined,
       };
       if (editing) await api.updateParameter(parameter!.id, body);
@@ -130,17 +167,19 @@ export function ParameterDialog({ parameter, onSaved, onClose }: Props) {
 
         <div className="row">
           <label>
-            Тип значения
+            Вид значения
             <select
-              value={draft.value_type}
+              value={draft.kind}
               disabled={used > 0}
-              onChange={(e) => set({ value_type: e.target.value })}
+              onChange={(e) => set({ kind: e.target.value })}
             >
-              {VALUE_TYPES.map((type) => (
-                <option key={type.code} value={type.code}>{type.title}</option>
+              {KINDS.map((kind) => (
+                <option key={kind.code} value={kind.code}>{kind.title}</option>
               ))}
             </select>
-            {used > 0 && <span className="hint">Величина заполнена {used} раз — тип не меняется</span>}
+            {used > 0 && (
+              <span className="hint">Величина заполнена {used} раз — вид не меняется</span>
+            )}
           </label>
           <label>
             Единица измерения
@@ -151,26 +190,58 @@ export function ParameterDialog({ parameter, onSaved, onClose }: Props) {
             />
             <span className="hint">Часть определения, а не подпись рядом со значением</span>
           </label>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={draft.is_repeatable}
-              onChange={(e) => set({ is_repeatable: e.target.checked })}
-            />
-            Несколько ответов
-          </label>
+          {!draft.kind.startsWith("option") && (
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={draft.is_repeatable}
+                onChange={(e) => set({ is_repeatable: e.target.checked })}
+              />
+              Несколько ответов
+            </label>
+          )}
         </div>
 
-        {draft.value_type === "option" && (
-          <label>
-            Список значений
-            <input
-              value={draft.options}
-              placeholder="кирпич, железобетон, металл"
-              onChange={(e) => set({ options: e.target.value })}
-            />
-            <span className="hint">Через запятую</span>
-          </label>
+        {draft.kind.startsWith("option") && (
+          <div className="value-field">
+            <div className="value-label">Значения списка</div>
+            {options.length === 0 && <p className="notice">Пока пусто.</p>}
+            <div className="chips">
+              {options.map((option) => (
+                <span className="chip" key={option.code}>
+                  {option.title}
+                  <button
+                    type="button"
+                    className="chip-remove"
+                    onClick={() =>
+                      setOptions(options.filter((item) => item.code !== option.code))}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="value-row">
+              <input
+                value={adding}
+                placeholder="железобетон"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  addOption();
+                }}
+                onChange={(e) => setAdding(e.target.value)}
+              />
+              <button type="button" className="ghost" onClick={addOption}>
+                Добавить значение
+              </button>
+            </div>
+            <span className="hint">
+              {draft.kind === "option_many"
+                ? "Из этого списка можно выбрать несколько ответов"
+                : "Из этого списка выбирается один ответ"}
+            </span>
+          </div>
         )}
 
         <label>

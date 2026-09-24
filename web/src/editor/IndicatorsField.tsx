@@ -205,6 +205,7 @@ export function IndicatorsField({ indicators, suggested, onChange }: Props) {
       );
     }
 
+
     const numeric = field.value_type === "number" || field.value_type === "integer";
     return (
       <input
@@ -262,6 +263,40 @@ export function IndicatorsField({ indicators, suggested, onChange }: Props) {
           {fields.map((field) => {
             const entries = entriesOf(indicator, field.parameter);
             const many = repeatable(field);
+
+            if (field.value_type === "option" && many) {
+              const chosen = entries.map((entry) => entry.value.option);
+              return (
+                <div className="value-field" key={field.parameter}>
+                  <div className="value-label">{field.title}</div>
+                  <div className="chips">
+                    {field.options.map((option) => (
+                      <label className="chip" key={option.code}>
+                        <input
+                          type="checkbox"
+                          checked={chosen.includes(option.code)}
+                          onChange={(e) => {
+                            const current = indicators[group];
+                            const values = e.target.checked
+                              ? [...current.values, {
+                                parameter: field.parameter,
+                                option: option.code,
+                              }]
+                              : current.values.filter((item) =>
+                                !(item.parameter === field.parameter &&
+                                  item.option === option.code)
+                              );
+                            update(group, { ...current, values });
+                          }}
+                        />
+                        {option.title}
+                      </label>
+                    ))}
+                  </div>
+                  {field.definition && <span className="hint">{field.definition}</span>}
+                </div>
+              );
+            }
             if (entries.length === 0 && !many) {
               // Единственный ответ заводится сразу, чтобы поле было видно.
               return (

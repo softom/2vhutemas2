@@ -172,7 +172,7 @@ function valueText(value: Indicator["values"][number]): string {
   if (value.bool_value !== null && value.bool_value !== undefined) {
     return value.bool_value ? "да" : "нет";
   }
-  if (value.option) return value.option;
+  if (value.option) return value.option_title ?? value.option;
   if (value.place) return placeLabel(value.place);
   if (value.date_start_year) {
     const range = value.date_end_year

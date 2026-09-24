@@ -203,6 +203,8 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                                'bool_value', iv.bool_value,
                                'option', (select o.code from app.parameter_options o
                                            where o.id = iv.option_id),
+                               'option_title', (select o.title_ru from app.parameter_options o
+                                                 where o.id = iv.option_id),
                                'place', (select to_jsonb(pl) from app.places pl
                                           where pl.id = iv.place_id),
                                'date_start_year', iv.date_start_year,

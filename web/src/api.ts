@@ -132,6 +132,7 @@ export interface IndicatorValue {
   text_value?: string | null;
   bool_value?: boolean | null;
   option?: string | null;
+  option_title?: string | null;
   /** Место из справочника: величина с типом «место» (Р-39). */
   place_id?: string | null;
   place?: Place | null;

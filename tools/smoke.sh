@@ -227,6 +227,23 @@ code -H "$AUTH" "$API/entities?parameter=smoke_capacity&min=5000" >/dev/null
 missing "запись вне диапазона не попала" 'smoke-vtoroy' "$(body)"
 check "занятый параметр не удаляется" 400 "$(code -X DELETE -H "$AUTH" $API/parameters/$PID_PARAM)"
 
+# Список — это параметр с типом option и строками в parameter_options; ответ
+# пишется ссылкой на строку. Множественный выбор — несколько ответов на один
+# параметр, их разрешает признак повторяемости (Р-43).
+curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"code":"smoke_material","title_ru":"smoke: материал","value_type":"option","options":[{"code":"brick","title_ru":"кирпич"},{"code":"concrete","title_ru":"железобетон"}]}' $API/parameters >/dev/null
+curl -s -X PUT -H "$AUTH" -H "$JSON" -d '{"items":[{"parameter":"smoke_capacity"},{"parameter":"smoke_material"},{"parameter":"smoke_features"}]}' $API/parameter-sets/smoke_set/items >/dev/null
+curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"code":"smoke_features","title_ru":"smoke: признаки","value_type":"option","is_repeatable":true,"options":[{"code":"dome","title_ru":"купол"},{"code":"ring","title_ru":"кольцо"}]}' $API/parameters >/dev/null
+curl -s -X PUT -H "$AUTH" -H "$JSON" -d '{"items":[{"parameter":"smoke_capacity"},{"parameter":"smoke_material"},{"parameter":"smoke_features"}]}' $API/parameter-sets/smoke_set/items >/dev/null
+check "один выбор из списка" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"smoke_material\",\"option\":\"brick\"}]}]}" $API/entities-indicators/$EID2)"
+code -H "$AUTH" $API/entities/$EID2 >/dev/null
+contains "название значения в карточке" 'кирпич' "$(body)"
+check "значение не из того списка" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"smoke_material\",\"option\":\"dome\"}]}]}" $API/entities-indicators/$EID2)"
+check "второй ответ на одиночный список" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"smoke_material\",\"option\":\"brick\"},{\"parameter\":\"smoke_material\",\"option\":\"concrete\"}]}]}" $API/entities-indicators/$EID2)"
+check "несколько ответов из списка" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"smoke_features\",\"option\":\"dome\"},{\"parameter\":\"smoke_features\",\"option\":\"ring\"}]}]}" $API/entities-indicators/$EID2)"
+code -H "$AUTH" $API/entities/$EID2 >/dev/null
+contains "оба значения списка в карточке" 'кольцо' "$(body)"
+
+
 # Место — такая же величина, как вместимость: роль стала параметром (Р-39).
 code -H "$AUTH" $API/parameters/for-type/architecture_object >/dev/null
 contains "адрес среди величин" 'Адрес объекта' "$(body)"

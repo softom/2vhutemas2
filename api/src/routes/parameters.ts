@@ -151,6 +151,40 @@ parameters.patch("/:id", async (c: Context<AppEnv>) => {
       );
     }
 
+    // Список значений правится вместе с параметром: добавить, переименовать,
+    // убрать. Убрать можно только то, чем ещё не ответили, — значения дороже.
+    if (input.options) {
+      const keep: string[] = [];
+      for (const [index, option] of input.options.entries()) {
+        keep.push(option.code);
+        await tx`
+          insert into app.parameter_options (parameter_id, code, title_ru, sort_order)
+          values (${id}, ${option.code}, ${option.title_ru}, ${index})
+          on conflict (parameter_id, code)
+          do update set title_ru = excluded.title_ru, sort_order = excluded.sort_order
+        `;
+      }
+      // Массивы драйверу передаём через jsonb: так же, как в остальных местах.
+      const kept = JSON.stringify(keep);
+      const used = await tx<{ title_ru: string }>`
+        select o.title_ru from app.parameter_options o
+         where o.parameter_id = ${id}
+           and o.code <> all (select jsonb_array_elements_text(${kept}::jsonb))
+           and exists (select 1 from app.indicator_values iv where iv.option_id = o.id)
+      `;
+      if (used.length > 0) {
+        throw new ApiError(
+          "validation_failed",
+          `Значение «${used[0].title_ru}» уже выбрано в карточках: убрать нельзя`,
+        );
+      }
+      await tx`
+        delete from app.parameter_options
+         where parameter_id = ${id}
+           and code <> all (select jsonb_array_elements_text(${kept}::jsonb))
+      `;
+    }
+
     const rows = await tx`
       update app.parameters set
         title_ru   = coalesce(${input.title_ru ?? null}, title_ru),
