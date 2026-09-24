@@ -51,13 +51,12 @@ export function EntityPanel({ entityId, types, onInsertCard, onInsertMention }: 
 
   useEffect(reloadLinks, [entityId]);
 
+  // Панель не пустует: без запроса показываем записи выбранной ветви.
+  // Пустой список выглядел поломкой, хотя искать просто ещё не начали.
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setFound([]);
-      return;
-    }
+    const search = query.trim();
     const timer = setTimeout(() => {
-      api.entities({ q: query.trim(), type: branch || undefined })
+      api.entities({ q: search.length >= 2 ? search : undefined, type: branch || undefined })
         .then((page) => setFound(page.items.filter((item) => item.id !== entityId)))
         .catch(() => setFound([]));
     }, 250);
@@ -161,9 +160,17 @@ export function EntityPanel({ entityId, types, onInsertCard, onInsertMention }: 
         ))}
       </div>
 
+      {found.length === 0 && (
+        <p className="hint">
+          {query.trim().length >= 2
+            ? "Ничего не нашлось."
+            : "В этой ветви пока нет записей."}
+        </p>
+      )}
+
       {found.length > 0 && (
         <>
-          <h4>Найдено</h4>
+          <h4>{query.trim().length >= 2 ? "Найдено" : "Записи"}</h4>
           <ul className="panel-list">
             {found.map((item) =>
               row(
