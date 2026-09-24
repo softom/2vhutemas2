@@ -8,6 +8,7 @@ import { api, supabase } from "./api";
 import { Catalog } from "./pages/Catalog";
 import { EntityPage } from "./pages/EntityPage";
 import { EntityEditor } from "./pages/EntityEditor";
+import { Lectures } from "./pages/Lectures";
 import { MediaLibrary } from "./pages/MediaLibrary";
 import { Parameters } from "./pages/Parameters";
 import { Login } from "./pages/Login";
@@ -53,6 +54,9 @@ export function App() {
         <Link className="brand" to="/">2vhutemas</Link>
         <nav>
           <Link to="/" className={location.pathname === "/" ? "active" : ""}>Каталог</Link>
+          <Link to="/lectures" className={location.pathname === "/lectures" ? "active" : ""}>
+            Лекции
+          </Link>
           <Link to="/media" className={location.pathname.startsWith("/media") ? "active" : ""}>
             Медиатека
           </Link>
@@ -92,6 +96,7 @@ export function App() {
           <Route path="/entities/new" element={<EntityEditor mode="create" />} />
           <Route path="/entities/:id" element={<EntityPage canEdit={can("edit")} />} />
           <Route path="/entities/:id/edit" element={<EntityEditor mode="edit" />} />
+          <Route path="/lectures" element={<Lectures canCreate={can("create_delete")} />} />
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
           <Route path="/login" element={<Login onDone={refresh} />} />

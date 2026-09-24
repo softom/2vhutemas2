@@ -103,6 +103,10 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const min = c.req.query("min") ? Number(c.req.query("min")) : null;
   const max = c.req.query("max") ? Number(c.req.query("max")) : null;
   const sortByValue = c.req.query("sort") === "parameter" && parameter !== null;
+  // Какие величины показать в списке: страница лекций просит номер и курс.
+  const wanted = JSON.stringify(
+    (c.req.query("values") ?? "").split(",").map((code) => code.trim()).filter(Boolean),
+  );
   const descending = c.req.query("order") === "desc";
   const drafts = canSeeDrafts(principal);
   // Архив в каталоге не показывается: он не «ещё не готово», а «убрано».
@@ -120,7 +124,21 @@ entities.get("/", async (c: Context<AppEnv>) => {
               join app.targets t on t.id = a.target_id
              where t.entity_id = e.id and a.asset_id is not null
              order by a.sort_order, a.id limit 1) as cover_asset_id,
-           pv.num_value as parameter_value, pv.text_value as parameter_text
+           pv.num_value as parameter_value, pv.text_value as parameter_text,
+           coalesce((
+             select jsonb_object_agg(v.code, v.value)
+               from (select distinct on (p.code) p.code,
+                            coalesce(to_jsonb(iv.num_value), to_jsonb(iv.text_value),
+                                     to_jsonb(o.title_ru), to_jsonb(iv.date_start_year),
+                                     to_jsonb(iv.bool_value)) as value
+                       from app.indicator_values iv
+                       join app.indicators i on i.id = iv.indicator_id
+                       join app.parameters p on p.id = iv.parameter_id
+                       left join app.parameter_options o on o.id = iv.option_id
+                      where i.entity_id = e.id and i.is_current
+                        and p.code in (select jsonb_array_elements_text(${wanted}::jsonb))
+                      order by p.code, i.sort_order, iv.sort_order) v),
+             '{}'::jsonb) as values
     from app.entities e
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
@@ -137,8 +155,6 @@ entities.get("/", async (c: Context<AppEnv>) => {
            or e.type_id in (select app.entity_type_subtree(${type})))
       and (${search}::text is null or e.title_ru ilike ${"%" + (search ?? "") + "%"}
            or e.title_en ilike ${"%" + (search ?? "") + "%"})
-      and (${parameter}::text is null
-           or pv.num_value is not null or pv.text_value is not null)
       and (${min}::numeric is null or pv.num_value >= ${min})
       and (${max}::numeric is null or pv.num_value <= ${max})
       and (${sortByValue} or ${after}::bigint is null or e.id > ${after})

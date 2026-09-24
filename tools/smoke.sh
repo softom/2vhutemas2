@@ -256,6 +256,28 @@ code -H "$AUTH" $API/places/$PID/usage >/dev/null
 contains "где используется место" 'Адрес объекта' "$(body)"
 check "место без ссылки отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"address\",\"text_value\":\"где\"}]}]}" $API/entities-indicators/$EID)"
 
+echo "── Лекции"
+# Страница лекций — это каталог, отобранный по ветви «Служебные»
+# и отсортированный по величине «Номер лекции» (Р-44).
+L2=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"type":"lecture","slug":"smoke-lekciya-dva","title_ru":"smoke: лекция вторая"}' $API/entities)
+LID2=$(echo "$L2" | field id)
+LREV2=$(echo "$L2" | field revision_id)
+L1=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"type":"lecture","slug":"smoke-lekciya-odin","title_ru":"smoke: лекция первая"}' $API/entities)
+LID1=$(echo "$L1" | field id)
+LREV1=$(echo "$L1" | field revision_id)
+check "лекция создана" "да" "$([ -n "$LID1" ] && echo да || echo нет)"
+curl -s -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"lecture_number\",\"num_value\":2},{\"parameter\":\"course\",\"text_value\":\"smoke: курс\"}]}],\"base_revision_id\":\"$LREV2\"}" $API/entities-indicators/$LID2 >/dev/null
+curl -s -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"lecture_number\",\"num_value\":1},{\"parameter\":\"course\",\"text_value\":\"smoke: курс\"}]}],\"base_revision_id\":\"$LREV1\"}" $API/entities-indicators/$LID1 >/dev/null
+ORDER=$(curl -s -H "$AUTH" "$API/entities?type=service&parameter=lecture_number&sort=parameter&order=asc&values=lecture_number,course" | python3 -c "
+import json,sys
+items = [i for i in json.load(sys.stdin)['items'] if i['slug'].startswith('smoke-lekciya')]
+print(','.join(str(i['values'].get('lecture_number')) for i in items))")
+check "лекции по порядку номеров" "1,2" "$ORDER"
+code -H "$AUTH" "$API/entities?type=service&values=lecture_number,course" >/dev/null
+contains "курс приходит в списке" 'smoke: курс' "$(body)"
+code -H "$AUTH" "$API/entities?type=what&parameter=lecture_number&sort=parameter" >/dev/null
+missing "лекции не попали в энциклопедию" 'smoke-lekciya' "$(body)"
+
 echo "── Уборка"
 docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -q -c "
 delete from app.attachments a using app.targets t
@@ -278,7 +300,14 @@ delete from app.materials where entity_id in ($EID,$EID2) or document_id = $DID
    or asset_id = '$AID' or link_id in (select id from app.links where from_entity_id in ($EID,$EID2));
 delete from app.links where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2);
 delete from app.documents where id = $DID or title like 'smoke:%' or title = 'Обоснование связи' and id not in (select document_id from app.attachments where document_id is not null);
-delete from app.entities where id in ($EID,$EID2);
+delete from app.revision_reviews rr using app.revisions r, app.materials m
+ where rr.revision_id = r.id and r.material_id = m.id and m.entity_id in ($LID1,$LID2);
+delete from app.revisions rev using app.materials m
+ where rev.material_id = m.id and m.entity_id in ($LID1,$LID2);
+delete from app.material_credits mc using app.materials m
+ where mc.material_id = m.id and m.entity_id in ($LID1,$LID2);
+delete from app.materials where entity_id in ($LID1,$LID2);
+delete from app.entities where id in ($EID,$EID2,$LID1,$LID2);
 delete from app.media_files where asset_id = '$AID';
 delete from app.media_assets where id = '$AID';
 delete from app.places where id = '$PID';

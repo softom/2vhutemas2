@@ -77,6 +77,8 @@ export interface EntityListItem {
   /** Значение величины, по которой шёл отбор; приходит только с ?parameter=. */
   parameter_value?: number | string | null;
   parameter_text?: string | null;
+  /** Значения величин, названных в ?values=; пусто, если их не просили. */
+  values?: Record<string, string | number | boolean | null>;
 }
 
 export interface EntityCard extends EntityListItem {
@@ -223,6 +225,8 @@ export const api = {
       max?: string;
       sort?: string;
       order?: string;
+      /** Коды величин, значения которых нужны в списке. */
+      values?: string;
     },
   ) => {
     const search = new URLSearchParams();
@@ -236,6 +240,7 @@ export const api = {
     if (params.max) search.set("max", params.max);
     if (params.sort) search.set("sort", params.sort);
     if (params.order) search.set("order", params.order);
+    if (params.values) search.set("values", params.values);
     return request<{ items: EntityListItem[]; next_cursor: string | null }>(
       `/entities?${search.toString()}`,
     );
