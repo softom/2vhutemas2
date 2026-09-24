@@ -1,5 +1,5 @@
 /** Карточка объекта: свойства, датировки, описание и медиа. */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -7,7 +7,7 @@ import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { api, type EntityCard, type Indicator, placeLabel } from "../api";
-import { schema } from "../editor/entityBlocks";
+import { createSchema } from "../editor/entityBlocks";
 
 /** Первое место записи: им подписывается карточка сверху. */
 function firstPlace(indicators: Indicator[]) {
@@ -270,9 +270,32 @@ function Indicators({ items }: { items: Indicator[] }) {
   );
 }
 
+/**
+ * Показ текста: редактор создаётся только после того, как предыдущий снят.
+ *
+ * При переходе по ссылке с одной карточки на другую оба показа существовали
+ * мгновение одновременно, и новый падал с «Position undefined out of range».
+ * Обновление страницы ошибку прятало, потому что прежнего показа уже не было.
+ */
 function ReadOnlyDocument({ blocks }: { blocks: PartialBlock[] }) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setReady(true));
+    return () => {
+      cancelAnimationFrame(frame);
+      setReady(false);
+    };
+  }, [blocks]);
+
+  if (!ready) return <p className="notice">Готовим текст…</p>;
+  return <DocumentView blocks={blocks} />;
+}
+
+function DocumentView({ blocks }: { blocks: PartialBlock[] }) {
   // Схема та же, что в редакторе: иначе карточка объекта падает на карточке
   // объекта внутри текста и на изображении из медиатеки.
+  const schema = useMemo(() => createSchema(), []);
   const editor = useCreateBlockNote({
     schema,
     initialContent: blocks.length ? (blocks as never) : undefined,

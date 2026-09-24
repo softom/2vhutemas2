@@ -21,10 +21,10 @@ import {
 } from "../api";
 import { IndicatorsField } from "../editor/IndicatorsField";
 import {
+  createSchema,
   insertEntityCard,
   insertEntityMention,
   insertMediaImage,
-  schema,
   withEditableEdges,
 } from "../editor/entityBlocks";
 import { InsertPanel } from "../editor/InsertPanel";
@@ -196,6 +196,9 @@ function EditorBody(props: any) {
     error, setError, saving, setSaving, navigate,
   } = props;
 
+  // Своя схема на каждый редактор: общая роняла второй показ при переходе
+  // с карточки на карточку («Position undefined out of range»).
+  const schema = useMemo(() => createSchema(), []);
   const editor = useCreateBlockNote({
     schema,
     initialContent: initialBlocks.length > 0 ? withEditableEdges(initialBlocks) : undefined,

@@ -101,14 +101,20 @@ export const MediaImageBlock = createReactBlockSpec(
   },
 );
 
-export const schema = BlockNoteSchema.create({
-  blockSpecs: {
-    ...defaultBlockSpecs,
-    entityCard: EntityCardBlock,
-    mediaImage: MediaImageBlock,
-  },
-  inlineContentSpecs: { ...defaultInlineContentSpecs, entityMention: EntityMention },
-});
+/** Схема блоков проекта. Отдельная на каждый показ: общая делает переход
+ *  с карточки на карточку падением «Position undefined out of range». */
+export function createSchema() {
+  return BlockNoteSchema.create({
+    blockSpecs: {
+      ...defaultBlockSpecs,
+      entityCard: EntityCardBlock,
+      mediaImage: MediaImageBlock,
+    },
+    inlineContentSpecs: { ...defaultInlineContentSpecs, entityMention: EntityMention },
+  });
+}
+
+export const schema = createSchema();
 
 export type AppSchema = typeof schema;
 

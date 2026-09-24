@@ -8,7 +8,7 @@
  * и роль места стали параметрами. У таких вопросов бывает несколько ответов
  * — две реконструкции, два адреса, — поэтому они заполняются списком.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type Indicator, type IndicatorValue, placeLabel, type SuggestedParameter } from "../api";
 import { PlacePicker } from "./PlacePicker";
 import { PlaceDialog } from "./PlaceDialog";
@@ -28,6 +28,14 @@ function repeatable(field: SuggestedParameter): boolean {
 }
 
 export function IndicatorsField({ indicators, suggested, onChange }: Props) {
+  // Величины видно сразу: пустой список за кнопкой выглядел так, будто
+  // показателей у типа нет вовсе.
+  useEffect(() => {
+    if (indicators.length === 0 && suggested.length > 0) {
+      onChange([emptyIndicator("Сведения")]);
+    }
+  }, [indicators.length, suggested.length]);
+
   // Окно места открывается поверх формы: универсальный элемент правится
   // в собственном окне (правило 15).
   const [picking, setPicking] = useState<{ group: number; position: number } | null>(null);
