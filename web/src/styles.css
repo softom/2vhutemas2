@@ -212,3 +212,18 @@ button:disabled { opacity: .5; cursor: default; }
 .chips button.chip.active { background: var(--accent); color: #17140f; border-color: var(--accent); }
 .plain-document { padding: 12px 16px; }
 .plain-document p { margin: 0 0 10px; }
+
+/* Просмотр изображений карточки: следующее по порядку прикрепления, по кругу */
+.card-button { text-align: left; background: var(--surface); color: var(--text); cursor: pointer; padding: 0; }
+.card-button .kind { padding: 0 10px 10px; }
+.media-viewer-backdrop {
+  position: fixed; inset: 0; background: rgba(8,7,6,.92); z-index: 60;
+  display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+}
+.media-viewer { display: flex; flex-direction: column; gap: 12px; max-width: min(1200px, 100%); max-height: 100%; }
+.media-viewer-image { max-width: 100%; max-height: calc(100vh - 140px); object-fit: contain; border-radius: var(--radius); }
+.media-viewer-bar { display: flex; align-items: center; gap: 12px; justify-content: center; }
+.media-viewer-bar button { min-width: 48px; font-size: 18px; line-height: 1; }
+.media-viewer-caption { flex: 1; display: flex; flex-direction: column; gap: 2px; text-align: center; }
+.media-viewer-caption a { color: var(--accent); }
+@media (max-width: 640px) { .media-viewer-image { max-height: calc(100vh - 180px); } }

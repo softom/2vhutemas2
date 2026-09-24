@@ -11,6 +11,10 @@ import {
 
 export function Catalog({ canCreate }: { canCreate: boolean }) {
   const [items, setItems] = useState<EntityListItem[]>([]);
+  // Каталог отдаётся страницами; без этого записи за первой страницей
+  // были не видны вовсе.
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [types, setTypes] = useState<EntityType[]>([]);
   const [type, setType] = useState("");
   const [query, setQuery] = useState("");
@@ -63,6 +67,7 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
         .then((page) => {
           if (!cancelled) {
             setItems(page.items);
+            setCursor(page.next_cursor);
             setError(null);
           }
         })
@@ -74,6 +79,27 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
       clearTimeout(timer);
     };
   }, [type, query, parameter, min, max, descending]);
+
+  const loadMore = () => {
+    if (!cursor) return;
+    setLoadingMore(true);
+    api.entities({
+      type: type || undefined,
+      q: query || undefined,
+      parameter: parameter || undefined,
+      min: min || undefined,
+      max: max || undefined,
+      sort: parameter ? "parameter" : undefined,
+      order: descending ? "desc" : "asc",
+      cursor,
+    })
+      .then((page) => {
+        setItems((current) => [...current, ...page.items]);
+        setCursor(page.next_cursor);
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoadingMore(false));
+  };
 
   return (
     <section>
@@ -141,6 +167,8 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
         </p>
       )}
 
+      <p className="hint">Показано записей: {items.length}{cursor ? " — есть ещё" : ""}</p>
+
       <div className="grid">
         {items.map((item) => (
           <Link className="card" key={item.id} to={`/entities/${item.id}`}>
@@ -171,6 +199,12 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
           </Link>
         ))}
       </div>
+
+      {cursor && (
+        <button type="button" className="ghost" disabled={loadingMore} onClick={loadMore}>
+          {loadingMore ? "Загружаем…" : "Показать ещё"}
+        </button>
+      )}
     </section>
   );
 }

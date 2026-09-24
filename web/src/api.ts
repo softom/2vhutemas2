@@ -227,6 +227,7 @@ export const api = {
       order?: string;
       /** Коды величин, значения которых нужны в списке. */
       values?: string;
+      limit?: string;
     },
   ) => {
     const search = new URLSearchParams();
@@ -241,6 +242,7 @@ export const api = {
     if (params.sort) search.set("sort", params.sort);
     if (params.order) search.set("order", params.order);
     if (params.values) search.set("values", params.values);
+    if (params.limit) search.set("limit", params.limit);
     return request<{ items: EntityListItem[]; next_cursor: string | null }>(
       `/entities?${search.toString()}`,
     );

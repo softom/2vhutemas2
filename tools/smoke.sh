@@ -77,11 +77,12 @@ contains "карточка отдаёт метки" '"tags"' "$(body)"
 contains "карточка отдаёт путь по дереву" '"type_path"' "$(body)"
 check "черновик гостю не виден" 404 "$(code $API/entities/$EID)"
 check "неизвестный тип отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"type":"net-takogo","slug":"smoke-net-tipa","title_ru":"smoke: нет типа"}' $API/entities)"
-code -H "$AUTH" "$API/entities?type=what" >/dev/null
+# Записей в базе больше страницы, поэтому ищем свою по имени, а не наугад.
+code -H "$AUTH" "$API/entities?type=what&q=smoke" >/dev/null
 contains "отбор по корневой ветви" 'smoke-proverka' "$(body)"
-code -H "$AUTH" "$API/entities?type=who" >/dev/null
+code -H "$AUTH" "$API/entities?type=who&q=smoke" >/dev/null
 missing "запись не попала в чужую ветвь" 'smoke-proverka' "$(body)"
-code -H "$AUTH" "$API/entities?kind=object" >/dev/null
+code -H "$AUTH" "$API/entities?kind=object&q=smoke" >/dev/null
 contains "прежний фильтр по виду работает" 'smoke-proverka' "$(body)"
 check "повтор адреса отклоняется" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"kind":"object","slug":"smoke-proverka","title_ru":"smoke: повтор"}' $API/entities)"
 check "правка от устаревшей версии" 409 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"title_ru":"smoke","base_revision_id":"00000000-0000-4000-8000-000000000000"}' $API/entities/$EID)"
@@ -117,7 +118,7 @@ check "повторная привязка" 409 "$(code -X POST -H "$AUTH" -H "$
 ATT=$(curl -s -H "$AUTH" $API/entities/$EID | python3 -c "
 import json,sys
 print(json.load(sys.stdin)['media'][0]['attachment_id'])")
-code -H "$AUTH" $API/entities >/dev/null
+code -H "$AUTH" "$API/entities?q=smoke" >/dev/null
 COVER=$(body | python3 -c "
 import json,sys
 print(next((1 for i in json.load(sys.stdin)['items'] if str(i['id']) == '$EID' and i.get('cover_asset_id')), 0))")
@@ -187,7 +188,7 @@ ARCHIVED_IN_LIST=$(body | python3 -c "
 import json,sys
 print(sum(1 for i in json.load(sys.stdin)['items'] if i.get('material_status') == 'archived'))")
 check "архива нет в каталоге" 0 "$ARCHIVED_IN_LIST"
-code -H "$AUTH" "$API/entities?archived=1" >/dev/null
+code -H "$AUTH" "$API/entities?archived=1&q=smoke" >/dev/null
 ARCHIVED_ON_DEMAND=$(body | python3 -c "
 import json,sys
 print(sum(1 for i in json.load(sys.stdin)['items'] if str(i['id']) == '$EID'))")
@@ -285,7 +286,7 @@ import json,sys
 items = [i for i in json.load(sys.stdin)['items'] if i['slug'].startswith('smoke-lekciya')]
 print(','.join(str(i['values'].get('lecture_number')) for i in items))")
 check "лекции по порядку номеров" "1,2" "$ORDER"
-code -H "$AUTH" "$API/entities?type=service&values=lecture_number,course" >/dev/null
+code -H "$AUTH" "$API/entities?type=service&values=lecture_number,course&q=smoke" >/dev/null
 contains "курс приходит в списке" 'smoke: курс' "$(body)"
 code -H "$AUTH" "$API/entities?type=what&parameter=lecture_number&sort=parameter" >/dev/null
 missing "лекции не попали в энциклопедию" 'smoke-lekciya' "$(body)"

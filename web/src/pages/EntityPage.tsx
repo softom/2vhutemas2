@@ -7,6 +7,7 @@ import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { api, type EntityCard, type Indicator, placeLabel } from "../api";
+import { MediaViewer, type ViewerItem } from "../ui/MediaViewer";
 import { createSchema, withEditableEdges } from "../editor/entityBlocks";
 
 /** Первое место записи: им подписывается карточка сверху. */
@@ -25,8 +26,11 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
   const [entity, setEntity] = useState<EntityCard | null>(null);
   const [blocks, setBlocks] = useState<PartialBlock[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Какое изображение открыто во весь экран; пусто — просмотр закрыт.
+  const [viewing, setViewing] = useState<number | null>(null);
 
   useEffect(() => {
+    setViewing(null);
     api.entity(entityId).then(async (card) => {
       setEntity(card);
       const documentId = (card as unknown as { description_document_id?: number })
@@ -44,7 +48,9 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
   if (!entity || blocks === null) return <p className="notice">Загружаем…</p>;
 
   const indicators = (entity as unknown as { indicators?: Indicator[] }).indicators ?? [];
-  const media = (entity as unknown as { media?: { asset_id: string; role: string }[] }).media ?? [];
+  const media = (entity as unknown as {
+    media?: { asset_id: string; role: string; role_title?: string; caption?: string | null }[];
+  }).media ?? [];
   const tags = (entity as unknown as { tags?: { id: string; title: string }[] }).tags ?? [];
 
   return (
@@ -91,22 +97,28 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         <>
           <h2>Изображения</h2>
           <div className="grid">
-            {media.map((item) => (
-              <a
-                className="card"
+            {media.map((item, index) => (
+              <button
+                type="button"
+                className="card card-button"
                 key={item.asset_id}
-                href={api.mediaFileUrl(item.asset_id, "screen")}
-                target="_blank"
-                rel="noreferrer"
+                onClick={() => setViewing(index)}
               >
                 <img src={api.mediaFileUrl(item.asset_id, "thumbnail")} alt="" />
-                <div className="kind">
-                  {(item as unknown as { caption?: string }).caption ?? item.role}
-                </div>
-              </a>
+                <div className="kind">{item.caption ?? item.role}</div>
+              </button>
             ))}
           </div>
         </>
+      )}
+
+      {viewing !== null && (
+        <MediaViewer
+          items={media as ViewerItem[]}
+          index={viewing}
+          onMove={setViewing}
+          onClose={() => setViewing(null)}
+        />
       )}
     </article>
   );

@@ -21,6 +21,7 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
       sort: "parameter",
       order: "asc",
       values: "lecture_number,course",
+      limit: "100",
     })
       .then((page) => {
         setItems(page.items);
