@@ -94,7 +94,11 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
             </option>
           ))}
         </select>
-        {canCreate && <Link to="/entities/new"><button type="button">Создать объект</button></Link>}
+        {canCreate && (
+          <Link to={type ? `/entities/new?type=${type}` : "/entities/new"}>
+            <button type="button">Создать запись</button>
+          </Link>
+        )}
       </div>
 
       {parameters.length > 0 && (

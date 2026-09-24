@@ -65,7 +65,7 @@ export function App() {
               Параметры
             </Link>
           )}
-          {can("create_delete") && <Link to="/entities/new">Создать объект</Link>}
+          {can("create_delete") && <Link to="/entities/new">Создать запись</Link>}
         </nav>
         <div className="viewer">
           {viewer?.authenticated

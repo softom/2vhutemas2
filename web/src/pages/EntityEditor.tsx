@@ -5,7 +5,7 @@
  * если материал успели изменить, сервер вернёт конфликт и правка не затрётся.
  */
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
 import type { PartialBlock } from "@blocknote/core";
@@ -60,11 +60,14 @@ export function slugify(value: string): string {
 export function EntityEditor({ mode }: Props) {
   const params = useParams();
   const navigate = useNavigate();
+  const [search] = useSearchParams();
   const entityId = params.id ? Number(params.id) : null;
+  // С каким типом открыли экран: «Создать лекцию» приводит сюда с ?type=lecture.
+  const requestedType = search.get("type");
 
   const [types, setTypes] = useState<EntityType[]>([]);
   const [form, setForm] = useState({
-    type: "what",
+    type: requestedType ?? "what",
     slug: "",
     title_ru: "",
     title_en: "",
@@ -200,6 +203,7 @@ function EditorBody(props: any) {
   });
 
   const [problems, setProblems] = props.problemsState;
+  const typeTitle = types.find((item: EntityType) => item.code === form.type)?.title_ru ?? "";
 
   const field = (
     name: string,
@@ -300,7 +304,13 @@ function EditorBody(props: any) {
 
   return (
     <section>
-      <h1>{mode === "create" ? "Новый объект" : "Правка объекта"}</h1>
+      <h1>
+        {mode === "create"
+          ? typeTitle
+            ? `Новая запись: ${typeTitle}`
+            : "Новая запись"
+          : "Правка записи"}
+      </h1>
       <p className="sub">Свойства и описание. Каждое сохранение создаёт версию.</p>
 
       {error && <p className="error">{error}</p>}
@@ -320,7 +330,7 @@ function EditorBody(props: any) {
             ))}
           </select>
           <span className="hint">
-            Верхние ветви — кто, что и когда; ниже — тип записи
+            Верхняя ветвь — род записи, ниже — её тип
           </span>
         </label>
         {field("title_ru", "Название по-русски")}

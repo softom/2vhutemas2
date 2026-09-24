@@ -40,7 +40,7 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
       {!loading && !error && items.length === 0 && (
         <p className="notice">
           Лекций пока нет.{" "}
-          {canCreate && "Создайте запись типа «Служебные → Лекция»."}
+          {canCreate && "Нажмите «Создать лекцию» — тип подставится сам."}
         </p>
       )}
 
@@ -77,7 +77,7 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
       )}
 
       {canCreate && (
-        <Link to="/entities/new">
+        <Link to="/entities/new?type=lecture">
           <button type="button">Создать лекцию</button>
         </Link>
       )}
