@@ -79,6 +79,7 @@ export function EntityEditor({ mode }: Props) {
   const [documentRevision, setDocumentRevision] = useState<string | null>(null);
   const [initialBlocks, setInitialBlocks] = useState<PartialBlock[] | null>(null);
   const [indicators, setIndicators] = useState<Indicator[]>([]);
+  const [hadIndicators, setHadIndicators] = useState(false);
   const [suggested, setSuggested] = useState<SuggestedParameter[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [media, setMedia] = useState<
@@ -127,7 +128,9 @@ export function EntityEditor({ mode }: Props) {
       setRevisionId(entity.latest_revision_id);
       setMedia((entity as unknown as { media?: typeof media }).media ?? []);
       setTags((entity as unknown as { tags?: Tag[] }).tags ?? []);
-      setIndicators((entity as unknown as { indicators?: Indicator[] }).indicators ?? []);
+      const loaded = (entity as unknown as { indicators?: Indicator[] }).indicators ?? [];
+      setIndicators(loaded);
+      setHadIndicators(loaded.length > 0);
 
       const described = (entity as unknown as { description_document_id?: number })
         .description_document_id;
@@ -159,6 +162,7 @@ export function EntityEditor({ mode }: Props) {
       types={types}
       indicators={indicators}
       setIndicators={setIndicators}
+      hadIndicators={hadIndicators}
       suggested={suggested}
       media={media}
       tags={tags}
@@ -196,7 +200,7 @@ export function EntityEditor({ mode }: Props) {
 function EditorBody(props: any) {
   const {
     mode, entityId, form, setForm, slugTouched, setSlugTouched, types,
-    indicators, setIndicators, suggested,
+    indicators, setIndicators, hadIndicators, suggested,
     media, tags, setTags, reloadAttachments, initialBlocks,
     revisionId, setRevisionId, documentId, setDocumentId,
     documentRevision, setDocumentRevision, status, setStatus,
@@ -254,25 +258,34 @@ function EditorBody(props: any) {
       };
 
       let id = entityId;
+      // Версию ведём по ходу сохранения: правка записи создаёт новую, и
+      // показатели надо писать уже от неё, иначе сервер справедливо ответит
+      // «изменено другим редактором» и значения не сохранятся.
+      let revision = revisionId;
       if (mode === "create") {
         const created = await api.createEntity(payload);
         id = created.id;
-        setRevisionId(created.revision_id);
+        revision = created.revision_id;
       } else {
         const updated = await api.updateEntity(entityId!, {
           ...payload,
-          base_revision_id: revisionId,
+          base_revision_id: revision,
         });
-        setRevisionId(updated.revision_id);
+        revision = updated.revision_id;
       }
+      setRevisionId(revision);
 
       if (id) await api.setEntityTags(id, tags.map((tag: Tag) => tag.title));
 
       // Показатели — часть материала записи, поэтому пишутся после неё
-      // и от её же версии (Р-38).
-      if (id && indicators.length > 0) {
-        const saved = await api.saveIndicators(id, indicators, revisionId);
-        if (saved.revision_id) setRevisionId(saved.revision_id);
+      // и от её же версии (Р-38). Пустой список тоже отправляем, если
+      // раньше величины были: иначе их нельзя стереть.
+      if (id && (indicators.length > 0 || hadIndicators)) {
+        const saved = await api.saveIndicators(id, indicators, revision);
+        if (saved.revision_id) {
+          revision = saved.revision_id;
+          setRevisionId(revision);
+        }
         setIndicators(saved.items ?? indicators);
       }
 
@@ -311,6 +324,21 @@ function EditorBody(props: any) {
     }
   };
 
+  // Кнопки сохранения стоят и сверху, и снизу: форма длиннее экрана,
+  // и искать кнопку в её конце неудобно.
+  const actions = (
+    <div className="row">
+      <button type="button" onClick={save} disabled={saving}>
+        {saving ? "Сохраняем…" : "Сохранить версию"}
+      </button>
+      {entityId && (
+        <button type="button" className="ghost" onClick={() => navigate(`/entities/${entityId}`)}>
+          К карточке
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <section>
       <h1>
@@ -321,6 +349,8 @@ function EditorBody(props: any) {
           : "Правка записи"}
       </h1>
       <p className="sub">Свойства и описание. Каждое сохранение создаёт версию.</p>
+
+      {actions}
 
       {error && <p className="error">{error}</p>}
       {status && <p className="notice">{status}</p>}
@@ -399,16 +429,7 @@ function EditorBody(props: any) {
         </div>
       </div>
 
-      <div className="row" style={{ marginTop: 18 }}>
-        <button type="button" onClick={save} disabled={saving}>
-          {saving ? "Сохраняем…" : "Сохранить версию"}
-        </button>
-        {entityId && (
-          <button type="button" className="ghost" onClick={() => navigate(`/entities/${entityId}`)}>
-            К карточке
-          </button>
-        )}
-      </div>
+      <div style={{ marginTop: 18 }}>{actions}</div>
     </section>
   );
 }

@@ -219,6 +219,17 @@ contains "величина подсказана ветви" 'smoke_capacity' "$(
 check "запись показателей" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"по проекту\",\"is_current\":true,\"values\":[{\"parameter\":\"smoke_capacity\",\"num_value\":3000}]}],\"base_revision_id\":\"$REVB\"}" $API/entities-indicators/$EID2)"
 REV_IND=$(body | field revision_id)
 check "правка показателей создала версию" "да" "$([ -n "$REV_IND" ] && echo да || echo нет)"
+
+# Правка записи двигает версию: показатели от прежней версии должны быть
+# отклонены, иначе редактор молча теряет введённое.
+PATCHED=$(curl -s -X PATCH -H "$AUTH" -H "$JSON" -d "{\"title_ru\":\"smoke: сдвиг версии\",\"base_revision_id\":\"$REV_IND\"}" $API/entities/$EID2)
+REV_AFTER=$(echo "$PATCHED" | field revision_id)
+check "запись сдвинула версию" "да" "$([ -n "$REV_AFTER" ] && echo да || echo нет)"
+check "показатели от устаревшей версии" 409 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"smoke_capacity\",\"num_value\":1}]}],\"base_revision_id\":\"$REV_IND\"}" $API/entities-indicators/$EID2)"
+check "показатели от текущей версии" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"smoke_capacity\",\"num_value\":4242}]}],\"base_revision_id\":\"$REV_AFTER\"}" $API/entities-indicators/$EID2)"
+REV_IND=$(body | field revision_id)
+code -H "$AUTH" $API/entities/$EID2 >/dev/null
+contains "новое значение сохранено" '4242' "$(body)"
 code -H "$AUTH" $API/entities/$EID2 >/dev/null
 contains "показатели в карточке" 'smoke_capacity' "$(body)"
 check "не то значение отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"smoke_capacity\",\"text_value\":\"много\"}]}]}" $API/entities-indicators/$EID2)"
