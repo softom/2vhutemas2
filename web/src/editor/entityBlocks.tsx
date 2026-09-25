@@ -6,9 +6,50 @@
  * в разных текстах и несколько раз в одном, а правка карточки объекта
  * не требует правки текстов.
  */
+import { useEffect, useState } from "react";
 import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
 import { createReactBlockSpec, createReactInlineContentSpec } from "@blocknote/react";
 import { api } from "../api";
+
+/**
+ * Обложка и название для карточки в тексте берутся у самой записи, а не
+ * хранятся в документе: обложка — это первое прикреплённое изображение
+ * ([Р-36]), и держать её копию в тексте значило бы иметь два источника
+ * одного сведения. Ответы запоминаем, чтобы десяток карточек в лекции
+ * не превращался в десяток одинаковых запросов.
+ */
+const cardCache = new Map<string, { title: string; kind: string; cover: string | null }>();
+
+function useEntityCard(entityId: string, fallback: { title: string; kind: string }) {
+  const [card, setCard] = useState(cardCache.get(entityId) ?? { ...fallback, cover: null });
+
+  useEffect(() => {
+    if (!entityId) return;
+    const known = cardCache.get(entityId);
+    if (known) {
+      setCard(known);
+      return;
+    }
+    let cancelled = false;
+    api.entity(Number(entityId))
+      .then((entity) => {
+        const media = (entity as unknown as { media?: { asset_id: string }[] }).media ?? [];
+        const next = {
+          title: entity.title_ru,
+          kind: entity.type_title ?? entity.type ?? "",
+          cover: media[0]?.asset_id ?? null,
+        };
+        cardCache.set(entityId, next);
+        if (!cancelled) setCard(next);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [entityId]);
+
+  return card;
+}
 
 /** Блок-карточка: занимает строку и двигается вместе с остальными блоками. */
 export const EntityCardBlock = createReactBlockSpec(
@@ -27,22 +68,35 @@ export const EntityCardBlock = createReactBlockSpec(
   {
     render: ({ block }) => {
       const props = block.props as Record<string, string>;
-      const href = `/new/entities/${props.entityId}`;
-      return (
-        <div className="entity-card">
-          {props.mediaAssetId
-            ? <img src={api.mediaFileUrl(props.mediaAssetId, "thumbnail")} alt="" />
-            : null}
-          <div>
-            <a href={href}>{props.title || `Объект ${props.entityId}`}</a>
-            <div className="entity-card-kind">{props.kind}</div>
-            {props.note ? <div className="entity-card-note">{props.note}</div> : null}
-          </div>
-        </div>
-      );
+      return <EntityCardView props={props} />;
     },
   },
 );
+
+/**
+ * Вид карточки в тексте: изображение крупно, поверх него — название
+ * и тип записи. Мелкая строчка терялась среди абзацев, а объект в лекции
+ * должен читаться как объект.
+ */
+function EntityCardView({ props }: { props: Record<string, string> }) {
+  const card = useEntityCard(props.entityId, {
+    title: props.title || `Запись ${props.entityId}`,
+    kind: props.kind ?? "",
+  });
+  const cover = card.cover ?? (props.mediaAssetId || null);
+  const href = `/new/entities/${props.entityId}`;
+
+  return (
+    <div className={cover ? "entity-card with-cover" : "entity-card"}>
+      {cover && <img src={api.mediaFileUrl(cover, "screen")} alt="" />}
+      <div className="entity-card-text">
+        <a href={href}>{card.title}</a>
+        <div className="entity-card-kind">{card.kind}</div>
+        {props.note ? <div className="entity-card-note">{props.note}</div> : null}
+      </div>
+    </div>
+  );
+}
 
 /** Упоминание: ссылка внутри абзаца, «здание [НОВАТ] перестроено». */
 export const EntityMention = createReactInlineContentSpec(

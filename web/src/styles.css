@@ -112,11 +112,22 @@ button:disabled { opacity: .5; cursor: default; }
 .panel-item-actions { display: flex; gap: 6px; margin-top: 6px; }
 .panel-item-actions button { padding: 4px 8px; font-size: 12px; }
 
-.entity-card { display: flex; gap: 12px; align-items: center; border: 1px solid #d8d2c6; border-radius: 8px; padding: 10px; background: #faf7f2; margin: 6px 0; }
-.entity-card img { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; }
-.entity-card a { color: #17140f; font-size: 17px; text-decoration: none; border-bottom: 1px solid var(--accent); }
-.entity-card-kind { color: #6f685c; font-size: 12px; margin-top: 2px; }
-.entity-card-note { color: #3f3a32; font-size: 13px; margin-top: 4px; }
+/* Карточка записи в тексте: вдвое крупнее прежней, с изображением. */
+.entity-card { display: flex; gap: 16px; align-items: center; border: 1px solid #d8d2c6; border-radius: 10px; padding: 14px 16px; background: #faf7f2; margin: 12px 0; }
+.entity-card img { width: 144px; height: 108px; object-fit: cover; border-radius: 8px; }
+.entity-card a { color: #17140f; font-size: 22px; text-decoration: none; border-bottom: 1px solid var(--accent); }
+.entity-card-kind { color: #6f685c; font-size: 14px; margin-top: 4px; }
+.entity-card-note { color: #3f3a32; font-size: 15px; margin-top: 6px; }
+/* Есть обложка — изображение во всю ширину, надпись поверх него. */
+.entity-card.with-cover { display: block; position: relative; padding: 0; overflow: hidden; border: 0; }
+.entity-card.with-cover img { width: 100%; height: 320px; border-radius: 0; display: block; }
+.entity-card.with-cover .entity-card-text {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 18px;
+  background: linear-gradient(transparent, rgba(12,10,8,.86));
+}
+.entity-card.with-cover a { color: #fbf7f0; border-bottom-color: var(--accent); }
+.entity-card.with-cover .entity-card-kind { color: #e2d9cb; }
+.entity-card.with-cover .entity-card-note { color: #efe7db; }
 .entity-mention { color: #a8461c; text-decoration: none; border-bottom: 1px dotted #a8461c; }
 
 .relations { list-style: none; padding: 0; display: grid; gap: 12px; }
