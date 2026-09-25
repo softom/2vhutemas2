@@ -19,6 +19,7 @@ import {
   type Indicator,
   type SuggestedParameter,
 } from "../api";
+import { AttachedMedia } from "../editor/AttachedMedia";
 import { IndicatorsField } from "../editor/IndicatorsField";
 import {
   createSchema,
@@ -409,6 +410,14 @@ function EditorBody(props: any) {
         indicators={indicators}
         suggested={suggested}
         onChange={setIndicators}
+      />
+
+      <AttachedMedia
+        entityId={entityId}
+        items={media}
+        onInsert={(item) =>
+          insertMediaImage(editor, { id: item.asset_id, caption_ru: item.caption })}
+        onChanged={reloadAttachments}
       />
 
       <h2>Описание</h2>

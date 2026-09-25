@@ -8,7 +8,6 @@
 import { useEffect, useState } from "react";
 import { api, type MediaAsset } from "../api";
 import { MediaDialog } from "./MediaDialog";
-import { AttachedMedia } from "./AttachedMedia";
 
 interface Props {
   entityId: number | null;
@@ -95,16 +94,6 @@ export function MediaPanel({ entityId, attached, onInsert, onChanged }: Props) {
       />
       {error && <p className="error">{error}</p>}
 
-      <AttachedMedia
-        entityId={entityId}
-        items={attached}
-        onInsert={(item) =>
-          onInsert(
-            items.find((candidate) => candidate.id === item.asset_id) ??
-              ({ id: item.asset_id, caption_ru: item.caption } as MediaAsset),
-          )}
-        onChanged={onChanged}
-      />
 
       <h4>Медиатека</h4>
       {items.length === 0 && <p className="hint">Ничего не нашлось.</p>}

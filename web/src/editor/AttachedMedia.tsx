@@ -1,9 +1,10 @@
 /**
- * Прикреплённые изображения объекта: показ в заданном порядке и перестановка
+ * Прикреплённые изображения записи: показ в заданном порядке и перестановка
  * перетаскиванием за «хваталку».
  *
  * Порядок хранится в самой привязке (`sort_order`), а не в файле: один и тот же
- * файл может стоять по-разному в разных карточках.
+ * файл может стоять по-разному в разных карточках. Первое по порядку —
+ * обложка в каталоге ([Р-36]), поэтому перестановка и есть выбор обложки.
  */
 import { useEffect, useState } from "react";
 import { api } from "../api";
@@ -46,18 +47,33 @@ export function AttachedMedia({ entityId, items, onInsert, onChanged }: Props) {
     }
   };
 
-  if (order.length === 0) return null;
+  if (order.length === 0) {
+    return (
+      <div className="block">
+        <h3>Изображения</h3>
+        <p className="hint">
+          Файлы прикрепляются в панели справа: найдите нужный и нажмите «Прикрепить».
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <>
-      <h4>Прикреплённые</h4>
-      <p className="hint">Перетащите за «хваталку», чтобы изменить порядок.</p>
+    <div className="block">
+      <h3>Изображения</h3>
+      <p className="hint">
+        Порядок задаёте вы: перетащите за «хваталку». Первое изображение
+        становится обложкой записи в каталоге.
+      </p>
       {error && <p className="error">{error}</p>}
-      <ul className="panel-list media-list">
+      <ul className="attached-media">
         {order.map((item, index) => (
           <li
             key={item.attachment_id}
-            className={over === index ? "drop-target" : undefined}
+            className={[
+              index === 0 ? "cover" : "",
+              over === index ? "drop-target" : "",
+            ].filter(Boolean).join(" ") || undefined}
             onDragOver={(event) => {
               if (dragged === null) return;
               event.preventDefault();
@@ -92,12 +108,14 @@ export function AttachedMedia({ entityId, items, onInsert, onChanged }: Props) {
             </div>
             <button type="button" className="panel-item-main linklike" onClick={() => onInsert(item)}>
               <img
-                className="panel-thumb"
+                className="attached-thumb"
                 src={api.mediaFileUrl(item.asset_id, "thumbnail")}
                 alt={item.caption ?? ""}
               />
               <span className="panel-item-title">{item.caption ?? "без подписи"}</span>
-              <span className="panel-item-sub">{item.role_title}</span>
+              <span className="panel-item-sub">
+                {index === 0 ? "обложка" : item.role_title}
+              </span>
             </button>
             <div className="panel-item-actions">
               <button
@@ -114,6 +132,6 @@ export function AttachedMedia({ entityId, items, onInsert, onChanged }: Props) {
           </li>
         ))}
       </ul>
-    </>
+    </div>
   );
 }
