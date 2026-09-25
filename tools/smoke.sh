@@ -174,6 +174,10 @@ TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d pos
 select body_text from app.documents where id=$DID")
 contains "поисковый текст извлечён" 'smoke проверка текста' "$TEXT"
 
+# Незаполненные свойства блока приходят пустыми строками; пустая строка
+# в колонке с UUID роняла сохранение внутренней ошибкой.
+check "карточка объекта без изображения" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: карточка в тексте\",\"attach_to_entity_id\":$EID2,\"role\":\"description\",\"body\":[{\"id\":\"b1\",\"type\":\"entityCard\",\"props\":{\"entityId\":\"$EID\",\"occurrenceId\":\"\",\"mediaAssetId\":\"\",\"note\":\"\"}}]}" $API/documents)"
+
 echo "── Публикация"
 MID=$(echo "$C" | field material_id)
 check "публикация версии" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"note":"smoke"}' $API/materials/$MID/publish)"

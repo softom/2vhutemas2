@@ -20,8 +20,18 @@ export interface Viewer {
   permissions: string[];
 }
 
+/** Какой файл сборки сейчас выполняется в этой вкладке. */
+function currentBundle(): string | null {
+  const script = document.querySelector('script[type="module"][src*="/assets/"]');
+  const src = script?.getAttribute("src") ?? null;
+  return src ? src.split("/").pop() ?? null : null;
+}
+
 export function App() {
   const [viewer, setViewer] = useState<Viewer | null>(null);
+  // Открытая вкладка продолжает работать на старом коде, пока её не
+  // перезагрузят: после выкладки это выглядело как «кнопка не сохраняет».
+  const [stale, setStale] = useState(false);
   const location = useLocation();
 
   const refresh = async () => {
@@ -43,6 +53,29 @@ export function App() {
     refresh();
     const { data } = supabase.auth.onAuthStateChange(() => refresh());
     return () => data.subscription.unsubscribe();
+  }, []);
+
+  // Сверяем имя файла сборки со страницей на сервере: имя содержит
+  // отпечаток содержимого, поэтому другое имя значит новую выкладку.
+  useEffect(() => {
+    const mine = currentBundle();
+    if (!mine) return;
+    const check = async () => {
+      try {
+        const html = await (await fetch("/new/", { cache: "no-store" })).text();
+        const found = html.match(/assets\/index-[A-Za-z0-9_-]+\.js/);
+        if (found && !found[0].endsWith(mine)) setStale(true);
+      } catch {
+        // Сеть недоступна — молчим: это не повод пугать сообщением.
+      }
+    };
+    check();
+    const timer = setInterval(check, 5 * 60 * 1000);
+    globalThis.addEventListener("focus", check);
+    return () => {
+      clearInterval(timer);
+      globalThis.removeEventListener("focus", check);
+    };
   }, []);
 
   const can = (permission: string) =>
@@ -88,6 +121,18 @@ export function App() {
             : <Link to="/login">Войти</Link>}
         </div>
       </header>
+
+      {stale && (
+        <div className="stale-banner">
+          <span>
+            Вышла новая версия приложения. Эта вкладка работает на прежней —
+            перезагрузите её, иначе правки могут не сохраниться.
+          </span>
+          <button type="button" onClick={() => globalThis.location.reload()}>
+            Обновить страницу
+          </button>
+        </div>
+      )}
 
       <main>
         <ErrorBoundary key={location.pathname}>

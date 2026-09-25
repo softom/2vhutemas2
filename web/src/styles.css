@@ -238,3 +238,12 @@ button:disabled { opacity: .5; cursor: default; }
 .media-viewer-caption a { color: var(--accent); }
 .list-count { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin: 12px 0; }
 .list-count .hint { margin: 0; }
+.stale-banner {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 10px 20px; background: var(--accent); color: #17140f;
+}
+.stale-banner button { background: #17140f; color: var(--text); }
+.save-mark { font-size: 14px; padding: 4px 10px; border-radius: 999px; }
+.save-mark.ok { color: #17140f; background: #8fbf6a; }
+.save-mark.fail { color: #17140f; background: #d8642f; }

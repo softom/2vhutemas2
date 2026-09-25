@@ -102,6 +102,17 @@ export interface EntityRef {
   ordinal: number;
 }
 
+/**
+ * Пустая строка в свойствах блока — это «не задано», а не значение.
+ * Редактор хранит незаполненные свойства пустыми строками, и такая строка,
+ * попав в колонку с UUID, роняла сохранение текста внутренней ошибкой.
+ */
+function orNull(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text === "" ? null : text;
+}
+
 export function extractRefs(blocks: unknown): EntityRef[] {
   const refs: EntityRef[] = [];
   let ordinal = 0;
@@ -114,13 +125,13 @@ export function extractRefs(blocks: unknown): EntityRef[] {
     const entityId = Number(props.entityId ?? props.entity_id);
     if (!Number.isInteger(entityId) || entityId <= 0) return;
     refs.push({
-      occurrenceId: String(props.occurrenceId ?? props.occurrence_id ?? crypto.randomUUID()),
-      blockId,
+      occurrenceId: orNull(props.occurrenceId ?? props.occurrence_id) ?? crypto.randomUUID(),
+      blockId: orNull(blockId),
       entityId,
       displayMode: mode,
-      mediaAssetId: (props.mediaAssetId ?? props.media_asset_id ?? null) as string | null,
-      targetBlockId: (props.targetBlockId ?? props.target_block_id ?? null) as string | null,
-      note: (props.note ?? null) as string | null,
+      mediaAssetId: orNull(props.mediaAssetId ?? props.media_asset_id),
+      targetBlockId: orNull(props.targetBlockId ?? props.target_block_id),
+      note: orNull(props.note),
       ordinal: ordinal++,
     });
   };

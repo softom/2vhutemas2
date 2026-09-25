@@ -210,6 +210,14 @@ function EditorBody(props: any) {
   // Своя схема на каждый редактор: общая роняла второй показ при переходе
   // с карточки на карточку («Position undefined out of range»).
   const schema = useMemo(() => createSchema(), []);
+  // Отметка «Сохранено» держится несколько секунд; ошибка остаётся,
+  // пока её не исправят.
+  useEffect(() => {
+    if (!status) return;
+    const timer = setTimeout(() => setStatus(null), 4000);
+    return () => clearTimeout(timer);
+  }, [status]);
+
   const editor = useCreateBlockNote({
     schema,
     initialContent: initialBlocks.length > 0 ? withEditableEdges(initialBlocks) : undefined,
@@ -336,6 +344,9 @@ function EditorBody(props: any) {
           К карточке
         </button>
       )}
+      {/* Итог сохранения виден там же, где нажимали: у обеих кнопок. */}
+      {status && <span className="save-mark ok">Сохранено</span>}
+      {error && <span className="save-mark fail">Ошибка</span>}
     </div>
   );
 
