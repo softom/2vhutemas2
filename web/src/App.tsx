@@ -4,6 +4,7 @@
  */
 import { useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { useScrollMemory } from "./ui/scrollMemory";
 import { api, supabase } from "./api";
 import { Catalog } from "./pages/Catalog";
 import { EntityPage } from "./pages/EntityPage";
@@ -33,6 +34,9 @@ export function App() {
   // перезагрузят: после выкладки это выглядело как «кнопка не сохраняет».
   const [stale, setStale] = useState(false);
   const location = useLocation();
+  // Возврат со страницы объекта приводит туда, откуда ушли: лекцию читают
+  // подряд, и начинать сначала после каждой карточки невозможно.
+  useScrollMemory();
 
   const refresh = async () => {
     try {

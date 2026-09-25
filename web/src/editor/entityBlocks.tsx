@@ -6,7 +6,8 @@
  * в разных текстах и несколько раз в одном, а правка карточки объекта
  * не требует правки текстов.
  */
-import { useEffect, useState } from "react";
+import { type MouseEvent, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
 import { createReactBlockSpec, createReactInlineContentSpec } from "@blocknote/react";
 import { api } from "../api";
@@ -19,6 +20,25 @@ import { api } from "../api";
  * не превращался в десяток одинаковых запросов.
  */
 const cardCache = new Map<string, { title: string; kind: string; cover: string | null }>();
+
+/**
+ * Переход внутри приложения: полная перезагрузка теряет место в тексте,
+ * а лекцию читают подряд и возвращаются в ту же точку. Щелчок с Ctrl или
+ * средней кнопкой оставляем браузеру — он откроет в новой вкладке.
+ *
+ * Переход делаем средствами маршрутизатора: подделка события истории
+ * выглядела для него возвратом назад, и страница объекта открывалась
+ * не сверху.
+ */
+function useInAppLink(href: string) {
+  const navigate = useNavigate();
+  return (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    navigate(href.replace(/^\/new/, ""));
+  };
+}
 
 function useEntityCard(entityId: string, fallback: { title: string; kind: string }) {
   const [card, setCard] = useState(cardCache.get(entityId) ?? { ...fallback, cover: null });
@@ -85,12 +105,13 @@ function EntityCardView({ props }: { props: Record<string, string> }) {
   });
   const cover = card.cover ?? (props.mediaAssetId || null);
   const href = `/new/entities/${props.entityId}`;
+  const open = useInAppLink(href);
 
   return (
     <div className={cover ? "entity-card with-cover" : "entity-card"}>
       {cover && <img src={api.mediaFileUrl(cover, "screen")} alt="" />}
       <div className="entity-card-text">
-        <a href={href}>{card.title}</a>
+        <a href={href} onClick={open}>{card.title}</a>
         <div className="entity-card-kind">{card.kind}</div>
         {props.note ? <div className="entity-card-note">{props.note}</div> : null}
       </div>
@@ -112,14 +133,21 @@ export const EntityMention = createReactInlineContentSpec(
   {
     render: ({ inlineContent }) => {
       const props = inlineContent.props as Record<string, string>;
-      return (
-        <a className="entity-mention" href={`/new/entities/${props.entityId}`}>
-          {props.title || `объект ${props.entityId}`}
-        </a>
-      );
+      return <EntityMentionView props={props} />;
     },
   },
 );
+
+/** Упоминание в строке: переход тоже внутренний. */
+function EntityMentionView({ props }: { props: Record<string, string> }) {
+  const href = `/new/entities/${props.entityId}`;
+  const open = useInAppLink(href);
+  return (
+    <a className="entity-mention" href={href} onClick={open}>
+      {props.title || `объект ${props.entityId}`}
+    </a>
+  );
+}
 
 /**
  * Изображение из медиатеки: в документе хранится идентификатор файла,

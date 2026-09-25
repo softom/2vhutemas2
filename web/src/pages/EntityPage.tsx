@@ -290,17 +290,10 @@ function Indicators({ items }: { items: Indicator[] }) {
  * Обновление страницы ошибку прятало, потому что прежнего показа уже не было.
  */
 function ReadOnlyDocument({ blocks }: { blocks: PartialBlock[] }) {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setReady(true));
-    return () => {
-      cancelAnimationFrame(frame);
-      setReady(false);
-    };
-  }, [blocks]);
-
-  if (!ready) return <p className="notice">Готовим текст…</p>;
+  // Показ строится сразу: прежняя задержка через кадр отрисовки не срабатывала
+  // в скрытой вкладке, и текст навсегда застревал на «Готовим текст…».
+  // Столкновение двух показов лечится своей схемой у каждого (Р-46).
+  //
   // Если показ всё же споткнётся, читателю остаётся текст, а не пустая
   // страница с ошибкой: материал важнее оформления.
   return (
