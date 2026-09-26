@@ -315,6 +315,7 @@ here() { curl -s -o /dev/null -w '%{redirect_url}' "$1" | sed 's#^https\?://[^/]
 # и такая проверка прошла бы, даже если на корне остался он.
 contains "корень отдаёт новый контур" "/assets/index-" "$(curl -s $SITE/)"
 contains "ссылка на запись открывается" "/assets/index-" "$(curl -s $SITE/entities/42)"
+contains "значок вкладки на месте" "<svg" "$(curl -s $SITE/favicon.svg)"
 contains "прежний сайт под /old" "Архитектурный таймлайн" "$(curl -s $SITE/old/)"
 check "прежняя страница ведёт под /old" "/old/praktika-graph.html" "$(here $SITE/praktika-graph.html)"
 check "прежний адрес /new ведёт на корень" "/lectures" "$(here $SITE/new/lectures)"

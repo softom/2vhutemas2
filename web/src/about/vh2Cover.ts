@@ -138,3 +138,61 @@ export function buildCover(p: CoverParams, F: GlyphFont): string {
   o.push(`</g></svg>`);
   return o.join("\n");
 }
+
+
+/**
+ * Знак для вкладки браузера (решение Р-62).
+ *
+ * Тот же кусок обложки, что и в заголовке страницы: Вх² и красная ось. Взят
+ * крупно, с подрезкой «В» краем листа — во вкладке значок виден размером с
+ * букву, и поля там непозволительная роскошь. Штриховки в значке нет: ниже
+ * 48 точек она превращается в серое пятно.
+ *
+ * Отсюда берутся `web/public/favicon.svg` и растровые значки; как их
+ * пересобрать — в `tools/make_mark.ts`.
+ */
+export function buildMark(p: CoverParams, F: GlyphFont): string {
+  const SIZE = 256;
+  const PAD = 10;
+  /** Насколько знак крупнее, чем влез бы целиком. */
+  const BLEED = 1.2;
+  const SUP = 0.5;
+
+  const adv = (ch: string) => (F.g[ch] ?? F.g["?"])[0];
+  const outline = (ch: string) => (F.g[ch] ?? F.g["?"])[1];
+  const glyph = (ch: string, x: number, y: number, s: number) =>
+    `<path transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${s.toFixed(5)},${(-s).toFixed(5)})" d="${outline(ch)}"/>`;
+
+  const gap = 0.045 * F.upm;
+  const wBig = [...p.big].reduce((w, ch) => w + adv(ch), 0);
+  const wSup = [...p.exponent].reduce((w, ch) => w + adv(ch), 0) * SUP;
+  const unit = wBig + gap + wSup;
+  const s = ((SIZE - 2 * PAD) / unit) * BLEED;
+  const s2 = s * SUP;
+  // Подрезаем слева: степень должна остаться целой — она и есть смысл знака.
+  let x = SIZE - PAD - unit * s;
+  const baseY = SIZE / 2 + (F.cap * s) / 2;
+
+  const glyphs: string[] = [];
+  let axis = x;
+  for (const ch of p.big) {
+    glyphs.push(glyph(ch, x, baseY, s));
+    axis = x + (adv(ch) * s) / 2;
+    x += adv(ch) * s;
+  }
+  x += gap * s;
+  const supY = baseY - F.cap * s + F.cap * s2;
+  for (const ch of p.exponent) {
+    glyphs.push(glyph(ch, x, supY, s2));
+    x += adv(ch) * s2;
+  }
+  const beam = F.stem * s * 0.78;
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SIZE} ${SIZE}" width="${SIZE}" height="${SIZE}">`,
+    `<rect width="100%" height="100%" fill="${p.paper}"/>`,
+    `<rect x="${(axis - beam / 2).toFixed(1)}" y="0" width="${beam.toFixed(1)}" height="${SIZE}" fill="${p.red}"/>`,
+    `<g fill="${p.ink}">${glyphs.join("")}</g>`,
+    `</svg>`,
+  ].join("\n");
+}
