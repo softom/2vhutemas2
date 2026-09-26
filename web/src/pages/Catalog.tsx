@@ -211,7 +211,11 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
       <div className="grid">
         {items.map((item) => (
-          <Link className="card" key={item.id} to={`/entities/${item.id}`}>
+          <Link
+            className={item.type_path?.[0]?.code === "who" ? "card portrait" : "card"}
+            key={item.id}
+            to={`/entities/${item.id}`}
+          >
             {item.cover_asset_id
               ? (
                 <img
