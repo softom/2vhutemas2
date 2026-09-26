@@ -90,7 +90,9 @@ export function App() {
       <header className="top">
         <Link className="brand" to="/">2vhutemas</Link>
         <nav>
-          <Link to="/" className={location.pathname === "/" ? "active" : ""}>Каталог</Link>
+          {/* «Всё» — общий список: разделы ниже показывают по ветви, а сюда
+              попадает и то, у чего своего раздела пока нет (Р-55). */}
+          <Link to="/" className={location.pathname === "/" ? "active" : ""}>Всё</Link>
           <Link to="/objects" className={location.pathname === "/objects" ? "active" : ""}>
             Объекты
           </Link>

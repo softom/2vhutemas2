@@ -136,8 +136,10 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
   return (
     <section>
-      <h1>{title ?? "Каталог"}</h1>
-      <p className="sub">{sub ?? "Объекты, авторы и периоды нового контура."}</p>
+      <h1>{title ?? "Всё"}</h1>
+      <p className="sub">
+        {sub ?? "Все записи подряд: объекты, авторы, периоды и служебные материалы."}
+      </p>
 
       <div className="filters">
         <input
