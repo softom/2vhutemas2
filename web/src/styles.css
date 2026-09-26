@@ -316,3 +316,14 @@ button:disabled { opacity: .5; cursor: default; }
 .splash-sheet { line-height: 0; max-width: min(100%, 92vh); width: 100%; }
 .splash-sheet svg { width: 100%; height: auto; display: block; }
 @media (prefers-reduced-motion: reduce) { .splash { transition: none; } }
+
+/* Подразделы «О проекте» (Р-61). */
+.subnav { display: flex; gap: 18px; flex-wrap: wrap; margin: 0 0 22px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.subnav a { color: var(--muted); text-decoration: none; padding-bottom: 6px; margin-bottom: -9px; }
+.subnav a:hover { color: var(--text); }
+.subnav a.active { color: var(--text); border-bottom: 2px solid var(--accent); }
+.cover-sheet { line-height: 0; max-width: 560px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-bottom: 8px; }
+.cover-sheet svg { width: 100%; height: auto; display: block; }
+.about blockquote { margin: 16px 0; padding-left: 14px; border-left: 2px solid var(--accent); font-size: 18px; }
+.manifest { max-width: 68ch; padding-left: 22px; margin: 0 0 8px; }
+.manifest li { margin-bottom: 12px; }

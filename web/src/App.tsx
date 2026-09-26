@@ -119,15 +119,17 @@ export function App() {
           <Link to="/media" className={location.pathname.startsWith("/media") ? "active" : ""}>
             Медиатека
           </Link>
-          <Link to="/about" className={location.pathname === "/about" ? "active" : ""}>
-            О проекте
-          </Link>
           {can("edit") && (
             <Link to="/parameters" className={location.pathname === "/parameters" ? "active" : ""}>
               Параметры
             </Link>
           )}
           {can("create_delete") && <Link to="/entities/new">Создать запись</Link>}
+          {/* «О проекте» стоит последним: это не рабочий раздел, а рассказ о
+              проекте — логотип, философия, манифест (Р-61). */}
+          <Link to="/about" className={location.pathname.startsWith("/about") ? "active" : ""}>
+            О проекте
+          </Link>
         </nav>
         <div className="viewer">
           {viewer?.authenticated
@@ -196,6 +198,7 @@ export function App() {
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
           <Route path="/about" element={<About />} />
+          <Route path="/about/:section" element={<About />} />
           <Route path="/login" element={<Login onDone={refresh} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
