@@ -305,3 +305,14 @@ button:disabled { opacity: .5; cursor: default; }
 .sign-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .sign-chips button { padding: 5px 9px; font-size: 13px; }
 .sign-loading { display: grid; place-items: center; aspect-ratio: 5 / 4; color: var(--muted); line-height: 1.4; }
+
+/* Заставка (Р-58): обложка во весь экран, бумажный фон вместо тёмного. */
+.splash {
+  position: fixed; inset: 0; z-index: 100; background: #EFE6D3;
+  display: grid; place-items: center; padding: 16px;
+  opacity: 1; transition: opacity .4s ease;
+}
+.splash.leaving { opacity: 0; pointer-events: none; }
+.splash-sheet { line-height: 0; max-width: min(100%, 92vh); width: 100%; }
+.splash-sheet svg { width: 100%; height: auto; display: block; }
+@media (prefers-reduced-motion: reduce) { .splash { transition: none; } }

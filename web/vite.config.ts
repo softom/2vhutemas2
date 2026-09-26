@@ -1,9 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Новый контур живёт на отдельном пути, пока не заменит старый сайт (Р-21).
+// Новый контур — основной сайт; прежний ушёл под /old (Р-59).
 export default defineConfig({
   plugins: [react()],
-  base: "/new/",
+  base: "/",
   build: { outDir: "dist", sourcemap: false },
 });

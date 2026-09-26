@@ -2,7 +2,7 @@
  * Каркас интерфейса нового контура: навигация, вход и экраны этапа 1.
  * Интерфейс на русском, отдельного слоя перевода нет (решение Р-18).
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useScrollMemory } from "./ui/scrollMemory";
 import { api, supabase } from "./api";
@@ -15,12 +15,20 @@ import { MediaLibrary } from "./pages/MediaLibrary";
 import { Parameters } from "./pages/Parameters";
 import { Login } from "./pages/Login";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
+import { Splash } from "./ui/Splash";
 
 export interface Viewer {
   authenticated: boolean;
   displayName: string;
   permissions: string[];
 }
+
+/**
+ * С какого адреса открыли сайт. Заставку показываем только тем, кто пришёл
+ * на корень: переход внутри сайта её не повторяет, прямая ссылка на запись
+ * ведёт сразу к записи (Р-58).
+ */
+const ENTRY = globalThis.location.pathname;
 
 /** Какой файл сборки сейчас выполняется в этой вкладке. */
 function currentBundle(): string | null {
@@ -34,6 +42,7 @@ export function App() {
   // Открытая вкладка продолжает работать на старом коде, пока её не
   // перезагрузят: после выкладки это выглядело как «кнопка не сохраняет».
   const [stale, setStale] = useState(false);
+  const [splash, setSplash] = useState(ENTRY === "/" || ENTRY === "");
   const location = useLocation();
   // Возврат со страницы объекта приводит туда, откуда ушли: лекцию читают
   // подряд, и начинать сначала после каждой карточки невозможно.
@@ -67,7 +76,7 @@ export function App() {
     if (!mine) return;
     const check = async () => {
       try {
-        const html = await (await fetch("/new/", { cache: "no-store" })).text();
+        const html = await (await fetch("/", { cache: "no-store" })).text();
         const found = html.match(/assets\/index-[A-Za-z0-9_-]+\.js/);
         if (found && !found[0].endsWith(mine)) setStale(true);
       } catch {
@@ -83,11 +92,15 @@ export function App() {
     };
   }, []);
 
+  // Постоянная ссылка: иначе перерисовка каркаса сбрасывает отсчёт заставки.
+  const hideSplash = useCallback(() => setSplash(false), []);
+
   const can = (permission: string) =>
     viewer?.permissions.includes(permission) || viewer?.permissions.includes("su") || false;
 
   return (
     <div className="shell">
+      {splash && <Splash onDone={hideSplash} />}
       <header className="top">
         <Link className="brand" to="/">2vhutemas</Link>
         <nav>
@@ -190,7 +203,7 @@ export function App() {
       </main>
 
       <footer>
-        Новый контур в разработке. Старый сайт работает по прежнему адресу.
+        Новый контур. Прежний сайт — <a href="/old/">2vhutemas.ru/old</a>.
       </footer>
     </div>
   );

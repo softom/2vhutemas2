@@ -306,6 +306,19 @@ contains "курс приходит в списке" 'smoke: курс' "$(body)"
 code -H "$AUTH" "$API/entities?type=what&parameter=lecture_number&sort=parameter" >/dev/null
 missing "лекции не попали в энциклопедию" 'smoke-lekciya' "$(body)"
 
+echo "── Адреса сайта"
+# Новый контур стоит на корне, прежний сайт — под /old (Р-59). Проверяем
+# снаружи, через Caddy: путь ломается именно здесь, а не в приложении.
+SITE=https://2vhutemas.ru
+here() { curl -s -o /dev/null -w '%{redirect_url}' "$1" | sed 's#^https\?://[^/]*##'; }
+# Ищем имя файла сборки: пустой <div id="root"> есть и у старого сайта,
+# и такая проверка прошла бы, даже если на корне остался он.
+contains "корень отдаёт новый контур" "/assets/index-" "$(curl -s $SITE/)"
+contains "ссылка на запись открывается" "/assets/index-" "$(curl -s $SITE/entities/42)"
+contains "прежний сайт под /old" "Архитектурный таймлайн" "$(curl -s $SITE/old/)"
+check "прежняя страница ведёт под /old" "/old/praktika-graph.html" "$(here $SITE/praktika-graph.html)"
+check "прежний адрес /new ведёт на корень" "/lectures" "$(here $SITE/new/lectures)"
+
 echo "── Уборка"
 docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -q -c "
 delete from app.attachments a using app.targets t

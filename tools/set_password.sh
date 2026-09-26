@@ -24,7 +24,7 @@ RESPONSE=$(curl -s -o /tmp/pw-response.json -w "%{http_code}" \
 unset PW PW2
 
 if [ "$RESPONSE" = "200" ]; then
-  echo "Пароль изменён. Войдите на https://2vhutemas.ru/new/"
+  echo "Пароль изменён. Войдите на https://2vhutemas.ru/"
 else
   echo "Не удалось изменить пароль, код ответа $RESPONSE"
   head -c 300 /tmp/pw-response.json; echo

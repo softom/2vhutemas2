@@ -39,6 +39,8 @@ function useInAppLink(href: string) {
     if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey) return;
     if (event.button !== 0) return;
     event.preventDefault();
+    // Ссылки в старых текстах написаны с прежним путём /new — снимаем его,
+    // чтобы переход остался внутри приложения (Р-59).
     navigate(href.replace(/^\/new/, ""));
   };
 }
@@ -112,7 +114,7 @@ function EntityCardView({ props }: { props: Record<string, string> }) {
     kind: props.kind ?? "",
   });
   const cover = card.cover ?? (props.mediaAssetId || null);
-  const href = `/new/entities/${props.entityId}`;
+  const href = `/entities/${props.entityId}`;
   const open = useInAppLink(href);
 
   const shape = card.root === "who" ? " portrait" : "";
@@ -149,7 +151,7 @@ export const EntityMention = createReactInlineContentSpec(
 
 /** Упоминание в строке: переход тоже внутренний. */
 function EntityMentionView({ props }: { props: Record<string, string> }) {
-  const href = `/new/entities/${props.entityId}`;
+  const href = `/entities/${props.entityId}`;
   const open = useInAppLink(href);
   return (
     <a className="entity-mention" href={href} onClick={open}>

@@ -38,7 +38,7 @@ export class ErrorBoundary extends Component<Props, State> {
         </p>
         <div className="row">
           <button type="button" onClick={() => location.reload()}>Обновить страницу</button>
-          <a href="/new/"><button type="button" className="ghost">В каталог</button></a>
+          <a href="/"><button type="button" className="ghost">В каталог</button></a>
         </div>
       </section>
     );
