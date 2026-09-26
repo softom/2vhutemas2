@@ -1,4 +1,10 @@
-/** Каталог записей: поиск, отбор по ветви дерева типов, переход к карточке. */
+/**
+ * Каталог записей: поиск, отбор по ветви дерева типов, переход к карточке.
+ *
+ * Одна и та же страница служит и общим каталогом, и разделами меню: «Объекты»
+ * — это ветвь «Что», «Авторы» — ветвь «Кто». Отдельных механизмов для них не
+ * заводим, меняется только начальная ветвь и заголовок (Р-37).
+ */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ListCount } from "../ui/ListCount";
@@ -10,14 +16,22 @@ import {
   type SuggestedParameter,
 } from "../api";
 
-export function Catalog({ canCreate }: { canCreate: boolean }) {
+interface Props {
+  canCreate: boolean;
+  /** Ветвь дерева, которой ограничен раздел; пусто — весь каталог. */
+  branch?: string;
+  title?: string;
+  sub?: string;
+}
+
+export function Catalog({ canCreate, branch, title, sub }: Props) {
   const [items, setItems] = useState<EntityListItem[]>([]);
   // Каталог отдаётся страницами; без этого записи за первой страницей
   // были не видны вовсе.
   const [cursor, setCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [types, setTypes] = useState<EntityType[]>([]);
-  const [type, setType] = useState("");
+  const [type, setType] = useState(branch ?? "");
   const [query, setQuery] = useState("");
   const [parameters, setParameters] = useState<SuggestedParameter[]>([]);
   const [parameter, setParameter] = useState("");
@@ -32,6 +46,24 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
       .then((caps: Capabilities) => setTypes(caps.entity_types ?? []))
       .catch(() => setTypes([]));
   }, []);
+
+  useEffect(() => {
+    setType(branch ?? "");
+    setQuery("");
+  }, [branch]);
+
+  /** В разделе показываем только его ветвь: остальное дерево здесь лишнее. */
+  const inBranch = (code: string): boolean => {
+    if (!branch) return true;
+    let current: EntityType | undefined = types.find((item) => item.code === code);
+    while (current) {
+      if (current.code === branch) return true;
+      current = types.find((item) => item.code === current?.parent);
+    }
+    return false;
+  };
+  const shown = types.filter((item) => inBranch(item.code));
+  const depthShift = branch ? (types.find((item) => item.code === branch)?.depth ?? 0) : 0;
 
   // Сортировать можно по числовым величинам выбранной ветви: ради этого
   // параметры и заведены (Р-38).
@@ -104,8 +136,8 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
 
   return (
     <section>
-      <h1>Каталог</h1>
-      <p className="sub">Объекты, авторы и периоды нового контура.</p>
+      <h1>{title ?? "Каталог"}</h1>
+      <p className="sub">{sub ?? "Объекты, авторы и периоды нового контура."}</p>
 
       <div className="filters">
         <input
@@ -114,10 +146,11 @@ export function Catalog({ canCreate }: { canCreate: boolean }) {
           onChange={(e) => setQuery(e.target.value)}
         />
         <select value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="">Все типы</option>
-          {types.map((t) => (
+          <option value={branch ?? ""}>{branch ? "Все в разделе" : "Все типы"}</option>
+          {shown.filter((t) => t.code !== branch).map((t) => (
             <option key={t.code} value={t.code}>
-              {"  ".repeat(t.depth) + (t.depth > 0 ? "– " : "") + t.title_ru}
+              {"  ".repeat(Math.max(t.depth - depthShift, 0)) +
+                (t.depth - depthShift > 0 ? "– " : "") + t.title_ru}
             </option>
           ))}
         </select>

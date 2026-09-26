@@ -91,6 +91,12 @@ export function App() {
         <Link className="brand" to="/">2vhutemas</Link>
         <nav>
           <Link to="/" className={location.pathname === "/" ? "active" : ""}>Каталог</Link>
+          <Link to="/objects" className={location.pathname === "/objects" ? "active" : ""}>
+            Объекты
+          </Link>
+          <Link to="/authors" className={location.pathname === "/authors" ? "active" : ""}>
+            Авторы
+          </Link>
           <Link to="/lectures" className={location.pathname === "/lectures" ? "active" : ""}>
             Лекции
           </Link>
@@ -142,6 +148,28 @@ export function App() {
         <ErrorBoundary key={location.pathname}>
         <Routes>
           <Route path="/" element={<Catalog canCreate={can("create_delete")} />} />
+          <Route
+            path="/objects"
+            element={
+              <Catalog
+                canCreate={can("create_delete")}
+                branch="what"
+                title="Объекты"
+                sub="Здания, произведения, события — всё, о чём говорим."
+              />
+            }
+          />
+          <Route
+            path="/authors"
+            element={
+              <Catalog
+                canCreate={can("create_delete")}
+                branch="who"
+                title="Авторы"
+                sub="Люди, бюро и коллективы."
+              />
+            }
+          />
           <Route path="/entities/new" element={<EntityEditor mode="create" />} />
           <Route path="/entities/:id" element={<EntityPage canEdit={can("edit")} />} />
           <Route path="/entities/:id/edit" element={<EntityEditor mode="edit" />} />
