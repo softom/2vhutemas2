@@ -273,3 +273,9 @@ button:disabled { opacity: .5; cursor: default; }
    и снимок выравнивается по верху — лицо обычно там. */
 .card.portrait img { height: auto; aspect-ratio: 3 / 4; object-position: top center; }
 .card.portrait .card-no-cover { height: auto; aspect-ratio: 3 / 4; }
+
+/* Запись о человеке и в тексте показывается стоячим кадром: широкая полоса
+   режет портрет по глазам. Ширину ограничиваем, иначе лицо занимает экран. */
+.entity-card.with-cover.portrait { max-width: 420px; }
+.entity-card.with-cover.portrait img { height: auto; aspect-ratio: 3 / 4; object-position: top center; }
+.entity-card.portrait:not(.with-cover) img { width: 108px; height: 144px; }

@@ -19,7 +19,10 @@ import { api } from "../api";
  * одного сведения. Ответы запоминаем, чтобы десяток карточек в лекции
  * не превращался в десяток одинаковых запросов.
  */
-const cardCache = new Map<string, { title: string; kind: string; cover: string | null }>();
+const cardCache = new Map<
+  string,
+  { title: string; kind: string; cover: string | null; root: string }
+>();
 
 /**
  * Переход внутри приложения: полная перезагрузка теряет место в тексте,
@@ -41,7 +44,9 @@ function useInAppLink(href: string) {
 }
 
 function useEntityCard(entityId: string, fallback: { title: string; kind: string }) {
-  const [card, setCard] = useState(cardCache.get(entityId) ?? { ...fallback, cover: null });
+  const [card, setCard] = useState(
+    cardCache.get(entityId) ?? { ...fallback, cover: null, root: "" },
+  );
 
   useEffect(() => {
     if (!entityId) return;
@@ -54,10 +59,13 @@ function useEntityCard(entityId: string, fallback: { title: string; kind: string
     api.entity(Number(entityId))
       .then((entity) => {
         const media = (entity as unknown as { media?: { asset_id: string }[] }).media ?? [];
+        const path = (entity as unknown as { type_path?: { code: string }[] }).type_path ?? [];
         const next = {
           title: entity.title_ru,
           kind: entity.type_title ?? entity.type ?? "",
           cover: media[0]?.asset_id ?? null,
+          // Корневая ветвь решает, каким кадром показывать: у людей стоячим.
+          root: path[0]?.code ?? "",
         };
         cardCache.set(entityId, next);
         if (!cancelled) setCard(next);
@@ -107,8 +115,9 @@ function EntityCardView({ props }: { props: Record<string, string> }) {
   const href = `/new/entities/${props.entityId}`;
   const open = useInAppLink(href);
 
+  const shape = card.root === "who" ? " portrait" : "";
   return (
-    <div className={cover ? "entity-card with-cover" : "entity-card"}>
+    <div className={cover ? `entity-card with-cover${shape}` : `entity-card${shape}`}>
       {cover && <img src={api.mediaFileUrl(cover, "screen")} alt="" />}
       <div className="entity-card-text">
         <a href={href} onClick={open}>{card.title}</a>
