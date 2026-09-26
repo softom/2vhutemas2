@@ -279,3 +279,28 @@ button:disabled { opacity: .5; cursor: default; }
 .entity-card.with-cover.portrait { max-width: 420px; }
 .entity-card.with-cover.portrait img { height: auto; aspect-ratio: 3 / 4; object-position: top center; }
 .entity-card.portrait:not(.with-cover) img { width: 108px; height: 144px; }
+
+/* О проекте и конструктор знака (Р-56). Лист знака — бумажный, в любой теме. */
+.about-text { max-width: 68ch; }
+.about-text p { margin: 0 0 12px; }
+.about-credit { margin-top: 18px; }
+.sign-builder { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; margin-top: 16px; }
+@media (max-width: 900px) { .sign-builder { grid-template-columns: 1fr; } }
+.sign-stage { position: sticky; top: 76px; display: grid; gap: 10px; }
+@media (max-width: 900px) { .sign-stage { position: static; } }
+.sign-preview { line-height: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.sign-preview svg { width: 100%; height: auto; display: block; }
+.sign-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sign-controls { display: grid; gap: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.sign-controls fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; }
+.sign-controls legend { color: var(--accent); font-size: 14px; margin-bottom: 8px; padding: 0; }
+.sign-controls label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+.sign-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sign-range { grid-template-columns: 1fr auto; }
+.sign-range output { font-variant-numeric: tabular-nums; font-size: 13px; }
+.sign-range input { grid-column: 1 / -1; width: 100%; padding: 0; accent-color: var(--accent); }
+.sign-check { display: flex !important; align-items: center; gap: 8px; }
+.sign-check input { width: auto; }
+.sign-controls input[type="color"] { width: 100%; height: 34px; padding: 2px; }
+.sign-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sign-chips button { padding: 5px 9px; font-size: 13px; }
