@@ -108,7 +108,7 @@ export function App() {
               попадает и то, у чего своего раздела пока нет (Р-55). */}
           <Link to="/" className={location.pathname === "/" ? "active" : ""}>Всё</Link>
           <Link to="/objects" className={location.pathname === "/objects" ? "active" : ""}>
-            Объекты
+            Проекты
           </Link>
           <Link to="/authors" className={location.pathname === "/authors" ? "active" : ""}>
             Авторы
@@ -175,8 +175,8 @@ export function App() {
               <Catalog
                 canCreate={can("create_delete")}
                 branch="what"
-                title="Объекты"
-                sub="Здания, произведения, события — всё, о чём говорим."
+                title="Проекты"
+                sub="Построенное и оставшееся на бумаге: смотрим на расчёт, чертёж и стремление."
               />
             }
           />
