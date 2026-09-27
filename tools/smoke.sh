@@ -113,6 +113,13 @@ check "загрузка файла" "да" "$([ -n "$AID" ] && echo да || echo
 contains "превью готово" '"thumbnail"' "$A"
 check "приватный файл гостю" 404 "$(code "$API/media/$AID/file?variant=thumbnail")"
 check "файл под входом" 200 "$(code -H "$AUTH" "$API/media/$AID/file?variant=thumbnail")"
+# Цитирование в учебных целях: без автора и источника файл публичным не станет (Р-67).
+check "публичным без ссылок нельзя" 400 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"public"}' $API/media/$AID)"
+check "автора мало, нужен источник" 400 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"public","author":"smoke: автор"}' $API/media/$AID)"
+check "со ссылками публичным можно" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"public","author":"smoke: автор","source_url":"https://example.org/smoke"}' $API/media/$AID)"
+contains "изображения закрыты от картиночного поиска" "noimageindex" "$(curl -s -D - -o /dev/null -H "$AUTH" "$API/media/$AID/file?variant=thumbnail")"
+code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"private"}' $API/media/$AID >/dev/null
+
 check "привязка файла к объекту" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"asset_id\":\"$AID\",\"role\":\"gallery\"}" $API/media/attachments)"
 check "повторная привязка" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"asset_id\":\"$AID\",\"role\":\"gallery\"}" $API/media/attachments)"
 ATT=$(curl -s -H "$AUTH" $API/entities/$EID | python3 -c "
@@ -123,6 +130,9 @@ COVER=$(body | python3 -c "
 import json,sys
 print(next((1 for i in json.load(sys.stdin)['items'] if str(i['id']) == '$EID' and i.get('cover_asset_id')), 0))")
 check "обложка в каталоге" 1 "$COVER"
+check "автор изображения в карточке" "smoke: автор" "$(curl -s -H "$AUTH" $API/entities/$EID | python3 -c "
+import json,sys
+print(json.load(sys.stdin)['media'][0].get('author') or '')")"
 check "порядок изображений" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"order\":[$ATT]}" $API/media/attachments/order)"
 check "чужая привязка в порядке" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"order\":[999999]}" $API/media/attachments/order)"
 

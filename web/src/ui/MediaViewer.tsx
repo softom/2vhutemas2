@@ -18,6 +18,10 @@ export interface ViewerItem {
   asset_id: string;
   caption?: string | null;
   role_title?: string | null;
+  /** Кому приписать и откуда взято: без этого изображение не цитата (Р-67). */
+  author?: string | null;
+  source?: string | null;
+  source_url?: string | null;
 }
 
 interface Props {
@@ -80,6 +84,19 @@ export function MediaViewer({ items, index, onMove, onClose }: Props) {
 
           <div className="media-viewer-caption">
             <span>{item.caption || item.role_title || "без подписи"}</span>
+            {(item.author || item.source || item.source_url) && (
+              <span className="hint">
+                {item.author}
+                {item.author && (item.source || item.source_url) ? " · " : ""}
+                {item.source_url
+                  ? (
+                    <a href={item.source_url} target="_blank" rel="noreferrer">
+                      {item.source || "источник"}
+                    </a>
+                  )
+                  : item.source}
+              </span>
+            )}
             <span className="hint">
               {index + 1} из {total} ·{" "}
               <a

@@ -58,7 +58,15 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
 
   const indicators = (entity as unknown as { indicators?: Indicator[] }).indicators ?? [];
   const media = (entity as unknown as {
-    media?: { asset_id: string; role: string; role_title?: string; caption?: string | null }[];
+    media?: {
+      asset_id: string;
+      role: string;
+      role_title?: string;
+      caption?: string | null;
+      author?: string | null;
+      source?: string | null;
+      source_url?: string | null;
+    }[];
   }).media ?? [];
   const tags = (entity as unknown as { tags?: { id: string; title: string }[] }).tags ?? [];
 

@@ -210,6 +210,9 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                         'role', ar.code, 'role_title', ar.title_ru,
                         'caption', ma.caption_ru, 'kind',
                         (select mk.code from app.media_kinds mk where mk.id = ma.kind_id),
+                        'author', coalesce(nullif(ma.author, ''), nullif(ma.credit, '')),
+                        'source_url', nullif(ma.source_url, ''),
+                        'source', coalesce(nullif(ma.original_caption, ''), nullif(ma.holder, '')),
                         'sort_order', a.sort_order)
                         order by a.sort_order, a.id)
                      from app.attachments a
