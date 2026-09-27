@@ -121,10 +121,14 @@ entities.get("/", async (c: Context<AppEnv>) => {
            app.entity_type_path(e.type_id) as type_path,
            e.is_published, e.sort_order,
            m.status as material_status,
-           -- Обложка — первое по порядку прикреплённое изображение (решение Р-36).
+           -- Обложка — первое по порядку прикреплённое изображение (решение Р-36),
+           -- но только то, которое спрашивающий может увидеть: иначе карточка
+           -- обещает картинку, а на её месте выходит битый значок (Р-68).
            (select a.asset_id from app.attachments a
               join app.targets t on t.id = a.target_id
+              join app.media_assets ma on ma.id = a.asset_id
              where t.entity_id = e.id and a.asset_id is not null
+               and (${drafts} or (ma.is_published and ma.visibility = 'public'))
              order by a.sort_order, a.id limit 1) as cover_asset_id,
            pv.num_value as parameter_value, pv.text_value as parameter_text,
            coalesce((
@@ -178,6 +182,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
 
 entities.get("/:id", async (c: Context<AppEnv>) => {
   const principal = c.get("principal");
+  const drafts = canSeeDrafts(principal);
   // Запись ищется и по номеру, и по адресу — текущему или прежнему (Р-65):
   // адрес страницы теперь слаг, а в текстах и старых ссылках лежат номера.
   const key = c.req.param("id") ?? "";
@@ -219,7 +224,9 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                      join app.targets t on t.id = a.target_id
                      join app.attachment_roles ar on ar.id = a.role_id
                      join app.media_assets ma on ma.id = a.asset_id
-                    where t.entity_id = e.id and a.asset_id is not null), '[]'::jsonb) as media,
+                    where t.entity_id = e.id and a.asset_id is not null
+                      and (${drafts} or (ma.is_published and ma.visibility = 'public'))),
+                    '[]'::jsonb) as media,
            coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
                         order by t.title)
                      from app.entity_tags et join app.tags t on t.id = et.tag_id
@@ -270,7 +277,6 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
   `;
   const entity = rows[0];
   if (!entity) throw new ApiError("not_found", "Сущность не найдена");
-  const drafts = canSeeDrafts(principal);
   if (!entity.is_published && !drafts) {
     throw new ApiError("not_found", "Сущность не найдена");
   }
