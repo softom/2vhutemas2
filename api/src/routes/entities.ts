@@ -159,6 +159,9 @@ entities.get("/", async (c: Context<AppEnv>) => {
       and (${archived} or coalesce(m.status, 'draft') <> 'archived')
       and (${type}::text is null
            or e.type_id in (select app.entity_type_subtree(${type})))
+      -- Тексты интерфейса проекта показываются в «О проекте», а не в общем каталоге.
+      and (${type}::text is not null or e.type_id not in
+           (select app.entity_type_subtree('project_pages')))
       and (${search}::text is null or e.title_ru ilike ${"%" + (search ?? "") + "%"}
            or e.title_en ilike ${"%" + (search ?? "") + "%"})
       and (${min}::numeric is null or pv.num_value >= ${min})

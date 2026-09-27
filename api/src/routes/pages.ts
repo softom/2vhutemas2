@@ -164,18 +164,21 @@ async function publishedIn(branch: string | null): Promise<ListRow[]> {
       from app.entities e
       join app.entity_types ty on ty.id = e.type_id
      where e.is_published
-       and (${branch}::text is null or e.type_id in (select app.entity_type_subtree(${branch})))
+       and ((${branch}::text is not null and e.type_id in
+             (select app.entity_type_subtree(${branch})))
+            or (${branch}::text is null and e.type_id not in
+             (select app.entity_type_subtree('project_pages'))))
      order by e.title_ru
      limit 2000
   `;
 }
 
-function listHtml(rows: ListRow[]): string {
+function listHtml(rows: ListRow[], showType = true): string {
   if (rows.length === 0) return `<p>Опубликованных записей пока нет.</p>`;
   return `<ul>${
     rows.map((row) =>
       `<li><a href="${escapeHtml(entityPath(row.slug))}">${escapeHtml(row.title_ru)}</a>` +
-      ` — ${escapeHtml(row.type_title)}</li>`
+      (showType ? ` — ${escapeHtml(row.type_title)}` : "") + `</li>`
     ).join("")
   }</ul>`;
 }
@@ -254,86 +257,36 @@ for (const [path, section] of Object.entries(SECTIONS)) {
 
 // ── О проекте ────────────────────────────────────────────────────────────────
 
-/**
- * Подразделы «О проекте» (Р-61). Полный текст рисует клиент; здесь —
- * заголовок и суть, чтобы у каждого подраздела было своё описание в поиске.
- */
-const ABOUT: Record<string, { title: string; text: string }> = {
-  logo: {
-    title: "Логотип",
-    text: "Знак Вх² — кириллицей: поиск русского стиля не начинают с латиницы. " +
-      "Искусство = Вх² · м: мастерские, материя и массы.",
-  },
-  philosophy: {
-    title: "Философия",
-    text: "Объекты и студенческие работы живут вместе, потому что во времени их разделяет " +
-      "только точка наблюдателя — сегодня. Мы не приравниваем — мы меняем оптику. " +
-      "Объект сегодня — проект вчера. Мастер сегодня — подмастерье вчера.",
-  },
-  manifest: {
-    title: "Манифест",
-    // Авторский текст (Р-67): только его собственные фразы, без пересказа.
-    // Правится вместе с манифестом в About.tsx.
-    text: "О русском дизайне, который не нужно искать. " +
-      "Любой дизайн, созданный в России, является русским дизайном. " +
-      "Русский дизайн не нужно искать. Его нужно активировать.",
-  },
-  feedback: {
-    title: "Обратная связь",
-    text: "Адрес для замечаний и для правообладателей. Изображения приводятся как цитаты " +
-      "в учебных целях, с указанием автора и источника; по обращению правообладателя " +
-      "изображение снимается сразу, разбирательство — после.",
-  },
+/** Тексты «О проекте» — сущности с документом-описанием; прежние адреса сохранены. */
+const ABOUT_ALIASES: Record<string, string> = {
+  logo: "about-logo",
+  philosophy: "about-philosophy",
+  manifest: "about-manifest",
+  feedback: "about-feedback",
 };
 
-pages.get("/about", (c) => aboutPage(c, "logo"));
-pages.get("/about/:section", (c) => aboutPage(c, c.req.param("section")));
-
-let aboutTexts: { mtime: number; sections: Record<string, string> } | null = null;
-
-/**
- * Тексты «О проекте», собранные при сборке клиента из тех же компонентов,
- * что рисует клиент (`web/src/about/prerender.tsx`). Лежат рядом с шаблоном
- * страницы и перечитываются после каждой сборки. Нет файла — страница
- * обходится сутью подраздела, а журнал об этом говорит.
- */
-async function readAboutTexts(c: Context<AppEnv>): Promise<Record<string, string>> {
-  const path = site.indexHtml.replace(/index\.html$/, "prerender/about.json");
-  try {
-    const mtime = (await Deno.stat(path)).mtime?.getTime() ?? 0;
-    if (!aboutTexts || aboutTexts.mtime !== mtime) {
-      aboutTexts = { mtime, sections: JSON.parse(await Deno.readTextFile(path)) };
-    }
-    return aboutTexts.sections;
-  } catch (error) {
-    log("warn", c.get("requestId"), "нет готовых текстов «О проекте»", {
-      path,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return {};
-  }
-}
-
-async function aboutPage(c: Context<AppEnv>, key: string) {
-  const section = ABOUT[key];
-  if (!section) return await notFound(c);
-  const nav = Object.entries(ABOUT)
-    .map(([k, s]) => `<a href="/about/${k}">${s.title}</a>`).join(" · ");
-  // Полный текст подраздела — тот же, что видит читатель (Р-65); суть из
-  // ABOUT остаётся описанием для выдачи и запасным текстом.
-  const full = (await readAboutTexts(c))[key];
+pages.get("/about", async (c) => {
+  const rows = await publishedIn("project_pages");
+  const title = "О проекте";
+  const lead = "Зачем создан 2ВХУТЕМАС, как устроен атлас и как связаться с проектом.";
   return await render(c, {
     status: 200,
-    title: `${section.title} — О проекте — ${site.name}`,
-    description: summary(section.text),
-    publicReader: key !== "logo",
-    canonical: `/about/${key}`,
-    body: layout(
-      `<h1>О проекте</h1><p>${nav}</p><h2>${section.title}</h2>` +
-        (full ?? `<p>${escapeHtml(section.text)}</p>`),
-    ),
+    title: `${title} — ${site.name}`,
+    description: lead,
+    canonical: "/about",
+    jsonLd: [listLd("/about", title, rows)],
+    body: layout(`<h1>${title}</h1><p>${escapeHtml(lead)}</p>${listHtml(rows, false)}`),
   });
-}
+});
+
+pages.get("/about/logo/tool", (c) => appOnly(c, "Конструктор знака"));
+pages.get("/about/:section", async (c) => {
+  const slug = ABOUT_ALIASES[c.req.param("section")];
+  if (!slug) return await notFound(c);
+  c.header("location", entityPath(slug));
+  c.header("cache-control", "public, max-age=3600");
+  return c.body(null, 301);
+});
 
 // ── Запись ───────────────────────────────────────────────────────────────────
 
@@ -648,8 +601,7 @@ pages.get("/robots.txt", (c) => {
     "Disallow: /entities/*/edit",
     "Disallow: /media",
     "Disallow: /parameters",
-    // Заготовки текстов для готовых страниц — не страницы, в выдаче им не место.
-    "Disallow: /prerender/",
+    "Disallow: /about/logo/tool",
     // /old/ не закрываем здесь: запрет обхода помешал бы поисковику увидеть
     // noindex, который Caddy ставит прежнему сайту, и старые страницы
     // остались бы в выдаче голыми адресами.
@@ -680,13 +632,10 @@ pages.get("/sitemap.xml", async (c) => {
     0,
   );
   const lastmod = (time: number) => new Date(time).toISOString().slice(0, 10);
-  const statics = ["/", "/objects", "/authors", "/lectures"].map((path) =>
+  const statics = ["/", "/objects", "/authors", "/lectures", "/about"].map((path) =>
     `<url><loc>${escapeHtml(absolute(path))}</loc>${
       newest ? `<lastmod>${lastmod(newest)}</lastmod>` : ""
     }</url>`
-  );
-  const about = Object.keys(ABOUT).map((key) =>
-    `<url><loc>${escapeHtml(absolute(`/about/${key}`))}</loc></url>`
   );
   const entries = rows.map((row) =>
     `<url><loc>${escapeHtml(absolute(entityPath(row.slug)))}</loc>` +
@@ -694,7 +643,7 @@ pages.get("/sitemap.xml", async (c) => {
   );
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    [...statics, ...about, ...entries].join("\n") + `\n</urlset>\n`;
+    [...statics, ...entries].join("\n") + `\n</urlset>\n`;
   c.header("content-type", "application/xml; charset=utf-8");
   c.header("cache-control", "public, max-age=600");
   return c.body(xml);

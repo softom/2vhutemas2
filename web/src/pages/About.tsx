@@ -1,13 +1,5 @@
-/**
- * О проекте: логотип, философия и манифест (Р-56, Р-57, Р-61).
- *
- * Три подраздела вместо одной длинной страницы: знак с конструктором сам по
- * себе занимает экран, а философию и манифест читают отдельно и дают на них
- * ссылки. Конструктор — игрушка для поиска знака: параметры живут в браузере
- * читателя и никуда не отправляются.
- */
+/** Интерактивный конструктор знака, открываемый отдельно от сущности логотипа. */
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
 import {
   AXIS_LOOK, buildSign, FONTS, PALETTES, SIGN_DEFAULTS,
   type FontKey, type GlyphFont, type SignParams,
@@ -260,54 +252,25 @@ function CoverSheet() {
   return <div className="cover-sheet" dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
-import {
-  BuilderNote, CoverNote, Feedback, FontsCredit, LogoIntro, Manifest, Philosophy,
-} from "../about/texts";
 function Logo() {
   return (
     <>
-      <LogoIntro />
-
-      <h2>Обложка</h2>
-      <CoverNote />
       <CoverSheet />
-
-      <h2>Конструктор знака</h2>
-      <BuilderNote />
       <SignBuilder />
-
-      <FontsCredit />
+      <p className="hint about-credit">
+        Шрифты Oswald, Montserrat и Unbounded — © The Oswald, Montserrat и Unbounded Project
+        Authors, SIL Open Font License 1.1.
+      </p>
     </>
   );
 }
 
-const SECTIONS = [
-  { key: "logo", title: "Логотип", node: <Logo /> },
-  { key: "philosophy", title: "Философия", node: <Philosophy /> },
-  { key: "manifest", title: "Манифест", node: <Manifest /> },
-  { key: "feedback", title: "Обратная связь", node: <Feedback /> },
-];
-
 export function About() {
-  // Подразделы — отдельные адреса: на «Философию» и «Манифест» дают ссылку,
-  // и по ней должен открываться именно подраздел (Р-61).
-  const { section } = useParams();
-  const current = SECTIONS.find((s) => s.key === section) ?? SECTIONS[0];
-
   return (
     <section className="about">
-      <h1>О проекте</h1>
-      <p className="sub">2vhutemas — учебный атлас объектов культуры и их места в истории.</p>
-
-      <nav className="subnav">
-        {SECTIONS.map((s) => (
-          <Link key={s.key} to={`/about/${s.key}`} className={s.key === current.key ? "active" : ""}>
-            {s.title}
-          </Link>
-        ))}
-      </nav>
-
-      {current.node}
+      <h1>Конструктор знака</h1>
+      <p><a href="/entities/about-logo">← О проекте: логотип</a></p>
+      <Logo />
     </section>
   );
 }

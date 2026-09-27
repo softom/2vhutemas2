@@ -240,8 +240,15 @@ export function App() {
           <Route path="/lectures" element={<Lectures canCreate={can("create_delete")} />} />
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/about/:section" element={<About />} />
+          <Route path="/about" element={
+            <Catalog
+              canCreate={can("create_delete")}
+              branch="project_pages"
+              title="О проекте"
+              sub="Зачем создан 2ВХУТЕМАС, как устроен атлас и как связаться с проектом."
+            />
+          } />
+          <Route path="/about/logo/tool" element={<About />} />
           <Route path="/login" element={<Login onDone={refresh} />} />
           {/* Неизвестный адрес — честное «не найдено», а не переброс на главную:
               сервер отвечает на него 404, и страница говорит то же (Р-65). */}

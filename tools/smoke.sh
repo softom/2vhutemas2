@@ -190,6 +190,11 @@ check "ссылка в никуда отклоняется" 400 "$(code -X POST 
 TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -c "
 select body_text from app.documents where id=$DID")
 contains "поисковый текст извлечён" 'smoke проверка текста' "$TEXT"
+D2=$(curl -s -X PATCH -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: текст правлен\",\"body\":[{\"id\":\"su-edit\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"smoke правка текста SU\",\"styles\":{}}]}],\"base_revision_id\":\"$DREV\"}" $API/documents/$DID)
+DREV2=$(echo "$D2" | field revision_id)
+check "SU правит текст стандартного документа" "да" "$([ -n "$DREV2" ] && echo да || echo нет)"
+TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -c "select body_text from app.documents where id=$DID")
+contains "новая версия текста сохранена" 'smoke правка текста SU' "$TEXT"
 
 # Незаполненные свойства блока приходят пустыми строками; пустая строка
 # в колонке с UUID роняла сохранение внутренней ошибкой.
@@ -372,9 +377,10 @@ contains "sitemap.xml собран" '<urlset' "$(curl -s $SITE/sitemap.xml)"
 check "несуществующая страница — 404" 404 "$(code $SITE/net-takoj-stranicy)"
 check "несуществующая запись — 404" 404 "$(code $SITE/entities/net-takoj-zapisi)"
 contains "главная описана для поисковика" 'rel="canonical" href="https://2vhutemas.ru/"' "$(curl -s $SITE/)"
-# Тексты «О проекте» собираются при сборке клиента и вкладываются API (Р-65):
-# подпись автора стоит только в полном тексте манифеста, не в описании.
-contains "манифест целиком в готовой странице" 'class="hint about-credit"' "$(curl -s $SITE/about/manifest)"
+# «О проекте» — ветвь сущностей; прежний адрес манифеста сохраняет постоянную ссылку.
+check "раздел «О проекте» доступен" 200 "$(code $SITE/about)"
+check "старый адрес манифеста ведёт на сущность" "301 https://2vhutemas.ru/entities/about-manifest" \
+  "$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" $SITE/about/manifest)"
 # Метрика (Р-66): счётчик в общем шаблоне — и на главной, и в готовой странице от API.
 contains "счётчик Метрики на главной" 'mc.yandex.ru/metrika/tag.js?id=108525511' "$(curl -s $SITE/)"
 contains "счётчик Метрики на странице раздела" 'mc.yandex.ru/metrika/tag.js?id=108525511' "$(curl -s $SITE/objects)"
