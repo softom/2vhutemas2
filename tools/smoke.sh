@@ -315,7 +315,16 @@ here() { curl -s -o /dev/null -w '%{redirect_url}' "$1" | sed 's#^https\?://[^/]
 # и такая проверка прошла бы, даже если на корне остался он.
 contains "корень отдаёт новый контур" "/assets/index-" "$(curl -s $SITE/)"
 contains "ссылка на запись открывается" "/assets/index-" "$(curl -s $SITE/entities/42)"
-contains "значок вкладки на месте" "<svg" "$(curl -s $SITE/favicon.svg)"
+check "значок вкладки на месте" "image/vnd.microsoft.icon" "$(curl -s -o /dev/null -w '%{content_type}' $SITE/favicon.ico)"
+# Клиент весит полтора мегабайта: без сжатия сайт выглядит незагружающимся.
+ASSET=$(curl -s $SITE/ | grep -o "/assets/index-[A-Za-z0-9_-]*\.js" | head -1)
+# Сравниваем вес: curl на сервере старый и про content_encoding не знает,
+# а вдвое меньший ответ ни с чем не спутаешь.
+PLAIN=$(curl -s -o /dev/null -H 'Accept-Encoding: identity' -w '%{size_download}' $SITE$ASSET)
+GZIP=$(curl -s -o /dev/null -H 'Accept-Encoding: gzip' -w '%{size_download}' $SITE$ASSET)
+SMALLER=нет
+[ "${GZIP:-0}" -gt 0 ] && [ "${PLAIN:-0}" -gt 0 ] && [ "$GZIP" -lt $((PLAIN / 2)) ] && SMALLER=да
+check "клиент отдаётся сжатым" "да" "$SMALLER"
 contains "прежний сайт под /old" "Архитектурный таймлайн" "$(curl -s $SITE/old/)"
 check "прежняя страница ведёт под /old" "/old/praktika-graph.html" "$(here $SITE/praktika-graph.html)"
 check "прежний адрес /new ведёт на корень" "/lectures" "$(here $SITE/new/lectures)"
