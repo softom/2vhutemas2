@@ -25,8 +25,14 @@ import {
   site,
   summary,
 } from "../lib/site.ts";
-import { type CardValue, loadPublicCard, type PublicCard, resolveEntity } from "../lib/publicCard.ts";
-import { blocks as blocksHtml, firstParagraph } from "../lib/blocksHtml.ts";
+import {
+  type CardValue,
+  loadPublicCard,
+  type PublicCard,
+  type PublicImage,
+  resolveEntity,
+} from "../lib/publicCard.ts";
+import { blocks as blocksHtml, figureHtml, firstParagraph } from "../lib/blocksHtml.ts";
 
 export const pages = new Hono<AppEnv>();
 
@@ -365,6 +371,22 @@ function schemaTypes(card: PublicCard): string[] {
   return ["CreativeWork"];
 }
 
+function imageLd(image: PublicImage) {
+  const data: Record<string, unknown> = {
+    "@type": "ImageObject",
+    contentUrl: mediaUrl(image.asset_id),
+    url: mediaUrl(image.asset_id),
+  };
+  if (image.caption) data.caption = image.caption;
+  if (image.author) {
+    data.creator = { "@type": "Person", name: image.author };
+    data.creditText = image.author;
+  }
+  if (image.source_url && /^https?:/i.test(image.source_url)) data.isBasedOn = image.source_url;
+  else if (image.source) data.isBasedOn = image.source;
+  return data;
+}
+
 const CREATOR_ROLES = new Set(["architect", "engineer", "author"]);
 
 function cardLd(card: PublicCard, description: string, authors: string[]) {
@@ -385,7 +407,9 @@ function cardLd(card: PublicCard, description: string, authors: string[]) {
   const alternate = [card.title_original, card.title_en, card.title_la].filter(Boolean);
   if (alternate.length > 0) data.alternateName = alternate;
   if (description) data.description = description;
-  if (card.media[0]) data.image = card.media.slice(0, 5).map((m) => mediaUrl(m.asset_id));
+  // Картинка в разметке несёт ту же подпись, что и на странице (Р-68):
+  // поисковик, показывая её, знает, кому она принадлежит и откуда взята.
+  if (card.media[0]) data.image = card.media.slice(0, 5).map(imageLd);
   if (card.published_at) data.datePublished = new Date(card.published_at).toISOString();
   const links = sameAs(card);
   if (links.length > 0) data.sameAs = links;
@@ -491,9 +515,9 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   if (card.media.length > 0) {
     parts.push(
       `<h2>Изображения</h2>${
+        // Изображение — цитата (Р-68): под каждым автор и источник.
         card.media.map((m) =>
-          `<figure><img src="${e(mediaUrl(m.asset_id, "thumbnail"))}" alt="${e(m.caption ?? card.title_ru)}" loading="lazy">` +
-          (m.caption ? `<figcaption>${e(m.caption)}</figcaption>` : "") + `</figure>`
+          figureHtml(mediaUrl(m.asset_id, "thumbnail"), m.caption ?? card.title_ru, m)
         ).join("")
       }`,
     );

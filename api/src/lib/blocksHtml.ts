@@ -16,8 +16,37 @@ export interface RefTarget {
 export interface RenderContext {
   /** Опубликованные записи, на которые ссылается текст: номер → адрес. */
   entities: Map<number, RefTarget>;
-  /** Файлы, которые можно показать без входа. */
-  publicAssets: Set<string>;
+  /** Файлы, которые можно показать без входа, с автором и источником. */
+  publicAssets: Map<string, Attribution>;
+}
+
+/** Подпись изображения-цитаты (Р-68): кому приписать и откуда взято. */
+export interface Attribution {
+  author: string | null;
+  source: string | null;
+  source_url: string | null;
+}
+
+/** «Автор · Источник»; источник — ссылкой наружу, если адрес известен. */
+export function creditHtml(credit: Attribution): string {
+  const parts: string[] = [];
+  if (credit.author) parts.push(escapeHtml(credit.author));
+  const url = safeHref(credit.source_url);
+  const label = escapeHtml(credit.source || "источник");
+  if (url && /^https?:/i.test(url)) {
+    parts.push(`<a href="${escapeHtml(url)}" rel="noopener">${label}</a>`);
+  } else if (credit.source) {
+    parts.push(label);
+  }
+  return parts.join(" · ");
+}
+
+/** Изображение с подписью и обязательной строкой «Автор · Источник». */
+export function figureHtml(src: string, caption: string, credit: Attribution | null): string {
+  const alt = escapeHtml(caption);
+  const lines = [caption ? alt : "", credit ? creditHtml(credit) : ""].filter(Boolean);
+  return `<figure><img src="${escapeHtml(src)}" alt="${alt}" loading="lazy">` +
+    (lines.length ? `<figcaption>${lines.join("<br>")}</figcaption>` : "") + `</figure>`;
 }
 
 interface Inline {
@@ -83,12 +112,6 @@ function tableHtml(content: unknown, ctx: RenderContext): string {
   return body ? `<table>${body}</table>` : "";
 }
 
-function figure(src: string, caption: string): string {
-  const alt = escapeHtml(caption);
-  return `<figure><img src="${escapeHtml(src)}" alt="${alt}" loading="lazy">` +
-    (caption ? `<figcaption>${alt}</figcaption>` : "") + `</figure>`;
-}
-
 function block(item: Block, ctx: RenderContext): string {
   const props = item.props ?? {};
   const children = item.children?.length ? blocks(item.children, ctx) : "";
@@ -115,12 +138,15 @@ function block(item: Block, ctx: RenderContext): string {
     case "mediaImage": {
       const assetId = String(props.assetId ?? "");
       const caption = String(props.caption ?? "");
-      if (ctx.publicAssets.has(assetId)) return figure(mediaUrl(assetId), caption);
+      const credit = ctx.publicAssets.get(assetId);
+      if (credit) return figureHtml(mediaUrl(assetId), caption, credit);
       return caption ? `<p>${escapeHtml(caption)}</p>` : "";
     }
     case "image": {
-      const src = safeHref(props.url);
-      return src ? figure(src, String(props.caption ?? "")) : "";
+      // Внешняя картинка без автора и источника — не цитата (Р-68):
+      // показываем только подпись, если она есть.
+      const caption = String(props.caption ?? "");
+      return caption ? `<p>${escapeHtml(caption)}</p>` : "";
     }
     default: {
       const text = inline(item.content, ctx);

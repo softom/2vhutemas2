@@ -75,7 +75,7 @@ export interface PublicCard {
   modified_at: string;
   values: CardValue[];
   tags: string[];
-  media: { asset_id: string; caption: string | null }[];
+  media: PublicImage[];
   document: { body_json: unknown } | null;
   links: {
     other_id: number;
@@ -99,8 +99,23 @@ export interface PublicCard {
   authors: string[];
   /** Опубликованные записи, упомянутые в тексте: номер → адрес. */
   refs: Map<number, RefTarget>;
-  /** Файлы из текста, которые можно показать гостю. */
-  publicAssets: Set<string>;
+  /** Файлы из текста, которые можно показать гостю, с их подписью. */
+  publicAssets: Map<string, PublicImage>;
+}
+
+/**
+ * Открытое изображение с обязательной подписью (Р-68): показываем по праву
+ * цитирования в учебных целях, поэтому автор и источник идут всюду, где идёт
+ * картинка, — в подписи под ней и в разметке schema.org.
+ */
+export interface PublicImage {
+  asset_id: string;
+  caption: string | null;
+  /** Автор произведения или съёмки, иначе правообладатель. */
+  author: string | null;
+  /** Подпись из источника или место хранения. */
+  source: string | null;
+  source_url: string | null;
 }
 
 /** Опубликованная запись целиком; черновик и архив гостю не существуют. */
@@ -141,9 +156,13 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
   `;
 
   // Только открытые и опубликованные файлы: закрытый файл гостю не отдаётся,
-  // и ссылка на него в разметке вела бы в 404.
-  const media = await sql<{ asset_id: string; caption: string | null }>`
-    select a.asset_id, ma.caption_ru as caption
+  // и ссылка на него в разметке вела бы в 404. Открытым файл бывает только
+  // с автором и источником (Р-68) — второго условия здесь не нужно.
+  const media = await sql<PublicImage>`
+    select a.asset_id, ma.caption_ru as caption,
+           coalesce(nullif(ma.author, ''), nullif(ma.credit, '')) as author,
+           coalesce(nullif(ma.original_caption, ''), nullif(ma.holder, '')) as source,
+           nullif(ma.source_url, '') as source_url
       from app.attachments a
       join app.targets t on t.id = a.target_id
       join app.media_assets ma on ma.id = a.asset_id
@@ -214,7 +233,7 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
 
   // Ссылки из текста — только на опубликованное; прочее остаётся словами.
   const refs = new Map<number, RefTarget>();
-  const publicAssets = new Set<string>(media.map((m) => m.asset_id));
+  const publicAssets = new Map<string, PublicImage>(media.map((m) => [m.asset_id, m]));
   if (document) {
     const ids = [...new Set(extractRefs(document.body_json).map((ref) => ref.entityId))];
     if (ids.length > 0) {
@@ -226,12 +245,16 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
     }
     const assetIds = collectAssets(document.body_json);
     if (assetIds.length > 0) {
-      const open = await sql<{ id: string }>`
-        select id from app.media_assets
-         where id = any(${assetIds}::uuid[]) and is_published and visibility = 'public'
-           and archived_at is null
+      const open = await sql<PublicImage>`
+        select ma.id as asset_id, ma.caption_ru as caption,
+               coalesce(nullif(ma.author, ''), nullif(ma.credit, '')) as author,
+               coalesce(nullif(ma.original_caption, ''), nullif(ma.holder, '')) as source,
+               nullif(ma.source_url, '') as source_url
+          from app.media_assets ma
+         where ma.id = any(${assetIds}::uuid[]) and ma.is_published
+           and ma.visibility = 'public' and ma.archived_at is null
       `;
-      for (const row of open) publicAssets.add(row.id);
+      for (const row of open) publicAssets.set(row.asset_id, row);
     }
   }
 
