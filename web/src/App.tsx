@@ -2,17 +2,17 @@
  * Каркас интерфейса нового контура: навигация, вход и экраны этапа 1.
  * Интерфейс на русском, отдельного слоя перевода нет (решение Р-18).
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link, Route, Routes, useLocation, useNavigationType } from "react-router-dom";
 import { useScrollMemory } from "./ui/scrollMemory";
 import { api, supabase } from "./api";
 import { Catalog } from "./pages/Catalog";
-import { EntityPage } from "./pages/EntityPage";
-import { EntityEditor } from "./pages/EntityEditor";
+const EntityPage = lazy(() => import("./pages/EntityPage").then((m) => ({ default: m.EntityPage })));
+const EntityEditor = lazy(() => import("./pages/EntityEditor").then((m) => ({ default: m.EntityEditor })));
 import { Lectures } from "./pages/Lectures";
-import { About } from "./pages/About";
-import { MediaLibrary } from "./pages/MediaLibrary";
-import { Parameters } from "./pages/Parameters";
+const About = lazy(() => import("./pages/About").then((m) => ({ default: m.About })));
+const MediaLibrary = lazy(() => import("./pages/MediaLibrary").then((m) => ({ default: m.MediaLibrary })));
+const Parameters = lazy(() => import("./pages/Parameters").then((m) => ({ default: m.Parameters })));
 import { Login } from "./pages/Login";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { Splash } from "./ui/Splash";
@@ -209,6 +209,7 @@ export function App() {
 
       <main>
         <ErrorBoundary key={location.pathname}>
+        <Suspense fallback={<p className="notice">Загружаем раздел…</p>}>
         <Routes>
           <Route path="/" element={<Catalog canCreate={can("create_delete")} />} />
           <Route
@@ -246,6 +247,7 @@ export function App() {
               сервер отвечает на него 404, и страница говорит то же (Р-65). */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
         </ErrorBoundary>
       </main>
 

@@ -1,0 +1,62 @@
+const { chromium } = require('C:/Users/tigra/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+const origin = 'https://2vhutemas.ru';
+(async () => {
+  const browser = await chromium.launch({ headless: true, executablePath: 'C:/Users/tigra/AppData/Local/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-win64/chrome-headless-shell.exe' });
+  try {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    const results = [];
+    for (const slug of ['taipei-performing-arts-center', 'panteon-rim', 'national-taichung-theater']) {
+      const requests = [];
+      const record = request => { if (request.url().startsWith(origin)) requests.push({ url: request.url(), type: request.resourceType() }); };
+      page.on('request', record);
+      const start = Date.now();
+      const response = await page.goto(`${origin}/entities/${slug}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      await page.locator('dialog.reader-lightbox').waitFor({ state: 'attached' });
+      const readyMs = Date.now() - start;
+      assert.equal(response.status(), 200);
+      assert.equal(await page.locator('[data-public-page]').count(), 1);
+      assert.equal(requests.filter(r => /appMount|entityBlocks|EntityEditor|EntityPage/.test(r.url)).length, 0);
+      assert.equal(requests.filter(r => /\/api\/v1\/(entities|documents)/.test(r.url)).length, 0);
+      results.push({ slug, readyMs, scripts: requests.filter(r => r.type === 'script').map(r => r.url) });
+      page.off('request', record);
+    }
+    await page.locator('[data-gallery]').first().click();
+    assert.equal(await page.locator('dialog').evaluate(el => el.open), true);
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('dialog').evaluate(el => el.open), false);
+    await page.locator('[data-copy="cite-gost"]').click();
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), await page.locator('#cite-gost').innerText());
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    fs.mkdirSync('backups/reader-check', { recursive: true });
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({ path: 'backups/reader-check/mobile.png' });
+    const noJS = await browser.newContext({ javaScriptEnabled: false });
+    const plain = await noJS.newPage();
+    await plain.goto(`${origin}/entities/taipei-performing-arts-center`, { waitUntil: 'domcontentloaded' });
+    assert.match(await plain.locator('h1').innerText(), /Тайбэй/);
+    assert.ok(await plain.locator('[data-gallery]').count());
+    await noJS.close();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`${origin}/objects`, { waitUntil: 'domcontentloaded' });
+    await page.locator('a.card').first().waitFor({ timeout: 45000 });
+    await page.locator('a.card').first().click();
+    await page.locator('[data-public-page]').waitFor();
+    await page.locator('.reader-actions a').click();
+    await page.locator('input').first().waitFor({ timeout: 45000 });
+    assert.match(page.url(), /\/entities\/\d+\/edit/);
+    assert.equal(await page.locator('[data-public-page]').count(), 0);
+    await page.goto(`${origin}/login`, { waitUntil: 'domcontentloaded' });
+    await page.locator('input[type=password]').waitFor();
+    assert.deepEqual(errors, []);
+    const output = { results, gallery: true, citation: true, mobile: true, noJS: true, catalogNavigation: true, editor: true, login: true, errors };
+    fs.writeFileSync('backups/reader-check/results.json', JSON.stringify(output, null, 2));
+    console.log(JSON.stringify(output, null, 2));
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exit(1); });

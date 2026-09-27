@@ -45,7 +45,9 @@ export function creditHtml(credit: Attribution): string {
 export function figureHtml(src: string, caption: string, credit: Attribution | null): string {
   const alt = escapeHtml(caption);
   const lines = [caption ? alt : "", credit ? creditHtml(credit) : ""].filter(Boolean);
-  return `<figure><img src="${escapeHtml(src)}" alt="${alt}" loading="lazy">` +
+  const full = new URL(src);
+  full.searchParams.set("variant", "screen");
+  return `<figure><a data-gallery href="${escapeHtml(full.href)}"><img src="${escapeHtml(src)}" alt="${alt}" loading="lazy" decoding="async"></a>` +
     (lines.length ? `<figcaption>${lines.join("<br>")}</figcaption>` : "") + `</figure>`;
 }
 

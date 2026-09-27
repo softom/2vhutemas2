@@ -1,13 +1,14 @@
-import React from "react";
-import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import { App } from "./App";
+// Готовое публичное содержание не заменяется приложением редактора.
 import "./styles.css";
+import { enhancePublicPage } from "./publicPage";
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </React.StrictMode>,
-);
+if (document.querySelector("[data-public-page]")) {
+  enhancePublicPage();
+} else {
+  import("./appMount").catch(() => {
+    const message = document.createElement("p");
+    message.className = "notice";
+    message.textContent = "Не удалось загрузить приложение. Обновите страницу, чтобы повторить.";
+    document.getElementById("root")?.append(message);
+  });
+}

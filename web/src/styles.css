@@ -346,3 +346,42 @@ button:disabled { opacity: .5; cursor: default; }
 /* Файл ждёт автора и источника: задача редактора, не ошибка (Р-68). */
 .needs-links { color: var(--accent); }
 .notice .linklike { display: inline; width: auto; color: var(--accent); text-decoration: underline; }
+
+/* Готовая карточка: общий облик сайта без стилей и рантайма редактора. */
+.ssr a { color: var(--accent); }
+.ssr .brand { color: var(--text); }
+.public-card { overflow-wrap: anywhere; }
+.reader-actions { font-size: 14px; margin: 10px 0 22px; }
+.public-card dl { display: grid; grid-template-columns: minmax(120px, 220px) 1fr; gap: 8px 20px; }
+.public-card dt { color: var(--muted); }
+.public-card dd { margin: 0; }
+.public-document { background: #fff; color: #171717; border-radius: var(--radius); padding: 24px; line-height: 1.7; }
+.public-document p { max-width: 75ch; }
+.public-card figure { margin: 16px 0; }
+.public-card figure img { display: block; width: 100%; max-height: 75vh; object-fit: contain; border-radius: 8px; }
+.public-card figcaption { font-size: 13px; margin-top: 8px; }
+.public-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 22px; }
+.public-gallery img { aspect-ratio: 4 / 3; background: var(--surface); }
+.public-card table { display: block; overflow-x: auto; border-collapse: collapse; }
+.public-card td { padding: 8px; border: 1px solid #aaa; }
+.public-card pre { overflow-x: auto; }
+.reader-lightbox { width: min(1200px, 96vw); max-height: 94vh; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); padding: 16px; }
+.reader-lightbox::backdrop { background: #000d; }
+.reader-lightbox-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.reader-lightbox figure { margin: 16px 0 0; }
+.reader-lightbox img { display: block; width: 100%; max-height: 70vh; object-fit: contain; }
+.reader-lightbox figcaption { margin-top: 12px; }
+.reader-lightbox a { color: var(--accent); }
+@media (max-width: 640px) {
+  .public-card dl { grid-template-columns: 1fr; gap: 3px; }
+  .public-card dd { margin-bottom: 10px; }
+  .public-document { padding: 16px; }
+}
+
+.ssr[data-public-page] { max-width: none; margin: 0; padding: 0; }
+
+@media (max-width: 640px) {
+  .ssr .top { gap: 12px; }
+  .ssr .top nav { order: 3; flex-basis: 100%; gap: 10px; }
+  .ssr .top > a:last-child { margin-left: auto; }
+}

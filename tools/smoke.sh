@@ -382,26 +382,32 @@ contains "прежний сайт закрыт от индекса" 'noindex' "$
 
 echo "── Уборка"
 docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -q -c "
+create temporary table smoke_document_ids as
+select ${DID}::bigint as id
+union
+select a.document_id from app.attachments a join app.targets t on t.id = a.target_id
+ where a.document_id is not null and (t.entity_id in ($EID,$EID2) or t.link_id in
+   (select id from app.links where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2)));
 delete from app.attachments a using app.targets t
  where a.target_id = t.id and (t.entity_id in ($EID,$EID2) or t.link_id in
    (select id from app.links where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2)));
 delete from app.document_entity_refs r using app.revisions rev, app.materials m
  where r.revision_id = rev.id and rev.material_id = m.id
-   and (m.entity_id in ($EID,$EID2) or m.document_id = $DID);
+   and (m.entity_id in ($EID,$EID2) or m.document_id in (select id from smoke_document_ids));
 delete from app.revision_reviews rr using app.revisions r, app.materials m
- where rr.revision_id = r.id and r.material_id = m.id and (m.entity_id in ($EID,$EID2) or m.document_id = $DID);
+ where rr.revision_id = r.id and r.material_id = m.id and (m.entity_id in ($EID,$EID2) or m.document_id in (select id from smoke_document_ids));
 delete from app.entity_tags where entity_id in ($EID,$EID2);
 delete from app.media_tags where asset_id = '$AID';
 delete from app.revisions rev using app.materials m where rev.material_id = m.id
-   and (m.entity_id in ($EID,$EID2) or m.document_id = $DID or m.asset_id = '$AID'
+   and (m.entity_id in ($EID,$EID2) or m.document_id in (select id from smoke_document_ids) or m.asset_id = '$AID'
         or m.link_id in (select id from app.links where from_entity_id in ($EID,$EID2)));
 delete from app.material_credits mc using app.materials m where mc.material_id = m.id
-   and (m.entity_id in ($EID,$EID2) or m.document_id = $DID or m.asset_id = '$AID'
+   and (m.entity_id in ($EID,$EID2) or m.document_id in (select id from smoke_document_ids) or m.asset_id = '$AID'
         or m.link_id in (select id from app.links where from_entity_id in ($EID,$EID2)));
-delete from app.materials where entity_id in ($EID,$EID2) or document_id = $DID
+delete from app.materials where entity_id in ($EID,$EID2) or document_id in (select id from smoke_document_ids)
    or asset_id = '$AID' or link_id in (select id from app.links where from_entity_id in ($EID,$EID2));
 delete from app.links where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2);
-delete from app.documents where id = $DID or title like 'smoke:%' or title = 'Обоснование связи' and id not in (select document_id from app.attachments where document_id is not null);
+delete from app.documents where id in (select id from smoke_document_ids);
 delete from app.revision_reviews rr using app.revisions r, app.materials m
  where rr.revision_id = r.id and r.material_id = m.id and m.entity_id in ($LID1,$LID2);
 delete from app.revisions rev using app.materials m

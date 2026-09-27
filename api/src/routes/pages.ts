@@ -3,9 +3,9 @@
  *
  * Caddy отдаёт сюда все адреса сайта, которым не нашлось файла сборки.
  * Ответ — та же страница клиента, но с заполненными заголовком, описанием,
- * разметкой schema.org и основным текстом. Клиент, загрузившись, рисует
- * страницу заново поверх этого текста: поисковик и человек без скриптов
- * видят содержание, остальные — привычное приложение.
+ * разметкой schema.org и основным текстом. Публичная карточка сохраняет
+ * этот HTML (Р-69); приложение загружается только для интерактивных разделов
+ * и рабочих экранов.
  *
  * Здесь же служебные файлы: robots.txt, sitemap.xml и ключ IndexNow.
  * Показывается только опубликованное: готовая страница строится без входа,
@@ -62,6 +62,8 @@ interface Page {
   body: string;
   /** Страница только для работы: в поиск её не пускаем. */
   noindex?: boolean;
+  /** Чтение без запуска React и BlockNote. */
+  publicReader?: boolean;
 }
 
 function head(page: Page): string {
@@ -122,7 +124,7 @@ async function render(c: Context<AppEnv>, page: Page) {
     .replace(/<title>[\s\S]*?<\/title>/, head(page))
     .replace(
       '<div id="root"></div>',
-      `<div id="root"><div class="ssr">${page.body}</div></div>`,
+      `<div id="root"><div class="ssr"${page.publicReader ? ' data-public-page="true"' : ""}>${page.body}</div></div>`,
     );
   c.header("cache-control", "no-cache");
   c.header("content-type", "text/html; charset=utf-8");
@@ -136,7 +138,7 @@ const NAV = `<nav><a href="/">Всё</a> · <a href="/objects">Проекты</a
   `<a href="/about">О проекте</a></nav>`;
 
 function layout(inner: string): string {
-  return `<header><a href="/">${escapeHtml(site.name)}</a> ${NAV}</header><main>${inner}</main>`;
+  return `<div class="shell"><header class="top"><a class="brand" href="/">${escapeHtml(site.name)}</a> ${NAV}<a href="/login">Войти</a></header><main>${inner}</main></div>`;
 }
 
 const WEBSITE = {
@@ -324,6 +326,7 @@ async function aboutPage(c: Context<AppEnv>, key: string) {
     status: 200,
     title: `${section.title} — О проекте — ${site.name}`,
     description: summary(section.text),
+    publicReader: key !== "logo",
     canonical: `/about/${key}`,
     body: layout(
       `<h1>О проекте</h1><p>${nav}</p><h2>${section.title}</h2>` +
@@ -518,7 +521,8 @@ function breadcrumbsLd(card: PublicCard) {
 function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<typeof citation>) {
   const e = escapeHtml;
   const parts: string[] = [];
-  parts.push(`<article>`, `<h1>${e(card.title_ru)}</h1>`);
+  parts.push(`<article class="public-card">`, `<h1>${e(card.title_ru)}</h1>`,
+    `<p class="reader-actions"><a href="/entities/${card.id}/edit">Открыть в редакторе</a></p>`);
   const alternate = [card.title_original, card.title_en, card.title_la].filter(Boolean);
   if (alternate.length > 0) parts.push(`<p>${e(alternate.join(" · "))}</p>`);
   parts.push(`<p>${e(card.type_title)}</p>`);
@@ -546,16 +550,16 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     );
   }
 
-  if (descriptionHtml) parts.push(`<h2>Описание</h2>${descriptionHtml}`);
+  if (descriptionHtml) parts.push(`<h2>Описание</h2><div class="public-document">${descriptionHtml}</div>`);
 
   if (card.media.length > 0) {
     parts.push(
-      `<h2>Изображения</h2>${
+      `<h2>Изображения</h2><div class="public-gallery">${
         // Изображение — цитата (Р-68): под каждым автор и источник.
         card.media.map((m) =>
           figureHtml(mediaUrl(m.asset_id, "thumbnail"), m.caption ?? card.title_ru, m)
         ).join("")
-      }`,
+      }</div>`,
     );
   }
 
@@ -585,8 +589,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
 
   parts.push(
     `<h2>Как цитировать</h2>`,
-    `<p><b>ГОСТ Р 7.0.100–2018:</b> ${e(cite.gost)}</p>`,
-    `<p><b>APA:</b> ${e(cite.apa)}</p>`,
+    `<p><b>ГОСТ Р 7.0.100–2018:</b> <span id="cite-gost">${e(cite.gost)}</span></p><button type="button" data-copy="cite-gost">Скопировать ГОСТ</button>`,
+    `<p><b>APA:</b> <span id="cite-apa">${e(cite.apa)}</span></p><button type="button" data-copy="cite-apa">Скопировать APA</button>`,
     `<p>Постоянная ссылка: <a href="${e(cite.url)}">${e(cite.url)}</a></p>`,
     `</article>`,
   );
@@ -623,6 +627,7 @@ pages.get("/entities/:key", async (c) => {
     image: card.media[0] ? mediaUrl(card.media[0].asset_id) : null,
     ogType: root === "who" ? "profile" : "article",
     jsonLd: [cardLd(card, description, card.authors), breadcrumbsLd(card)],
+    publicReader: true,
     body: layout(cardBody(card, descriptionHtml, cite)),
   });
 });
