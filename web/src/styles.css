@@ -385,3 +385,8 @@ button:disabled { opacity: .5; cursor: default; }
   .ssr .top nav { order: 3; flex-basis: 100%; gap: 10px; }
   .ssr .top > a:last-child { margin-left: auto; }
 }
+
+.cite-disclosure { margin-top: 28px; border-top: 1px solid var(--line); padding-top: 12px; }
+.cite-disclosure > summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.cite-disclosure > summary:hover { color: var(--text); }
+.cite-disclosure[open] > summary { margin-bottom: 16px; }

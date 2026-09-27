@@ -239,7 +239,8 @@ function Cite({ citation }: { citation: NonNullable<EntityCard["citation"]> }) {
     ["apa", "APA", citation.apa],
   ];
   return (
-    <section className="cite">
+    <details className="cite cite-disclosure">
+      <summary>Цитировать</summary>
       <h2>Как цитировать</h2>
       {rows.map(([name, title, text]) => (
         <div className="cite-row" key={name}>
@@ -253,7 +254,7 @@ function Cite({ citation }: { citation: NonNullable<EntityCard["citation"]> }) {
       <p className="notice">
         Постоянная ссылка: <a href={citation.url}>{citation.url}</a>
       </p>
-    </section>
+    </details>
   );
 }
 

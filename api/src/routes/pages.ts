@@ -588,11 +588,11 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   }
 
   parts.push(
-    `<h2>Как цитировать</h2>`,
-    `<p><b>ГОСТ Р 7.0.100–2018:</b> <span id="cite-gost">${e(cite.gost)}</span></p><button type="button" data-copy="cite-gost">Скопировать ГОСТ</button>`,
-    `<p><b>APA:</b> <span id="cite-apa">${e(cite.apa)}</span></p><button type="button" data-copy="cite-apa">Скопировать APA</button>`,
+    `<details class="cite-disclosure"><summary>Цитировать</summary><h2>Как цитировать</h2>`,
+    `<p><b>ГОСТ Р 7.0.100–2018:</b> <span id="cite-gost">${e(cite.gost)}</span></p><button type="button" class="ghost" data-copy="cite-gost">Скопировать ГОСТ</button>`,
+    `<p><b>APA:</b> <span id="cite-apa">${e(cite.apa)}</span></p><button type="button" class="ghost" data-copy="cite-apa">Скопировать APA</button>`,
     `<p>Постоянная ссылка: <a href="${e(cite.url)}">${e(cite.url)}</a></p>`,
-    `</article>`,
+    `</details></article>`,
   );
   return parts.join("");
 }
