@@ -340,3 +340,5 @@ button:disabled { opacity: .5; cursor: default; }
 .about blockquote { margin: 16px 0; padding-left: 14px; border-left: 2px solid var(--accent); font-size: 18px; }
 .manifest { max-width: 68ch; padding-left: 22px; margin: 0 0 8px; }
 .manifest li { margin-bottom: 12px; }
+.manifest-text h3 { font-size: 16px; font-weight: 600; margin: 22px 0 6px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
+.manifest-text ul { margin: 0 0 12px; padding-left: 22px; }
