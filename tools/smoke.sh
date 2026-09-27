@@ -353,6 +353,9 @@ contains "sitemap.xml собран" '<urlset' "$(curl -s $SITE/sitemap.xml)"
 check "несуществующая страница — 404" 404 "$(code $SITE/net-takoj-stranicy)"
 check "несуществующая запись — 404" 404 "$(code $SITE/entities/net-takoj-zapisi)"
 contains "главная описана для поисковика" 'rel="canonical" href="https://2vhutemas.ru/"' "$(curl -s $SITE/)"
+# Метрика (Р-66): счётчик в общем шаблоне — и на главной, и в готовой странице от API.
+contains "счётчик Метрики на главной" 'mc.yandex.ru/metrika/tag.js?id=108525511' "$(curl -s $SITE/)"
+contains "счётчик Метрики на странице раздела" 'mc.yandex.ru/metrika/tag.js?id=108525511' "$(curl -s $SITE/objects)"
 contains "прежний сайт закрыт от индекса" 'noindex' "$(curl -s -D - -o /dev/null $SITE/old/ | tr 'A-Z' 'a-z')"
 
 echo "── Уборка"

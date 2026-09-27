@@ -2,8 +2,8 @@
  * Каркас интерфейса нового контура: навигация, вход и экраны этапа 1.
  * Интерфейс на русском, отдельного слоя перевода нет (решение Р-18).
  */
-import { useCallback, useEffect, useState } from "react";
-import { Link, Route, Routes, useLocation } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, Route, Routes, useLocation, useNavigationType } from "react-router-dom";
 import { useScrollMemory } from "./ui/scrollMemory";
 import { api, supabase } from "./api";
 import { Catalog } from "./pages/Catalog";
@@ -29,6 +29,9 @@ export interface Viewer {
  * ведёт сразу к записи (Р-58).
  */
 const ENTRY = globalThis.location.pathname;
+
+/** Счётчик Яндекс.Метрики; сам код счётчика — в index.html (Р-66). */
+const METRIKA_ID = 108525511;
 
 function NotFound() {
   return (
@@ -65,6 +68,27 @@ export function App() {
   useEffect(() => {
     if (!location.pathname.startsWith("/entities/")) document.title = "2ВХУТЕМАС";
   }, [location.pathname]);
+
+  // Метрика (Р-66) сама засчитывает только первую загрузку; переходы внутри
+  // сайта идут без перезагрузки, и о них сообщаем сами. Первый адрес уже
+  // засчитан при загрузке — его пропускаем, иначе вход считался бы дважды.
+  const lastHit = useRef(globalThis.location.href);
+  const navigationType = useNavigationType();
+  useEffect(() => {
+    const url = globalThis.location.href;
+    if (url === lastHit.current) return;
+    const referer = lastHit.current;
+    lastHit.current = url;
+    // Замена адреса без шага в истории — это та же страница под постоянным
+    // адресом (номер записи → слаг, Р-65), а не новый просмотр.
+    if (navigationType === "REPLACE") return;
+    // Название записи карточка ставит после загрузки — даём ей мгновение.
+    const timer = setTimeout(() => {
+      const ym = (globalThis as { ym?: (...args: unknown[]) => void }).ym;
+      ym?.(METRIKA_ID, "hit", url, { referer, title: document.title });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [location.pathname, location.search]);
 
   const refresh = async () => {
     try {
