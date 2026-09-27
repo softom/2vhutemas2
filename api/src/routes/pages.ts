@@ -287,18 +287,47 @@ const ABOUT: Record<string, { title: string; text: string }> = {
 pages.get("/about", (c) => aboutPage(c, "logo"));
 pages.get("/about/:section", (c) => aboutPage(c, c.req.param("section")));
 
+let aboutTexts: { mtime: number; sections: Record<string, string> } | null = null;
+
+/**
+ * Тексты «О проекте», собранные при сборке клиента из тех же компонентов,
+ * что рисует клиент (`web/src/about/prerender.tsx`). Лежат рядом с шаблоном
+ * страницы и перечитываются после каждой сборки. Нет файла — страница
+ * обходится сутью подраздела, а журнал об этом говорит.
+ */
+async function readAboutTexts(c: Context<AppEnv>): Promise<Record<string, string>> {
+  const path = site.indexHtml.replace(/index\.html$/, "prerender/about.json");
+  try {
+    const mtime = (await Deno.stat(path)).mtime?.getTime() ?? 0;
+    if (!aboutTexts || aboutTexts.mtime !== mtime) {
+      aboutTexts = { mtime, sections: JSON.parse(await Deno.readTextFile(path)) };
+    }
+    return aboutTexts.sections;
+  } catch (error) {
+    log("warn", c.get("requestId"), "нет готовых текстов «О проекте»", {
+      path,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {};
+  }
+}
+
 async function aboutPage(c: Context<AppEnv>, key: string) {
   const section = ABOUT[key];
   if (!section) return await notFound(c);
   const nav = Object.entries(ABOUT)
     .map(([k, s]) => `<a href="/about/${k}">${s.title}</a>`).join(" · ");
+  // Полный текст подраздела — тот же, что видит читатель (Р-65); суть из
+  // ABOUT остаётся описанием для выдачи и запасным текстом.
+  const full = (await readAboutTexts(c))[key];
   return await render(c, {
     status: 200,
     title: `${section.title} — О проекте — ${site.name}`,
     description: summary(section.text),
     canonical: `/about/${key}`,
     body: layout(
-      `<h1>О проекте</h1><p>${nav}</p><h2>${section.title}</h2><p>${escapeHtml(section.text)}</p>`,
+      `<h1>О проекте</h1><p>${nav}</p><h2>${section.title}</h2>` +
+        (full ?? `<p>${escapeHtml(section.text)}</p>`),
     ),
   });
 }
@@ -614,6 +643,8 @@ pages.get("/robots.txt", (c) => {
     "Disallow: /entities/*/edit",
     "Disallow: /media",
     "Disallow: /parameters",
+    // Заготовки текстов для готовых страниц — не страницы, в выдаче им не место.
+    "Disallow: /prerender/",
     // /old/ не закрываем здесь: запрет обхода помешал бы поисковику увидеть
     // noindex, который Caddy ставит прежнему сайту, и старые страницы
     // остались бы в выдаче голыми адресами.
