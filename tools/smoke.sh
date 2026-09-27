@@ -113,10 +113,17 @@ check "загрузка файла" "да" "$([ -n "$AID" ] && echo да || echo
 contains "превью готово" '"thumbnail"' "$A"
 check "приватный файл гостю" 404 "$(code "$API/media/$AID/file?variant=thumbnail")"
 check "файл под входом" 200 "$(code -H "$AUTH" "$API/media/$AID/file?variant=thumbnail")"
-# Цитирование в учебных целях: без автора и источника файл публичным не станет (Р-67).
-check "публичным без ссылок нельзя" 400 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"public"}' $API/media/$AID)"
-check "автора мало, нужен источник" 400 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"public","author":"smoke: автор"}' $API/media/$AID)"
-check "со ссылками публичным можно" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"public","author":"smoke: автор","source_url":"https://example.org/smoke"}' $API/media/$AID)"
+# Ссылки на автора и источник — задача редактора, а не запрет (Р-68):
+# файл публикуется и без них, но попадает в список ждущих ссылок.
+check "файл без ссылок публикуется" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"public"}' $API/media/$AID)"
+# Сужаем поиском: список ждущих ссылок длинный, и наш файл, самый свежий,
+# в первую страницу не попадает.
+needs() { curl -s -H "$AUTH" "$API/media?needs=attribution&q=smoke" | python3 -c "
+import json,sys
+print(str(any(i['id'] == '$AID' for i in json.load(sys.stdin)['items'])).lower())"; }
+check "файл без ссылок ждёт их" true "$(needs)"
+check "со ссылками задача снимается" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"public","author":"smoke: автор","source_url":"https://example.org/smoke"}' $API/media/$AID)"
+check "заполненный файл задачи не ждёт" false "$(needs)"
 contains "изображения закрыты от картиночного поиска" "noimageindex" "$(curl -s -D - -o /dev/null -H "$AUTH" "$API/media/$AID/file?variant=thumbnail")"
 code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"private"}' $API/media/$AID >/dev/null
 

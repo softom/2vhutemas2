@@ -111,6 +111,8 @@ export interface MediaAsset {
   caption_ru: string | null;
   credit: string | null;
   visibility: string;
+  /** Не указано, кому приписать или откуда взято: задача редактора (Р-68). */
+  needs_attribution?: boolean;
   files: Record<string, { status: string; width: number | null; height: number | null }> | null;
 }
 
@@ -381,13 +383,17 @@ export const api = {
   /** Обмен токена на куку: без неё браузер не покажет приватные файлы. */
   openMediaSession: () => request<{ expires_at: string }>("/session", { method: "POST" }),
 
-  media: (params: { q?: string; cursor?: string } = {}) => {
+  media: (params: { q?: string; cursor?: string; needsAttribution?: boolean } = {}) => {
     const search = new URLSearchParams();
     if (params.q) search.set("q", params.q);
     if (params.cursor) search.set("cursor", params.cursor);
-    return request<{ items: MediaAsset[]; next_cursor: string | null }>(
-      `/media?${search.toString()}`,
-    );
+    if (params.needsAttribution) search.set("needs", "attribution");
+    return request<{
+      items: MediaAsset[];
+      /** Сколько файлов ждут ссылок — задача видна числом (Р-68). */
+      needs_attribution: number;
+      next_cursor: string | null;
+    }>(`/media?${search.toString()}`);
   },
   attachMedia: (body: unknown) =>
     request<{ attachment_id: number }>("/media/attachments", {

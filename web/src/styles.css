@@ -342,3 +342,7 @@ button:disabled { opacity: .5; cursor: default; }
 .manifest li { margin-bottom: 12px; }
 .manifest-text h3 { font-size: 16px; font-weight: 600; margin: 22px 0 6px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
 .manifest-text ul { margin: 0 0 12px; padding-left: 22px; }
+
+/* Файл ждёт автора и источника: задача редактора, не ошибка (Р-68). */
+.needs-links { color: var(--accent); }
+.notice .linklike { display: inline; width: auto; color: var(--accent); text-decoration: underline; }

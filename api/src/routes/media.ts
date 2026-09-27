@@ -60,6 +60,9 @@ media.get("/", async (c: Context<AppEnv>) => {
   const drafts = canSeeDrafts(principal);
   const search = c.req.query("q")?.trim() || null;
   const pattern = search ? `%${search}%` : null;
+  // Ссылки — задача, а не запрет (Р-68): медиатека умеет показать отдельно те
+  // файлы, у которых нечем подписать автора или источник.
+  const onlyNeedy = c.req.query("needs") === "attribution";
 
   const rows = await sql<Record<string, unknown>>`
     select a.id, a.asset_class, a.caption_ru, a.credit, a.visibility, a.is_published,
@@ -72,6 +75,7 @@ media.get("/", async (c: Context<AppEnv>) => {
             from app.media_files f where f.asset_id = a.id and f.is_current) as files,
            (select k.code from app.media_kinds k where k.id = a.kind_id) as kind,
            a.author, a.holder, a.created_year, a.description,
+           app.media_needs_attribution(a) as needs_attribution,
            coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
                         order by t.title)
                      from app.media_tags mt join app.tags t on t.id = mt.tag_id
@@ -80,6 +84,7 @@ media.get("/", async (c: Context<AppEnv>) => {
     from app.media_assets a
     where a.archived_at is null
       and (${drafts} or a.is_published)
+      and (not ${onlyNeedy} or app.media_needs_attribution(a))
       and (${after}::bigint is null or extract(epoch from a.created_at)::bigint > ${after})
       and (${pattern}::text is null
            or a.caption_ru ilike ${pattern} or a.description ilike ${pattern}
@@ -91,36 +96,19 @@ media.get("/", async (c: Context<AppEnv>) => {
   `;
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
+  // Сколько файлов ждут ссылок — чтобы задача была видна числом, а не
+  // вспоминалась. Считаем только для тех, кто правит.
+  const needy = drafts
+    ? await sql<{ n: number }>`
+        select count(*)::int as n from app.media_assets a
+         where a.archived_at is null and app.media_needs_attribution(a)`
+    : [{ n: 0 }];
   return c.json({
     items,
+    needs_attribution: needy[0].n,
     next_cursor: hasMore ? encodeCursor(Number(items[items.length - 1].cursor_key)) : null,
   });
 });
-
-/**
- * Можно ли показывать файл посторонним (решение Р-67).
- *
- * «Чужие» изображения показываем по праву цитирования в учебных целях, а оно
- * требует указать автора и источник. Поэтому правило не в дисциплине
- * редактора, а в коде: нет ссылок — файл остаётся закрытым, и никакой
- * галочкой это не обойти.
- *
- * Автор или правообладатель — кому приписать; источник, подпись источника или
- * место хранения — откуда взято.
- */
-interface Attribution {
-  author?: string | null;
-  credit?: string | null;
-  source_url?: string | null;
-  original_caption?: string | null;
-  holder?: string | null;
-}
-
-export function citable(a: Attribution): boolean {
-  const filled = (...values: (string | null | undefined)[]) =>
-    values.some((v) => typeof v === "string" && v.trim() !== "");
-  return filled(a.author, a.credit) && filled(a.source_url, a.original_caption, a.holder);
-}
 
 /** Загрузка оригинала. Файл передаёт клиент; сервер не скачивает произвольные адреса. */
 media.post("/", async (c: Context<AppEnv>) => {
@@ -133,20 +121,6 @@ media.post("/", async (c: Context<AppEnv>) => {
 
   const mimeType = file.type || "application/octet-stream";
   checkUpload(mimeType, file.size);
-
-  const wantsPublic = String(form.get("visibility") ?? "private") === "public";
-  if (wantsPublic && !citable({
-    author: text(form, "author"),
-    credit: text(form, "credit"),
-    source_url: text(form, "source_url"),
-    original_caption: text(form, "original_caption"),
-    holder: text(form, "holder"),
-  })) {
-    throw new ApiError(
-      "validation_failed",
-      "Публичным файл становится только с указанием автора и источника (Р-67)",
-    );
-  }
 
   const stored = await storeOriginal(file.stream(), mimeType, file.name);
 
@@ -423,27 +397,6 @@ media.patch("/:id", async (c: Context<AppEnv>) => {
   const assetId = c.req.param("id");
   const input = await c.req.json<Record<string, unknown>>();
   const value = (name: string) => (input[name] ?? null) as string | null;
-
-  // Считаем не то, что прислали, а то, что получится: часть полей могла быть
-  // заполнена раньше, а часть присылают сейчас.
-  const current = await sql<Attribution & { visibility: string }>`
-    select author, credit, source_url, original_caption, holder, visibility
-      from app.media_assets where id = ${assetId} and archived_at is null
-  `;
-  if (current.length === 0) throw new ApiError("not_found", "Файл не найден");
-  const after = {
-    author: value("author") ?? current[0].author,
-    credit: value("credit") ?? current[0].credit,
-    source_url: value("source_url") ?? current[0].source_url,
-    original_caption: value("original_caption") ?? current[0].original_caption,
-    holder: value("holder") ?? current[0].holder,
-  };
-  if ((value("visibility") ?? current[0].visibility) === "public" && !citable(after)) {
-    throw new ApiError(
-      "validation_failed",
-      "Публичным файл становится только с указанием автора и источника (Р-67)",
-    );
-  }
 
   await transaction(principal.contributorId, async (tx) => {
     const updated = await tx`
