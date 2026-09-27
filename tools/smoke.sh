@@ -343,7 +343,9 @@ here() { curl -s -o /dev/null -w '%{redirect_url}' "$1" | sed 's#^https\?://[^/]
 # Ищем имя файла сборки: пустой <div id="root"> есть и у старого сайта,
 # и такая проверка прошла бы, даже если на корне остался он.
 contains "корень отдаёт новый контур" "/assets/index-" "$(curl -s $SITE/)"
-contains "ссылка на запись открывается" "/assets/index-" "$(curl -s $SITE/entities/42)"
+# Номер записи ведёт на слаг (Р-65), поэтому идём за перенаправлением:
+# проверяем, что ссылка на запись в итоге открывает страницу, а не обрывается.
+contains "ссылка на запись открывается" "/assets/index-" "$(curl -sL $SITE/entities/42)"
 check "значок вкладки на месте" "image/vnd.microsoft.icon" "$(curl -s -o /dev/null -w '%{content_type}' $SITE/favicon.ico)"
 # Клиент весит полтора мегабайта: без сжатия сайт выглядит незагружающимся.
 ASSET=$(curl -s $SITE/ | grep -o "/assets/index-[A-Za-z0-9_-]*\.js" | head -1)
