@@ -13,7 +13,9 @@ import type { Context } from "hono";
 import { sql, transaction, type Tx } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
 import { can, require as requirePermission } from "../lib/auth.ts";
-import type { AppEnv } from "../lib/http.ts";
+import { type AppEnv, log } from "../lib/http.ts";
+import { entityPath } from "../lib/site.ts";
+import { notifyIndexNow } from "./pages.ts";
 
 export const materials = new Hono<AppEnv>();
 
@@ -35,6 +37,30 @@ async function loadMaterial(tx: Tx, materialId: string): Promise<MaterialRow> {
   `;
   if (rows.length === 0) throw new ApiError("not_found", "Материал не найден");
   return rows[0];
+}
+
+/**
+ * После публикации сообщаем поисковикам адрес записи (IndexNow, Р-65):
+ * самой записи или той, чьим описанием служит опубликованный текст.
+ * Неопубликованная запись в список не попадает — её адрес ответил бы 404.
+ */
+async function announce(requestId: string, materialId: string | undefined) {
+  if (!materialId) return;
+  try {
+    const rows = await sql<{ slug: string }>`
+      select distinct e.slug
+        from app.materials m
+        left join app.attachments a on a.document_id = m.document_id
+        left join app.targets t on t.id = a.target_id
+        join app.entities e on e.id = coalesce(m.entity_id, t.entity_id)
+       where m.id = ${materialId} and e.is_published
+    `;
+    notifyIndexNow(requestId, rows.map((row) => entityPath(row.slug)));
+  } catch (error) {
+    log("warn", requestId, "indexnow: адрес записи не найден", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 /** Состояние материала: что опубликовано, что предложено, как рассматривали. */
@@ -97,6 +123,7 @@ materials.post("/:id/publish", async (c: Context<AppEnv>) => {
     return { material_id: materialId, published_revision_id: revisionId, status: "published" };
   });
 
+  await announce(c.get("requestId"), materialId);
   return c.json(result);
 });
 
@@ -158,6 +185,7 @@ materials.post("/:id/review", async (c: Context<AppEnv>) => {
     return { material_id: materialId, decision: input.decision };
   });
 
+  if (input.decision === "approved") await announce(c.get("requestId"), materialId);
   return c.json(result);
 });
 

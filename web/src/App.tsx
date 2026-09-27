@@ -3,7 +3,7 @@
  * Интерфейс на русском, отдельного слоя перевода нет (решение Р-18).
  */
 import { useCallback, useEffect, useState } from "react";
-import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Link, Route, Routes, useLocation } from "react-router-dom";
 import { useScrollMemory } from "./ui/scrollMemory";
 import { api, supabase } from "./api";
 import { Catalog } from "./pages/Catalog";
@@ -30,6 +30,18 @@ export interface Viewer {
  */
 const ENTRY = globalThis.location.pathname;
 
+function NotFound() {
+  return (
+    <section>
+      <h1>Страница не найдена</h1>
+      <p className="notice">
+        Такой страницы нет. Возможно, запись ещё не опубликована или адрес набран с ошибкой.
+      </p>
+      <p><Link to="/">На главную</Link></p>
+    </section>
+  );
+}
+
 /** Какой файл сборки сейчас выполняется в этой вкладке. */
 function currentBundle(): string | null {
   const script = document.querySelector('script[type="module"][src*="/assets/"]');
@@ -47,6 +59,12 @@ export function App() {
   // Возврат со страницы объекта приводит туда, откуда ушли: лекцию читают
   // подряд, и начинать сначала после каждой карточки невозможно.
   useScrollMemory();
+
+  // Заголовок вкладки: у записи своё название (его ставит карточка),
+  // у остальных страниц — имя сайта, иначе держалось бы имя прошлой записи.
+  useEffect(() => {
+    if (!location.pathname.startsWith("/entities/")) document.title = "2ВХУТЕМАС";
+  }, [location.pathname]);
 
   const refresh = async () => {
     try {
@@ -200,7 +218,9 @@ export function App() {
           <Route path="/about" element={<About />} />
           <Route path="/about/:section" element={<About />} />
           <Route path="/login" element={<Login onDone={refresh} />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Неизвестный адрес — честное «не найдено», а не переброс на главную:
+              сервер отвечает на него 404, и страница говорит то же (Р-65). */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
         </ErrorBoundary>
       </main>

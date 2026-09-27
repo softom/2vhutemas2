@@ -23,6 +23,7 @@ import { dates } from "./routes/dates.ts";
 import { indicators } from "./routes/indicators.ts";
 import { parameters, parameterSets } from "./routes/parameters.ts";
 import { materials } from "./routes/materials.ts";
+import { pages } from "./routes/pages.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -124,6 +125,10 @@ app.route("/api/v1/entities-indicators", indicators);
 app.route("/api/v1/parameters", parameters);
 app.route("/api/v1/parameter-sets", parameterSets);
 app.route("/api/v1/materials", materials);
+
+// Всё, что не API, — страницы сайта: готовый HTML для поисковиков и ссылок
+// (Р-65). Caddy присылает сюда адреса, которым не нашлось файла сборки.
+app.route("/", pages);
 
 const shutdown = async () => {
   log("info", "system", "остановка сервиса");

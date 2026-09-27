@@ -10,7 +10,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { sql, transaction } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
-import { require as requirePermission } from "../lib/auth.ts";
+import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import type { AppEnv } from "../lib/http.ts";
 import { extractText } from "./documents.ts";
 
@@ -113,6 +113,7 @@ links.get("/", async (c: Context<AppEnv>) => {
   if (!Number.isInteger(entityId)) {
     throw new ApiError("validation_failed", "Укажите entity_id");
   }
+  const drafts = canSeeDrafts(c.get("principal"));
 
   const rows = await sql<Record<string, unknown>>`
     select l.id, l.from_entity_id, l.to_entity_id, l.note, l.is_primary, l.confidence,
@@ -139,7 +140,10 @@ links.get("/", async (c: Context<AppEnv>) => {
     join app.entities other
       on other.id = case when l.from_entity_id = ${entityId} then l.to_entity_id
                          else l.from_entity_id end
-    where l.from_entity_id = ${entityId} or l.to_entity_id = ${entityId}
+    where (l.from_entity_id = ${entityId} or l.to_entity_id = ${entityId})
+      -- Гость не видит черновиков — и связей с ними тоже: иначе название
+      -- неопубликованной записи утекало через соседнюю карточку.
+      and (${drafts} or other.is_published)
     order by l.is_primary desc, l.sort_order, l.id
   `;
   return c.json({ items: rows });

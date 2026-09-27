@@ -1,12 +1,12 @@
 /** Карточка объекта: свойства, датировки, описание и медиа. */
 import { Component, type ReactNode, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
 import type { PartialBlock } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import { api, type EntityCard, type Indicator, placeLabel } from "../api";
+import { api, type EntityCard, type EntitySource, type Indicator, placeLabel } from "../api";
 import { MediaViewer, type ViewerItem } from "../ui/MediaViewer";
 import { createSchema, withEditableEdges } from "../editor/entityBlocks";
 
@@ -21,8 +21,9 @@ function firstPlace(indicators: Indicator[]) {
 }
 
 export function EntityPage({ canEdit }: { canEdit: boolean }) {
-  const { id } = useParams();
-  const entityId = Number(id);
+  // Адрес записи — слаг; номер и прежний слаг тоже открывают её (Р-65).
+  const { id: key = "" } = useParams();
+  const navigate = useNavigate();
   const [entity, setEntity] = useState<EntityCard | null>(null);
   const [blocks, setBlocks] = useState<PartialBlock[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,8 +31,16 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
   const [viewing, setViewing] = useState<number | null>(null);
 
   useEffect(() => {
+    // Адрес сменился с номера на слаг той же записи — она уже загружена.
+    if (entity && entity.slug === key) return;
     setViewing(null);
-    api.entity(entityId).then(async (card) => {
+    api.entity(key).then(async (card) => {
+      // Открыли по номеру или устаревшему адресу — показываем постоянный,
+      // не добавляя шага в историю: «назад» ведёт туда, откуда пришли.
+      if (card.slug && card.slug !== key) {
+        navigate(`/entities/${card.slug}${location.hash}`, { replace: true });
+      }
+      document.title = `${card.title_ru} — 2ВХУТЕМАС`;
       setEntity(card);
       const documentId = (card as unknown as { description_document_id?: number })
         .description_document_id;
@@ -42,7 +51,7 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         setBlocks([]);
       }
     }).catch((e) => setError(e.message));
-  }, [entityId]);
+  }, [key]);
 
   if (error) return <p className="error">{error}</p>;
   if (!entity || blocks === null) return <p className="notice">Загружаем…</p>;
@@ -112,6 +121,10 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
         </>
       )}
 
+      <Sources items={entity.sources ?? []} />
+
+      {entity.citation && <Cite citation={entity.citation} />}
+
       {viewing !== null && (
         <MediaViewer
           items={media as ViewerItem[]}
@@ -127,6 +140,7 @@ export function EntityPage({ canEdit }: { canEdit: boolean }) {
 interface LinkRow {
   id: number;
   other_id: number;
+  other_slug?: string;
   other_title: string;
   other_type_title: string | null;
   role: string | null;
@@ -153,7 +167,7 @@ function Relations({ entityId }: { entityId: number }) {
           <ul className="relations">
             {items.map((item) => (
               <li key={item.id}>
-                <Link to={`/entities/${item.other_id}`}>{item.other_title}</Link>
+                <Link to={`/entities/${item.other_slug ?? item.other_id}`}>{item.other_title}</Link>
                 {item.role && <span className="badge">{item.role}</span>}
                 {item.justification && <p className="notice">{item.justification}</p>}
               </li>
@@ -172,6 +186,66 @@ function Relations({ entityId }: { entityId: number }) {
         </>
       )}
     </>
+  );
+}
+
+/** Источники открыто и со ссылкой наружу: откуда взято, проверит любой (Р-65). */
+function Sources({ items }: { items: EntitySource[] }) {
+  if (items.length === 0) return null;
+  return (
+    <>
+      <h2>Источники</h2>
+      <ul className="sources">
+        {items.map((item) => {
+          const label = (item.title || item.text || item.url || item.kind_title) +
+            (item.year ? `, ${item.year}` : "");
+          return (
+            <li key={item.id}>
+              {item.url && /^https?:/i.test(item.url)
+                ? <a href={item.url} target="_blank" rel="noopener">{label}</a>
+                : label}
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * Готовая ссылка для курсовой и статьи (Р-65). Текст считает API — тот же,
+ * что стоит в готовой странице для поисковика: «как цитировать» одно.
+ */
+function Cite({ citation }: { citation: NonNullable<EntityCard["citation"]> }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = async (name: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(name);
+    } catch {
+      setCopied(null);
+    }
+  };
+  const rows: [string, string, string][] = [
+    ["gost", "ГОСТ Р 7.0.100–2018", citation.gost],
+    ["apa", "APA", citation.apa],
+  ];
+  return (
+    <section className="cite">
+      <h2>Как цитировать</h2>
+      {rows.map(([name, title, text]) => (
+        <div className="cite-row" key={name}>
+          <div className="cite-title">{title}</div>
+          <p className="cite-text">{text}</p>
+          <button type="button" className="ghost" onClick={() => copy(name, text)}>
+            {copied === name ? "Скопировано" : "Скопировать"}
+          </button>
+        </div>
+      ))}
+      <p className="notice">
+        Постоянная ссылка: <a href={citation.url}>{citation.url}</a>
+      </p>
+    </section>
   );
 }
 

@@ -87,6 +87,22 @@ export interface EntityCard extends EntityListItem {
   profile: Record<string, unknown>;
   material_id: string | null;
   latest_revision_id: string | null;
+  /** Источники записи; гостю — только опубликованные (Р-65). */
+  sources?: EntitySource[];
+  /** Подписи авторов материала — для ссылки «как цитировать». */
+  authors?: string[];
+  canonical_url?: string;
+  citation?: { url: string; accessed: string; gost: string; apa: string };
+}
+
+export interface EntitySource {
+  id: number;
+  kind: string;
+  kind_title: string;
+  title: string | null;
+  text: string | null;
+  url: string | null;
+  year: number | null;
 }
 
 export interface MediaAsset {
@@ -247,7 +263,9 @@ export const api = {
       `/entities?${search.toString()}`,
     );
   },
-  entity: (id: number) => request<EntityCard>(`/entities/${id}`),
+  /** Запись по номеру или по адресу — текущему или прежнему (Р-65). */
+  entity: (id: number | string) =>
+    request<EntityCard>(`/entities/${encodeURIComponent(String(id))}`),
   createEntity: (body: unknown) =>
     request<{ id: number; revision_id: string }>("/entities", {
       method: "POST",

@@ -182,11 +182,30 @@ echo "── Публикация"
 MID=$(echo "$C" | field material_id)
 check "публикация версии" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"note":"smoke"}' $API/materials/$MID/publish)"
 check "объект виден гостю после публикации" 200 "$(code $API/entities/$EID)"
+
+echo "── Страница для поисковика"
+# Готовый HTML записи (Р-65) проверяем снаружи, через Caddy: ломается
+# именно маршрут, а не сборка страницы в API.
+SITE=https://2vhutemas.ru
+check "запись открывается по адресу" 200 "$(code $API/entities/smoke-proverka)"
+contains "в карточке готовая ссылка ГОСТ" 'дата обращения' "$(body)"
+check "страница записи отдаётся" 200 "$(code $SITE/entities/smoke-proverka)"
+PAGE=$(body)
+contains "заголовок страницы — название записи" '<title>smoke: правка — 2ВХУТЕМАС</title>' "$PAGE"
+contains "канонический адрес по слагу" 'rel="canonical" href="https://2vhutemas.ru/entities/smoke-proverka"' "$PAGE"
+contains "разметка schema.org" 'application/ld+json' "$PAGE"
+contains "блок «Как цитировать»" 'Как цитировать' "$PAGE"
+contains "клиент оживляет страницу" '/assets/index-' "$PAGE"
+check "номер записи ведёт на слаг навсегда" "301 /entities/smoke-proverka" \
+  "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' $SITE/entities/$EID | sed 's#https\?://[^/]*##')"
+contains "запись попала в sitemap" '/entities/smoke-proverka</loc>' "$(curl -s $SITE/sitemap.xml)"
 check "повторная публикация той же версии" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/materials/$MID/publish)"
 code -H "$AUTH" $API/materials/$MID >/dev/null
 contains "состояние материала" '"published"' "$(body)"
 check "архивирование" 204 "$(code -X DELETE -H "$AUTH" $API/materials/$MID)"
 check "архивный объект гостю не виден" 404 "$(code $API/entities/$EID)"
+check "страница архивной записи — 404" 404 "$(code $SITE/entities/smoke-proverka)"
+missing "архивной записи нет в sitemap" 'smoke-proverka' "$(curl -s $SITE/sitemap.xml)"
 code -H "$AUTH" $API/entities >/dev/null
 ARCHIVED_IN_LIST=$(body | python3 -c "
 import json,sys
@@ -328,6 +347,13 @@ check "клиент отдаётся сжатым" "да" "$SMALLER"
 contains "прежний сайт под /old" "Архитектурный таймлайн" "$(curl -s $SITE/old/)"
 check "прежняя страница ведёт под /old" "/old/praktika-graph.html" "$(here $SITE/praktika-graph.html)"
 check "прежний адрес /new ведёт на корень" "/lectures" "$(here $SITE/new/lectures)"
+# Поисковику (Р-65): служебные файлы, настоящий 404 и закрытый прежний сайт.
+contains "robots.txt указывает sitemap" 'Sitemap: https://2vhutemas.ru/sitemap.xml' "$(curl -s $SITE/robots.txt)"
+contains "sitemap.xml собран" '<urlset' "$(curl -s $SITE/sitemap.xml)"
+check "несуществующая страница — 404" 404 "$(code $SITE/net-takoj-stranicy)"
+check "несуществующая запись — 404" 404 "$(code $SITE/entities/net-takoj-zapisi)"
+contains "главная описана для поисковика" 'rel="canonical" href="https://2vhutemas.ru/"' "$(curl -s $SITE/)"
+contains "прежний сайт закрыт от индекса" 'noindex' "$(curl -s -D - -o /dev/null $SITE/old/ | tr 'A-Z' 'a-z')"
 
 echo "── Уборка"
 docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -q -c "

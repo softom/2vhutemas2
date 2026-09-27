@@ -216,7 +216,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
           <Link
             className={item.type_path?.[0]?.code === "who" ? "card portrait" : "card"}
             key={item.id}
-            to={`/entities/${item.id}`}
+            to={`/entities/${item.slug}`}
           >
             {item.cover_asset_id
               ? (

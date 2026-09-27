@@ -13,6 +13,8 @@ import { ApiError } from "../lib/errors.ts";
 import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import { type AppEnv, decodeCursor, encodeCursor, pageSize } from "../lib/http.ts";
 import { resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../lib/entityTypes.ts";
+import { entityAuthors, resolveEntity } from "../lib/publicCard.ts";
+import { absolute, citation, entityPath } from "../lib/site.ts";
 
 export const entities = new Hono<AppEnv>();
 
@@ -176,8 +178,12 @@ entities.get("/", async (c: Context<AppEnv>) => {
 
 entities.get("/:id", async (c: Context<AppEnv>) => {
   const principal = c.get("principal");
-  const id = Number(c.req.param("id"));
-  if (!Number.isInteger(id)) throw new ApiError("validation_failed", "Неверный идентификатор");
+  // Запись ищется и по номеру, и по адресу — текущему или прежнему (Р-65):
+  // адрес страницы теперь слаг, а в текстах и старых ссылках лежат номера.
+  const key = c.req.param("id") ?? "";
+  const resolved = /^\d+$/.test(key) ? null : await resolveEntity(key);
+  const id = resolved ? resolved.id : Number(key);
+  if (!Number.isInteger(id)) throw new ApiError("not_found", "Сущность не найдена");
 
   const rows = await sql`
     select e.*, ty.code as type, ty.title_ru as type_title,
@@ -186,6 +192,8 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            m.published_revision_id,
            (select r.id from app.revisions r where r.material_id = m.id
              order by r.created_at desc limit 1) as latest_revision_id,
+           greatest(e.updated_at, (select max(r.created_at) from app.revisions r
+                                    where r.material_id = m.id)) as modified_at,
            -- Описаний может оказаться несколько: архивное не показываем,
            -- даже если оно прикреплено первым.
            (select a.document_id from app.attachments a
@@ -259,10 +267,33 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
   `;
   const entity = rows[0];
   if (!entity) throw new ApiError("not_found", "Сущность не найдена");
-  if (!entity.is_published && !canSeeDrafts(principal)) {
+  const drafts = canSeeDrafts(principal);
+  if (!entity.is_published && !drafts) {
     throw new ApiError("not_found", "Сущность не найдена");
   }
-  return c.json(entity);
+
+  // Источники видны на карточке и ведут наружу (Р-65). Гостю — опубликованные.
+  const sources = await sql`
+    select ri.id, rk.code as kind, rk.title_ru as kind_title, ri.title, ri.text, ri.url, ri.year
+      from app.attachments a
+      join app.targets t on t.id = a.target_id
+      join app.reference_items ri on ri.id = a.reference_item_id
+      join app.reference_kinds rk on rk.id = ri.kind_id
+     where t.entity_id = ${id} and (${drafts} or ri.is_published)
+     order by a.sort_order, ri.sort_order, ri.id
+  `;
+  const authors = await entityAuthors(id);
+  // Год в ссылке — год последней правки: страница меняется, и так же
+  // его считает готовая страница сайта.
+  const year = new Date(String(entity.modified_at ?? new Date().toISOString())).getFullYear();
+  const slug = String(entity.slug);
+  return c.json({
+    ...entity,
+    sources,
+    authors,
+    canonical_url: absolute(entityPath(slug)),
+    citation: citation({ title: String(entity.title_ru), slug, authors, year }),
+  });
 });
 
 /**

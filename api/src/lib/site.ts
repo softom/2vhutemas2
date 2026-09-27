@@ -1,5 +1,5 @@
 /**
- * Сайт глазами поисковика и читателя со ссылкой (решение Р-63).
+ * Сайт глазами поисковика и читателя со ссылкой (решение Р-65).
  *
  * Адреса, ссылки для цитирования и разметка общие для готового HTML,
  * который API отдаёт по адресам страниц, и для ответа карточки клиенту:
@@ -117,9 +117,12 @@ export function citation(input: CitationInput): Citation {
   const gost = `${input.title}${responsibility} // ${site.name} : [сайт]. – ${year}. – ` +
     `URL: ${url} (дата обращения: ${accessed}).`;
 
-  const apaAuthor = authors.length > 0 ? authors.join(", ") : site.name;
-  const apa = `${apaAuthor}. (${year}). ${input.title}. ${site.name}. ` +
-    `Дата обращения: ${now.day} ${MONTHS[now.month - 1]} ${now.year} г., ${url}`;
+  // Без автора APA ставит на его место заглавие. Инициалы уже кончаются точкой.
+  const dot = (text: string) => text.endsWith(".") ? text : `${text}.`;
+  const retrieved = `Дата обращения: ${now.day} ${MONTHS[now.month - 1]} ${now.year} г., ${url}`;
+  const apa = authors.length > 0
+    ? `${dot(authors.join(", "))} (${year}). ${dot(input.title)} ${site.name}. ${retrieved}`
+    : `${dot(input.title)} (${year}). ${site.name}. ${retrieved}`;
 
   return { url, accessed, gost, apa };
 }
