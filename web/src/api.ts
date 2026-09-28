@@ -229,6 +229,7 @@ export interface Capabilities {
 }
 
 export const api = {
+  siteHeader: (path: string) => request<{ html: string; viewer: { authenticated: boolean; displayName: string; permissions: string[] } }>(`/site-header?path=${encodeURIComponent(path)}`),
   capabilities: () => request<Capabilities>("/capabilities"),
   me: () =>
     request<{ authenticated: boolean; display_name?: string; permissions: string[] }>("/me"),
@@ -268,6 +269,8 @@ export const api = {
   /** Запись по номеру или по адресу — текущему или прежнему (Р-65). */
   entity: (id: number | string) =>
     request<EntityCard>(`/entities/${encodeURIComponent(String(id))}`),
+  entityCardHtml: (id: number | string) =>
+    request<{ html: string; title: string; path: string }>(`/entities/${encodeURIComponent(String(id))}/card`),
   createEntity: (body: unknown) =>
     request<{ id: number; revision_id: string }>("/entities", {
       method: "POST",

@@ -213,10 +213,10 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
       <div className="grid">
         {items.map((item) => (
-          <Link
+          <a
             className={item.type_path?.[0]?.code === "who" ? "card portrait" : "card"}
             key={item.id}
-            to={`/entities/${item.slug}`}
+            href={`/entities/${item.slug}`}
           >
             {item.cover_asset_id
               ? (
@@ -242,7 +242,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
                 {item.material_status === "published" ? "опубликовано" : "черновик"}
               </span>
             </div>
-          </Link>
+          </a>
         ))}
       </div>
 

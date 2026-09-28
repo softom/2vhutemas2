@@ -234,32 +234,7 @@ button:disabled { opacity: .5; cursor: default; }
   border: 1px solid var(--line); font-size: 12px;
 }
 .chips button.chip.active { background: var(--accent); color: #17140f; border-color: var(--accent); }
-.plain-document { padding: 12px 16px; }
-.plain-document p { margin: 0 0 10px; }
 
-/* Просмотр изображений карточки: следующее по порядку прикрепления, по кругу */
-.card-button { text-align: left; background: var(--surface); color: var(--text); cursor: pointer; padding: 0; }
-.card-button .kind { padding: 0 10px 10px; }
-.media-viewer-backdrop {
-  /* Непрозрачный фон: сквозь полупрозрачный просвечивала страница
-     и мешала смотреть снимок. */
-  position: fixed; inset: 0; background: #0b0a09; z-index: 60;
-  display: flex; flex-direction: column;
-}
-/* Изображение занимает всё, что выше полосы, и растягивается по длинной стороне. */
-.media-viewer-stage {
-  flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
-  padding: 16px 16px 8px;
-}
-.media-viewer-image { width: 100%; height: 100%; object-fit: contain; border-radius: var(--radius); }
-.media-viewer-bar {
-  display: flex; align-items: center; gap: 12px; justify-content: center;
-  padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid var(--line); background: var(--surface);
-}
-.media-viewer-bar button { min-width: 48px; font-size: 18px; line-height: 1; }
-.media-viewer-caption { flex: 1; display: flex; flex-direction: column; gap: 2px; text-align: center; }
-.media-viewer-caption a { color: var(--accent); }
 .list-count { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin: 12px 0; }
 .list-count .hint { margin: 0; }
 .stale-banner {
@@ -293,32 +268,9 @@ button:disabled { opacity: .5; cursor: default; }
 .entity-card.with-cover.portrait img { height: auto; aspect-ratio: 3 / 4; object-position: top center; }
 .entity-card.portrait:not(.with-cover) img { width: 108px; height: 144px; }
 
-/* О проекте и конструктор знака (Р-56). Лист знака — бумажный, в любой теме. */
+/* О проекте. */
 .about-text { max-width: 68ch; }
 .about-text p { margin: 0 0 12px; }
-.about-credit { margin-top: 18px; }
-.sign-builder { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; margin-top: 16px; }
-@media (max-width: 900px) { .sign-builder { grid-template-columns: 1fr; } }
-.sign-stage { position: sticky; top: 76px; display: grid; gap: 10px; }
-@media (max-width: 900px) { .sign-stage { position: static; } }
-.sign-preview { line-height: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-.sign-preview svg { width: 100%; height: auto; display: block; }
-.sign-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.sign-controls { display: grid; gap: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
-.sign-controls fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; }
-.sign-controls legend { color: var(--accent); font-size: 14px; margin-bottom: 8px; padding: 0; }
-.sign-controls label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
-.sign-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.sign-range { grid-template-columns: 1fr auto; }
-.sign-range output { font-variant-numeric: tabular-nums; font-size: 13px; }
-.sign-range input { grid-column: 1 / -1; width: 100%; padding: 0; accent-color: var(--accent); }
-.sign-check { display: flex !important; align-items: center; gap: 8px; }
-.sign-check input { width: auto; }
-.sign-controls input[type="color"] { width: 100%; height: 34px; padding: 2px; }
-.sign-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.sign-chips button { padding: 5px 9px; font-size: 13px; }
-.sign-loading { display: grid; place-items: center; aspect-ratio: 5 / 4; color: var(--muted); line-height: 1.4; }
-
 /* Заставка (Р-58): обложка во весь экран, бумажный фон вместо тёмного. */
 .splash {
   position: fixed; inset: 0; z-index: 100; background: #EFE6D3;
@@ -329,19 +281,6 @@ button:disabled { opacity: .5; cursor: default; }
 .splash-sheet { line-height: 0; max-width: min(100%, 92vh); width: 100%; }
 .splash-sheet svg { width: 100%; height: auto; display: block; }
 @media (prefers-reduced-motion: reduce) { .splash { transition: none; } }
-
-/* Подразделы «О проекте» (Р-61). */
-.subnav { display: flex; gap: 18px; flex-wrap: wrap; margin: 0 0 22px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.subnav a { color: var(--muted); text-decoration: none; padding-bottom: 6px; margin-bottom: -9px; }
-.subnav a:hover { color: var(--text); }
-.subnav a.active { color: var(--text); border-bottom: 2px solid var(--accent); }
-.cover-sheet { line-height: 0; max-width: 560px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-bottom: 8px; }
-.cover-sheet svg { width: 100%; height: auto; display: block; }
-.about blockquote { margin: 16px 0; padding-left: 14px; border-left: 2px solid var(--accent); font-size: 18px; }
-.manifest { max-width: 68ch; padding-left: 22px; margin: 0 0 8px; }
-.manifest li { margin-bottom: 12px; }
-.manifest-text h3 { font-size: 16px; font-weight: 600; margin: 22px 0 6px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
-.manifest-text ul { margin: 0 0 12px; padding-left: 22px; }
 
 /* Файл ждёт автора и источника: задача редактора, не ошибка (Р-68). */
 .needs-links { color: var(--accent); }
@@ -357,6 +296,7 @@ button:disabled { opacity: .5; cursor: default; }
 .public-card dd { margin: 0; }
 .public-document { background: #fff; color: #171717; border-radius: var(--radius); padding: 24px; line-height: 1.7; }
 .public-document p { max-width: 75ch; }
+.public-document blockquote, .entity-quote { margin: 16px 0; padding-left: 14px; border-left: 2px solid var(--accent); font-size: 18px; }
 .public-card figure { margin: 16px 0; }
 .public-card figure img { display: block; width: 100%; max-height: 75vh; object-fit: contain; border-radius: 8px; }
 .public-card figcaption { font-size: 13px; margin-top: 8px; }
@@ -390,3 +330,11 @@ button:disabled { opacity: .5; cursor: default; }
 .cite-disclosure > summary { cursor: pointer; color: var(--muted); font-size: 14px; }
 .cite-disclosure > summary:hover { color: var(--text); }
 .cite-disclosure[open] > summary { margin-bottom: 16px; }
+
+.reader-meta { margin: 18px 0; }
+.public-card h1 .reader-actions { margin: 0 0 0 10px; font-size: inherit; }
+.ssr a.reader-edit-link { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; width: 36px; height: 36px; border: 1px solid transparent; border-radius: 6px; color: var(--muted); text-decoration: none; }
+.ssr a.reader-edit-link:hover, .ssr a.reader-edit-link:focus-visible { color: var(--accent); border-color: var(--line); }
+.public-document { color-scheme: light; }
+.public-document h2 { font-size: 28px; }
+.public-document h3 { font-size: 23px; }

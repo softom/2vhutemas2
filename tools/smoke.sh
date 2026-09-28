@@ -55,6 +55,15 @@ body() { cat /tmp/smoke.out; }
 echo "── Служебные маршруты"
 check "проверка живости" 200 "$(code $API/health)"
 contains "версия контракта" '"version"' "$(body)"
+contains "SU получает право редактирования в /me" '"su"' "$(curl -s -H "$AUTH" $API/me)"
+check "единое меню гостя доступно" 200 "$(code $API/site-header)"
+contains "меню гостя содержит вход" 'Войти' "$(body)"
+missing "меню гостя не содержит создания" 'Создать запись' "$(body)"
+check "единое меню SU доступно" 200 "$(code -H "$AUTH" $API/site-header)"
+contains "меню SU содержит выход" 'signout' "$(body)"
+contains "меню SU содержит создание записи" 'Создать запись' "$(body)"
+missing "меню SU не предлагает вход" 'Войти' "$(body)"
+
 code -H "$AUTH" $API/capabilities >/dev/null
 contains "дерево типов" '"entity_types"' "$(body)"
 contains "корневая ветвь в дереве" '"who"' "$(body)"
@@ -76,6 +85,14 @@ contains "карточка отдаёт файлы" '"media"' "$(body)"
 contains "карточка отдаёт метки" '"tags"' "$(body)"
 contains "карточка отдаёт путь по дереву" '"type_path"' "$(body)"
 check "черновик гостю не виден" 404 "$(code $API/entities/$EID)"
+check "HTML черновика гостю не виден" 404 "$(code $API/entities/$EID/card)"
+check "единый HTML черновика доступен SU" 200 "$(code -H "$AUTH" $API/entities/$EID/card)"
+contains "черновик использует общий рендер" 'public-card' "$(body)"
+contains "общий рендер содержит действие правки" 'data-reader-edit' "$(body)"
+check "прямая страница черновика сохраняет 404" 404 "$(code http://127.0.0.1:7073/entities/$EID)"
+contains "страница черновика не запускает React повторно" 'data-public-page' "$(body)"
+missing "гость не получает название черновика" 'smoke: проверка' "$(body)"
+
 check "неизвестный тип отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"type":"net-takogo","slug":"smoke-net-tipa","title_ru":"smoke: нет типа"}' $API/entities)"
 # Записей в базе больше страницы, поэтому ищем свою по имени, а не наугад.
 code -H "$AUTH" "$API/entities?type=what&q=smoke" >/dev/null
@@ -146,10 +163,10 @@ check "чужая привязка в порядке" 400 "$(code -X PUT -H "$AU
 echo "── Места"
 check "справочник мест гостю закрыт" 401 "$(code $API/places)"
 check "справочник мест под входом" 200 "$(code -H "$AUTH" $API/places)"
-P=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"country":"smoke-страна","settlement":"smoke-город","precision":"settlement"}' $API/places)
+P=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"country":"smoke-страна","settlement":"smoke-город","street":"smoke-улица","house":"17","unit":"4","precision":"settlement"}' $API/places)
 PID=$(echo "$P" | field id)
 check "создание места" "да" "$([ -n "$PID" ] && echo да || echo нет)"
-SAME=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"country":"SMOKE-СТРАНА","settlement":" smoke-город "}' $API/places | field id)
+SAME=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"country":"SMOKE-СТРАНА","settlement":" smoke-город ","street":"smoke-улица","house":"17","unit":"4"}' $API/places | field id)
 check "повтор адреса не плодит место" "$PID" "$SAME"
 check "пустое место отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/places)"
 check "широта без долготы отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"settlement":"smoke","lat":10}' $API/places)"
@@ -321,6 +338,9 @@ check "место значением параметра" 200 "$(code -X PUT -H "
 code -H "$AUTH" $API/entities/$EID >/dev/null
 contains "место в карточке" '"value_type":"place"' "$(body)"
 contains "дата в карточке" '"value_type":"date"' "$(body)"
+check "HTML карточки с адресом" 200 "$(code -H "$AUTH" $API/entities/$EID/card)"
+contains "HTML сохраняет улицу, дом и помещение" 'smoke-страна, smoke-город, smoke-улица, 17, 4' "$(body)"
+
 code -H "$AUTH" $API/places/$PID/usage >/dev/null
 contains "где используется место" 'Адрес объекта' "$(body)"
 check "место без ссылки отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"сведения\",\"values\":[{\"parameter\":\"address\",\"text_value\":\"где\"}]}]}" $API/entities-indicators/$EID)"
@@ -381,6 +401,8 @@ contains "главная описана для поисковика" 'rel="canon
 check "раздел «О проекте» доступен" 200 "$(code $SITE/about)"
 check "старый адрес манифеста ведёт на сущность" "301 https://2vhutemas.ru/entities/about-manifest" \
   "$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" $SITE/about/manifest)"
+check "бывший конструктор ведёт на сущность логотипа" "301 https://2vhutemas.ru/entities/about-logo" \
+  "$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" $SITE/about/logo/tool)"
 # Метрика (Р-66): счётчик в общем шаблоне — и на главной, и в готовой странице от API.
 contains "счётчик Метрики на главной" 'mc.yandex.ru/metrika/tag.js?id=108525511' "$(curl -s $SITE/)"
 contains "счётчик Метрики на странице раздела" 'mc.yandex.ru/metrika/tag.js?id=108525511' "$(curl -s $SITE/objects)"

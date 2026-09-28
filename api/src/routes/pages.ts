@@ -9,12 +9,15 @@
  *
  * Здесь же служебные файлы: robots.txt, sitemap.xml и ключ IndexNow.
  * Показывается только опубликованное: готовая страница строится без входа,
- * как для гостя. Черновик отвечает 404, а клиент вошедшего редактора всё
- * равно откроет его — он берёт запись у API со своим токеном.
+ * как для гостя. Черновик отвечает 404, а вошедший редактор получает тот же HTML-рендер
+ * через защищённый API со своим токеном.
  */
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { sql } from "../lib/db.ts";
+import { siteHeader } from "../lib/siteHeader.ts";
+import { canSeeDrafts } from "../lib/auth.ts";
+import { ApiError } from "../lib/errors.ts";
 import { type AppEnv, log } from "../lib/http.ts";
 import {
   absolute,
@@ -64,6 +67,7 @@ interface Page {
   noindex?: boolean;
   /** Чтение без запуска React и BlockNote. */
   publicReader?: boolean;
+  entityKey?: string;
 }
 
 function head(page: Page): string {
@@ -124,7 +128,7 @@ async function render(c: Context<AppEnv>, page: Page) {
     .replace(/<title>[\s\S]*?<\/title>/, head(page))
     .replace(
       '<div id="root"></div>',
-      `<div id="root"><div class="ssr"${page.publicReader ? ' data-public-page="true"' : ""}>${page.body}</div></div>`,
+      `<div id="root"><div class="ssr"${page.publicReader ? ' data-public-page="true"' : ""}${page.entityKey ? ` data-entity-key="${escapeHtml(page.entityKey)}"` : ""}>${page.body}</div></div>`,
     );
   c.header("cache-control", "no-cache");
   c.header("content-type", "text/html; charset=utf-8");
@@ -133,13 +137,20 @@ async function render(c: Context<AppEnv>, page: Page) {
 
 // ── Общие куски ──────────────────────────────────────────────────────────────
 
-const NAV = `<nav><a href="/">Всё</a> · <a href="/objects">Проекты</a> · ` +
-  `<a href="/authors">Авторы</a> · <a href="/lectures">Лекции</a> · ` +
-  `<a href="/about">О проекте</a></nav>`;
-
 function layout(inner: string): string {
-  return `<div class="shell"><header class="top"><a class="brand" href="/">${escapeHtml(site.name)}</a> ${NAV}<a href="/login">Войти</a></header><main>${inner}</main></div>`;
+  return `<div class="shell"><header class="top" data-site-header>${siteHeader(null, "")}</header><main>${inner}</main></div>`;
 }
+
+// Оба клиента получают один и тот же элемент меню и ту же модель прав.
+pages.get("/api/v1/site-header", (c) => {
+  c.header("cache-control", "private, no-store");
+  const principal = c.get("principal");
+  return c.json({
+    html: siteHeader(principal, c.req.query("path") ?? "/"),
+    viewer: { authenticated: !!principal, displayName: principal?.displayName ?? "Гость",
+      permissions: principal ? [...principal.permissions] : [] },
+  });
+});
 
 const WEBSITE = {
   "@type": "WebSite",
@@ -279,7 +290,11 @@ pages.get("/about", async (c) => {
   });
 });
 
-pages.get("/about/logo/tool", (c) => appOnly(c, "Конструктор знака"));
+pages.get("/about/logo/tool", (c) => {
+  c.header("location", entityPath(ABOUT_ALIASES.logo));
+  c.header("cache-control", "public, max-age=3600");
+  return c.body(null, 301);
+});
 pages.get("/about/:section", async (c) => {
   const slug = ABOUT_ALIASES[c.req.param("section")];
   if (!slug) return await notFound(c);
@@ -313,10 +328,12 @@ function valueText(value: CardValue): string {
 }
 
 function placeText(place: Record<string, unknown>): string {
-  const parts = ["title", "address", "settlement", "region", "country"]
-    .map((key) => place[key])
+  const parts = ["country", "settlement", "street", "house", "unit"]
+    .map(key => place[key])
     .filter((part): part is string => typeof part === "string" && part.trim() !== "");
-  return [...new Set(parts)].join(", ");
+  if (parts.length) return parts.join(", ");
+  return place.lat !== null && place.lat !== undefined && place.lon !== null && place.lon !== undefined
+    ? `${place.lat}, ${place.lon}` : "место без сведений";
 }
 
 /** Год как дата schema.org: «около» и диапазоны не изображаем точнее, чем знаем. */
@@ -459,6 +476,7 @@ function breadcrumbsLd(card: PublicCard) {
     ? ["/authors", "Авторы"]
     : root === "learning"
     ? ["/lectures", "Лекции"]
+    : root === "project_pages" ? ["/about", "О проекте"]
     : ["/objects", "Проекты"];
   return {
     "@context": "https://schema.org",
@@ -474,26 +492,39 @@ function breadcrumbsLd(card: PublicCard) {
 function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<typeof citation>) {
   const e = escapeHtml;
   const parts: string[] = [];
-  parts.push(`<article class="public-card">`, `<h1>${e(card.title_ru)}</h1>`,
-    `<p class="reader-actions"><a href="/entities/${card.id}/edit">Открыть в редакторе</a></p>`);
+  const editPath = `/entities/${card.id}/edit`;
+  parts.push(`<article class="public-card">`, `<h1>${e(card.title_ru)}<span class="reader-actions" data-reader-edit data-href="${e(editPath)}" hidden></span></h1>`);
   const alternate = [card.title_original, card.title_en, card.title_la].filter(Boolean);
-  if (alternate.length > 0) parts.push(`<p>${e(alternate.join(" · "))}</p>`);
-  parts.push(`<p>${e(card.type_title)}</p>`);
-  if (card.tags.length > 0) parts.push(`<p>${card.tags.map((t) => `#${e(t)}`).join(" ")}</p>`);
+  if (alternate.length > 0) parts.push(`<p class="sub">${e(alternate.join(" · "))}</p>`);
+  const place = card.values.find(v => v.place)?.place;
+  parts.push(`<div class="row reader-meta"><span class="badge">${e(card.type_title)}</span>` +
+    `<span class="badge">${card.is_published ? "опубликовано" : "черновик"}</span>` +
+    [place?.settlement, place?.country].filter(Boolean).map(v => `<span class="badge">${e(v)}</span>`).join("") +
+    `</div>`);
+  if (card.tags.length > 0) parts.push(`<p class="tags-line">${card.tags.map(t => `<span class="tag-chip">#${e(t)}</span>`).join(" ")}</p>`);
 
-  if (card.values.length > 0) {
-    parts.push(
-      `<h2>Сведения</h2><dl>${
-        card.values.map((v) => `<dt>${e(v.title)}</dt><dd>${e(valueText(v))}</dd>`).join("")
-      }</dl>`,
-    );
+  const groups = new Map<number, CardValue[]>();
+  for (const value of card.values) {
+    if (!groups.has(value.indicator_id)) groups.set(value.indicator_id, []);
+    groups.get(value.indicator_id)!.push(value);
+  }
+  for (const values of groups.values()) {
+    const group = values[0];
+    if (groups.size > 1 || !group.is_current) parts.push(`<h2>${e(group.indicator_title)}${group.measured_year ? ` · ${group.measured_year}` : ""}${group.is_current ? "" : " · не действующие"}</h2>`);
+    for (const [title, rows] of [
+      ["Показатели", values.filter(v => v.value_type !== "place" && v.value_type !== "date")],
+      ["Места", values.filter(v => v.value_type === "place")],
+      ["Датировки", values.filter(v => v.value_type === "date")],
+    ] as [string, CardValue[]][]) {
+      if (rows.length) parts.push(`<h2>${title}</h2><dl>${rows.map(v => `<dt>${e(v.title)}</dt><dd>${e(valueText(v))}</dd>`).join("")}</dl>`);
+    }
   }
 
   if (card.links.length > 0) {
     // Обоснование связи — наш собственный текст, которого нет в энциклопедиях.
     // Выводим его открыто, рядом со ссылкой, а не прячем в интерфейсе.
     parts.push(
-      `<h2>Связи</h2><ul>${
+      `<h2>Связи</h2><ul class="relations">${
         card.links.map((l) =>
           `<li><a href="${e(entityPath(l.other_slug))}">${e(l.other_title)}</a>` +
           (l.role_title ? ` (${e(l.role_title)})` : "") +
@@ -555,12 +586,12 @@ pages.get("/entities/:key", async (c) => {
   if (key === "new") return await appOnly(c, "Новая запись");
   const found = await resolveEntity(key);
   // Черновик для гостя не существует: 404, и прежний номер не выдаёт его слаг.
-  if (!found || !found.isPublished) return await notFound(c);
+  if (!found || !found.isPublished) return await notFound(c, key);
   if (found.moved || found.slug !== key) {
     return c.redirect(entityPath(found.slug), 301);
   }
   const card = await loadPublicCard(found.id);
-  if (!card) return await notFound(c);
+  if (!card) return await notFound(c, key);
 
   const ctx = { entities: card.refs, publicAssets: card.publicAssets };
   const descriptionHtml = card.document ? blocksHtml(card.document.body_json, ctx) : "";
@@ -581,8 +612,29 @@ pages.get("/entities/:key", async (c) => {
     ogType: root === "who" ? "profile" : "article",
     jsonLd: [cardLd(card, description, card.authors), breadcrumbsLd(card)],
     publicReader: true,
+    entityKey: String(card.id),
     body: layout(cardBody(card, descriptionHtml, cite)),
   });
+});
+
+// Тот же рендер для просмотра черновиков: авторизация общая для /api/v1/*.
+// Ответ не кэшируется; гость не получает ни названия, ни адреса черновика.
+pages.get("/api/v1/entities/:key/card", async (c) => {
+  c.header("cache-control", "private, no-store");
+  const principal = c.get("principal");
+  const found = await resolveEntity(c.req.param("key"));
+  if (!found || (!found.isPublished && !canSeeDrafts(principal))) {
+    throw new ApiError("not_found", "Сущность не найдена");
+  }
+  const card = await loadPublicCard(found.id, principal);
+  if (!card) throw new ApiError("not_found", "Сущность не найдена");
+  const description = card.document ? blocksHtml(card.document.body_json, {
+    entities: card.refs, publicAssets: card.publicAssets,
+  }) : "";
+  const cite = citation({ title: card.title_ru, slug: card.slug, authors: card.authors,
+    year: new Date(card.modified_at).getFullYear() });
+  return c.json({ html: cardBody(card, description, cite), title: `${card.title_ru} — ${site.name}`,
+    path: entityPath(card.slug) });
 });
 
 pages.get("/entities/:key/edit", (c) => appOnly(c, "Правка записи"));
@@ -601,7 +653,7 @@ pages.get("/robots.txt", (c) => {
     "Disallow: /entities/*/edit",
     "Disallow: /media",
     "Disallow: /parameters",
-    "Disallow: /about/logo/tool",
+
     // /old/ не закрываем здесь: запрет обхода помешал бы поисковику увидеть
     // noindex, который Caddy ставит прежнему сайту, и старые страницы
     // остались бы в выдаче голыми адресами.
@@ -668,10 +720,12 @@ for (const path of ["/login", "/media", "/media/*", "/parameters"]) {
   pages.get(path, (c) => appOnly(c, title));
 }
 
-async function notFound(c: Context<AppEnv>) {
+async function notFound(c: Context<AppEnv>, entityKey?: string) {
   return await render(c, {
     status: 404,
     title: `Страница не найдена — ${site.name}`,
+    publicReader: !!entityKey,
+    entityKey,
     description: "Такой страницы нет. Возможно, запись ещё не опубликована или адрес набран с ошибкой.",
     canonical: null,
     body: layout(

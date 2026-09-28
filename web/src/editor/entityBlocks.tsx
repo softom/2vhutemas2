@@ -194,12 +194,22 @@ export const MediaImageBlock = createReactBlockSpec(
   },
 );
 
+/** Цитата из старых документов проекта; сохраняем отдельным блочным типом. */
+export const QuoteBlock = createReactBlockSpec(
+  { type: "quote", propSchema: {}, content: "inline" },
+  {
+    render: ({ contentRef }) => <blockquote ref={contentRef} className="entity-quote" />,
+    toExternalHTML: ({ contentRef }) => <blockquote ref={contentRef} className="entity-quote" />,
+  },
+);
+
 /** Схема блоков проекта. Отдельная на каждый показ: общая делает переход
  *  с карточки на карточку падением «Position undefined out of range». */
 export function createSchema() {
   return BlockNoteSchema.create({
     blockSpecs: {
       ...defaultBlockSpecs,
+      quote: QuoteBlock,
       entityCard: EntityCardBlock,
       mediaImage: MediaImageBlock,
     },
@@ -207,28 +217,33 @@ export function createSchema() {
   });
 }
 
-export const schema = createSchema();
-
-export type AppSchema = typeof schema;
-
 /** Блоки без собственного текста: курсор внутрь них поставить нельзя. */
 const VOID_BLOCKS = new Set(["entityCard", "mediaImage"]);
 
 /**
- * Пустой абзац по краям документа, если с края стоит блок без текста.
- * Иначе после последнего изображения некуда поставить курсор и текст
- * невозможно продолжить. Содержимое от этого не меняется.
+ * Подготовка старых документов к текущей схеме BlockNote.
+ * Ранний импорт хранил таблицу без маркера tableContent, а цитата quote
+ * осталась отдельным блоком проекта. Эти формы сохраняем при открытии,
+ * чтобы читатель и редактор видели исходное содержимое без потерь.
  */
 // deno-lint-ignore no-explicit-any
-export function withEditableEdges(blocks: any[]): any[] {
+export function prepareEditorBlocks(blocks: any[]): any[] {
   if (!Array.isArray(blocks) || blocks.length === 0) return blocks;
+  const normalize = (block: any): any => {
+    const result = { ...block };
+    if (result.type === "table" && result.content && Array.isArray(result.content.rows) &&
+        result.content.type === undefined) {
+      result.content = { ...result.content, type: "tableContent" };
+    }
+    if (Array.isArray(result.children)) result.children = result.children.map(normalize);
+    return result;
+  };
+  const result = blocks.map(normalize);
   const paragraph = () => ({ type: "paragraph", content: [] });
-  const result = [...blocks];
   if (VOID_BLOCKS.has(result[result.length - 1]?.type)) result.push(paragraph());
   if (VOID_BLOCKS.has(result[0]?.type)) result.unshift(paragraph());
   return result;
 }
-
 export interface InsertableEntity {
   id: number;
   title_ru: string;

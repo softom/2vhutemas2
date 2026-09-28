@@ -17,3 +17,6 @@ Thumbs.db
 # Сборка клиента и готовые фрагменты для поисковиков (Р-65).
 web/dist/
 web/dist-ssr/
+
+# TypeScript build cache
+*.tsbuildinfo

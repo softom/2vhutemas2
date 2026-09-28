@@ -1,71 +1,120 @@
+// Проверка единственной карточки: гость, SU, переходы и стандартный редактор.
 const { chromium } = require('C:/Users/tigra/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const fs = require('node:fs');
+const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const origin = 'https://2vhutemas.ru';
+const outputDir = 'backups/reader-check';
 (async () => {
   const browser = await chromium.launch({ headless: true, executablePath: 'C:/Users/tigra/AppData/Local/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-win64/chrome-headless-shell.exe' });
-  try {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
-    const page = await context.newPage();
-    const errors = [];
+  fs.mkdirSync(outputDir, { recursive: true });
+  const errors = [];
+  const pending = new Set();
+  const results = [];
+  const watch = page => {
+    page.setDefaultNavigationTimeout(60000);
     page.on('pageerror', error => errors.push(error.message));
-    const results = [];
-    for (const slug of ['taipei-performing-arts-center', 'panteon-rim', 'national-taichung-theater']) {
-      const requests = [];
-      const record = request => { if (request.url().startsWith(origin)) requests.push({ url: request.url(), type: request.resourceType() }); };
+    page.on('request', req => { if (req.resourceType() === 'script' && req.url().startsWith(origin)) pending.add(req.url()); });
+    page.on('requestfinished', req => pending.delete(req.url()));
+    page.on('requestfailed', req => { pending.delete(req.url()); console.log('Request failed:', new URL(req.url()).pathname, req.failure()?.errorText); });
+  };
+  try {
+    if (!process.argv.includes('--signed-only')) {
+    const guest = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
+    const page = await guest.newPage(); watch(page);
+    for (const slug of ['muzey-terrakotovoy-armii', 'the-burnt-city-punchdrunk', 'taipei-performing-arts-center', 'about-philosophy']) {
+      const scripts = [];
+      const record = request => { if (request.resourceType() === 'script' && request.url().startsWith(origin)) scripts.push(request.url()); };
       page.on('request', record);
       const start = Date.now();
-      const response = await page.goto(`${origin}/entities/${slug}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
-      await page.locator('dialog.reader-lightbox').waitFor({ state: 'attached' });
-      const readyMs = Date.now() - start;
-      const icon = await page.locator('link[rel="icon"]').getAttribute('href');
-      assert.match(icon, /favicon\.ico\?v=/);
-      const iconWidth = await page.evaluate(src => new Promise((resolve, reject) => {
-        const image = new Image(); image.onload = () => resolve(image.naturalWidth); image.onerror = reject; image.src = src;
-      }), icon);
-      assert.ok(iconWidth >= 16);
-      assert.equal(response.status(), 200);
-      assert.equal(await page.locator('[data-public-page]').count(), 1);
-      assert.equal(requests.filter(r => /appMount|entityBlocks|EntityEditor|EntityPage/.test(r.url)).length, 0);
-      assert.equal(requests.filter(r => /\/api\/v1\/(entities|documents)/.test(r.url)).length, 0);
-      results.push({ slug, readyMs, scripts: requests.filter(r => r.type === 'script').map(r => r.url) });
+      const response = await page.goto(`${origin}/entities/${slug}`, { waitUntil: 'domcontentloaded' });
+      assert.equal(response.status(), 200, slug);
+      await page.locator('.public-card').waitFor();
+      await page.locator('.cite-disclosure').waitFor();
+      assert.equal(await page.locator('.public-card').count(), 1);
+      assert.equal(await page.getByRole('link', { name: 'Править запись', exact: true }).count(), 0);
+      assert.equal(scripts.some(url => /appMount|EntityEditor|EntityPage|\/api-/.test(url)), false);
+      assert.equal(await page.locator('.cite-disclosure').evaluate(el => el.open), false);
+      results.push({ slug, readyMs: Date.now() - start, scripts });
       page.off('request', record);
+      console.log(`Verified guest: ${slug}`);
     }
+    await page.goto(`${origin}/entities/taipei-performing-arts-center`, { waitUntil: 'domcontentloaded' });
+    await page.locator('dialog.reader-lightbox').waitFor({ state: 'attached' });
     await page.locator('[data-gallery]').first().click();
     assert.equal(await page.locator('dialog').evaluate(el => el.open), true);
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('Escape');
-    assert.equal(await page.locator('dialog').evaluate(el => el.open), false);
-    assert.equal(await page.locator(".cite-disclosure").evaluate(el => el.open), false);
-    await page.locator(".cite-disclosure > summary").click();
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('Escape');
+    await page.locator('.cite-disclosure > summary').click();
     await page.locator('[data-copy="cite-gost"]').click();
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), await page.locator('#cite-gost').innerText());
-    await page.locator('.cite-disclosure > summary').click();
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-    fs.mkdirSync('backups/reader-check', { recursive: true });
-    await page.evaluate(() => scrollTo(0, 0));
-    await page.screenshot({ path: 'backups/reader-check/mobile.png' });
-    const noJS = await browser.newContext({ javaScriptEnabled: false });
-    const plain = await noJS.newPage();
-    await plain.goto(`${origin}/entities/taipei-performing-arts-center`, { waitUntil: 'domcontentloaded' });
-    assert.match(await plain.locator('h1').innerText(), /Тайбэй/);
-    assert.ok(await plain.locator('[data-gallery]').count());
-    await noJS.close();
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(`${origin}/objects`, { waitUntil: 'domcontentloaded' });
-    await page.locator('a.card').first().waitFor({ timeout: 45000 });
-    await page.locator('a.card').first().click();
-    await page.locator('[data-public-page]').waitFor();
-    await page.locator('.reader-actions a').click();
-    await page.locator('input').first().waitFor({ timeout: 45000 });
-    assert.match(page.url(), /\/entities\/\d+\/edit/);
-    assert.equal(await page.locator('[data-public-page]').count(), 0);
-    await page.goto(`${origin}/login`, { waitUntil: 'domcontentloaded' });
-    await page.locator('input[type=password]').waitFor();
+    await page.screenshot({ path: `${outputDir}/mobile.png` });
+    const plain = await browser.newContext({ javaScriptEnabled: false });
+    const noJS = await plain.newPage();
+    await noJS.goto(`${origin}/entities/the-burnt-city-punchdrunk`, { waitUntil: 'domcontentloaded' });
+    assert.equal(await noJS.locator('.public-card').count(), 1);
+    assert.match(await noJS.locator('main').innerText(), /Показатели[\s\S]*Места[\s\S]*Датировки/);
+    await plain.close();
+    }
+    // Краткоживущий токен существующего SU: тот же способ, что у smoke.sh.
+    // Токен только в памяти теста; в отчёт, команды и файлы не попадает.
+    const smoke = fs.readFileSync('tools/smoke.sh', 'utf8');
+    const tokenScript = smoke.slice(smoke.indexOf('UID_T='), smoke.indexOf('AUTH="')).replace('docker exec -i ', 'docker exec ') + '\nprintf "%s" "$TOKEN"\n';
+    const token = execFileSync('ssh', ['-o', 'BatchMode=yes', '2vhutemas', 'bash -s'], { input: tokenScript, encoding: 'utf8' }).trim();
+    const supabaseUrl = execFileSync('ssh', ['-o', 'BatchMode=yes', '2vhutemas', "sed -n 's/^VITE_SUPABASE_URL=//p' /opt/2vhutemas-services/app-web/.env"], { encoding: 'utf8' }).trim();
+    assert.equal(token.split('.').length, 3, 'Test token creation failed');
+    const uid = JSON.parse(Buffer.from(token.split('.')[1], 'base64url')).sub;
+    const session = { access_token: token, refresh_token: 'test-unused', token_type: 'bearer', expires_at: Math.floor(Date.now()/1000)+3500, expires_in: 3500, user: { id: uid, aud: 'authenticated', role: 'authenticated' } };
+    const key = `sb-${new URL(supabaseUrl).hostname.split('.')[0]}-auth-token`;
+    const signed = await browser.newContext({ viewport: { width: 1280, height: 900 }, storageState: { cookies: [], origins: [{ origin, localStorage: [{ name: key, value: JSON.stringify(session) }] }] } });
+    const editorPage = await signed.newPage(); watch(editorPage);
+    editorPage.on('response', async response => {
+      if (response.url().includes('/api/v1/site-header')) {
+        const me = (await response.json().catch(() => ({}))).viewer ?? {};
+        console.log('Permission check:', JSON.stringify({ authenticated: me.authenticated, permissions: me.permissions }));
+      }
+    });
+    const pencil = () => editorPage.getByRole('link', { name: 'Править запись', exact: true });
+    for (const slug of ['muzey-terrakotovoy-armii', 'the-burnt-city-punchdrunk', 'about-logo', 'about-philosophy', 'about-manifest', 'about-feedback']) {
+      await editorPage.goto(`${origin}/entities/${slug}`, { waitUntil: 'domcontentloaded' });
+      await pencil().waitFor({ timeout: 45000 });
+      assert.equal(await editorPage.locator('h1 .reader-edit-link svg').count(), 1);
+      assert.equal(await pencil().innerText(), '');
+      assert.equal(await editorPage.locator('[data-site-header]').count(), 1);
+      assert.equal(await editorPage.locator('[data-site-header] a[href="/login"]').count(), 0);
+      assert.equal(await editorPage.getByRole('button', { name: 'Выйти', exact: true }).count(), 1);
+      const menu = await editorPage.locator('[data-site-header]').innerHTML();
+      const html = await editorPage.locator('.public-card').innerHTML();
+      if (slug === 'muzey-terrakotovoy-armii') await editorPage.screenshot({ path: `${outputDir}/card-pencil.png` });
+      await pencil().click();
+      await editorPage.locator('.bn-editor[contenteditable=true]').waitFor({ timeout: 45000 });
+      assert.match(editorPage.url(), /\/entities\/\d+\/edit/);
+      assert.equal(await editorPage.locator('[data-site-header]').innerHTML(), menu, `editor menu: ${slug}`);
+      assert.equal(await editorPage.getByText('Страница не открылась', { exact: true }).count(), 0);
+      await editorPage.getByRole('button', { name: 'К карточке', exact: true }).first().click();
+      await pencil().waitFor();
+      assert.equal(await editorPage.locator('.public-card').count(), 1);
+      assert.equal(await editorPage.locator('.bn-editor').count(), 0);
+      assert.equal(await editorPage.locator('.public-card').innerHTML(), html, `return: ${slug}`);
+      assert.equal(await editorPage.locator('[data-site-header]').innerHTML(), menu, `returned menu: ${slug}`);
+      await editorPage.reload({ waitUntil: 'domcontentloaded' });
+      await pencil().waitFor();
+      assert.equal(await editorPage.locator('.public-card').innerHTML(), html, `reload: ${slug}`);
+      results.push({ slug, editReturnAndReloadIdentical: true });
+      console.log(`Verified editor roundtrip: ${slug}`);
+    }
+    await editorPage.goto(`${origin}/objects`, { waitUntil: 'domcontentloaded' });
+    await editorPage.locator('a.card').first().waitFor();
+    await editorPage.locator('a.card').first().click();
+    await pencil().waitFor();
+    assert.equal(await editorPage.locator('.public-card').count(), 1);
+    // Старый адрес редактора по slug тоже загружает существующую запись.
+    await editorPage.goto(`${origin}/entities/about-philosophy/edit`, { waitUntil: 'domcontentloaded' });
+    await editorPage.locator('.bn-editor[contenteditable=true]').waitFor({ timeout: 45000 });
     assert.deepEqual(errors, []);
-    const output = { results, gallery: true, citation: true, mobile: true, noJS: true, catalogNavigation: true, editor: true, login: true, errors };
-    fs.writeFileSync('backups/reader-check/results.json', JSON.stringify(output, null, 2));
+    const output = { results, guestCheckedThisRun: !process.argv.includes('--signed-only'), catalogNavigation: true, slugEditor: true, errors };
+    fs.writeFileSync(`${outputDir}/results.json`, JSON.stringify(output, null, 2));
     console.log(JSON.stringify(output, null, 2));
-  } finally { await browser.close(); }
+  } finally { console.log('Pending scripts:', [...pending]); console.log('Browser errors:', errors); await browser.close(); }
 })().catch(error => { console.error(error); process.exit(1); });

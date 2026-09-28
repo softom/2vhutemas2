@@ -10,7 +10,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "── Код на сервер"
 cd "$ROOT"
-tar -czf - api web | ssh -o BatchMode=yes "$HOST" '
+tar --exclude=node_modules --exclude=dist --exclude=".env*" --exclude="*.tsbuildinfo" -czf - api web | ssh -o BatchMode=yes "$HOST" '
   cd /opt/2vhutemas-services && tar -xzf - &&
   rsync -a --delete api/src/ app-api/src/ &&
   cp api/Dockerfile api/deno.json app-api/ &&
@@ -34,7 +34,7 @@ ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services/app-web &&
 echo "  ok"
 
 echo "── Сборка клиента"
-ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services/app-web && npm run build 2>&1 | grep -E "error|built" | tail -2'
+ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services/app-web && npm run build'
 
 echo "── Клиент поднимается"
 # Проверяем не факт сборки, а что в ней есть настройки: без них страница

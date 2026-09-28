@@ -1,5 +1,50 @@
 /** Небольшие улучшения готового HTML. Данные и текст уже на странице. */
-export function enhancePublicPage() {
+
+/** Гость читает готовый HTML, без загрузки клиента авторизации. */
+async function authenticatedCard() {
+  try {
+    if (!Object.keys(localStorage).some(key => /^sb-.+-auth-token$/.test(key))) return;
+    const { api, supabase } = await import("./api");
+    const { html, viewer: me } = await api.siteHeader(location.pathname);
+    const header = document.querySelector<HTMLElement>("[data-site-header]");
+    if (header) {
+      header.innerHTML = html;
+      header.querySelector('[data-action="signout"]')?.addEventListener("click", async () => {
+        await supabase.auth.signOut();
+        location.reload();
+      });
+    }
+    if (!me.authenticated) return;
+    const key = document.querySelector<HTMLElement>("[data-entity-key]")?.dataset.entityKey;
+    const canReadDrafts = me.permissions.some(p => ["edit", "review", "su"].includes(p));
+    if (key && canReadDrafts) {
+      await api.openMediaSession();
+      const card = await api.entityCardHtml(key);
+      const main = document.querySelector(".ssr main");
+      if (main) {
+        // HTML формирует единственный серверный рендер с экранированием данных.
+        main.innerHTML = card.html;
+        document.title = card.title;
+        history.replaceState(history.state, "", card.path + location.search + location.hash);
+      }
+    }
+    const container = document.querySelector<HTMLElement>("[data-reader-edit]");
+    if (!container || !me.permissions.some(p => p === "edit" || p === "su")) return;
+    const link = document.createElement("a");
+    link.href = container.dataset.href!;
+    link.className = "reader-edit-link";
+    link.title = "Править";
+    link.setAttribute("aria-label", "Править запись");
+    link.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5-12 12-6 1 1-6Z"/><path d="m14 5 5 5"/></svg>';
+    container.append(link);
+    container.hidden = false;
+  } catch {
+    // Опубликованная карточка остаётся читаемой при недоступности сессии/API.
+  }
+}
+
+export async function enhancePublicPage() {
+  await authenticatedCard();
   const links = [...document.querySelectorAll<HTMLAnchorElement>("[data-gallery]")];
   let current = 0;
   let opener: HTMLAnchorElement | undefined;

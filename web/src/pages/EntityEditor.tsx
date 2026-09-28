@@ -26,7 +26,7 @@ import {
   insertEntityCard,
   insertEntityMention,
   insertMediaImage,
-  withEditableEdges,
+  prepareEditorBlocks,
 } from "../editor/entityBlocks";
 import { InsertPanel } from "../editor/InsertPanel";
 import { type Tag, TagsField } from "../editor/TagsField";
@@ -61,7 +61,8 @@ export function EntityEditor({ mode }: Props) {
   const params = useParams();
   const navigate = useNavigate();
   const [search] = useSearchParams();
-  const entityId = params.id ? Number(params.id) : null;
+  const entityKey = params.id;
+  const [entityId, setEntityId] = useState<number | null>(null);
   // С каким типом открыли экран: «Создать лекцию» приводит сюда с ?type=lecture.
   const requestedType = search.get("type");
 
@@ -113,11 +114,12 @@ export function EntityEditor({ mode }: Props) {
   }, [form.type, mode, entityId]);
 
   useEffect(() => {
-    if (mode !== "edit" || !entityId) {
+    if (mode !== "edit" || !entityKey) {
       setInitialBlocks([]);
       return;
     }
-    api.entity(entityId).then(async (entity) => {
+    api.entity(entityKey).then(async (entity) => {
+      setEntityId(entity.id);
       setForm({
         type: entity.type,
         slug: entity.slug,
@@ -147,10 +149,11 @@ export function EntityEditor({ mode }: Props) {
       setError(e.message);
       setInitialBlocks([]);
     });
-  }, [mode, entityId]);
+  }, [mode, entityKey]);
 
   const editor = useMemo(() => initialBlocks, [initialBlocks]);
 
+  if (mode === "edit" && error && !revisionId) return <p className="error">{error}</p>;
   if (editor === null) return <p className="notice">Загружаем…</p>;
   return (
     <EditorBody
@@ -221,7 +224,7 @@ function EditorBody(props: any) {
 
   const editor = useCreateBlockNote({
     schema,
-    initialContent: initialBlocks.length > 0 ? withEditableEdges(initialBlocks) : undefined,
+    initialContent: initialBlocks.length > 0 ? prepareEditorBlocks(initialBlocks) : undefined,
   });
 
   const [problems, setProblems] = props.problemsState;
@@ -341,7 +344,7 @@ function EditorBody(props: any) {
         {saving ? "Сохраняем…" : "Сохранить версию"}
       </button>
       {entityId && (
-        <button type="button" className="ghost" onClick={() => navigate(`/entities/${entityId}`)}>
+        <button type="button" className="ghost" onClick={() => globalThis.location.assign(`/entities/${entityId}`)}>
           К карточке
         </button>
       )}

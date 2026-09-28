@@ -65,7 +65,7 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
               <tr key={item.id}>
                 <td>{item.values?.lecture_number ?? "—"}</td>
                 <td>
-                  <Link to={`/entities/${item.slug}`}>{item.title_ru}</Link>
+                  <a href={`/entities/${item.slug}`}>{item.title_ru}</a>
                   {item.type !== "lecture" && (
                     <span className="hint">{item.type_title ?? item.type}</span>
                   )}

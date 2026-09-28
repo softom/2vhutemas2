@@ -1,12 +1,13 @@
 /**
- * Карточка записи так, как её видит гость (Р-65).
+ * Единая загрузка карточки (Р-74). По умолчанию — только публичные данные.
  *
  * Отсюда берут данные готовый HTML страницы записи, её разметка schema.org
- * и ссылка «как цитировать». Всё отбирается по правилу гостя: только
- * опубликованное — сама запись, связанные с ней записи, текст, файлы
+ * и ссылка «как цитировать». Без principal отбирается только опубликованное;
+ * редактору и рецензенту доступны черновики по canSeeDrafts. Проверяются — сама запись, связанные с ней записи, текст, файлы
  * и источники.
  */
 import { sql } from "./db.ts";
+import { canSeeDrafts, type Principal } from "./auth.ts";
 import { extractRefs } from "../routes/documents.ts";
 import type { RefTarget } from "./blocksHtml.ts";
 
@@ -45,6 +46,10 @@ export async function resolveEntity(key: string): Promise<Resolved | null> {
 }
 
 export interface CardValue {
+  indicator_id: number;
+  indicator_title: string;
+  measured_year: number | null;
+  is_current: boolean;
   parameter: string;
   title: string;
   unit: string | null;
@@ -61,6 +66,7 @@ export interface CardValue {
 }
 
 export interface PublicCard {
+  is_published: boolean;
   id: number;
   slug: string;
   title_ru: string;
@@ -119,9 +125,10 @@ export interface PublicImage {
 }
 
 /** Опубликованная запись целиком; черновик и архив гостю не существуют. */
-export async function loadPublicCard(id: number): Promise<PublicCard | null> {
+export async function loadPublicCard(id: number, principal: Principal | null = null): Promise<PublicCard | null> {
+  const drafts = canSeeDrafts(principal);
   const rows = await sql<Record<string, unknown>>`
-    select e.id, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
+    select e.id, e.is_published, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
            ty.code as type, ty.title_ru as type_title,
            app.entity_type_path(e.type_id) as type_path,
            (select r.created_at from app.revisions r where r.id = m.published_revision_id)
@@ -132,13 +139,14 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
       from app.entities e
       join app.entity_types ty on ty.id = e.type_id
       left join app.materials m on m.entity_id = e.id
-     where e.id = ${id} and e.is_published
+     where e.id = ${id} and (${drafts} or e.is_published)
   `;
   if (rows.length === 0) return null;
   const e = rows[0];
 
   const values = await sql<CardValue>`
-    select p.code as parameter, p.title_ru as title, p.unit, p.value_type,
+    select i.id as indicator_id, i.title as indicator_title, i.measured_year, i.is_current,
+           p.code as parameter, p.title_ru as title, p.unit, p.value_type,
            iv.num_value, iv.text_value, iv.bool_value,
            (select o.title_ru from app.parameter_options o where o.id = iv.option_id) as option_title,
            (select to_jsonb(pl) from app.places pl where pl.id = iv.place_id) as place,
@@ -146,7 +154,7 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
       from app.indicators i
       join app.indicator_values iv on iv.indicator_id = i.id
       join app.parameters p on p.id = iv.parameter_id
-     where i.entity_id = ${id} and i.is_current
+     where i.entity_id = ${id}
      order by i.sort_order, i.id, p.sort_order, p.title_ru, iv.sort_order
   `;
 
@@ -166,7 +174,7 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
       from app.attachments a
       join app.targets t on t.id = a.target_id
       join app.media_assets ma on ma.id = a.asset_id
-     where t.entity_id = ${id} and ma.is_published and ma.visibility = 'public'
+     where t.entity_id = ${id} and (${drafts} or (ma.is_published and ma.visibility = 'public'))
        and ma.archived_at is null
      order by a.sort_order, a.id
   `;
@@ -179,7 +187,8 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
       join app.documents d on d.id = a.document_id
       join app.materials dm on dm.document_id = d.id
      where t.entity_id = ${id} and ar.code in ('description', 'wiki')
-       and dm.status = 'published'
+       and (${drafts} or dm.status = 'published')
+       and dm.status <> 'archived'
      order by a.sort_order, a.id
      limit 1
   `;
@@ -201,7 +210,7 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
         on other.id = case when l.from_entity_id = ${id} then l.to_entity_id
                            else l.from_entity_id end
       left join app.link_roles lr on lr.id = l.role_id
-     where (l.from_entity_id = ${id} or l.to_entity_id = ${id}) and other.is_published
+     where (l.from_entity_id = ${id} or l.to_entity_id = ${id}) and (${drafts} or other.is_published)
      order by l.is_primary desc, l.sort_order, l.id
   `;
 
@@ -223,7 +232,7 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
       join app.targets t on t.id = a.target_id
       join app.reference_items ri on ri.id = a.reference_item_id
       join app.reference_kinds rk on rk.id = ri.kind_id
-     where t.entity_id = ${id} and ri.is_published
+     where t.entity_id = ${id} and (${drafts} or ri.is_published)
      order by a.sort_order, ri.sort_order, ri.id
   `;
 
@@ -239,7 +248,7 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
     if (ids.length > 0) {
       const found = await sql<{ id: number; slug: string; title_ru: string }>`
         select id, slug, title_ru from app.entities
-         where id = any(${ids}::bigint[]) and is_published
+         where id = any(${ids}::bigint[]) and (${drafts} or is_published)
       `;
       for (const row of found) refs.set(Number(row.id), { slug: row.slug, title: row.title_ru });
     }
@@ -251,14 +260,16 @@ export async function loadPublicCard(id: number): Promise<PublicCard | null> {
                coalesce(nullif(ma.original_caption, ''), nullif(ma.holder, '')) as source,
                nullif(ma.source_url, '') as source_url
           from app.media_assets ma
-         where ma.id = any(${assetIds}::uuid[]) and ma.is_published
-           and ma.visibility = 'public' and ma.archived_at is null
+         where ma.id = any(${assetIds}::uuid[])
+           and (${drafts} or (ma.is_published and ma.visibility = 'public'))
+           and ma.archived_at is null
       `;
       for (const row of open) publicAssets.set(row.asset_id, row);
     }
   }
 
   return {
+    is_published: Boolean(e.is_published),
     id: Number(e.id),
     slug: e.slug as string,
     title_ru: e.title_ru as string,

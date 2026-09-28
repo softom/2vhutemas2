@@ -7,10 +7,10 @@ import { Link, Route, Routes, useLocation, useNavigationType } from "react-route
 import { useScrollMemory } from "./ui/scrollMemory";
 import { api, supabase } from "./api";
 import { Catalog } from "./pages/Catalog";
-const EntityPage = lazy(() => import("./pages/EntityPage").then((m) => ({ default: m.EntityPage })));
+
 const EntityEditor = lazy(() => import("./pages/EntityEditor").then((m) => ({ default: m.EntityEditor })));
 import { Lectures } from "./pages/Lectures";
-const About = lazy(() => import("./pages/About").then((m) => ({ default: m.About })));
+
 const MediaLibrary = lazy(() => import("./pages/MediaLibrary").then((m) => ({ default: m.MediaLibrary })));
 const Parameters = lazy(() => import("./pages/Parameters").then((m) => ({ default: m.Parameters })));
 import { Login } from "./pages/Login";
@@ -52,7 +52,16 @@ function currentBundle(): string | null {
   return src ? src.split("/").pop() ?? null : null;
 }
 
+function PublicEntityPage() {
+  useEffect(() => {
+    // Публичная карточка имеет один серверный HTML-рендер для прямых ссылок,
+    // каталога и возврата из редактора. Не строим вторую React-копию.
+    globalThis.location.replace(globalThis.location.href);
+  }, []);
+  return null;
+}
 export function App() {
+  const [headerHtml, setHeaderHtml] = useState("");
   const [viewer, setViewer] = useState<Viewer | null>(null);
   // Открытая вкладка продолжает работать на старом коде, пока её не
   // перезагрузят: после выкладки это выглядело как «кнопка не сохраняет».
@@ -92,22 +101,20 @@ export function App() {
 
   const refresh = async () => {
     try {
-      const me = await api.me();
+      const { html, viewer: me } = await api.siteHeader(location.pathname);
+      setHeaderHtml(html);
       // Кука нужна, чтобы браузер показывал приватные файлы в тегах изображений.
       if (me.authenticated) api.openMediaSession().catch(() => {});
-      setViewer({
-        authenticated: me.authenticated,
-        displayName: me.display_name ?? "Гость",
-        permissions: me.permissions ?? [],
-      });
+      setViewer(me);
     } catch {
       setViewer({ authenticated: false, displayName: "Гость", permissions: [] });
     }
   };
 
+  useEffect(() => { void refresh(); }, [location.pathname]);
+
   useEffect(() => {
-    refresh();
-    const { data } = supabase.auth.onAuthStateChange(() => refresh());
+    const { data } = supabase.auth.onAuthStateChange(() => { setTimeout(() => { void refresh(); }, 0); });
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -143,57 +150,15 @@ export function App() {
   return (
     <div className="shell">
       {splash && <Splash onDone={hideSplash} />}
-      <header className="top">
-        <Link className="brand" to="/">2vhutemas</Link>
-        <nav>
-          {/* «Всё» — общий список: разделы ниже показывают по ветви, а сюда
-              попадает и то, у чего своего раздела пока нет (Р-55). */}
-          <Link to="/" className={location.pathname === "/" ? "active" : ""}>Всё</Link>
-          <Link to="/objects" className={location.pathname === "/objects" ? "active" : ""}>
-            Проекты
-          </Link>
-          <Link to="/authors" className={location.pathname === "/authors" ? "active" : ""}>
-            Авторы
-          </Link>
-          <Link to="/lectures" className={location.pathname === "/lectures" ? "active" : ""}>
-            Лекции
-          </Link>
-          <Link to="/media" className={location.pathname.startsWith("/media") ? "active" : ""}>
-            Медиатека
-          </Link>
-          {can("edit") && (
-            <Link to="/parameters" className={location.pathname === "/parameters" ? "active" : ""}>
-              Параметры
-            </Link>
-          )}
-          {can("create_delete") && <Link to="/entities/new">Создать запись</Link>}
-          {/* «О проекте» стоит последним: это не рабочий раздел, а рассказ о
-              проекте — логотип, философия, манифест (Р-61). */}
-          <Link to="/about" className={location.pathname.startsWith("/about") ? "active" : ""}>
-            О проекте
-          </Link>
-        </nav>
-        <div className="viewer">
-          {viewer?.authenticated
-            ? (
-              <>
-                <span title={viewer.permissions.join(", ") || "без прав"}>
-                  {viewer.displayName}
-                </span>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await supabase.auth.signOut();
-                    refresh();
-                  }}
-                >
-                  Выйти
-                </button>
-              </>
-            )
-            : <Link to="/login">Войти</Link>}
-        </div>
-      </header>
+      <header className="top" data-site-header
+        dangerouslySetInnerHTML={{ __html: headerHtml }}
+        onClick={async (event) => {
+          const target = event.target as HTMLElement;
+          if (target.closest('[data-action="signout"]')) {
+            await supabase.auth.signOut();
+            await refresh();
+          }
+        }} />
 
       {stale && (
         <div className="stale-banner">
@@ -235,8 +200,8 @@ export function App() {
             }
           />
           <Route path="/entities/new" element={<EntityEditor mode="create" />} />
-          <Route path="/entities/:id" element={<EntityPage canEdit={can("edit")} />} />
-          <Route path="/entities/:id/edit" element={<EntityEditor mode="edit" />} />
+          <Route path="/entities/:id" element={<PublicEntityPage />} />
+          <Route path="/entities/:id/edit" element={!viewer ? <p className="notice">Проверяем права…</p> : can("edit") ? <EntityEditor mode="edit" /> : <p className="error">Недостаточно прав для редактирования.</p>} />
           <Route path="/lectures" element={<Lectures canCreate={can("create_delete")} />} />
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
@@ -248,7 +213,7 @@ export function App() {
               sub="Зачем создан 2ВХУТЕМАС, как устроен атлас и как связаться с проектом."
             />
           } />
-          <Route path="/about/logo/tool" element={<About />} />
+
           <Route path="/login" element={<Login onDone={refresh} />} />
           {/* Неизвестный адрес — честное «не найдено», а не переброс на главную:
               сервер отвечает на него 404, и страница говорит то же (Р-65). */}
