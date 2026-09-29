@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Каталонский свод: форма</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<style>
+:root{--text-primary:#1f1e1d;--text-secondary:#5f5e5a;--text-success:#3b6d11;--text-danger:#a32d2d;--text-warning:#854f0b;--text-accent:#185fa5;--border:rgba(0,0,0,.15);--bg:#faf9f5}
+@media (prefers-color-scheme:dark){:root{--text-primary:#f1efe8;--text-secondary:#b4b2a9;--text-success:#97c459;--text-danger:#f09595;--text-warning:#fac775;--text-accent:#85b7eb;--border:rgba(255,255,255,.18);--bg:#1f1e1d}}
+body{margin:0 auto;padding:16px;max-width:680px;background:var(--bg);color:var(--text-primary);font:16px/1.5 system-ui,sans-serif}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+button,select{font:inherit;font-size:14px;padding:4px 10px;border-radius:8px;border:.5px solid var(--border);background:transparent;color:inherit;cursor:pointer}
+</style></head><body>
+<h2 class="sr-only">Физическая модель двух тонких сводов одинакового пролёта: по цепной линии и по полуокружности; толщина и груз показывают, почему каталонский свод держится формой.</h2>
+<div style="display:grid;grid-template-columns:auto minmax(0,1fr) 64px;gap:8px 12px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label for="th" style="color:var(--text-secondary);">Толщина свода</label>
+  <input type="range" id="th" min="4" max="40" step="1" value="8">
+  <span id="thv" style="font-weight:500;">8 см</span>
+  <label for="lw" style="color:var(--text-secondary);">Вес груза</label>
+  <input type="range" id="lw" min="0" max="50" step="5" value="0">
+  <span id="lwv" style="font-weight:500;">0 %</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label style="color:var(--text-secondary);">Груз
+    <select id="lp" style="margin-left:6px;"><option value="0.5">в замке</option><option value="0.25">в четверти пролёта</option></select>
+  </label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="slow"> Замедление</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="fv"> Силы</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="tl" checked> Линия давления</label>
+  <button id="reset"><i class="ti ti-refresh" aria-hidden="true"></i> Собрать</button>
+</div>
+<div id="status" style="font-size:13px;margin:0 0 8px;min-height:40px;color:var(--text-secondary);">Загружаем физический движок…</div>
+<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;">
+  <canvas id="cv" style="display:block;width:100%;height:auto;touch-action:none;cursor:grab;"></canvas>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text-secondary);margin-top:8px;">
+  <span><span style="display:inline-block;width:14px;height:3px;background:#1D9E75;vertical-align:middle;"></span> давление в средней трети шва</span>
+  <span><span style="display:inline-block;width:14px;height:3px;background:#BA7517;vertical-align:middle;"></span> ближе к краю</span>
+  <span><span style="display:inline-block;width:14px;height:3px;background:#E24B4A;vertical-align:middle;"></span> на краю — шарнир</span>
+  <span><span style="display:inline-block;width:14px;border-top:2px dashed #D85A30;vertical-align:middle;"></span> линия давления</span>
+  <span><span style="display:inline-block;width:10px;height:10px;background:#5F5E5A;vertical-align:middle;"></span> плитка с грузом</span>
+</div>
+<script type="module">
+import RAPIER from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier2d-compat@0.19.3/rapier.mjs';
+await RAPIER.init();
+const $=id=>document.getElementById(id);
+const css=(n,f)=>getComputedStyle(document.body).getPropertyValue(n).trim()||f;
+const W=680,H=290,S=45,GY=270,G=9.81,DT=1/240,N=24,SPAN=6,RISE=3,Y0=0.5,RHO=1800;
+const cv=$('cv'),DPR=window.devicePixelRatio||1;
+cv.width=W*DPR;cv.height=H*DPR;
+const ctx=cv.getContext('2d');
+const sx=x=>x*S, sy=y=>GY-y*S;
+const rot=(v,a)=>({x:v.x*Math.cos(a)-v.y*Math.sin(a),y:v.x*Math.sin(a)+v.y*Math.cos(a)});
+function centroid(v){let A=0,x=0,y=0;for(let i=0;i<v.length;i++){const p=v[i],q=v[(i+1)%v.length],c=p.x*q.y-q.x*p.y;A+=c;x+=(p.x+q.x)*c;y+=(p.y+q.y)*c;}A/=2;return{x:x/(6*A),y:y/(6*A)};}
+let A=1;{let lo=0.5,hi=10;for(let i=0;i<80;i++){const m=(lo+hi)/2;(m*(Math.cosh(SPAN/2/m)-1)>RISE)?lo=m:hi=m;}A=(lo+hi)/2;}
+const CURVES=[
+  {name:'Цепная линия',cx:3.9,f:u=>{const x=-SPAN/2+SPAN*u;return{x,y:A*(Math.cosh(SPAN/2/A)-Math.cosh(x/A))};}},
+  {name:'Полуокружность',cx:11.2,f:u=>{const t=Math.PI*(1-u);return{x:RISE*Math.cos(t),y:RISE*Math.sin(t)};}}
+];
+let world,vaults,info,grab=null,cursor={x:0,y:0},settle=0;
+function resample(f,cx,n){
+  const M=2000,pts=[],len=[0];
+  for(let i=0;i<=M;i++){const p=f(i/M);pts.push({x:p.x+cx,y:p.y+Y0});if(i)len.push(len[i-1]+Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y));}
+  const L=len[M],out=[];let j=0;
+  for(let k=0;k<=n;k++){
+    const s=L*k/n;while(j<M-1&&len[j+1]<s)j++;
+    const r=(s-len[j])/(len[j+1]-len[j]||1),p={x:pts[j].x+(pts[j+1].x-pts[j].x)*r,y:pts[j].y+(pts[j+1].y-pts[j].y)*r};
+    const a=Math.max(0,j-2),b=Math.min(M,j+3),tx=pts[b].x-pts[a].x,ty=pts[b].y-pts[a].y,tl=Math.hypot(tx,ty);
+    out.push({p,n:{x:-ty/tl,y:tx/tl}});
+  }
+  return out;
+}
+function build(){
+  if(world)world.free();
+  world=new RAPIER.World({x:0,y:-G});world.timestep=DT;world.numSolverIterations=40;world.integrationParameters.contact_natural_frequency=1000;
+  info=new Map();vaults=[];grab=null;settle=0;
+  const g=world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(W/S/2,-0.5));
+  info.set(world.createCollider(RAPIER.ColliderDesc.cuboid(W/S,0.5).setFriction(1),g).handle,{kind:'ground'});
+  const t=+$('th').value/100,frac=+$('lw').value/100,lp=+$('lp').value;
+  const lk=Math.min(N-1,Math.floor(lp*N));
+  CURVES.forEach((c,vi)=>{
+    const P=resample(c.f,c.cx,N),I=P.map(q=>({x:q.p.x-q.n.x*t/2,y:q.p.y-q.n.y*t/2})),E=P.map(q=>({x:q.p.x+q.n.x*t/2,y:q.p.y+q.n.y*t/2}));
+    const v={c,segs:[],abut:[],I,E,load:frac>0?lk:-1};
+    [[0,-1],[N,1]].forEach(([k,sg])=>{
+      const i=I[k],e=E[k],pts=[e,i,{x:i.x,y:0},{x:e.x+sg*0.35,y:0}];
+      const lo=Math.min(i.y,e.y);if(lo<=0.02)return;
+      const b=world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+      const col=world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(pts.flatMap(p=>[p.x,p.y]))).setFriction(0.9),b);
+      const o={kind:'abut',vault:v,pts};v.abut.push(o);info.set(col.handle,o);
+    });
+    let segMass=0;
+    for(let k=0;k<N;k++){
+      const poly=[I[k],I[k+1],E[k+1],E[k]],ce=centroid(poly),lv=poly.map(p=>({x:p.x-ce.x,y:p.y-ce.y}));
+      const b=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(ce.x,ce.y).setCanSleep(false));
+      const heavy=k===v.load,dens=RHO*(heavy?1+frac*N:1);
+      const col=world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(lv.flatMap(p=>[p.x,p.y]))).setDensity(dens).setFriction(0.8).setRestitution(0),b);
+      const o={kind:'seg',vault:v,k,b,col,home:ce,lv,heavy};v.segs.push(o);info.set(col.handle,o);
+    }
+    vaults.push(v);
+  });
+}
+function toWorld(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width/S,y:(GY-(e.clientY-r.top)*H/r.height)/S};}
+function inPoly(p,s){const pos=s.b.translation(),a=s.b.rotation();const v=s.lv.map(q=>{const r=rot(q,a);return{x:r.x+pos.x,y:r.y+pos.y};});let ins=false;for(let i=0,j=v.length-1;i<v.length;j=i++){if(((v[i].y>p.y)!==(v[j].y>p.y))&&(p.x<(v[j].x-v[i].x)*(p.y-v[i].y)/(v[j].y-v[i].y)+v[i].x))ins=!ins;}return ins;}
+const allSegs=()=>vaults.flatMap(v=>v.segs);
+cv.addEventListener('pointerdown',e=>{
+  if(!world)return;
+  const p=toWorld(e);cursor=p;
+  let best=allSegs().find(s=>inPoly(p,s));
+  if(!best){let bd=0.4;allSegs().forEach(s=>{const q=s.b.translation(),d=Math.hypot(q.x-p.x,q.y-p.y);if(d<bd){bd=d;best=s;}});}
+  if(!best)return;
+  const q=best.b.translation(),a=best.b.rotation();
+  grab={s:best,local:rot({x:p.x-q.x,y:p.y-q.y},-a),snap:false};
+  best.b.setLinearDamping(1.5);best.b.setAngularDamping(3);
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}cv.style.cursor='grabbing';
+});
+cv.addEventListener('pointermove',e=>{if(grab)cursor=toWorld(e);});
+function release(){
+  if(!grab)return;
+  const s0=grab.s,b=s0.b,p=b.translation(),a=Math.atan2(Math.sin(b.rotation()),Math.cos(b.rotation()));
+  if(Math.hypot(p.x-s0.home.x,p.y-s0.home.y)<0.03&&Math.abs(a)<0.05){b.setTranslation(s0.home,true);b.setRotation(0,true);b.setLinvel({x:0,y:0},true);b.setAngvel(0,true);}
+  b.setLinearDamping(0);b.setAngularDamping(0);
+  grab=null;cv.style.cursor='grab';
+}
+cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);
+function stepGrab(){
+  if(!grab)return;
+  const s=grab.s,b=s.b,m=b.mass(),pos=b.translation(),a=b.rotation(),v=b.linvel(),w=b.angvel();
+  const r=rot(grab.local,a),ax=pos.x+r.x,ay=pos.y+r.y,vax=v.x-w*r.y,vay=v.y+w*r.x;
+  const k=m*70,c=2*Math.sqrt(k*m)*0.6,fmax=m*G*5;
+  let fx=k*(cursor.x-ax)-c*vax,fy=k*(cursor.y-ay)-c*vay;
+  const fl=Math.hypot(fx,fy);if(fl>fmax){fx*=fmax/fl;fy*=fmax/fl;}
+  b.applyImpulseAtPoint({x:fx*DT,y:fy*DT},{x:ax,y:ay},true);
+  grab.anchor={x:ax,y:ay};grab.stretch=Math.hypot(cursor.x-ax,cursor.y-ay);
+  grab.snap=Math.hypot(pos.x-s.home.x,pos.y-s.home.y)<0.25;
+  if(grab.snap){
+    const km=m*260,cm=2*Math.sqrt(km*m);
+    b.applyImpulse({x:(km*(s.home.x-pos.x)-cm*v.x)*DT,y:(km*(s.home.y-pos.y)-cm*v.y)*DT},true);
+    const I=b.principalInertia(),an=Math.atan2(Math.sin(a),Math.cos(a)),kt=I*260,ct=2*Math.sqrt(kt*I);
+    b.applyTorqueImpulse((-kt*an-ct*w)*DT,true);
+  }
+}
+function joints(){
+  const out=[],seen=new Set();
+  allSegs().forEach(s=>{
+    world.contactPairsWith(s.col,o=>{
+      const key=Math.min(s.col.handle,o.handle)+'-'+Math.max(s.col.handle,o.handle);
+      if(seen.has(key))return;seen.add(key);
+      const os=info.get(o.handle);if(!os||os.kind==='ground')return;
+      world.contactPair(s.col,o,(m,fl)=>{
+        const c1=fl?o:s.col,p=c1.translation(),a=c1.rotation(),n=m.numContacts();
+        let F=0,x=0,y=0;const imps=[];
+        for(let j=0;j<n;j++){const lp=m.localContactPoint1(j),im=m.contactImpulse(j);if(!lp||im<=0)continue;const r=rot(lp,a);imps.push(im);F+=im;x+=im*(r.x+p.x);y+=im*(r.y+p.y);}
+        if(F<=0)return;
+        const nr=m.normal();
+        const kk=os.kind==='seg'?(s.k+os.k)/2:(os.pts[0].x<s.vault.c.cx?-0.5:N-0.5);
+        out.push({x:x/F,y:y/F,F:F/DT,n:{x:nr.x,y:nr.y},a:s,b:os,v:s.vault,k:os.kind==='seg'&&Math.abs(s.k-os.k)!==1?null:kk,e:imps.length<2?1:Math.abs(imps[0]/F-0.5)*2});
+      });
+    });
+  });
+  return out;
+}
+function arrow(x1,y1,x2,y2,col,w){
+  const a=Math.atan2(y2-y1,x2-x1),h=5;
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=w;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-h*Math.cos(a-0.4),y2-h*Math.sin(a-0.4));ctx.lineTo(x2-h*Math.cos(a+0.4),y2-h*Math.sin(a+0.4));ctx.closePath();ctx.fill();
+}
+function poly(v,fill,stroke,lw,dash){ctx.beginPath();v.forEach((p,i)=>i?ctx.lineTo(sx(p.x),sy(p.y)):ctx.moveTo(sx(p.x),sy(p.y)));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.setLineDash(dash||[]);ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke();ctx.setLineDash([]);}}
+function draw(J){
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);
+  const ts=css('--text-secondary','#666'),tp=css('--text-primary','#222');
+  ctx.fillStyle='#888780';ctx.fillRect(0,GY,W,H-GY);
+  const res=vaults.map(v=>{
+    const intact=v.segs.every(s=>{const p=s.b.translation();return Math.hypot(p.x-s.home.x,p.y-s.home.y)<0.05&&Math.abs(s.b.rotation())<0.03;});
+    v.abut.forEach(o=>poly(o.pts,'#5F5E5A'));
+    if(!intact||grab)poly([...v.I,...v.E.slice().reverse()],null,ts,1,[3,3]);
+    v.segs.forEach(s=>{
+      const p=s.b.translation(),a=s.b.rotation(),pv=s.lv.map(q=>{const r=rot(q,a);return{x:r.x+p.x,y:r.y+p.y};});
+      const g=grab&&grab.s===s;poly(pv,s.heavy?'#5F5E5A':'#F0997B',g?'#378ADD':'#993C1D',g?2:0.6);
+    });
+    ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillStyle=tp;ctx.fillText(v.c.name,sx(v.c.cx),22);
+    const vj=J.filter(j=>j.v===v&&j.k!==null);
+    let hinges=0;vj.forEach(j=>{if(j.e>=0.9)hinges++;});
+    if($('tl').checked&&intact&&vj.length>1){
+      const pts=vj.slice().sort((a,b)=>a.k-b.k);
+      ctx.strokeStyle='#D85A30';ctx.lineWidth=2;ctx.setLineDash([5,4]);
+      ctx.beginPath();pts.forEach((j,i)=>i?ctx.lineTo(sx(j.x),sy(j.y)):ctx.moveTo(sx(j.x),sy(j.y)));ctx.stroke();ctx.setLineDash([]);
+    }
+    vj.forEach(j=>{if(j.e>=0.9){ctx.strokeStyle='#E24B4A';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(sx(j.x),sy(j.y),4,0,Math.PI*2);ctx.stroke();}});
+    return{intact,hinges};
+  });
+  if($('fv').checked){
+    const wseg=vaults[0].segs.find(s=>!s.heavy).b.mass()*G,pxPerN=14/wseg;
+    J.forEach(j=>{
+      if(j.k===null)return;
+      const col=j.e<1/3?'#1D9E75':j.e<0.9?'#BA7517':'#E24B4A',L=Math.min(Math.max(j.F*pxPerN,4),40);
+      [j.a,j.b].forEach(s=>{if(s.kind!=='seg')return;const p=s.b.translation();let dx=j.n.x,dy=j.n.y;if(dx*(p.x-j.x)+dy*(p.y-j.y)<0){dx=-dx;dy=-dy;}arrow(sx(j.x),sy(j.y),sx(j.x)+dx*L,sy(j.y)-dy*L,col,1.5);});
+    });
+  }
+  if(grab&&grab.anchor){
+    ctx.strokeStyle='#378ADD';ctx.lineWidth=3-2*Math.min(grab.stretch/1.5,1);
+    ctx.beginPath();ctx.moveTo(sx(grab.anchor.x),sy(grab.anchor.y));ctx.lineTo(sx(cursor.x),sy(cursor.y));ctx.stroke();
+    ctx.fillStyle='#378ADD';ctx.beginPath();ctx.arc(sx(cursor.x),sy(cursor.y),4,0,Math.PI*2);ctx.fill();
+  }
+  return res;
+}
+function status(res){
+  settle++;
+  const t=+$('th').value,load=+$('lw').value>0;
+  const txt=(r,i)=>{
+    const s=vaults[i].segs,moving=s.some(q=>{const v=q.b.linvel();return Math.hypot(v.x,v.y)>0.05;});
+    if(r.intact)return[vaults[i].c.name+': стоит'+(r.hinges?' (шарниров: '+r.hinges+')':''),r.hinges>=3?'--text-warning':'--text-success'];
+    return[vaults[i].c.name+': '+(moving?'рушится':'рухнул'),'--text-danger'];
+  };
+  const [a,ca]=txt(res[0],0),[b,cb]=txt(res[1],1);
+  let hint='';
+  if(res[0].intact&&!res[1].intact&&!load)hint='Одинаковая толщина '+t+' см: цепная линия держится формой, полуокружности по теории нужно около 32 см.';
+  else if(!res[0].intact&&load)hint='Груз сдвинул линию давления: форма цепи совпадает только с собственным весом. Сухой тонкий свод этого не прощает — каталонские мастера клали второй слой плитки на гипсе.';
+  else if(res[0].intact&&load)hint='Толщины хватает, чтобы линия давления с грузом осталась внутри кладки.';
+  else if(res[0].intact&&res[1].intact)hint='При такой толщине линия давления помещается в оба свода.';
+  $('status').innerHTML='<span style="color:var('+ca+')">'+a+'</span> · <span style="color:var('+cb+')">'+b+'</span><br><span style="color:var(--text-secondary)">'+hint+'</span>';
+}
+function tick(){
+  const n=$('slow').checked?1:4;
+  for(let k=0;k<n;k++){stepGrab();world.step();}
+  const J=joints(),res=draw(J);status(res);
+}
+function frame(){tick();requestAnimationFrame(frame);}
+$('th').addEventListener('input',e=>{$('thv').textContent=e.target.value+' см';build();});
+$('lw').addEventListener('input',e=>{$('lwv').textContent=e.target.value+' %';build();});
+$('lp').addEventListener('change',build);
+$('reset').addEventListener('click',build);
+build();requestAnimationFrame(frame);
+</script>
+
+</body></html>
