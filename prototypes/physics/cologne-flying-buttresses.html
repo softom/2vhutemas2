@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Кёльнский собор: аркбутаны</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<style>
+:root{--text-primary:#1f1e1d;--text-secondary:#5f5e5a;--text-success:#3b6d11;--text-danger:#a32d2d;--text-warning:#854f0b;--text-accent:#185fa5;--border:rgba(0,0,0,.15);--bg:#faf9f5}
+@media (prefers-color-scheme:dark){:root{--text-primary:#f1efe8;--text-secondary:#b4b2a9;--text-success:#97c459;--text-danger:#f09595;--text-warning:#fac775;--text-accent:#85b7eb;--border:rgba(255,255,255,.18);--bg:#1f1e1d}}
+body{margin:0 auto;padding:16px;max-width:680px;background:var(--bg);color:var(--text-primary);font:16px/1.5 system-ui,sans-serif}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+button,select{font:inherit;font-size:14px;padding:4px 10px;border-radius:8px;border:.5px solid var(--border);background:transparent;color:inherit;cursor:pointer}
+</style></head><body>
+<h2 class="sr-only">Физическая модель поперечного разреза Кёльнского собора: распор стрельчатого свода передаётся через стены и аркбутаны на контрфорсы.</h2>
+<div style="display:grid;grid-template-columns:auto minmax(0,1fr) 52px;gap:8px 12px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label for="bw" style="color:var(--text-secondary);">Ширина контрфорса</label>
+  <input type="range" id="bw" min="1" max="5" step="0.2" value="3.6">
+  <span id="bwv" style="font-weight:500;">3,6 м</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="fl" checked> Аркбутаны</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="pn" checked> Пинакли</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="slow"> Замедление</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="fv" checked> Силы</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="tl" checked> Линия давления</label>
+  <button id="reset"><i class="ti ti-refresh" aria-hidden="true"></i> Собрать</button>
+</div>
+<div id="status" style="font-size:13px;margin:0 0 8px;min-height:20px;color:var(--text-secondary);">Загружаем физический движок…</div>
+<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;">
+  <canvas id="cv" style="display:block;width:100%;height:auto;touch-action:none;cursor:grab;"></canvas>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text-secondary);margin-top:8px;">
+  <span><span style="display:inline-block;width:14px;height:3px;background:#7F77DD;vertical-align:middle;"></span> вес</span>
+  <span><span style="display:inline-block;width:14px;height:3px;background:#1D9E75;vertical-align:middle;"></span> давление в средней трети шва</span>
+  <span><span style="display:inline-block;width:14px;height:3px;background:#BA7517;vertical-align:middle;"></span> ближе к краю</span>
+  <span><span style="display:inline-block;width:14px;height:3px;background:#E24B4A;vertical-align:middle;"></span> на краю — шарнир</span>
+  <span><span style="display:inline-block;width:14px;border-top:2px dashed #D85A30;vertical-align:middle;"></span> линия давления</span>
+</div>
+<script type="module">
+import RAPIER from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier2d-compat@0.19.3/rapier.mjs';
+await RAPIER.init();
+const $=id=>document.getElementById(id);
+const css=(n,f)=>getComputedStyle(document.body).getPropertyValue(n).trim()||f;
+const W=680,H=580,S=12.5,OX=340,GY=560,G=9.81,DT=1/240;
+const cv=$('cv'),DPR=window.devicePixelRatio||1;
+cv.width=W*DPR;cv.height=H*DPR;
+const ctx=cv.getContext('2d');
+const sx=x=>OX+x*S, sy=y=>GY-y*S;
+const rot=(v,a)=>({x:v.x*Math.cos(a)-v.y*Math.sin(a),y:v.x*Math.sin(a)+v.y*Math.cos(a)});
+function centroid(v){let A=0,x=0,y=0;for(let i=0;i<v.length;i++){const p=v[i],q=v[(i+1)%v.length],c=p.x*q.y-q.x*p.y;A+=c;x+=(p.x+q.x)*c;y+=(p.y+q.y)*c;}A/=2;return{x:x/(6*A),y:y/(6*A)};}
+const COL={wall:'#D3D1C7',vault:'#F1EFE8',flyer:'#B4B2A9',pier:'#D3D1C7',butt:'#B4B2A9',pinn:'#888780'};
+let world,bodies,info,chains,settle=0,grab=null,cursor={x:0,y:0},wasBroken=false,calm=0,rescued=false;
+const BAY=7.5,DEPTH={wall:2,vault:7.5,flyer:1,pier:1.6,butt:4,pinn:1.5};
+const dens=k=>2200*DEPTH[k]/BAY;
+function addBody(verts,kind,group){
+  const c=centroid(verts),lv=verts.map(p=>({x:p.x-c.x,y:p.y-c.y}));
+  const b=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(c.x,c.y).setCanSleep(false));
+  const col=world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(lv.flatMap(p=>[p.x,p.y]))).setDensity(dens(kind)).setFriction(0.9).setRestitution(0),b);
+  const o={b,col,home:c,lv,kind,group,extra:[]};
+  bodies.push(o);info.set(col.handle,o);return o;
+}
+function corbel(o,x0,x1,yTop){
+  const v=rect(Math.min(x0,x1),yTop-0.7,Math.max(x0,x1),yTop).map(p=>({x:p.x-o.home.x,y:p.y-o.home.y}));
+  const col=world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(v.flatMap(p=>[p.x,p.y]))).setDensity(dens(o.kind)).setFriction(0.9).setRestitution(0),o.b);
+  o.extra.push(v);info.set(col.handle,o);
+}
+const rect=(x0,y0,x1,y1)=>[{x:x0,y:y0},{x:x1,y:y0},{x:x1,y:y1},{x:x0,y:y1}];
+function stack(x0,x1,y0,y1,n,kind,group){const out=[];for(let i=0;i<n;i++)out.push(addBody(rect(x0,y0+(y1-y0)*i/n,x1,y0+(y1-y0)*(i+1)/n),kind,group));return out;}
+function pinnacle(xc,w,y0,h,group){return addBody([{x:xc-w/2,y:y0},{x:xc+w/2,y:y0},{x:xc+w/2,y:y0+h*0.55},{x:xc,y:y0+h},{x:xc-w/2,y:y0+h*0.55}],'pinn',group);}
+function flyer(xA,yAb,yAt,xB,yBb,yBt,rise,n,group){
+  const bot=s=>({x:xA+(xB-xA)*s,y:yAb+(yBb-yAb)*s+rise*4*s*(1-s)});
+  const top=s=>({x:xA+(xB-xA)*s,y:yAt+(yBt-yAt)*s});
+  const ux=xB-xA,uy=yBt-yAt,ul=Math.hypot(ux,uy);let nx=uy/ul,ny=-ux/ul;if(ny>0){nx=-nx;ny=-ny;}
+  const T=[],B=[];
+  for(let k=0;k<=n;k++){
+    const s=k/n,t=top(s);T.push(t);
+    if(k===0||k===n){B.push(bot(s));continue;}
+    let lo=0,hi=1;const f=q=>{const p=bot(q);return nx*(p.y-t.y)-ny*(p.x-t.x);};
+    const flo=f(lo);for(let it=0;it<50;it++){const m=(lo+hi)/2;if((f(m)>0)===(flo>0))lo=m;else hi=m;}
+    B.push(bot((lo+hi)/2));
+  }
+  const out=[];for(let k=0;k<n;k++)out.push(addBody([T[k],T[k+1],B[k+1],B[k]],'flyer',group));
+  return out;
+}
+function build(){
+  if(world)world.free();
+  world=new RAPIER.World({x:0,y:-G});world.timestep=DT;world.numSolverIterations=30;
+  bodies=[];info=new Map();chains=[];settle=0;grab=null;wasBroken=false;calm=0;rescued=false;
+  const g=world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0,-1));
+  const gc=world.createCollider(RAPIER.ColliderDesc.cuboid(60,1).setFriction(1),g);
+  info.set(gc.handle,{kind:'ground',group:'ground'});
+  const bw=+$('bw').value,useF=$('fl').checked,useP=$('pn').checked;
+  const Ri=12.6,tv=0.9,Ro=Ri+tv,NV=5,apexA=2*Math.PI/3,apexO=Math.acos(-6.3/Ro);
+  const vault={L:[],R:[]};
+  for(const sg of [-1,1]){
+    const side=sg<0?'L':'R';
+    const wall=stack(sg<0?-7.9:6.3,sg<0?-6.3:7.9,0,30,5,'wall','wall'+side);
+    for(let k=0;k<NV;k++){
+      const a0=Math.PI-k*(Math.PI/3)/NV,a1=Math.PI-(k+1)*(Math.PI/3)/NV;
+      const pt=(r,a)=>({x:-sg*(6.3+r*Math.cos(a)),y:30+r*Math.sin(a)});
+      const i0=pt(Ri,a0),o0=pt(Ro,a0);
+      const i1=k<NV-1?pt(Ri,a1):{x:0,y:30+Ri*Math.sin(apexA)};
+      const o1=k<NV-1?pt(Ro,a1):{x:0,y:30+Ro*Math.sin(apexO)};
+      vault[side].push(addBody([i0,o0,o1,i1],'vault','vault'));
+    }
+    const px0=sg<0?-15.4:13.9,px1=sg<0?-13.9:15.4;
+    const pier=stack(px0,px1,0,27,4,'pier','pier'+side);
+    const bx0=sg<0?-21.4-bw:21.4,bx1=sg<0?-21.4:21.4+bw;
+    const butt=stack(bx0,bx1,0,24,4,'butt','butt'+side);
+    let pp=null,pb=null;
+    if(useP){pp=pinnacle((px0+px1)/2,1.1,27,7,'pier'+side);pb=pinnacle((bx0+bx1)/2,Math.min(1.6,bw*0.6),24,8,'butt'+side);}
+    chains.push({m:wall,start:'ground'},{m:pier,start:'ground'},{m:butt,start:'ground'});
+    if(useF){
+      corbel(wall[4],sg*7.9,sg*8.5,27.0);
+      corbel(pier[3],sg*13.3,sg*13.9,24.2);
+      corbel(pier[3],sg*15.4,sg*16.0,22.9);
+      corbel(butt[3],sg*20.8,sg*21.4,20.0);
+      const f1=flyer(sg*7.9,27.0,28.6,sg*13.9,24.2,25.6,0.7,4,'fly1'+side);
+      const f2=flyer(sg*15.4,22.9,24.3,sg*21.4,20.0,21.4,0.6,4,'fly2'+side);
+      chains.push({m:f1,start:'wall'+side,end:'pier'+side},{m:f2,start:'pier'+side,end:'butt'+side});
+    }
+  }
+  chains.push({m:[...vault.L,...vault.R.slice().reverse()],start:'wallL',end:'wallR'});
+}
+function toWorld(e){const r=cv.getBoundingClientRect();const px=(e.clientX-r.left)*W/r.width,py=(e.clientY-r.top)*H/r.height;return{x:(px-OX)/S,y:(GY-py)/S};}
+function inPoly(p,s){const pos=s.b.translation(),a=s.b.rotation();const v=s.lv.map(q=>{const r=rot(q,a);return{x:r.x+pos.x,y:r.y+pos.y};});let ins=false;for(let i=0,j=v.length-1;i<v.length;j=i++){if(((v[i].y>p.y)!==(v[j].y>p.y))&&(p.x<(v[j].x-v[i].x)*(p.y-v[i].y)/(v[j].y-v[i].y)+v[i].x))ins=!ins;}return ins;}
+cv.addEventListener('pointerdown',e=>{
+  if(!world)return;
+  const p=toWorld(e);cursor=p;
+  let best=bodies.find(s=>inPoly(p,s));
+  if(!best){let bd=2;bodies.forEach(s=>{const q=s.b.translation(),d=Math.hypot(q.x-p.x,q.y-p.y);if(d<bd){bd=d;best=s;}});}
+  if(!best)return;
+  const q=best.b.translation(),a=best.b.rotation();
+  grab={s:best,local:rot({x:p.x-q.x,y:p.y-q.y},-a),snap:false};
+  best.b.setLinearDamping(1.5);best.b.setAngularDamping(3);
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}cv.style.cursor='grabbing';
+});
+cv.addEventListener('pointermove',e=>{if(grab)cursor=toWorld(e);});
+function release(){
+  if(!grab)return;
+  const s0=grab.s,b=s0.b,p=b.translation(),a=Math.atan2(Math.sin(b.rotation()),Math.cos(b.rotation()));
+  if(Math.hypot(p.x-s0.home.x,p.y-s0.home.y)<0.3&&Math.abs(a)<0.05){b.setTranslation(s0.home,true);b.setRotation(0,true);b.setLinvel({x:0,y:0},true);b.setAngvel(0,true);}
+  b.setLinearDamping(0);b.setAngularDamping(0);
+  grab=null;cv.style.cursor='grab';
+}
+cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);
+function stepGrab(){
+  if(!grab)return;
+  const s=grab.s,b=s.b,m=b.mass(),pos=b.translation(),a=b.rotation(),v=b.linvel(),w=b.angvel();
+  const r=rot(grab.local,a),ax=pos.x+r.x,ay=pos.y+r.y,vax=v.x-w*r.y,vay=v.y+w*r.x;
+  const k=m*40,c=2*Math.sqrt(k*m)*0.6,fmax=m*G*4;
+  let fx=k*(cursor.x-ax)-c*vax,fy=k*(cursor.y-ay)-c*vay;
+  const fl=Math.hypot(fx,fy);if(fl>fmax){fx*=fmax/fl;fy*=fmax/fl;}
+  b.applyImpulseAtPoint({x:fx*DT,y:fy*DT},{x:ax,y:ay},true);
+  grab.anchor={x:ax,y:ay};grab.stretch=Math.hypot(cursor.x-ax,cursor.y-ay);
+  grab.snap=Math.hypot(pos.x-s.home.x,pos.y-s.home.y)<2;
+  if(grab.snap){
+    const km=m*120,cm=2*Math.sqrt(km*m);
+    b.applyImpulse({x:(km*(s.home.x-pos.x)-cm*v.x)*DT,y:(km*(s.home.y-pos.y)-cm*v.y)*DT},true);
+    const I=b.principalInertia(),an=Math.atan2(Math.sin(a),Math.cos(a)),kt=I*120,ct=2*Math.sqrt(kt*I);
+    b.applyTorqueImpulse((-kt*an-ct*w)*DT,true);
+  }
+}
+function joints(){
+  const out=[],seen=new Set();
+  bodies.forEach(s=>{
+    world.contactPairsWith(s.col,o=>{
+      const key=Math.min(s.col.handle,o.handle)+'-'+Math.max(s.col.handle,o.handle);
+      if(seen.has(key))return;seen.add(key);
+      const os=info.get(o.handle);if(!os)return;
+      world.contactPair(s.col,o,(m,fl)=>{
+        const c1=fl?o:s.col,p=c1.translation(),a=c1.rotation(),n=m.numContacts();
+        let F=0,x=0,y=0;const imps=[];
+        for(let j=0;j<n;j++){const lp=m.localContactPoint1(j),im=m.contactImpulse(j);if(!lp||im<=0)continue;const r=rot(lp,a);imps.push(im);F+=im;x+=im*(r.x+p.x);y+=im*(r.y+p.y);}
+        if(F<=0)return;
+        const nr=m.normal();
+        out.push({x:x/F,y:y/F,F:F/DT,n:{x:nr.x,y:nr.y},a:s,b:os,e:imps.length<2?1:Math.abs(imps[0]/F-0.5)*2});
+      });
+    });
+  });
+  return out;
+}
+function arrow(x1,y1,x2,y2,col,w){
+  const a=Math.atan2(y2-y1,x2-x1),h=6;
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=w;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-h*Math.cos(a-0.4),y2-h*Math.sin(a-0.4));ctx.lineTo(x2-h*Math.cos(a+0.4),y2-h*Math.sin(a+0.4));ctx.closePath();ctx.fill();
+}
+function poly(v,fill,stroke,lw,dash){ctx.beginPath();v.forEach((p,i)=>i?ctx.lineTo(sx(p.x),sy(p.y)):ctx.moveTo(sx(p.x),sy(p.y)));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.setLineDash(dash||[]);ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke();ctx.setLineDash([]);}}
+function chainPoints(ch,J){
+  const pts=[],m=ch.m,idx=new Map(m.map((o,i)=>[o,i]));
+  const ext=(o,grp)=>J.filter(j=>(j.a===o&&j.b.group===grp)||(j.b===o&&j.a.group===grp));
+  ext(m[0],ch.start).forEach(j=>pts.push({j,k:-0.5}));
+  J.forEach(j=>{const ia=idx.get(j.a),ib=idx.get(j.b);if(ia!==undefined&&ib!==undefined&&Math.abs(ia-ib)===1)pts.push({j,k:Math.min(ia,ib)+0.5});});
+  if(ch.end)ext(m[m.length-1],ch.end).forEach(j=>pts.push({j,k:m.length-0.5}));
+  return pts.sort((a,b)=>a.k-b.k).map(p=>p.j);
+}
+function draw(J){
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#888780';ctx.fillRect(0,GY,W,H-GY);
+  const intact=bodies.every(s=>{const p=s.b.translation();return Math.hypot(p.x-s.home.x,p.y-s.home.y)<0.5&&Math.abs(s.b.rotation())<0.08;});
+  if(!intact||grab)bodies.forEach(s=>{const hv=s.lv.map(q=>({x:q.x+s.home.x,y:q.y+s.home.y}));const near=grab&&grab.s===s&&grab.snap;poly(hv,near?'rgba(29,158,117,0.18)':null,near?'#1D9E75':css('--text-secondary','#666'),1,[3,3]);});
+  bodies.forEach(s=>{
+    const p=s.b.translation(),a=s.b.rotation(),v=s.lv.map(q=>{const r=rot(q,a);return{x:r.x+p.x,y:r.y+p.y};});
+    const g=grab&&grab.s===s;poly(v,COL[s.kind],g?'#378ADD':'#444441',g?2.5:0.8);
+    s.extra.forEach(ev=>poly(ev.map(q=>{const r=rot(q,a);return{x:r.x+p.x,y:r.y+p.y};}),COL[s.kind],'#444441',0.8));
+  });
+  if(grab&&grab.anchor){
+    const st=Math.min(grab.stretch/8,1);
+    ctx.strokeStyle='#378ADD';ctx.lineWidth=3-2*st;
+    ctx.beginPath();ctx.moveTo(sx(grab.anchor.x),sy(grab.anchor.y));ctx.lineTo(sx(cursor.x),sy(cursor.y));ctx.stroke();
+    ctx.fillStyle='#378ADD';ctx.beginPath();ctx.arc(sx(cursor.x),sy(cursor.y),4,0,Math.PI*2);ctx.fill();
+  }
+  const pxPerN=1/2500;
+  if($('fv').checked){
+    bodies.forEach(s=>{if(s.kind==='wall'||s.kind==='pier'||s.kind==='butt')return;const p=s.b.translation(),L=Math.min(Math.max(s.b.mass()*G*pxPerN,5),40);arrow(sx(p.x),sy(p.y),sx(p.x),sy(p.y)+L,'#7F77DD',1.5);});
+    J.forEach(j=>{
+      if(j.a.kind==='ground'||j.b.kind==='ground')return;
+      const col=j.e<1/3?'#1D9E75':j.e<0.9?'#BA7517':'#E24B4A';
+      const L=Math.min(Math.max(j.F*pxPerN,4),34);
+      [j.a,j.b].forEach(s=>{
+        if(!s.b)return;
+        const p=s.b.translation();let dx=j.n.x,dy=j.n.y;
+        if(dx*(p.x-j.x)+dy*(p.y-j.y)<0){dx=-dx;dy=-dy;}
+        arrow(sx(j.x),sy(j.y),sx(j.x)+dx*L,sy(j.y)-dy*L,col,1.5);
+      });
+    });
+  }
+  let hinges=0;
+  J.forEach(j=>{if(j.e>=0.9&&j.a.kind!=='ground'&&j.b.kind!=='ground'){hinges++;ctx.strokeStyle='#E24B4A';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(sx(j.x),sy(j.y),4,0,Math.PI*2);ctx.stroke();}});
+  if($('tl').checked&&intact){
+    ctx.strokeStyle='#D85A30';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+    chains.forEach(ch=>{const pts=chainPoints(ch,J);if(pts.length<2)return;ctx.beginPath();pts.forEach((j,i)=>i?ctx.lineTo(sx(j.x),sy(j.y)):ctx.moveTo(sx(j.x),sy(j.y)));ctx.stroke();});
+    ctx.setLineDash([]);
+  }
+  return{intact,hinges};
+}
+function status(st){
+  const el=$('status');let c='--text-success',t;
+  const moving=bodies.some(s=>{const v=s.b.linvel();return Math.hypot(v.x,v.y)>0.3;});
+  settle++;
+  if(!st.intact&&settle>60)wasBroken=true;
+  if(st.intact&&!moving&&!grab)calm++;else calm=0;
+  if(wasBroken&&calm>90)rescued=true;
+  if(!st.intact)rescued=false;
+  const useF=$('fl').checked;
+  if(grab){c='--text-accent';t=grab.snap?'Магнит затягивает камень в гнездо. Отпустите — он встанет на место.':'Камень на резинке — вы подпираете собор. Подведите его к пунктирному гнезду.';}
+  else if(rescued)t='Собор спасён: камни в гнёздах, распор снова идёт в контрфорсы.';
+  else if(!st.intact){c='--text-danger';t=moving?(useF?'Распор не удержан — собор рушится. Хватайте камни (помогает замедление).':'Без аркбутанов стены не держат распор свода — они расходятся, свод падает.'):'Собор разрушен. Соберите заново или поставьте камни в гнёзда.';}
+  else if(!useF)t='Стены пока стоят. Смотрите, куда уходит линия давления в стенах.';
+  else t='Распор свода идёт по стенам и аркбутанам в контрфорсы — собор стоит.';
+  el.style.color='var('+c+')';el.textContent=t;
+}
+function tick(){
+  const n=$('slow').checked?1:4;
+  for(let k=0;k<n;k++){stepGrab();world.step();}
+  const J=joints(),st=draw(J);status(st);
+}
+function frame(){tick();requestAnimationFrame(frame);}
+const fmt=v=>(+v).toFixed(1).replace('.',',')+' м';
+$('bw').addEventListener('input',e=>{$('bwv').textContent=fmt(e.target.value);build();});
+['fl','pn'].forEach(id=>$(id).addEventListener('change',build));
+$('reset').addEventListener('click',build);
+build();requestAnimationFrame(frame);
+</script>
+
+</body></html>
