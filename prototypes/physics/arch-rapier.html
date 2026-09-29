@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Арка из семи камней</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<style>
+:root{--text-primary:#1f1e1d;--text-secondary:#5f5e5a;--text-success:#3b6d11;--text-danger:#a32d2d;--text-warning:#854f0b;--text-accent:#185fa5;--border:rgba(0,0,0,.15);--bg:#faf9f5}
+@media (prefers-color-scheme:dark){:root{--text-primary:#f1efe8;--text-secondary:#b4b2a9;--text-success:#97c459;--text-danger:#f09595;--text-warning:#fac775;--text-accent:#85b7eb;--border:rgba(255,255,255,.18);--bg:#1f1e1d}}
+body{margin:0 auto;padding:16px;max-width:680px;background:var(--bg);color:var(--text-primary);font:16px/1.5 system-ui,sans-serif}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+button,select{font:inherit;font-size:14px;padding:4px 10px;border-radius:8px;border:.5px solid var(--border);background:transparent;color:inherit;cursor:pointer}
+</style></head><body>
+<h2 class="sr-only">Физическая модель арки из семи камней на движке Rapier: силы в швах, линия давления, обрушение и спасение арки перетаскиванием камней в гнёзда.</h2>
+<div style="display:grid;grid-template-columns:auto minmax(0,1fr) 44px;gap:8px 12px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label for="th" style="color:var(--text-secondary);">Толщина арки</label>
+  <input type="range" id="th" min="10" max="70" step="2" value="44">
+  <span id="thv" style="font-weight:500;">44</span>
+  <label for="sp" style="color:var(--text-secondary);">Раздвинуть опоры</label>
+  <input type="range" id="sp" min="0" max="60" step="1" value="0">
+  <span id="spv" style="font-weight:500;">0</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label style="color:var(--text-secondary);">Груз на камне
+    <select id="ld" style="margin-left:6px;"><option value="-1">нет</option><option value="0">1</option><option value="1">2</option><option value="2">3</option><option value="3">4</option><option value="4">5</option><option value="5">6</option><option value="6">7</option></select>
+  </label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="slow"> Замедление</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="fv" checked> Силы</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="tl" checked> Линия давления</label>
+  <button id="ctr"><i class="ti ti-building-bridge" aria-hidden="true"></i> Поставить кружало</button>
+  <button id="reset"><i class="ti ti-refresh" aria-hidden="true"></i> Собрать</button>
+</div>
+<div id="status" style="font-size:13px;margin:0 0 8px;min-height:20px;color:var(--text-secondary);">Загружаем физический движок…</div>
+<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;">
+  <canvas id="cv" style="display:block;width:100%;height:auto;touch-action:none;cursor:grab;"></canvas>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text-secondary);margin-top:8px;">
+  <span><span style="display:inline-block;width:14px;height:3px;background:#7F77DD;vertical-align:middle;"></span> вес камня</span>
+  <span><span style="display:inline-block;width:14px;height:3px;background:#1D9E75;vertical-align:middle;"></span> давление в средней трети шва</span>
+  <span><span style="display:inline-block;width:14px;height:3px;background:#BA7517;vertical-align:middle;"></span> ближе к краю</span>
+  <span><span style="display:inline-block;width:14px;height:3px;background:#E24B4A;vertical-align:middle;"></span> на краю — шарнир</span>
+  <span><span style="display:inline-block;width:14px;border-top:2px dashed #D85A30;vertical-align:middle;"></span> линия давления</span>
+  <span><span style="display:inline-block;width:14px;border-top:1px dashed var(--text-secondary);vertical-align:middle;"></span> гнездо камня</span>
+</div>
+<script type="module">
+import RAPIER from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier2d-compat@0.19.3/rapier.mjs';
+await RAPIER.init();
+const $=id=>document.getElementById(id);
+const css=(n,f)=>getComputedStyle(document.body).getPropertyValue(n).trim()||f;
+const W=680,H=380,S=100,GY=370,N=7,CX=3.4,CY=0.6,R=1.7,G=9.81,DT=1/240;
+const cv=$('cv'),DPR=window.devicePixelRatio||1;
+cv.width=W*DPR;cv.height=H*DPR;
+const ctx=cv.getContext('2d');
+const sx=x=>x*S, sy=y=>GY-y*S;
+let world,stones,abR,abRx0,spreadCur,ctrBody,ctrOn=false,grab=null,cursor={x:0,y:0},wasBroken=false,calm=0,rescued=false,ri,ro;
+const rot=(v,a)=>({x:v.x*Math.cos(a)-v.y*Math.sin(a),y:v.x*Math.sin(a)+v.y*Math.cos(a)});
+function centroid(v){let A=0,x=0,y=0;for(let i=0;i<v.length;i++){const p=v[i],q=v[(i+1)%v.length],c=p.x*q.y-q.x*p.y;A+=c;x+=(p.x+q.x)*c;y+=(p.y+q.y)*c;}A/=2;return{x:x/(6*A),y:y/(6*A)};}
+function build(){
+  if(world)world.free();
+  ctrBody=null;
+  world=new RAPIER.World({x:0,y:-G});
+  world.timestep=DT;world.numSolverIterations=24;
+  const t=+$('th').value/S;ri=R-t/2;ro=R+t/2;
+  const heavy=+$('ld').value;
+  const g=world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(CX,-0.2));
+  world.createCollider(RAPIER.ColliderDesc.cuboid(10,0.2).setFriction(0.9),g);
+  const xl=CX-ro-0.7,xr=CX-ri,hw=(xr-xl)/2,hh=CY/2;
+  const abL=world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation((xl+xr)/2,hh));
+  world.createCollider(RAPIER.ColliderDesc.cuboid(hw,hh).setFriction(0.9),abL);
+  abRx0=2*CX-(xl+xr)/2;spreadCur=0;
+  abR=world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(abRx0,hh));
+  world.createCollider(RAPIER.ColliderDesc.cuboid(hw,hh).setFriction(0.9),abR);
+  abL.hw=abR.hw=hw;abL.hh=abR.hh=hh;abL.isAb=abR.isAb=true;
+  stones=[];
+  for(let i=0;i<N;i++){
+    const a0=Math.PI-i*Math.PI/N,a1=Math.PI-(i+1)*Math.PI/N;
+    const P=(r,a)=>({x:CX+r*Math.cos(a),y:CY+r*Math.sin(a)});
+    const v=[P(ri,a1),P(ro,a1),P(ro,a0),P(ri,a0)];
+    const c=centroid(v),lv=v.map(p=>({x:p.x-c.x,y:p.y-c.y}));
+    const b=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(c.x,c.y).setCanSleep(false));
+    const col=world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(lv.flatMap(p=>[p.x,p.y]))).setDensity(i===heavy?9000:2200).setFriction(0.8).setRestitution(0),b);
+    stones.push({i,b,col,home:c,lv,heavy:i===heavy});
+  }
+  if(ctrOn)addCentering();
+  grab=null;wasBroken=false;calm=0;rescued=false;
+}
+function addCentering(){
+  const pts=[];
+  for(let k=0;k<=24;k++){const a=Math.PI*k/24;pts.push(CX+(ri-0.003)*Math.cos(a),CY+(ri-0.003)*Math.sin(a));}
+  pts.push(CX-ri+0.01,0,CX+ri-0.01,0);
+  ctrBody=world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+  world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(pts)).setFriction(0.8),ctrBody);
+  ctrBody.pts=pts;
+}
+function setCentering(on){
+  ctrOn=on;
+  if(on&&!ctrBody)addCentering();
+  if(!on&&ctrBody){world.removeRigidBody(ctrBody);ctrBody=null;}
+  $('ctr').lastChild.textContent=on?' Убрать кружало':' Поставить кружало';
+}
+function toWorld(e){const r=cv.getBoundingClientRect();const px=(e.clientX-r.left)*W/r.width,py=(e.clientY-r.top)*H/r.height;return{x:px/S,y:(GY-py)/S};}
+function inPoly(p,s){const pos=s.b.translation(),a=s.b.rotation();const v=s.lv.map(q=>{const r=rot(q,a);return{x:r.x+pos.x,y:r.y+pos.y};});let ins=false;for(let i=0,j=v.length-1;i<v.length;j=i++){if(((v[i].y>p.y)!==(v[j].y>p.y))&&(p.x<(v[j].x-v[i].x)*(p.y-v[i].y)/(v[j].y-v[i].y)+v[i].x))ins=!ins;}return ins;}
+cv.addEventListener('pointerdown',e=>{
+  if(!world)return;
+  const p=toWorld(e);cursor=p;
+  let best=null,bd=0.45;
+  let hit=stones.find(s=>inPoly(p,s));
+  if(hit)best=hit;else stones.forEach(s=>{const q=s.b.translation(),d=Math.hypot(q.x-p.x,q.y-p.y);if(d<bd){bd=d;best=s;}});
+  if(!best)return;
+  const q=best.b.translation(),a=best.b.rotation();
+  grab={s:best,local:rot({x:p.x-q.x,y:p.y-q.y},-a),snap:false};
+  best.b.setLinearDamping(1.5);best.b.setAngularDamping(3);
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}cv.style.cursor='grabbing';
+});
+cv.addEventListener('pointermove',e=>{if(grab)cursor=toWorld(e);});
+function release(){
+  if(!grab)return;
+  const s0=grab.s,b=s0.b,p=b.translation(),a=Math.atan2(Math.sin(b.rotation()),Math.cos(b.rotation()));
+  if(Math.hypot(p.x-s0.home.x,p.y-s0.home.y)<0.04&&Math.abs(a)<0.06){b.setTranslation(s0.home,true);b.setRotation(0,true);b.setLinvel({x:0,y:0},true);b.setAngvel(0,true);}
+  b.setLinearDamping(0);b.setAngularDamping(0);
+  grab=null;cv.style.cursor='grab';
+}
+cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);
+function stepGrab(){
+  if(!grab)return;
+  const s=grab.s,b=s.b,m=b.mass(),pos=b.translation(),a=b.rotation(),v=b.linvel(),w=b.angvel();
+  const r=rot(grab.local,a),ax=pos.x+r.x,ay=pos.y+r.y;
+  const vax=v.x-w*r.y,vay=v.y+w*r.x;
+  const k=m*70,c=2*Math.sqrt(k*m)*0.6,fmax=m*G*5;
+  let fx=k*(cursor.x-ax)-c*vax,fy=k*(cursor.y-ay)-c*vay+m*G*0.0;
+  const fl=Math.hypot(fx,fy);if(fl>fmax){fx*=fmax/fl;fy*=fmax/fl;}
+  b.applyImpulseAtPoint({x:fx*DT,y:fy*DT},{x:ax,y:ay},true);
+  grab.anchor={x:ax,y:ay};grab.stretch=Math.hypot(cursor.x-ax,cursor.y-ay);
+  const dh=Math.hypot(pos.x-s.home.x,pos.y-s.home.y);
+  grab.snap=dh<0.25;
+  if(grab.snap){
+    const km=m*260,cm=2*Math.sqrt(km*m);
+    b.applyImpulse({x:(km*(s.home.x-pos.x)-cm*v.x)*DT,y:(km*(s.home.y-pos.y)-cm*v.y)*DT},true);
+    const I=b.principalInertia(),an=Math.atan2(Math.sin(a),Math.cos(a)),kt=I*260,ct=2*Math.sqrt(kt*I);
+    b.applyTorqueImpulse((-kt*an-ct*w)*DT,true);
+  }
+}
+function stepSpread(){
+  const target=+$('sp').value/S,d=Math.max(-0.0005,Math.min(0.0005,target-spreadCur));
+  if(Math.abs(d)>1e-7){spreadCur+=d;}
+  abR.setNextKinematicTranslation({x:abRx0+spreadCur,y:CY/2});
+}
+function joints(){
+  const out=[];
+  stones.forEach(s=>{
+    world.contactPairsWith(s.col,o=>{
+      const ob=o.parent();
+      const os=stones.find(q=>q.col.handle===o.handle);
+      if(os&&os.i<s.i)return;
+      if(!os&&!ob.isAb&&!(ctrBody&&ob.handle===ctrBody.handle))return;
+      world.contactPair(s.col,o,(m,fl)=>{
+        const c1=fl?o:s.col,p=c1.translation(),a=c1.rotation(),n=m.numContacts();
+        let F=0,x=0,y=0;const imps=[];
+        for(let j=0;j<n;j++){const lp=m.localContactPoint1(j),im=m.contactImpulse(j);if(!lp||im<=0)continue;const r=rot(lp,a);imps.push(im);F+=im;x+=im*(r.x+p.x);y+=im*(r.y+p.y);}
+        if(F<=0)return;
+        const nr=m.normal();
+        out.push({x:x/F,y:y/F,F:F/DT,n:{x:nr.x,y:nr.y},bodies:[s,os],ab:!os,ctr:!!(ctrBody&&ob.handle===ctrBody.handle),e:imps.length<2?1:Math.abs(imps[0]/F-0.5)*2});
+      });
+    });
+  });
+  return out;
+}
+function arrow(x1,y1,x2,y2,col,w){
+  const a=Math.atan2(y2-y1,x2-x1),h=7;
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=w;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-h*Math.cos(a-0.4),y2-h*Math.sin(a-0.4));ctx.lineTo(x2-h*Math.cos(a+0.4),y2-h*Math.sin(a+0.4));ctx.closePath();ctx.fill();
+}
+function poly(v,fill,stroke,lw,dash){ctx.beginPath();v.forEach((p,i)=>i?ctx.lineTo(sx(p.x),sy(p.y)):ctx.moveTo(sx(p.x),sy(p.y)));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.setLineDash(dash||[]);ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke();ctx.setLineDash([]);}}
+function box(b,fill){const p=b.translation();ctx.fillStyle=fill;ctx.fillRect(sx(p.x-b.hw),sy(p.y+b.hh),b.hw*2*S,b.hh*2*S);}
+function draw(J){
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);
+  const tp=css('--text-primary','#222'),ts=css('--text-secondary','#666');
+  ctx.fillStyle='#888780';ctx.fillRect(0,GY,W,H-GY);
+  world.forEachRigidBody(b=>{if(b.isAb)box(b,'#5F5E5A');});
+  if(ctrBody){const p=ctrBody.pts,v=[];for(let i=0;i<p.length;i+=2)v.push({x:p[i],y:p[i+1]});poly(v.slice(0,25).concat([v[26],v[25]]),'rgba(239,159,39,0.35)','#BA7517',1);}
+  const intact=stones.every(s=>{const p=s.b.translation();return Math.hypot(p.x-s.home.x,p.y-s.home.y)<0.06&&Math.abs(s.b.rotation())<0.06;});
+  stones.forEach(s=>{
+    const hv=s.lv.map(q=>({x:q.x+s.home.x,y:q.y+s.home.y}));
+    const near=grab&&grab.s===s&&grab.snap;
+    if(!intact||grab)poly(hv,near?'rgba(29,158,117,0.18)':null,near?'#1D9E75':ts,1,[4,4]);
+  });
+  stones.forEach(s=>{
+    const p=s.b.translation(),a=s.b.rotation(),v=s.lv.map(q=>{const r=rot(q,a);return{x:r.x+p.x,y:r.y+p.y};});
+    const g=grab&&grab.s===s;
+    poly(v,s.heavy?'#5F5E5A':'#D3D1C7',g?'#378ADD':'#444441',g?3:1);
+  });
+  if(grab&&grab.anchor){
+    const st=Math.min(grab.stretch/1.2,1);
+    ctx.strokeStyle='#378ADD';ctx.lineWidth=3-2*st;ctx.setLineDash([]);
+    ctx.beginPath();ctx.moveTo(sx(grab.anchor.x),sy(grab.anchor.y));ctx.lineTo(sx(cursor.x),sy(cursor.y));ctx.stroke();
+    ctx.fillStyle='#378ADD';ctx.beginPath();ctx.arc(sx(cursor.x),sy(cursor.y),4,0,Math.PI*2);ctx.fill();
+  }
+  const mNorm=stones.find(s=>!s.heavy).b.mass(),pxPerN=26/(mNorm*G);
+  if($('fv').checked){
+    stones.forEach(s=>{const p=s.b.translation(),L=Math.min(s.b.mass()*G*pxPerN,90);arrow(sx(p.x),sy(p.y),sx(p.x),sy(p.y)+L,'#7F77DD',2);});
+    J.forEach(j=>{
+      const col=j.ctr?'#BA7517':j.e<1/3?'#1D9E75':j.e<0.9?'#BA7517':'#E24B4A';
+      const L=Math.min(Math.max(j.F*pxPerN,6),70);
+      j.bodies.forEach(s=>{
+        if(!s)return;
+        const p=s.b.translation();let dx=j.n.x,dy=j.n.y;
+        if(dx*(p.x-j.x)+dy*(p.y-j.y)<0){dx=-dx;dy=-dy;}
+        arrow(sx(j.x),sy(j.y),sx(j.x)+dx*L,sy(j.y)-dy*L,col,2);
+      });
+    });
+  }
+  const main=J.filter(j=>!j.ctr);
+  let hinges=0;
+  main.forEach(j=>{if(j.e>=0.9){hinges++;ctx.strokeStyle='#E24B4A';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sx(j.x),sy(j.y),6,0,Math.PI*2);ctx.stroke();}});
+  if($('tl').checked&&intact&&!ctrBody&&main.length>1){
+    const pts=main.map(j=>({x:sx(j.x),y:sy(j.y),a:Math.atan2(Math.max(j.y-CY,0),j.x-CX)})).sort((a,b)=>b.a-a.a);
+    ctx.strokeStyle='#D85A30';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+    ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.stroke();ctx.setLineDash([]);
+  }
+  return{intact,hinges};
+}
+function status(st){
+  const el=$('status');let c='--text-success',t;
+  const moving=stones.some(s=>{const v=s.b.linvel();return Math.hypot(v.x,v.y)>0.03;});
+  if(!st.intact)wasBroken=true;
+  if(st.intact&&!moving&&!grab)calm++;else calm=0;
+  if(wasBroken&&calm>90&&!ctrBody)rescued=true;
+  if(!st.intact)rescued=false;
+  if(grab){c='--text-accent';t=grab.snap?'Магнит затягивает камень в гнездо. Отпустите — камень встанет на место.':'Камень на резинке — вы подпираете арку. Подведите его к пунктирному гнезду.';}
+  else if(ctrBody){c='--text-warning';t='Арка лежит на кружале. Уберите кружало — устоит ли она сама?';}
+  else if(rescued){t='Арка спасена: все камни в гнёздах, линия давления снова внутри кладки.';}
+  else if(!st.intact){const fallen=stones.some(q=>q.b.translation().y<CY*0.6);c=moving||fallen?'--text-danger':'--text-warning';t=moving?'Арка рушится. Хватайте камни и возвращайте в гнёзда (помогает замедление).':fallen?'Арка разрушена. Поставьте камни в гнёзда или соберите заново.':'Камни сдвинулись из гнёзд, но заклинились — арка нашла новое равновесие.';}
+  else if(st.hinges>0){c='--text-warning';t='Шарниров: '+st.hinges+'. Линия давления касается краёв швов, но остаётся в кладке — арка стоит.';}
+  else t='Линия давления целиком внутри кладки — теорема о безопасности выполнена, арка стоит.';
+  el.style.color='var('+c+')';el.textContent=t;
+}
+function frame(){
+  const n=$('slow').checked?1:4;
+  for(let k=0;k<n;k++){stepGrab();stepSpread();world.step();}
+  const st=draw(joints());status(st);
+  requestAnimationFrame(frame);
+}
+$('th').addEventListener('input',e=>{$('thv').textContent=e.target.value;$('sp').value=0;$('spv').textContent=0;build();});
+$('sp').addEventListener('input',e=>{$('spv').textContent=e.target.value;});
+$('ld').addEventListener('change',()=>{$('sp').value=0;$('spv').textContent=0;build();});
+$('ctr').addEventListener('click',()=>setCentering(!ctrOn));
+$('reset').addEventListener('click',()=>{$('sp').value=0;$('spv').textContent=0;build();});
+build();requestAnimationFrame(frame);
+</script>
+
+</body></html>
