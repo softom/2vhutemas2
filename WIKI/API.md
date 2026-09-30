@@ -237,7 +237,8 @@ PUT /entities-dates/17
 
 - `entityCard` — карточка объекта отдельным блоком, `props: { entityId, occurrenceId }`;
 - `entityMention` — упоминание внутри абзаца, те же свойства, но внутри `content`;
-- `mediaImage` — изображение из медиатеки, `props: { assetId, caption, variant }`.
+- `mediaImage` — изображение из медиатеки, `props: { assetId, caption, variant }`;
+- `modelEmbed` — интерактивная модель сайта в выделенной рамке, `props: { src, title, caption, height }`; `src` только вида `/models/имя.html`, прочие адреса не показываются ([Р-83](Решения.md)).
 
 ```json
 POST /documents
