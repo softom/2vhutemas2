@@ -35,8 +35,11 @@ footer{margin:40px 0 8px;font-size:13px;color:var(--text-secondary)}
 .card{display:block;background:var(--card);border:.5px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit}
 .card b{font-weight:500;font-size:17px;color:var(--text-accent)}
 .card span{display:block;font-size:14px;color:var(--text-secondary);margin-top:4px}
+html.embed body{max-width:none;padding:8px}
+html.embed nav.crumbs,html.embed h1,html.embed p.lead,html.embed .howto,html.embed p.note,html.embed footer{display:none}
 </style>
     <script type="application/ld+json">[{"@context": "https://schema.org", "@type": "LearningResource", "name": "Линия красоты Хогарта", "description": "Семь S-линий от почти прямой до перегнутой и график их кривизны: можно ли измерить «слишком прямое» и «слишком изогнутое».", "url": "https://2vhutemas.ru/models/hogarth.html", "inLanguage": "ru", "isAccessibleForFree": true, "publisher": {"@type": "Organization", "name": "2ВХУТЕМАС", "url": "https://2vhutemas.ru/"}, "learningResourceType": "Интерактивная модель"}, {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "2ВХУТЕМАС", "item": "https://2vhutemas.ru/"}, {"@type": "ListItem", "position": 2, "name": "Модели", "item": "https://2vhutemas.ru/models/index.html"}, {"@type": "ListItem", "position": 3, "name": "Линия красоты Хогарта", "item": "https://2vhutemas.ru/models/hogarth.html"}]}]</script>
+    <script>(function(){if(/[?&]embed=1(&|$)/.test(location.search)){document.documentElement.classList.add("embed");window["disableYaCounter108525511"]=true;}})();</script>
     <!-- Яндекс.Метрика (Р-66) — копия кода из web/index.html; отдельные страницы моделей — исключение из правила «один шаблон» (Р-80). -->
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
@@ -130,12 +133,14 @@ window.__hg={sline,kappa,draw};
 draw();
 })();
 </script>
+    <section class="howto">
     <h2>Что попробовать</h2>
     <ul>
       <li>Двигайте изгиб или нажмите на одну из семи линий.</li>
       <li>График показывает кривизну вдоль линии: она меняется плавно и дважды проходит через ноль — так получается S.</li>
       <li>«Сравнить с ломаной»: у ломаной кривизна на отрезках равна нулю, а в вершинах скачет — глаз видит излом.</li>
     </ul>
+    </section>
     <p class="note">Линии построены по формуле угла касательной θ(s) = b·sin 2πs, а не скопированы с гравюры Хогарта; соответствие номеров приближённое. Кривые считаются по формулам прямо в браузере при каждом движении точки — ничего не нарисовано заранее.</p>
     <footer>2ВХУТЕМАС · учебный проект курса «Квантовая архитектура» · <a href="/">каталог</a> · <a href="/models/index.html">все модели</a></footer>
   </body>

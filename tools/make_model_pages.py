@@ -14,6 +14,13 @@ SITE = 'https://2vhutemas.ru'
 tpl = (ROOT / 'web/index.html').read_text(encoding='utf-8')
 metrika_head = tpl[tpl.index('    <!-- Yandex.Metrika counter -->'):tpl.index('    <!-- /Yandex.Metrika counter -->') + len('    <!-- /Yandex.Metrika counter -->')]
 metrika_body = re.search(r'    <noscript>.*?</noscript>', tpl, re.S).group(0)
+counter_id = re.search(r"ym\((\d+), 'init'", tpl).group(1)
+# Режим встраивания в текст лекции (?embed=1): только модель, без обвязки и без счётчика.
+# Счётчик отключается штатным флагом Метрики, сам код счётчика не правится.
+EMBED = ('    <script>(function(){if(/[?&]embed=1(&|$)/.test(location.search)){'
+         'document.documentElement.classList.add("embed");'
+         f'window["disableYaCounter{counter_id}"]=true;'
+         '}})();</script>')
 favicon = re.search(r'    <link rel="icon".*?\n    <link rel="apple-touch-icon"[^\n]*', tpl, re.S).group(0)
 
 STYLE = '''
@@ -37,6 +44,8 @@ footer{margin:40px 0 8px;font-size:13px;color:var(--text-secondary)}
 .card{display:block;background:var(--card);border:.5px solid var(--border);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit}
 .card b{font-weight:500;font-size:17px;color:var(--text-accent)}
 .card span{display:block;font-size:14px;color:var(--text-secondary);margin-top:4px}
+html.embed body{max-width:none;padding:8px}
+html.embed nav.crumbs,html.embed h1,html.embed p.lead,html.embed .howto,html.embed p.note,html.embed footer{display:none}
 '''
 
 DISCLAIMER = 'Модель показывает принцип, а не выполняет инженерный расчёт. Силы и линия давления берутся из физического движка Rapier: это импульсы в швах между камнями, а не заранее нарисованная картинка.'
@@ -137,6 +146,7 @@ def page(title, desc, url, crumbs, body, ld_type='LearningResource'):
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css" />
     <style>{STYLE}</style>
     <script type="application/ld+json">{json.dumps(ld, ensure_ascii=False)}</script>
+{EMBED}
     <!-- Яндекс.Метрика (Р-66) — копия кода из web/index.html; отдельные страницы моделей — исключение из правила «один шаблон» (Р-80). -->
 {metrika_head}
   </head>
@@ -158,10 +168,12 @@ for m in MODELS:
     body = f'''    <h1>{html.escape(m["title"])}</h1>
     <p class="lead">{html.escape(m["lead"])}</p>
 {widget}
+    <section class="howto">
     <h2>Что попробовать</h2>
     <ul>
 {how}
     </ul>
+    </section>
     <p class="note">{html.escape(m.get('note', DISCLAIMER))}</p>'''
     (OUT / f'{m["slug"]}.html').write_text(
         page(m['title'], m['desc'], url, [('2ВХУТЕМАС', SITE + '/'), ('Модели', INDEX_URL), (m['title'], url)], body),
