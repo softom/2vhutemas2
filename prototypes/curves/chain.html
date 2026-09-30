@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Цепь и арка</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<style>
+:root{--text-primary:#1f1e1d;--text-secondary:#5f5e5a;--text-success:#3b6d11;--text-danger:#a32d2d;--text-warning:#854f0b;--text-accent:#185fa5;--border:rgba(0,0,0,.15);--bg:#faf9f5}
+@media (prefers-color-scheme:dark){:root{--text-primary:#f1efe8;--text-secondary:#b4b2a9;--text-success:#97c459;--text-danger:#f09595;--text-warning:#fac775;--text-accent:#85b7eb;--border:rgba(255,255,255,.18);--bg:#1f1e1d}}
+body{margin:0 auto;padding:16px;max-width:680px;background:var(--bg);color:var(--text-primary);font:16px/1.5 system-ui,sans-serif}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+button,select{font:inherit;font-size:14px;padding:4px 10px;border-radius:8px;border:.5px solid var(--border);background:transparent;color:inherit;cursor:pointer}
+</style></head><body>
+<h2 class="sr-only">Физическая модель: цепь висит между опорами, поверх неё теоретические цепная линия и парабола; перевёрнутая цепь становится аркой, которую можно сравнить с полуокружностью.</h2>
+<div style="display:grid;grid-template-columns:auto minmax(0,1fr) 64px;gap:8px 12px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label for="len" style="color:var(--text-secondary);">Длина цепи</label>
+  <input type="range" id="len" min="1.05" max="1.7" step="0.01" value="1.3">
+  <span id="lenv" style="font-weight:500;">1,30 ×</span>
+  <label for="ld" style="color:var(--text-secondary);">Груз Гауди</label>
+  <input type="range" id="ld" min="0" max="100" step="5" value="0">
+  <span id="ldv" style="font-weight:500;">0 %</span>
+  <label for="th" style="color:var(--text-secondary);">Толщина арки</label>
+  <input type="range" id="th" min="5" max="60" step="1" value="15">
+  <span id="thv" style="font-weight:500;">15 см</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label style="color:var(--text-secondary);">Место груза
+    <select id="lp" style="margin-left:6px;"><option value="0.5">середина</option><option value="0.3">треть пролёта</option></select>
+  </label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="cat" checked> Цепная линия</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="par" checked> Парабола Галилея</label>
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="fv" checked> Силы</label>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 10px;">
+  <button id="flip"><i class="ti ti-arrows-vertical" aria-hidden="true"></i> <span>Перевернуть</span></button>
+  <button id="semi"><i class="ti ti-circle-half" aria-hidden="true"></i> <span>Полуокружность</span></button>
+  <button id="reset"><i class="ti ti-refresh" aria-hidden="true"></i> Собрать</button>
+</div>
+<div id="status" style="font-size:13px;margin:0 0 8px;min-height:40px;color:var(--text-secondary);">Загружаем физический движок…</div>
+<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;">
+  <canvas id="cv" style="display:block;width:100%;height:auto;touch-action:none;cursor:grab;"></canvas>
+</div>
+<div id="legend" style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text-secondary);margin-top:8px;"></div>
+<script type="module">
+import RAPIER from 'https://cdn.jsdelivr.net/npm/@dimforge/rapier2d-compat@0.19.3/rapier.mjs';
+await RAPIER.init();
+const $=id=>document.getElementById(id);
+const css=(n,f)=>getComputedStyle(document.body).getPropertyValue(n).trim()||f;
+const W=680,H=440,S=60,GY=430,G=9.81,DT=1/240,NL=40,NS=20,LINK_W=0.07,LIN_RHO=12;
+const cv=$('cv'),DPR=window.devicePixelRatio||1;cv.width=W*DPR;cv.height=H*DPR;
+const ctx=cv.getContext('2d');
+const sx=x=>x*S,sy=y=>(GY-y*S);
+const rot=(v,a)=>({x:v.x*Math.cos(a)-v.y*Math.sin(a),y:v.x*Math.sin(a)+v.y*Math.cos(a)});
+const fmt=(v,d=2)=>v.toFixed(d).replace('.',',');
+function centroid(v){let A=0,x=0,y=0;for(let i=0;i<v.length;i++){const p=v[i],q=v[(i+1)%v.length],c=p.x*q.y-q.x*p.y;A+=c;x+=(p.x+q.x)*c;y+=(p.y+q.y)*c;}A/=2;return{x:x/(6*A),y:y/(6*A)};}
+let mode='chain',world,anchors=[{x:1.3,y:6.4},{x:10.0,y:6.4}],links,aBodies,drag=null,loadIdx=-1,loadMass=0,arch=null,frozen=null,settle=0;
+const span=()=>Math.hypot(anchors[1].x-anchors[0].x,anchors[1].y-anchors[0].y);
+const chainLen=()=>+$('len').value*9.0;
+function catenary(A,B,L){
+  const h=B.x-A.x,v=B.y-A.y,r=Math.sqrt(Math.max(L*L-v*v,1e-9));
+  let lo=1e-3,hi=1e3;for(let i=0;i<200;i++){const a=Math.sqrt(lo*hi);(2*a*Math.sinh(h/(2*a))>r)?lo=a:hi=a;}
+  const a=Math.sqrt(lo*hi),x0=(A.x+B.x)/2-a*Math.atanh(v/L),c=A.y-a*Math.cosh((A.x-x0)/a);
+  return{a,x0,c,f:x=>c+a*Math.cosh((x-x0)/a)};
+}
+function parabola(A,B,ymin){
+  const dA=Math.max(A.y-ymin,1e-9),dB=Math.max(B.y-ymin,1e-9),qa=Math.sqrt(dA),qb=Math.sqrt(dB);
+  const xv=(A.x*qb+B.x*qa)/(qa+qb),k=dA/((A.x-xv)**2);
+  return x=>ymin+k*(x-xv)**2;
+}
+function newWorld(){if(world)world.free();world=new RAPIER.World({x:0,y:-G});world.timestep=DT;world.numSolverIterations=40;world.integrationParameters.contact_natural_frequency=1000;}
+function buildChain(){
+  newWorld();mode='chain';arch=null;frozen=null;settle=0;
+  const L=chainLen(),A=anchors[0],B=anchors[1],M=4000;
+  const shape=k=>{const pts=[],len=[0];for(let i=0;i<=M;i++){const x=A.x+(B.x-A.x)*i/M;pts.push({x,y:A.y+(B.y-A.y)*i/M-k*(x-A.x)*(B.x-x)});if(i)len.push(len[i-1]+Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y));}return{pts,len};};
+  let lo=0,hi=10;for(let i=0;i<60;i++){const m=(lo+hi)/2;(shape(m).len[M]<L)?lo=m:hi=m;}
+  const {pts,len}=shape((lo+hi)/2);
+  const at=s=>{let j=0;while(j<M-1&&len[j+1]<s)j++;const r=(s-len[j])/(len[j+1]-len[j]||1);return{x:pts[j].x+(pts[j+1].x-pts[j].x)*r,y:pts[j].y+(pts[j+1].y-pts[j].y)*r};};
+  const J=[];for(let k=0;k<=NL;k++)J.push(at(len[M]*k/NL));
+  const l=L/NL;
+  aBodies=anchors.map(p=>world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(p.x,p.y)));
+  const frac=+$('ld').value/100;loadIdx=frac>0?Math.min(NL-1,Math.floor(+$('lp').value*NL)):-1;loadMass=frac*LIN_RHO*L;
+  links=[];
+  for(let k=0;k<NL;k++){
+    const p=J[k],q=J[k+1],c={x:(p.x+q.x)/2,y:(p.y+q.y)/2},ang=Math.atan2(q.y-p.y,q.x-p.x);
+    const b=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(c.x,c.y).setRotation(ang).setLinearDamping(0.8).setAngularDamping(0.8).setCanSleep(false));
+    const m=LIN_RHO*l+(k===loadIdx?loadMass:0);
+    world.createCollider(RAPIER.ColliderDesc.cuboid(l/2,LINK_W/2).setDensity(m/(l*LINK_W)).setCollisionGroups(0x00010000),b);
+    links.push({b,l,m});
+  }
+  const jd=(a1,a2)=>RAPIER.JointData.revolute(a1,a2);
+  world.createImpulseJoint(jd({x:0,y:0},{x:-l/2,y:0}),aBodies[0],links[0].b,true);
+  for(let k=0;k<NL-1;k++)world.createImpulseJoint(jd({x:l/2,y:0},{x:-l/2,y:0}),links[k].b,links[k+1].b,true);
+  world.createImpulseJoint(jd({x:0,y:0},{x:l/2,y:0}),aBodies[1],links[NL-1].b,true);
+}
+function jointPts(){
+  const out=[{...anchors[0]}];
+  links.forEach((lk,k)=>{if(k<NL-1){const p=lk.b.translation(),r=rot({x:lk.l/2,y:0},lk.b.rotation());out.push({x:p.x+r.x,y:p.y+r.y});}});
+  out.push({...anchors[1]});return out;
+}
+function tensions(J){
+  let a11=0,a12=0,a22=0,b1=0,b2=0,cum=0;const Gs=links.map(l=>-l.m*G);
+  const rows=[];
+  for(let k=0;k<NL;k++){
+    const u={x:(J[k+1].x-J[k].x)/2,y:(J[k+1].y-J[k].y)/2},cy=2*cum+Gs[k];
+    const r1=-2*u.y,r2=2*u.x,rhs=-u.x*cy;
+    a11+=r1*r1;a12+=r1*r2;a22+=r2*r2;b1+=r1*rhs;b2+=r2*rhs;cum+=Gs[k];
+  }
+  const det=a11*a22-a12*a12,T0={x:(b1*a22-b2*a12)/det,y:(a11*b2-a12*b1)/det};
+  const T=[];let c=0;for(let k=0;k<=NL;k++){T.push({x:T0.x,y:T0.y+c});if(k<NL)c+=Gs[k];}
+  return T;
+}
+function resample(poly,n){
+  const len=[0];for(let i=1;i<poly.length;i++)len.push(len[i-1]+Math.hypot(poly[i].x-poly[i-1].x,poly[i].y-poly[i-1].y));
+  const L=len[len.length-1],out=[];let j=0;
+  for(let k=0;k<=n;k++){const s=L*k/n;while(j<poly.length-2&&len[j+1]<s)j++;const r=(s-len[j])/(len[j+1]-len[j]||1);out.push({x:poly[j].x+(poly[j+1].x-poly[j].x)*r,y:poly[j].y+(poly[j+1].y-poly[j].y)*r,s});}
+  return out;
+}
+function buildArch(kind){
+  const t=+$('th').value/100;
+  let curve,loadS=-1;
+  if(kind==='arch'){
+    const J=frozen.J,yref=Math.max(J[0].y,J[J.length-1].y),base=0.4;
+    const fine=[];for(let i=0;i<J.length;i++)fine.push({x:J[i].x,y:base+(yref-J[i].y)+(yref-Math.max(J[0].y,J[J.length-1].y))});
+    curve=fine;loadS=frozen.loadS;
+  }else{
+    const A=frozen.J[0],B=frozen.J[frozen.J.length-1],cx=(A.x+B.x)/2,R=Math.abs(B.x-A.x)/2,base=0.4;
+    curve=[];for(let i=0;i<=400;i++){const a=Math.PI*(1-i/400);curve.push({x:cx+R*Math.cos(a),y:base+R*Math.sin(a)});}
+    loadS=frozen.loadS;
+  }
+  const C=resample(curve,NS),Ltot=C[NS].s;
+  const nrm=C.map((p,i)=>{const a=C[Math.max(0,i-1)],b=C[Math.min(NS,i+1)],tx=b.x-a.x,ty=b.y-a.y,tl=Math.hypot(tx,ty);return{x:-ty/tl,y:tx/tl};});
+  const I=C.map((p,i)=>({x:p.x-nrm[i].x*t/2,y:p.y-nrm[i].y*t/2})),E=C.map((p,i)=>({x:p.x+nrm[i].x*t/2,y:p.y+nrm[i].y*t/2}));
+  newWorld();settle=0;
+  const g=world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(W/S/2,-0.5));world.createCollider(RAPIER.ColliderDesc.cuboid(W/S,0.5).setFriction(1),g);
+  const abut=[];
+  [[0,-1],[NS,1]].forEach(([k,sg])=>{const i=I[k],e=E[k],pts=[e,i,{x:i.x,y:0},{x:e.x+sg*0.35,y:0}];const b=world.createRigidBody(RAPIER.RigidBodyDesc.fixed());const col=world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(pts.flatMap(p=>[p.x,p.y]))).setFriction(0.9),b);abut.push({col,pts,side:sg});});
+  const RHO=1800,segs=[];
+  const lk=loadS>=0?Math.min(NS-1,Math.floor(loadS*NS)):-1;
+  let areaTot=0;const polys=[];for(let k=0;k<NS;k++){const p=[I[k],I[k+1],E[k+1],E[k]];polys.push(p);let A=0;for(let i=0;i<4;i++){const a=p[i],b=p[(i+1)%4];A+=a.x*b.y-b.x*a.y;}areaTot+=Math.abs(A)/2;}
+  const extra=frozen.loadFrac*RHO*areaTot;
+  for(let k=0;k<NS;k++){
+    const poly=polys[k],ce=centroid(poly),lv=poly.map(p=>({x:p.x-ce.x,y:p.y-ce.y}));
+    let A=0;for(let i=0;i<4;i++){const a=poly[i],b=poly[(i+1)%4];A+=a.x*b.y-b.x*a.y;}A=Math.abs(A)/2;
+    const b=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(ce.x,ce.y).setCanSleep(false).setLinearDamping(6).setAngularDamping(6));
+    const col=world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(lv.flatMap(p=>[p.x,p.y]))).setDensity(RHO+(k===lk?extra/A:0)).setFriction(0.8).setRestitution(0),b);
+    segs.push({k,b,col,home:ce,lv,heavy:k===lk});
+  }
+  arch={kind,segs,abut,I,E,t};mode=kind;
+}
+const pickChain=(js,n)=>{const by=new Map();js.forEach(j=>{if(j.k===null)return;const o=by.get(j.k);if(!o||j.F>o.F)by.set(j.k,j);});const out=[];for(let i=0;i<=n;i++){const j=by.get(i-0.5);if(!j)return null;out.push(j);}return out;};
+function archJoints(){
+  const out=[],seen=new Set(),byH=new Map();arch.segs.forEach(s=>byH.set(s.col.handle,s));const abH=new Map();arch.abut.forEach(a=>abH.set(a.col.handle,a));
+  arch.segs.forEach(s=>{world.contactPairsWith(s.col,o=>{
+    const key=Math.min(s.col.handle,o.handle)+'-'+Math.max(s.col.handle,o.handle);if(seen.has(key))return;seen.add(key);
+    const os=byH.get(o.handle),ab=abH.get(o.handle);if(!os&&!ab)return;
+    world.contactPair(s.col,o,(m,fl)=>{
+      const c1=fl?o:s.col,p=c1.translation(),a=c1.rotation(),n=m.numContacts();let F=0,x=0,y=0;const imps=[];
+      for(let j=0;j<n;j++){const lp=m.localContactPoint1(j),im=m.contactImpulse(j);if(!lp||im<=0)continue;const r=rot(lp,a);imps.push(im);F+=im;x+=im*(r.x+p.x);y+=im*(r.y+p.y);}
+      if(F<=0)return;
+      const k=os?(Math.abs(os.k-s.k)===1?(os.k+s.k)/2:null):(ab.side<0?(s.k===0?-0.5:null):(s.k===NS-1?NS-0.5:null));
+      out.push({x:x/F,y:y/F,F,k,e:imps.length<2?1:Math.abs(imps[0]/F-0.5)*2});
+    });
+  });});
+  return out;
+}
+function arrow(x1,y1,x2,y2,col,w){const a=Math.atan2(y2-y1,x2-x1),h=6;ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-h*Math.cos(a-0.4),y2-h*Math.sin(a-0.4));ctx.lineTo(x2-h*Math.cos(a+0.4),y2-h*Math.sin(a+0.4));ctx.closePath();ctx.fill();}
+function poly(v,fill,stroke,lw,dash){ctx.beginPath();v.forEach((p,i)=>i?ctx.lineTo(sx(p.x),sy(p.y)):ctx.moveTo(sx(p.x),sy(p.y)));ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.setLineDash(dash||[]);ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke();ctx.setLineDash([]);}}
+function curveLine(f,x0,x1,col,dash){ctx.strokeStyle=col;ctx.lineWidth=2;ctx.setLineDash(dash);ctx.beginPath();for(let i=0;i<=200;i++){const x=x0+(x1-x0)*i/200;i?ctx.lineTo(sx(x),sy(f(x))):ctx.moveTo(sx(x),sy(f(x)));}ctx.stroke();ctx.setLineDash([]);}
+let lastInfo={};
+function drawChain(){
+  const J=jointPts(),A=anchors[0],B=anchors[1],L=chainLen(),tp=css('--text-primary','#222');
+  const cat=catenary(A,B,L),ymin=Math.min(...J.map(p=>p.y)),par=parabola(A,B,ymin);
+  const loaded=loadIdx>=0;
+  const inner=J.slice(1,-1);
+  const dc=Math.sqrt(inner.reduce((s,p)=>s+(p.y-cat.f(p.x))**2,0)/inner.length),dp=Math.sqrt(inner.reduce((s,p)=>s+(p.y-par(p.x))**2,0)/inner.length);
+  if(!loaded&&$('par').checked)curveLine(par,A.x,B.x,'#7F77DD',[7,5]);
+  if(!loaded&&$('cat').checked)curveLine(cat.f,A.x,B.x,'#D85A30',[3,4]);
+  links.forEach((lk,k)=>{const p=lk.b.translation(),a=lk.b.rotation(),h=rot({x:lk.l/2,y:0},a);ctx.strokeStyle=tp;ctx.lineWidth=4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(sx(p.x-h.x),sy(p.y-h.y));ctx.lineTo(sx(p.x+h.x),sy(p.y+h.y));ctx.stroke();ctx.lineCap='butt';
+    if(k===loadIdx){ctx.strokeStyle=tp;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(sx(p.x),sy(p.y));ctx.lineTo(sx(p.x),sy(p.y)+28);ctx.stroke();const s=10+14*Math.sqrt(+$('ld').value/100);ctx.fillStyle='#5F5E5A';ctx.fillRect(sx(p.x)-s/2,sy(p.y)+28,s,s);}});
+  if($('fv').checked){
+    const T=tensions(J),maxT=Math.max(...T.map(t=>Math.hypot(t.x,t.y))),k=34/maxT;let maxAng=0;
+    for(let i=2;i<=NL-2;i+=3){const t=T[i],m=Math.hypot(t.x,t.y),d={x:t.x/m,y:t.y/m},L2=m*k;
+      const p=J[i],ox=d.y*10,oy=d.x*10,X=sx(p.x)+ox,Y=sy(p.y)+oy;arrow(X,Y,X-d.x*L2,Y+d.y*L2,'#1D9E75',2);arrow(X,Y,X+d.x*L2,Y-d.y*L2,'#1D9E75',2);
+      const lk={x:J[i+1].x-J[i-1].x,y:J[i+1].y-J[i-1].y},ang=Math.abs(Math.atan2(lk.x*d.y-lk.y*d.x,lk.x*d.x+lk.y*d.y));maxAng=Math.max(maxAng,Math.min(ang,Math.PI-ang));}
+    lastInfo.maxAng=maxAng*180/Math.PI;lastInfo.Tmin=Math.min(...T.map(t=>Math.hypot(t.x,t.y)));lastInfo.Tmax=maxT;
+  }
+  anchors.forEach((p,i)=>{ctx.fillStyle=drag===i?'#378ADD':'#5F5E5A';ctx.beginPath();ctx.arc(sx(p.x),sy(p.y),9,0,Math.PI*2);ctx.fill();});
+  lastInfo.dc=dc;lastInfo.dp=dp;lastInfo.loaded=loaded;
+  const st=$('status');
+  st.innerHTML=loaded?'<span>С грузом цепь — уже не цепная линия, а верёвочный многоугольник под этой нагрузкой. Переверните её — Гауди строил арки именно так.</span>'
+    :'Отклонение цепи: от цепной линии <b style="font-weight:500;color:#D85A30">'+fmt(dc*100,1)+' см</b>, от параболы Галилея <b style="font-weight:500;color:#7F77DD">'+fmt(dp*100,1)+' см</b>.'+($('fv').checked?' Натяжение идёт вдоль цепи: угол между силой и звеном не больше '+fmt(lastInfo.maxAng,1)+'°.':'');
+}
+function drawArch(){
+  const tp=css('--text-primary','#222'),ts=css('--text-secondary','#666');
+  arch.abut.forEach(a=>poly(a.pts,'#5F5E5A'));
+  const intact=arch.segs.every(s=>{const p=s.b.translation();return Math.hypot(p.x-s.home.x,p.y-s.home.y)<0.08&&Math.abs(s.b.rotation())<0.04;});
+  if(!intact)poly([...arch.I,...arch.E.slice().reverse()],null,ts,1,[3,3]);
+  arch.segs.forEach(s=>{const p=s.b.translation(),a=s.b.rotation();poly(s.lv.map(q=>{const r=rot(q,a);return{x:r.x+p.x,y:r.y+p.y};}),s.heavy?'#5F5E5A':'#F0997B','#993C1D',0.6);});
+  const J=archJoints(),ch=pickChain(J,NS);
+  if(ch){ctx.strokeStyle='#D85A30';ctx.lineWidth=2;ctx.setLineDash([5,4]);ctx.beginPath();ch.forEach((j,i)=>i?ctx.lineTo(sx(j.x),sy(j.y)):ctx.moveTo(sx(j.x),sy(j.y)));ctx.stroke();ctx.setLineDash([]);}
+  let hinges=0;J.forEach(j=>{if(j.k!==null&&j.e>=0.9){hinges++;ctx.strokeStyle='#E24B4A';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(sx(j.x),sy(j.y),4,0,Math.PI*2);ctx.stroke();}});
+  const moving=arch.segs.some(s=>{const v=s.b.linvel();return Math.hypot(v.x,v.y)>0.05;});
+  const name=arch.kind==='arch'?'Перевёрнутая цепь':'Полуокружность',t=Math.round(arch.t*100),ld=frozen.loadFrac>0;
+  let txt;
+  if(intact)txt=name+' толщиной '+t+' см стоит'+(ld?' и держит груз':'')+'. Линия давления '+(arch.kind==='arch'?'повторяет перевёрнутую цепь.':'ещё помещается в кладку.');
+  else txt=name+' толщиной '+t+' см '+(moving?'рушится':'рухнула')+': линия давления вышла из кладки.'+(arch.kind==='semi'?' Форма не совпадает с нагрузкой.':'');
+  $('status').innerHTML='<span style="color:var('+(intact?'--text-success':'--text-danger')+')">'+txt+'</span>';
+  lastInfo.intact=intact;lastInfo.hinges=hinges;
+}
+function legend(){
+  const i=(c,t,d)=>'<span><span style="display:inline-block;width:14px;'+(d?'border-top:2px dashed '+c:'height:3px;background:'+c)+';vertical-align:middle;"></span> '+t+'</span>';
+  $('legend').innerHTML=mode==='chain'?i('var(--text-primary)','цепь (Rapier)')+i('#D85A30','цепная линия y = a·ch(x/a) (1691)',1)+i('#7F77DD','парабола Галилея (1638)',1)+i('#1D9E75','натяжение'):i('#F0997B','камни арки')+i('#D85A30','линия давления',1)+i('#E24B4A','шарнир')+i('#5F5E5A','камень с грузом');
+  $('flip').querySelector('span').textContent=mode==='chain'?'Перевернуть':'Назад к цепи';
+  $('semi').disabled=mode==='chain';$('semi').querySelector('span').textContent=mode==='semi'?'Арка по цепи':'Полуокружность';
+  ['len','ld','lp'].forEach(id=>$(id).disabled=mode!=='chain');$('th').disabled=mode==='chain';
+}
+function tick(){
+  const n=4;
+  if(mode==='chain'){anchors.forEach((p,i)=>aBodies[i].setNextKinematicTranslation(p));}
+  for(let k=0;k<n;k++)world.step();
+  settle++;
+  if(settle===40&&arch&&mode!=='chain')arch.segs.forEach(q=>{q.b.setLinearDamping(0);q.b.setAngularDamping(0);});
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);ctx.fillStyle='#888780';ctx.fillRect(0,GY,W,H-GY);
+  mode==='chain'?drawChain():drawArch();
+}
+function frame(){tick();requestAnimationFrame(frame);}
+const toW=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width/S,y:(GY-(e.clientY-r.top)*H/r.height)/S};};
+cv.addEventListener('pointerdown',e=>{if(mode!=='chain')return;const p=toW(e),rad=(e.pointerType==='touch'?28:18)/S;let bi=-1,bd=rad;anchors.forEach((q,i)=>{const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<bd){bd=d;bi=i;}});if(bi<0)return;drag=bi;try{cv.setPointerCapture(e.pointerId);}catch(_){}cv.style.cursor='grabbing';});
+cv.addEventListener('pointermove',e=>{
+  if(drag===null)return;const p=toW(e),o=anchors[1-drag],L=chainLen();
+  let q={x:Math.max(0.3,Math.min(W/S-0.3,p.x)),y:Math.max(2.5,Math.min(7.0,p.y))};
+  const d=Math.hypot(q.x-o.x,q.y-o.y);if(d>L*0.97){q={x:o.x+(q.x-o.x)*L*0.97/d,y:o.y+(q.y-o.y)*L*0.97/d};}
+  if(Math.abs(q.x-o.x)<1)return;
+  anchors[drag]=q;
+});
+const up=()=>{drag=null;cv.style.cursor='grab';};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+$('len').addEventListener('input',e=>{const L=+e.target.value*9;if(span()>L*0.97){e.target.value=(span()/0.97/9).toFixed(2);}$('lenv').textContent=fmt(+e.target.value)+' ×';buildChain();legend();});
+$('ld').addEventListener('input',e=>{$('ldv').textContent=e.target.value+' %';buildChain();legend();});
+$('lp').addEventListener('change',()=>{buildChain();legend();});
+$('th').addEventListener('input',e=>{$('thv').textContent=e.target.value+' см';if(mode!=='chain'){buildArch(mode);}});
+$('flip').addEventListener('click',()=>{
+  if(mode==='chain'){const J=jointPts();let loadS=-1;if(loadIdx>=0){const len=[0];for(let i=1;i<J.length;i++)len.push(len[i-1]+Math.hypot(J[i].x-J[i-1].x,J[i].y-J[i-1].y));loadS=((len[loadIdx]+len[loadIdx+1])/2)/len[len.length-1];}
+    frozen={J,loadS,loadFrac:loadIdx>=0?+$('ld').value/100:0};buildArch('arch');}
+  else buildChain();
+  legend();
+});
+$('semi').addEventListener('click',()=>{if(mode==='chain')return;buildArch(mode==='semi'?'arch':'semi');legend();});
+$('reset').addEventListener('click',()=>{anchors=[{x:1.3,y:6.4},{x:10.0,y:6.4}];buildChain();legend();});
+window.__ch={run:n=>{for(let i=0;i<n;i++)tick();return lastInfo;},get info(){return lastInfo;},get mode(){return mode;},get anchors(){return anchors;},set anchors(a){anchors=a;}};
+buildChain();legend();requestAnimationFrame(frame);
+</script>
+
+</body></html>

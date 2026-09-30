@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Безье, B-сплайн, NURBS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<style>
+:root{--text-primary:#1f1e1d;--text-secondary:#5f5e5a;--text-success:#3b6d11;--text-danger:#a32d2d;--text-warning:#854f0b;--text-accent:#185fa5;--border:rgba(0,0,0,.15);--bg:#faf9f5}
+@media (prefers-color-scheme:dark){:root{--text-primary:#f1efe8;--text-secondary:#b4b2a9;--text-success:#97c459;--text-danger:#f09595;--text-warning:#fac775;--text-accent:#85b7eb;--border:rgba(255,255,255,.18);--bg:#1f1e1d}}
+body{margin:0 auto;padding:16px;max-width:680px;background:var(--bg);color:var(--text-primary);font:16px/1.5 system-ui,sans-serif}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+button,select{font:inherit;font-size:14px;padding:4px 10px;border-radius:8px;border:.5px solid var(--border);background:transparent;color:inherit;cursor:pointer}
+</style></head><body>
+<h2 class="sr-only">Одна контрольная ломаная в пяти режимах: прямая и дуга по методу наименьших квадратов, кривая Безье, B-сплайн и NURBS; подсвечивается участок кривой, изменившийся после сдвига точки.</h2>
+<div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:0 0 10px;font-size:14px;" role="radiogroup" aria-label="Режим">
+  <label style="display:flex;align-items:center;gap:6px;"><input type="radio" name="mode" value="line"> Прямая</label>
+  <label style="display:flex;align-items:center;gap:6px;"><input type="radio" name="mode" value="arc"> Дуга</label>
+  <label style="display:flex;align-items:center;gap:6px;"><input type="radio" name="mode" value="bezier" checked> Безье</label>
+  <label style="display:flex;align-items:center;gap:6px;"><input type="radio" name="mode" value="bspline"> B-сплайн</label>
+  <label style="display:flex;align-items:center;gap:6px;"><input type="radio" name="mode" value="nurbs"> NURBS</label>
+</div>
+<div style="display:grid;grid-template-columns:auto minmax(0,1fr) 52px;gap:8px 12px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label for="deg" style="color:var(--text-secondary);">Степень</label>
+  <input type="range" id="deg" min="2" max="3" step="1" value="3">
+  <span id="degv" style="font-weight:500;">3</span>
+  <label for="wt" style="color:var(--text-secondary);">Вес точки <span id="wtp">P3</span></label>
+  <input type="range" id="wt" min="-1" max="1" step="0.01" value="0">
+  <span id="wtv" style="font-weight:500;font-variant-numeric:tabular-nums;">1,00</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <button id="circle"><i class="ti ti-circle" aria-hidden="true"></i> Окружность</button>
+  <button id="reset"><i class="ti ti-refresh" aria-hidden="true"></i> Сбросить</button>
+  <span id="info" style="font-size:13px;color:var(--text-secondary);"></span>
+</div>
+<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;">
+  <canvas id="cv" style="display:block;width:100%;height:auto;touch-action:none;cursor:grab;"></canvas>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text-secondary);margin-top:8px;">
+  <span><span style="display:inline-block;width:14px;height:3px;background:#888780;vertical-align:middle;"></span> контрольная ломаная</span>
+  <span><span style="display:inline-block;width:14px;height:3px;background:var(--text-primary);vertical-align:middle;"></span> кривая</span>
+  <span><span style="display:inline-block;width:14px;height:5px;background:#EF9F27;vertical-align:middle;"></span> изменилось после сдвига точки</span>
+  <span><span style="display:inline-block;width:14px;border-top:2px dashed #378ADD;vertical-align:middle;"></span> точная окружность</span>
+</div>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const css=(n,f)=>getComputedStyle(document.body).getPropertyValue(n).trim()||f;
+const W=680,H=420,cv=$('cv'),DPR=window.devicePixelRatio||1,M=600;
+cv.width=W*DPR;cv.height=H*DPR;
+const ctx=cv.getContext('2d');
+const DEF=[[50,330],[120,110],[210,300],[300,90],[390,300],[480,90],[570,300],[630,120]];
+const CC={x:340,y:215},CR=165,S2=Math.SQRT1_2;
+let P,wts,knots=null,circle=false,sel=3,drag=null,before=null,changed=null;
+const mode=()=>document.querySelector('input[name=mode]:checked').value;
+function reset(){P=DEF.map(([x,y])=>({x,y}));wts=P.map(()=>1);circle=false;knots=null;sel=3;before=null;changed=null;syncW();draw();}
+function setCircle(){
+  const d=[[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1],[0,1],[1,1],[1,0]];
+  P=d.map(([a,b])=>({x:CC.x+a*CR,y:CC.y+b*CR}));wts=d.map((_,i)=>i%2?S2:1);
+  knots=[0,0,0,.25,.25,.5,.5,.75,.75,1,1,1];circle=true;sel=1;before=null;changed=null;
+  document.querySelector('input[value=nurbs]').checked=true;syncW();draw();
+}
+function bezier(t){let p=P.map(q=>({x:q.x,y:q.y}));for(let k=p.length-1;k>0;k--)for(let i=0;i<k;i++)p[i]={x:p[i].x+(p[i+1].x-p[i].x)*t,y:p[i].y+(p[i+1].y-p[i].y)*t};return p[0];}
+function uniformKnots(n,p){const m=n+p+1,U=[];for(let i=0;i<=m;i++)U.push(i<=p?0:i>=m-p?1:(i-p)/(n-p+1));return U;}
+function nurbsPoint(t,p,U,w){
+  const n=P.length-1;
+  let s=p;while(s<n&&t>=U[s+1])s++;
+  const d=[];for(let j=0;j<=p;j++){const q=P[s-p+j],ww=w[s-p+j];d.push({x:q.x*ww,y:q.y*ww,w:ww});}
+  for(let r=1;r<=p;r++)for(let j=p;j>=r;j--){const i=s-p+j,den=U[i+p-r+1]-U[i],a=den?(t-U[i])/den:0;d[j]={x:(1-a)*d[j-1].x+a*d[j].x,y:(1-a)*d[j-1].y+a*d[j].y,w:(1-a)*d[j-1].w+a*d[j].w};}
+  return{x:d[p].x/d[p].w,y:d[p].y/d[p].w};
+}
+function fitLine(){
+  const n=P.length,c={x:P.reduce((s,p)=>s+p.x,0)/n,y:P.reduce((s,p)=>s+p.y,0)/n};
+  let sxx=0,syy=0,sxy=0;P.forEach(p=>{const dx=p.x-c.x,dy=p.y-c.y;sxx+=dx*dx;syy+=dy*dy;sxy+=dx*dy;});
+  const a=Math.atan2(2*sxy,sxx-syy)/2,d={x:Math.cos(a),y:Math.sin(a)},pr=q=>((q.x-c.x)*d.x+(q.y-c.y)*d.y);
+  const t0=pr(P[0]),t1=pr(P[n-1]);
+  return{at:t=>{const u=t0+(t1-t0)*t;return{x:c.x+d.x*u,y:c.y+d.y*u};},dist:q=>Math.abs(-(q.x-c.x)*d.y+(q.y-c.y)*d.x)};
+}
+function fitArc(){
+  let m=[[0,0,0],[0,0,0],[0,0,0]],r=[0,0,0];
+  P.forEach(p=>{const v=[p.x,p.y,1],z=-(p.x*p.x+p.y*p.y);for(let i=0;i<3;i++){r[i]+=v[i]*z;for(let j=0;j<3;j++)m[i][j]+=v[i]*v[j];}});
+  const det=A=>A[0][0]*(A[1][1]*A[2][2]-A[1][2]*A[2][1])-A[0][1]*(A[1][0]*A[2][2]-A[1][2]*A[2][0])+A[0][2]*(A[1][0]*A[2][1]-A[1][1]*A[2][0]);
+  const D0=det(m);if(Math.abs(D0)<1e-9)return null;
+  const sol=[0,1,2].map(k=>det(m.map((row,i)=>row.map((v,j)=>j===k?r[i]:v)))/D0);
+  const c={x:-sol[0]/2,y:-sol[1]/2},R=Math.sqrt(Math.max(c.x*c.x+c.y*c.y-sol[2],0));
+  if(!(R>0)||R>1e5)return null;
+  const ang=q=>Math.atan2(q.y-c.y,q.x-c.x),a0=ang(P[0]),mid=ang(P[Math.floor(P.length/2)]);
+  let a1=ang(P[P.length-1]),d1=a1-a0;const norm=x=>((x%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+  const ccw=norm(mid-a0)<norm(d1);d1=ccw?norm(d1):-norm(-d1);if(Math.abs(d1)<1e-6)d1=ccw?2*Math.PI:-2*Math.PI;
+  return{at:t=>{const a=a0+d1*t;return{x:c.x+R*Math.cos(a),y:c.y+R*Math.sin(a)};},dist:q=>Math.abs(Math.hypot(q.x-c.x,q.y-c.y)-R)};
+}
+let fitCache=null;
+function evalAt(t){
+  const m=mode();
+  if(m==='line'||m==='arc'){if(!fitCache)fitCache=(m==='arc'&&fitArc())||fitLine();return fitCache.at(t);}
+  if(m==='bezier')return bezier(t);
+  const p=circle?2:Math.min(+$('deg').value,P.length-1);
+  const U=circle?knots:uniformKnots(P.length-1,p);
+  return nurbsPoint(t,p,U,m==='nurbs'?wts:P.map(()=>1));
+}
+const sample=()=>{fitCache=null;const a=[];for(let i=0;i<=M;i++)a.push(evalAt(i/M));return a;};
+function syncW(){
+  const w=wts[sel];$('wt').value=Math.log10(w).toFixed(2);$('wtv').textContent=w.toFixed(2).replace('.',',');$('wtp').textContent='P'+sel;
+  const nm=mode()==='nurbs';$('wt').disabled=!nm;$('deg').disabled=['bezier','line','arc'].includes(mode())||circle;$('degv').textContent=circle?'2':$('deg').value;
+}
+function draw(){
+  const tp=css('--text-primary','#222'),ts=css('--text-secondary','#666');
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);
+  if(circle){ctx.strokeStyle='#378ADD';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.beginPath();ctx.arc(CC.x,CC.y,CR,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}
+  ctx.strokeStyle='#888780';ctx.lineWidth=1.5;ctx.beginPath();P.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();
+  const s=sample();
+  if(changed){ctx.strokeStyle='#EF9F27';ctx.lineWidth=9;ctx.lineCap='round';ctx.beginPath();let on=false;s.forEach((q,i)=>{if(changed[i]){on?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y);on=true;}else on=false;});ctx.stroke();ctx.lineCap='butt';}
+  ctx.strokeStyle=tp;ctx.lineWidth=3;ctx.beginPath();s.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.stroke();
+  const nm=mode()==='nurbs';
+  const seen=new Map();
+  P.forEach((p,i)=>{
+    const key=Math.round(p.x)+','+Math.round(p.y);if(seen.has(key)&&circle)return;seen.set(key,1);
+    const r=nm?Math.max(6,Math.min(18,7+4*Math.log10(wts[i])*2)):8;
+    ctx.fillStyle=drag===i?'#378ADD':css('--bg','#fff');ctx.strokeStyle=nm&&i===sel?'#D85A30':'#888780';ctx.lineWidth=nm&&i===sel?3:2;
+    ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+    ctx.fillStyle=ts;ctx.font='12px sans-serif';ctx.textAlign='center';
+    ctx.fillText('P'+i+(nm?' · '+wts[i].toFixed(2).replace('.',','):''),p.x,p.y+(p.y>CC.y?r+16:-r-7));
+  });
+  let info='';
+  if((mode()==='line'||mode()==='arc')&&fitCache){const r=Math.sqrt(P.reduce((a,q)=>a+fitCache.dist(q)**2,0)/P.length);info=(mode()==='line'?'Прямая':'Дуга')+' проходит мимо точек: среднее отклонение '+r.toFixed(1).replace('.',',')+' px. ';}
+  if(circle){info='';let md=0;s.forEach(q=>{md=Math.max(md,Math.abs(Math.hypot(q.x-CC.x,q.y-CC.y)-CR));});info='Наибольшее отклонение от окружности: '+(md<0.05?'0':md.toFixed(1).replace('.',','))+' px'+(mode()==='nurbs'&&md<0.05?' — окружность точная.':'.');}
+  if(changed&&!circle){const n=changed.filter(Boolean).length;info+='Изменилось '+Math.round(100*n/changed.length)+' % кривой.';}
+  $('info').textContent=info;
+}
+const toC=e=>{const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height};};
+cv.addEventListener('pointerdown',e=>{
+  const p=toC(e),rad=e.pointerType==='touch'?26:16;let bi=-1,bd=rad;
+  P.forEach((q,i)=>{const d=Math.hypot(q.x-p.x,q.y-p.y);if(d<bd){bd=d;bi=i;}});
+  if(bi<0)return;
+  drag=bi;sel=bi;before=sample();changed=null;syncW();
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}cv.style.cursor='grabbing';draw();
+});
+cv.addEventListener('pointermove',e=>{
+  if(drag===null)return;const p=toC(e),q={x:Math.max(8,Math.min(W-8,p.x)),y:Math.max(8,Math.min(H-8,p.y))};
+  const same=circle?P.map((r,i)=>i).filter(i=>P[i].x===P[drag].x&&P[i].y===P[drag].y):[drag];
+  same.forEach(i=>P[i]=q);
+  const s=sample();changed=s.map((a,i)=>Math.hypot(a.x-before[i].x,a.y-before[i].y)>1e-6);draw();
+});
+const up=()=>{drag=null;cv.style.cursor='grab';draw();};
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+document.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener('change',()=>{changed=null;syncW();draw();}));
+$('deg').addEventListener('input',()=>{changed=null;syncW();draw();});
+$('wt').addEventListener('input',e=>{
+  const b=sample(),w=Math.pow(10,+e.target.value);
+  const same=circle&&(sel===0||sel===P.length-1)?[0,P.length-1]:[sel];same.forEach(i=>wts[i]=w);
+  const s=sample();changed=s.map((a,i)=>Math.hypot(a.x-b[i].x,a.y-b[i].y)>1e-6);
+  $('wtv').textContent=w.toFixed(2).replace('.',',');draw();
+});
+$('circle').addEventListener('click',setCircle);$('reset').addEventListener('click',()=>{document.querySelector('input[value=bezier]').checked=true;reset();});
+window.__nb={evalAt,sample,get P(){return P;},get wts(){return wts;},setCircle,reset};
+reset();
+})();
+</script>
+
+</body></html>

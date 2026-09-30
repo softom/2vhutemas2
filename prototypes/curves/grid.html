@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Прямая и поле</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<style>
+:root{--text-primary:#1f1e1d;--text-secondary:#5f5e5a;--text-success:#3b6d11;--text-danger:#a32d2d;--text-warning:#854f0b;--text-accent:#185fa5;--border:rgba(0,0,0,.15);--bg:#faf9f5}
+@media (prefers-color-scheme:dark){:root{--text-primary:#f1efe8;--text-secondary:#b4b2a9;--text-success:#97c459;--text-danger:#f09595;--text-warning:#fac775;--text-accent:#85b7eb;--border:rgba(255,255,255,.18);--bg:#1f1e1d}}
+body{margin:0 auto;padding:16px;max-width:680px;background:var(--bg);color:var(--text-primary);font:16px/1.5 system-ui,sans-serif}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+button,select{font:inherit;font-size:14px;padding:4px 10px;border-radius:8px;border:.5px solid var(--border);background:transparent;color:inherit;cursor:pointer}
+</style></head><body>
+<h2 class="sr-only">Регулярная сетка кварталов и перетаскиваемые притягивающие точки: поле искривляет сетку и меняет высоту кварталов; при нулевой силе сетка снова прямая.</h2>
+<div style="display:grid;grid-template-columns:auto minmax(0,1fr) 52px;gap:8px 12px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label for="k" style="color:var(--text-secondary);">Сила поля</label>
+  <input type="range" id="k" min="0" max="1" step="0.01" value="0.7">
+  <span id="kv" style="font-weight:500;">0,70</span>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:0 0 10px;font-size:14px;">
+  <label style="color:var(--text-secondary);display:flex;align-items:center;gap:6px;"><input type="checkbox" id="axo" checked> Объём</label>
+  <button id="add"><i class="ti ti-plus" aria-hidden="true"></i> Точка</button>
+  <button id="reset"><i class="ti ti-refresh" aria-hidden="true"></i> Сбросить</button>
+  <span id="info" style="font-size:13px;color:var(--text-secondary);"></span>
+</div>
+<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;">
+  <canvas id="cv" style="display:block;width:100%;height:auto;touch-action:none;cursor:grab;"></canvas>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--text-secondary);margin-top:8px;">
+  <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#378ADD;vertical-align:middle;"></span> притягивающая точка — тяните</span>
+  <span><span style="display:inline-block;width:14px;height:10px;background:#F5C4B3;vertical-align:middle;"></span> низкий квартал</span>
+  <span><span style="display:inline-block;width:14px;height:10px;background:#993C1D;vertical-align:middle;"></span> высокий квартал</span>
+</div>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const css=(n,f)=>getComputedStyle(document.body).getPropertyValue(n).trim()||f;
+const W=680,H=460,cv=$('cv'),DPR=window.devicePixelRatio||1,NX=11,NY=8,X0=60,Y0=40,DX=56,DY=54,SIG=120,SIGH=110,A=0.85,HMAX=90,H0=6,INSET=0.2;
+cv.width=W*DPR;cv.height=H*DPR;
+const ctx=cv.getContext('2d');
+const DEF=[{x:230,y:170},{x:470,y:300}];
+let at=DEF.map(p=>({...p})),drag=null;
+const k=()=>+$('k').value;
+function warp(p){let dx=0,dy=0;at.forEach(a=>{const rx=a.x-p.x,ry=a.y-p.y,g=Math.exp(-(rx*rx+ry*ry)/(SIG*SIG));dx+=A*k()*g*rx;dy+=A*k()*g*ry;});return{x:p.x+dx,y:p.y+dy};}
+function height(c){let h=0;at.forEach(a=>{const r2=(a.x-c.x)**2+(a.y-c.y)**2;h+=Math.exp(-r2/(SIGH*SIGH));});return H0+k()*HMAX*Math.min(h,1.3);}
+const axo=()=>$('axo').checked;
+const proj=(p,z)=>axo()?{x:p.x,y:110+p.y*0.72-z}:{x:p.x,y:p.y};
+function color(t){const a=[245,196,179],b=[153,60,29];return 'rgb('+a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')+')';}
+function draw(){
+  const ts=css('--text-secondary','#666'),tp=css('--text-primary','#222');
+  $('kv').textContent=k().toFixed(2).replace('.',',');
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);
+  const N=[];for(let j=0;j<NY;j++){const row=[];for(let i=0;i<NX;i++)row.push(warp({x:X0+i*DX,y:Y0+j*DY}));N.push(row);}
+  const blocks=[];let maxShift=0;
+  for(let j=0;j<NY-1;j++)for(let i=0;i<NX-1;i++){
+    const c4=[N[j][i],N[j][i+1],N[j+1][i+1],N[j+1][i]],c={x:c4.reduce((s,p)=>s+p.x,0)/4,y:c4.reduce((s,p)=>s+p.y,0)/4};
+    const q=c4.map(p=>({x:p.x+(c.x-p.x)*INSET,y:p.y+(c.y-p.y)*INSET}));
+    blocks.push({q,c,h:height(c)});
+  }
+  for(let j=0;j<NY;j++)for(let i=0;i<NX;i++)maxShift=Math.max(maxShift,Math.hypot(N[j][i].x-(X0+i*DX),N[j][i].y-(Y0+j*DY)));
+  ctx.strokeStyle=ts;ctx.lineWidth=0.8;ctx.setLineDash([3,4]);
+  for(let j=0;j<NY;j++){ctx.beginPath();for(let i=0;i<NX;i++){const p=proj(N[j][i],0);i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);}ctx.stroke();}
+  for(let i=0;i<NX;i++){ctx.beginPath();for(let j=0;j<NY;j++){const p=proj(N[j][i],0);j?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);}ctx.stroke();}
+  ctx.setLineDash([]);
+  const hmax=H0+HMAX*1.3;
+  blocks.sort((a,b)=>a.c.y-b.c.y).forEach(b=>{
+    const t=(b.h-H0)/(hmax-H0),col=color(Math.max(0,Math.min(1,t)));
+    if(axo()){
+      const base=b.q.map(p=>proj(p,0)),top=b.q.map(p=>proj(p,b.h));
+      for(let e=0;e<4;e++){const a=e,c=(e+1)%4;ctx.fillStyle=color(Math.min(1,t+0.25));ctx.strokeStyle='rgba(68,68,65,0.6)';ctx.lineWidth=0.6;ctx.beginPath();ctx.moveTo(base[a].x,base[a].y);ctx.lineTo(base[c].x,base[c].y);ctx.lineTo(top[c].x,top[c].y);ctx.lineTo(top[a].x,top[a].y);ctx.closePath();ctx.fill();ctx.stroke();}
+      ctx.fillStyle=col;ctx.beginPath();top.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fill();ctx.stroke();
+    }else{
+      ctx.fillStyle=col;ctx.strokeStyle='rgba(68,68,65,0.6)';ctx.lineWidth=0.6;ctx.beginPath();b.q.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fill();ctx.stroke();
+    }
+  });
+  at.forEach((a,i)=>{const p=proj(a,0);ctx.fillStyle=drag===i?'#185FA5':'#378ADD';ctx.strokeStyle=css('--bg','#fff');ctx.lineWidth=2;ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fill();ctx.stroke();});
+  const hs=blocks.map(b=>b.h);
+  $('info').textContent=k()===0?'Сила 0: сетка снова прямая и все кварталы одной высоты — модернистский план как частный случай поля.':'Узлы сдвинуты до '+Math.round(maxShift)+' px, высота кварталов от '+Math.round(Math.min(...hs))+' до '+Math.round(Math.max(...hs))+'.';
+  window.__gd={maxShift,hmin:Math.min(...hs),hmax:Math.max(...hs)};
+}
+const toC=e=>{const r=cv.getBoundingClientRect(),x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;return axo()?{x,y:(y-110)/0.72}:{x,y};};
+cv.addEventListener('pointerdown',e=>{const p=toC(e),rad=e.pointerType==='touch'?30:20;let bi=-1,bd=rad;at.forEach((a,i)=>{const d=Math.hypot(a.x-p.x,(a.y-p.y)*(axo()?0.72:1));if(d<bd){bd=d;bi=i;}});if(bi<0)return;drag=bi;try{cv.setPointerCapture(e.pointerId);}catch(_){}cv.style.cursor='grabbing';draw();});
+cv.addEventListener('pointermove',e=>{if(drag===null)return;const p=toC(e);at[drag]={x:Math.max(20,Math.min(W-20,p.x)),y:Math.max(10,Math.min(430,p.y))};draw();});
+const up=()=>{drag=null;cv.style.cursor='grab';draw();};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+$('k').addEventListener('input',draw);$('axo').addEventListener('change',draw);
+$('add').addEventListener('click',()=>{if(at.length<5){at.push({x:340+60*(at.length-2),y:230});draw();}});
+$('reset').addEventListener('click',()=>{at=DEF.map(p=>({...p}));$('k').value=0.7;draw();});
+draw();
+})();
+</script>
+
+</body></html>
