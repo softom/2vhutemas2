@@ -157,13 +157,14 @@ function joints(){
         for(let j=0;j<n;j++){const lp=m.localContactPoint1(j),im=m.contactImpulse(j);if(!lp||im<=0)continue;const r=rot(lp,a);imps.push(im);F+=im;x+=im*(r.x+p.x);y+=im*(r.y+p.y);}
         if(F<=0)return;
         const nr=m.normal();
-        const k=os?(os.i-s.i===1?s.i+0.5:null):(ob.isAb?(ob.translation().x<CX?-0.5:N-0.5):null);
+        const k=os?(os.i-s.i===1?s.i+0.5:null):(ob.isAb?(ob.translation().x<CX?(s.i===0?-0.5:null):(s.i===N-1?N-0.5:null)):null);
         out.push({x:x/F,y:y/F,F:F/DT,n:{x:nr.x,y:nr.y},bodies:[s,os],ab:!os,k,ctr:!!(ctrBody&&ob.handle===ctrBody.handle),e:imps.length<2?1:Math.abs(imps[0]/F-0.5)*2});
       });
     });
   });
   return out;
 }
+const pickChain=(js,n)=>{const by=new Map();js.forEach(j=>{if(j.k===null)return;const o=by.get(j.k);if(!o||j.F>o.F)by.set(j.k,j);});const out=[];for(let i=0;i<=n;i++){const j=by.get(i-0.5);if(!j)return null;out.push(j);}return out;};
 function arrow(x1,y1,x2,y2,col,w){
   const a=Math.atan2(y2-y1,x2-x1),h=7;
   ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=w;
@@ -212,8 +213,8 @@ function draw(J){
   const main=J.filter(j=>!j.ctr);
   let hinges=0;
   main.forEach(j=>{if(j.e>=0.9){hinges++;ctx.strokeStyle='#E24B4A';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sx(j.x),sy(j.y),6,0,Math.PI*2);ctx.stroke();}});
-  const chain=main.filter(j=>j.k!==null).sort((a,b)=>a.k-b.k);
-  if($('tl').checked&&!ctrBody&&chain.length===N+1&&new Set(chain.map(j=>j.k)).size===N+1){
+  const chain=pickChain(main,N);
+  if($('tl').checked&&!ctrBody&&chain){
     const pts=chain.map(j=>({x:sx(j.x),y:sy(j.y)}));
     ctx.strokeStyle='#D85A30';ctx.lineWidth=2;ctx.setLineDash([6,4]);
     ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.stroke();ctx.setLineDash([]);
