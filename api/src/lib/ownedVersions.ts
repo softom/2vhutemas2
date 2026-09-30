@@ -1,3 +1,12 @@
+/**
+ * Владение версиями: сущность и связь сами хранят рабочую и публичную
+ * редакции (Р-78).
+ *
+ * Прежде публикацией управлял материал; теперь публикуется владелец целиком
+ * вместе со своим МультиТекстом, а реестр материалов остаётся ради прежних
+ * UID, авторских подписей и независимых объектов — медиа и отдельных
+ * документов.
+ */
 import { type Tx } from "./db.ts";
 import { ApiError } from "./errors.ts";
 
@@ -33,4 +42,52 @@ export async function publishOwned(tx: Tx, owner: {entity_id: number|null;link_i
   if (!revisions.length) throw new ApiError("validation_failed","Нужна полная версия этого владельца");
   if (owner.entity_id) await tx`update app.entities set status='published',published_revision_id=${revisionId} where id=${owner.entity_id}`;
   else await tx`update app.links set status='published',published_revision_id=${revisionId} where id=${owner.link_id}`;
+}
+
+/**
+ * Публикация выбранной редакции владельцем.
+ *
+ * Порядок один для сущности и связи: взять редакцию (по умолчанию — рабочую),
+ * убедиться, что она принадлежит этому владельцу и является полной, и
+ * переключить указатель. Отметка о решении пишется в общий журнал
+ * рассмотрений: кто принял версию, видно и после следующих правок.
+ */
+export async function publishOwnerRevision(
+  tx: Tx,
+  owner: { kind: "entity" | "link"; id: number },
+  revisionId: string | undefined,
+  contributorId: string,
+  note: string | null,
+): Promise<{ published_revision_id: string; status: "published" }> {
+  const table = owner.kind === "entity" ? "сущность" : "связь";
+  const rows = owner.kind === "entity"
+    ? await tx<{ status: string; published_revision_id: string | null; working_revision_id: string | null }>`
+        select status, published_revision_id, working_revision_id
+          from app.entities where id = ${owner.id} for update`
+    : await tx<{ status: string; published_revision_id: string | null; working_revision_id: string | null }>`
+        select status, published_revision_id, working_revision_id
+          from app.links where id = ${owner.id} for update`;
+  if (rows.length === 0) throw new ApiError("not_found", `Не найдена ${table}`);
+  const current = rows[0];
+
+  // По умолчанию публикуется то, что сейчас в работе: это привычное «сохранил
+  // и опубликовал». Явно указанная версия позволяет вернуть прежнюю редакцию.
+  const chosen = revisionId ?? current.working_revision_id;
+  if (!chosen) throw new ApiError("validation_failed", `У этой записи нет ни одной версии`);
+  if (current.status === "published" && current.published_revision_id === chosen) {
+    throw new ApiError("duplicate", "Эта версия уже опубликована");
+  }
+
+  // Проверку принадлежности и полноты версии делает publishOwned: он же
+  // единственное место, где меняется указатель публикации.
+  await publishOwned(tx, {
+    entity_id: owner.kind === "entity" ? owner.id : null,
+    link_id: owner.kind === "link" ? owner.id : null,
+  }, chosen);
+
+  await tx`
+    insert into app.revision_reviews (revision_id, reviewer_id, decision, note)
+    values (${chosen}, ${contributorId}, 'published', ${note})
+  `;
+  return { published_revision_id: chosen, status: "published" };
 }

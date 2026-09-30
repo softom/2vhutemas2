@@ -192,6 +192,13 @@ check "связь без обоснования" 422 "$(code -X POST -H "$AUTH" 
 check "связь с обоснованием" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$EID2,\"justification\":{\"text\":\"smoke: обоснование\"}}" $API/links)"
 code -H "$AUTH" "$API/links?entity_id=$EID" >/dev/null
 contains "окружение с обоснованием" 'smoke: обоснование' "$(body)"
+LID=$(curl -s -H "$AUTH" "$API/links?entity_id=$EID" | python3 -c "
+import json,sys
+items=json.load(sys.stdin)['items']
+print(items[0].get('id') or items[0].get('link_id') or '')")
+if [ -n "$LID" ]; then
+  check "публикация связи с обоснованием" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/links/$LID/publish)"
+fi
 
 echo "── Документы"
 D=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: текст\",\"body\":[
@@ -221,8 +228,15 @@ check "карточка объекта без изображения в Муль
 
 echo "── Публикация"
 MID=$(echo "$C" | field material_id)
-check "публикация версии" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"note":"smoke"}' $API/materials/$MID/publish)"
+# Публикуется запись целиком вместе со своим текстом (Р-78): маршрут у
+# владельца, а не у материала.
+check "публикация записи" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"note":"smoke"}' $API/entities/$EID/publish)"
 check "объект виден гостю после публикации" 200 "$(code $API/entities/$EID)"
+check "повторная публикация той же редакции" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/entities/$EID/publish)"
+check "гость публиковать не может" 401 "$(code -X POST -H "$JSON" -d '{}' $API/entities/$EID/publish)"
+check "публикация несуществующей записи" 404 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/entities/99999999/publish)"
+code -H "$AUTH" $API/entities/$EID/versions >/dev/null
+contains "история показывает публичную редакцию" '"is_public":true' "$(body)"
 
 echo "── Страница для поисковика"
 # Готовый HTML записи (Р-65) проверяем снаружи, через Caddy: ломается
@@ -240,7 +254,6 @@ contains "клиент оживляет страницу" '/assets/index-' "$PAG
 check "номер записи ведёт на слаг навсегда" "301 /entities/smoke-proverka" \
   "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' $SITE/entities/$EID | sed 's#https\?://[^/]*##')"
 contains "запись попала в sitemap" '/entities/smoke-proverka</loc>' "$(curl -s $SITE/sitemap.xml)"
-check "повторная публикация той же версии" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/materials/$MID/publish)"
 code -H "$AUTH" $API/materials/$MID >/dev/null
 contains "состояние материала" '"published"' "$(body)"
 check "архивирование" 204 "$(code -X DELETE -H "$AUTH" $API/materials/$MID)"

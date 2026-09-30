@@ -13,6 +13,7 @@ import { ApiError } from "../lib/errors.ts";
 import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import type { AppEnv } from "../lib/http.ts";
 import { extractText } from "./documents.ts";
+import { publishOwnerRevision } from "../lib/ownedVersions.ts";
 
 export const links = new Hono<AppEnv>();
 
@@ -147,6 +148,22 @@ links.get("/mentions", async (c: Context<AppEnv>) => {
     order by document_title
   `;
   return c.json({ items: rows });
+});
+
+/**
+ * Публикация связи вместе с её обоснованием: у обоснования нет собственной
+ * публикации, оно часть редакции связи (Р-78).
+ */
+links.post("/:id/publish", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "publish");
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) throw new ApiError("not_found", "Связь не найдена");
+  const input = await c.req.json<{ revision_id?: string; note?: string }>().catch(() => ({}));
+
+  const result = await transaction(principal.contributorId, (tx) =>
+    publishOwnerRevision(tx, { kind: "link", id }, input.revision_id,
+                         principal.contributorId, input.note ?? null));
+  return c.json({ link_id: id, ...result });
 });
 
 links.delete("/:id", async (c: Context<AppEnv>) => {

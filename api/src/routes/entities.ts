@@ -15,6 +15,8 @@ import { type AppEnv, decodeCursor, encodeCursor, pageSize } from "../lib/http.t
 import { resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../lib/entityTypes.ts";
 import { entityAuthors, resolveEntity } from "../lib/publicCard.ts";
 import { absolute, citation, entityPath } from "../lib/site.ts";
+import { publishOwnerRevision } from "../lib/ownedVersions.ts";
+import { notifyIndexNow } from "./pages.ts";
 
 import { validateDocument, saveRefs } from "./documents.ts";
 import { writeIndicators, type IndicatorInput } from "./indicators.ts";
@@ -458,6 +460,29 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
 
 
 /** История одного владельца, включая прежние отдельные редакции его текста. */
+/**
+ * Публикация записи: публикуется она целиком — сведения, параметры, метки и
+ * собственный текст одной редакцией (Р-78). Прежний путь через материал
+ * оставлен для независимых медиа и документов.
+ */
+entities.post("/:id/publish", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "publish");
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) throw new ApiError("not_found", "Запись не найдена");
+  const input = await c.req.json<{ revision_id?: string; note?: string }>().catch(() => ({}));
+
+  const result = await transaction(principal.contributorId, (tx) =>
+    publishOwnerRevision(tx, { kind: "entity", id }, input.revision_id,
+                         principal.contributorId, input.note ?? null));
+
+  // Поисковику сообщаем только о том, что действительно стало публичным.
+  const rows = await sql<{ slug: string }>`
+    select slug from app.entities where id = ${id} and is_published
+  `;
+  if (rows.length > 0) notifyIndexNow(c.get("requestId"), [entityPath(rows[0].slug)]);
+  return c.json({ entity_id: id, ...result });
+});
+
 entities.get("/:id/versions", async (c: Context<AppEnv>) => {
   const principal=c.get("principal");
   if (!canSeeDrafts(principal)) throw new ApiError("permission_denied","История доступна редактору");
