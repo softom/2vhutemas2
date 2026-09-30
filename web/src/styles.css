@@ -351,4 +351,3 @@ button:disabled { opacity: .5; cursor: default; }
 .model-embed iframe { display: block; width: 100%; border: 0; background: var(--bg); }
 .model-embed figcaption { color: var(--muted); font-size: 13px; padding: 8px 12px; margin: 0; }
 .model-embed figcaption a { color: var(--accent); }
-@media (max-width: 640px) { .model-embed iframe { height: 460px !important; } }
