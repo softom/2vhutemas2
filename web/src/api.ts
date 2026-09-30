@@ -271,13 +271,16 @@ export const api = {
     request<EntityCard>(`/entities/${encodeURIComponent(String(id))}`),
   entityCardHtml: (id: number | string) =>
     request<{ html: string; title: string; path: string }>(`/entities/${encodeURIComponent(String(id))}/card`),
+  entityVersions: (id: number) => request<{items:{id:string;created_at:string;summary:string;editor:string|null;is_public:boolean;is_working:boolean;complete:boolean}[]}>(`/entities/${id}/versions`),
+  publishMaterial: (id: string, revision_id: string) => request(`/materials/${id}/publish`, {method:"POST", body:JSON.stringify({revision_id})}),
+  submitMaterial: (id: string) => request(`/materials/${id}/submit`, {method:"POST", body:JSON.stringify({})}),
   createEntity: (body: unknown) =>
-    request<{ id: number; revision_id: string }>("/entities", {
+    request<{ id: number; material_id:string; revision_id: string }>("/entities", {
       method: "POST",
       body: JSON.stringify(body),
     }),
   updateEntity: (id: number, body: unknown) =>
-    request<{ id: number; revision_id: string }>(`/entities/${id}`, {
+    request<{ id: number; material_id:string; revision_id: string }>(`/entities/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
@@ -337,12 +340,12 @@ export const api = {
       `/documents/${id}`,
     ),
   createDocument: (body: unknown) =>
-    request<{ id: number; revision_id: string }>("/documents", {
+    request<{ id: number; material_id:string; revision_id: string }>("/documents", {
       method: "POST",
       body: JSON.stringify(body),
     }),
   updateDocument: (id: number, body: unknown) =>
-    request<{ id: number; revision_id: string }>(`/documents/${id}`, {
+    request<{ id: number; material_id:string; revision_id: string }>(`/documents/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),

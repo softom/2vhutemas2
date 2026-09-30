@@ -72,21 +72,6 @@ links.post("/", async (c: Context<AppEnv>) => {
     `;
     const linkId = Number(created[0].id);
 
-    const documents = await tx<{ id: number }>`
-      insert into app.documents (title, body_json, body_text, body_format, body_schema_version)
-      values (${input.justification?.title ?? "Обоснование связи"},
-              ${JSON.stringify(blocks)}::jsonb, ${extractText(blocks)}, 'blocknote', 1)
-      returning id
-    `;
-
-    // Цель связи создаёт триггер при вставке; берём её и прикрепляем обоснование.
-    await tx`
-      insert into app.attachments (target_id, role_id, document_id)
-      select t.id, (select id from app.attachment_roles where code = 'justification'),
-             ${documents[0].id}
-        from app.targets t where t.link_id = ${linkId}
-    `;
-
     const materials = await tx<{ id: string }>`
       insert into app.materials (kind, link_id, created_by)
       values ('link', ${linkId}, ${principal.contributorId}) returning id
@@ -95,13 +80,13 @@ links.post("/", async (c: Context<AppEnv>) => {
       insert into app.material_credits (material_id, contributor_id, credit_role)
       values (${materials[0].id}, ${principal.contributorId}, 'author')
     `;
-    await tx`
+    const revisions = await tx`
       insert into app.revisions (material_id, edited_by, operation, summary, snapshot)
       values (${materials[0].id}, ${principal.contributorId}, 'create', 'Создание связи',
-              ${JSON.stringify({ link: input, justification: blocks })}::jsonb)
+              ${JSON.stringify({ body_json: blocks })}::jsonb) returning id
     `;
 
-    return { id: linkId, document_id: documents[0].id, material_id: materials[0].id };
+    return { id: linkId, revision_id: revisions[0].id, material_id: materials[0].id };
   });
 
   return c.json(result, 201);
@@ -130,14 +115,10 @@ links.get("/", async (c: Context<AppEnv>) => {
               join app.targets t on t.id = a.target_id
              where t.entity_id = other.id and a.asset_id is not null
              order by a.sort_order, a.id limit 1) as other_cover_media_id,
-           (select d.body_text from app.attachments a
-              join app.targets t on t.id = a.target_id
-              join app.attachment_roles ar on ar.id = a.role_id
-              join app.documents d on d.id = a.document_id
-             where t.link_id = l.id and ar.code = 'justification'
-             order by a.sort_order limit 1) as justification
-    from app.links l
-    join app.entities other
+           (select r.snapshot->'body_json' from app.revisions r where r.id=
+            case when ${drafts} then l.working_revision_id else l.published_revision_id end) as justification_blocks
+    from app.read_links(${drafts}) l
+    join app.read_entities(${drafts}) other
       on other.id = case when l.from_entity_id = ${entityId} then l.to_entity_id
                          else l.from_entity_id end
     where (l.from_entity_id = ${entityId} or l.to_entity_id = ${entityId})
@@ -146,7 +127,7 @@ links.get("/", async (c: Context<AppEnv>) => {
       and (${drafts} or other.is_published)
     order by l.is_primary desc, l.sort_order, l.id
   `;
-  return c.json({ items: rows });
+  return c.json({ items: rows.map(row => ({...row, justification:extractText(row.justification_blocks)})) });
 });
 
 /** Упоминания сущности в опубликованных материалах. */
@@ -183,7 +164,7 @@ links.delete("/:id", async (c: Context<AppEnv>) => {
                 ${JSON.stringify({ link_id: linkId })}::jsonb)
       `;
     }
-    const removed = await tx`delete from app.links where id = ${linkId} returning id`;
+    const removed = await tx`update app.links set status='archived',published_revision_id=null where id=${linkId} returning id`;
     if (removed.length === 0) throw new ApiError("not_found", "Связь не найдена");
   });
 

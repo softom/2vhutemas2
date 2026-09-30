@@ -7,7 +7,8 @@
 #
 # Запускается на сервере: bash smoke.sh
 set +e
-API=http://127.0.0.1:7073/api/v1
+API=${SMOKE_API:-http://127.0.0.1:7073/api/v1}
+DB=${SMOKE_DB:-postgres}
 UID_T="e6777073-6cae-46b5-8d48-a499e188f230"
 SPW=$(grep -E "^POSTGRES_PASSWORD=" /opt/2vhutemas/.env | cut -d= -f2-)
 PASS=0
@@ -178,7 +179,7 @@ check "справочник меток" 200 "$(code -H "$AUTH" $API/tags)"
 code -X PUT -H "$AUTH" -H "$JSON" -d '{"tags":["smoke-метка","#smoke-вторая"]}' $API/tags/entities/$EID >/dev/null
 contains "метка без решётки" '"smoke-вторая"' "$(body)"
 code -X PUT -H "$AUTH" -H "$JSON" -d '{"tags":["SMOKE-МЕТКА","smoke-вторая"]}' $API/tags/entities/$EID >/dev/null
-DOUBLES=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -c "
+DOUBLES=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
 select count(*) from app.tags where lower(title) like 'smoke-%'")
 check "регистр не плодит метки" 2 "$DOUBLES"
 check "гость метки не меняет" 401 "$(code -X PUT -H "$JSON" -d '{"tags":["взлом"]}' $API/tags/entities/$EID)"
@@ -186,36 +187,37 @@ check "гость метки не меняет" 401 "$(code -X PUT -H "$JSON" -d
 echo "── Связи"
 C2=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"type":"architecture_object","slug":"smoke-vtoroy","title_ru":"smoke: второй"}' $API/entities)
 EID2=$(echo "$C2" | field id)
-REVB=$(echo "$C2" | field revision_id)
+REVB=$(curl -s -H "$AUTH" $API/entities/$EID2 | field latest_revision_id)
 check "связь без обоснования" 422 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$EID2,\"justification\":{}}" $API/links)"
 check "связь с обоснованием" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$EID2,\"justification\":{\"text\":\"smoke: обоснование\"}}" $API/links)"
 code -H "$AUTH" "$API/links?entity_id=$EID" >/dev/null
 contains "окружение с обоснованием" 'smoke: обоснование' "$(body)"
 
 echo "── Документы"
-D=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: текст\",\"attach_to_entity_id\":$EID,\"body\":[
+D=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: текст\",\"body\":[
   {\"id\":\"s1\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"smoke проверка текста\",\"styles\":{}}]},
   {\"id\":\"s2\",\"type\":\"entityCard\",\"props\":{\"entityId\":\"$EID2\",\"occurrenceId\":\"s-c1\"}},
   {\"id\":\"s3\",\"type\":\"mediaImage\",\"props\":{\"assetId\":\"$AID\",\"caption\":\"smoke\"}}]}" $API/documents)
 DID=$(echo "$D" | field id)
 DREV=$(echo "$D" | field revision_id)
 check "создание документа" "да" "$([ -n "$DID" ] && echo да || echo нет)"
-REFS=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -c "
+REFS=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
 select count(*) from app.document_entity_refs where revision_id='$DREV'")
 check "вхождения объектов записаны" 1 "$REFS"
 check "ссылка в никуда отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"title":"smoke: плохая","body":[{"id":"x","type":"entityCard","props":{"entityId":"99999999","occurrenceId":"x1"}}]}' $API/documents)"
-TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -c "
+TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
 select body_text from app.documents where id=$DID")
 contains "поисковый текст извлечён" 'smoke проверка текста' "$TEXT"
 D2=$(curl -s -X PATCH -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: текст правлен\",\"body\":[{\"id\":\"su-edit\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"smoke правка текста SU\",\"styles\":{}}]}],\"base_revision_id\":\"$DREV\"}" $API/documents/$DID)
 DREV2=$(echo "$D2" | field revision_id)
 check "SU правит текст стандартного документа" "да" "$([ -n "$DREV2" ] && echo да || echo нет)"
-TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -c "select body_text from app.documents where id=$DID")
+TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "select body_text from app.documents where id=$DID")
 contains "новая версия текста сохранена" 'smoke правка текста SU' "$TEXT"
 
 # Незаполненные свойства блока приходят пустыми строками; пустая строка
 # в колонке с UUID роняла сохранение внутренней ошибкой.
-check "карточка объекта без изображения" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: карточка в тексте\",\"attach_to_entity_id\":$EID2,\"role\":\"description\",\"body\":[{\"id\":\"b1\",\"type\":\"entityCard\",\"props\":{\"entityId\":\"$EID\",\"occurrenceId\":\"\",\"mediaAssetId\":\"\",\"note\":\"\"}}]}" $API/documents)"
+CURRENT2=$(curl -s -H "$AUTH" $API/entities/$EID2 | field latest_revision_id)
+check "карточка объекта без изображения в МультиТексте" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d "{\"base_revision_id\":\"$CURRENT2\",\"body_json\":[{\"id\":\"b1\",\"type\":\"entityCard\",\"props\":{\"entityId\":\"$EID\",\"occurrenceId\":\"\",\"mediaAssetId\":\"\",\"note\":\"\"}}]}" $API/entities/$EID2)"
 
 echo "── Публикация"
 MID=$(echo "$C" | field material_id)
@@ -225,7 +227,7 @@ check "объект виден гостю после публикации" 200 "
 echo "── Страница для поисковика"
 # Готовый HTML записи (Р-65) проверяем снаружи, через Caddy: ломается
 # именно маршрут, а не сборка страницы в API.
-SITE=https://2vhutemas.ru
+SITE=${SMOKE_SITE:-https://2vhutemas.ru}
 check "запись открывается по адресу" 200 "$(code $API/entities/smoke-proverka)"
 contains "в карточке готовая ссылка ГОСТ" 'дата обращения' "$(body)"
 check "страница записи отдаётся" 200 "$(code $SITE/entities/smoke-proverka)"
@@ -278,6 +280,7 @@ contains "состав набора с подсказкой" 'smoke_capacity' "$
 code -H "$AUTH" $API/parameters/for-type/architecture_object >/dev/null
 contains "величина подсказана ветви" 'smoke_capacity' "$(body)"
 
+REVB=$(curl -s -H "$AUTH" $API/entities/$EID2 | field latest_revision_id)
 check "запись показателей" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"indicators\":[{\"title\":\"по проекту\",\"is_current\":true,\"values\":[{\"parameter\":\"smoke_capacity\",\"num_value\":3000}]}],\"base_revision_id\":\"$REVB\"}" $API/entities-indicators/$EID2)"
 REV_IND=$(body | field revision_id)
 check "правка показателей создала версию" "да" "$([ -n "$REV_IND" ] && echo да || echo нет)"
@@ -370,7 +373,7 @@ missing "лекции не попали в энциклопедию" 'smoke-lekc
 echo "── Адреса сайта"
 # Новый контур стоит на корне, прежний сайт — под /old (Р-59). Проверяем
 # снаружи, через Caddy: путь ломается именно здесь, а не в приложении.
-SITE=https://2vhutemas.ru
+SITE=${SMOKE_SITE:-https://2vhutemas.ru}
 here() { curl -s -o /dev/null -w '%{redirect_url}' "$1" | sed 's#^https\?://[^/]*##'; }
 # Ищем имя файла сборки: пустой <div id="root"> есть и у старого сайта,
 # и такая проверка прошла бы, даже если на корне остался он.
@@ -399,9 +402,9 @@ check "несуществующая запись — 404" 404 "$(code $SITE/enti
 contains "главная описана для поисковика" 'rel="canonical" href="https://2vhutemas.ru/"' "$(curl -s $SITE/)"
 # «О проекте» — ветвь сущностей; прежний адрес манифеста сохраняет постоянную ссылку.
 check "раздел «О проекте» доступен" 200 "$(code $SITE/about)"
-check "старый адрес манифеста ведёт на сущность" "301 https://2vhutemas.ru/entities/about-manifest" \
+check "старый адрес манифеста ведёт на сущность" "301 $SITE/entities/about-manifest" \
   "$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" $SITE/about/manifest)"
-check "бывший конструктор ведёт на сущность логотипа" "301 https://2vhutemas.ru/entities/about-logo" \
+check "бывший конструктор ведёт на сущность логотипа" "301 $SITE/entities/about-logo" \
   "$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" $SITE/about/logo/tool)"
 # Метрика (Р-66): счётчик в общем шаблоне — и на главной, и в готовой странице от API.
 contains "счётчик Метрики на главной" 'mc.yandex.ru/metrika/tag.js?id=108525511' "$(curl -s $SITE/)"
@@ -409,7 +412,9 @@ contains "счётчик Метрики на странице раздела" 'm
 contains "прежний сайт закрыт от индекса" 'noindex' "$(curl -s -D - -o /dev/null $SITE/old/ | tr 'A-Z' 'a-z')"
 
 echo "── Уборка"
-docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -q -c "
+docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -q -c "
+update app.entities set status='draft',published_revision_id=null,working_revision_id=null where id in ($EID,$EID2,$LID1,$LID2);
+update app.links set status='draft',published_revision_id=null,working_revision_id=null where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2);
 create temporary table smoke_document_ids as
 select ${DID}::bigint as id
 union
@@ -435,7 +440,7 @@ delete from app.material_credits mc using app.materials m where mc.material_id =
 delete from app.materials where entity_id in ($EID,$EID2) or document_id in (select id from smoke_document_ids)
    or asset_id = '$AID' or link_id in (select id from app.links where from_entity_id in ($EID,$EID2));
 delete from app.links where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2);
-delete from app.documents where id in (select id from smoke_document_ids);
+delete from app.documents where id in (select id from smoke_document_ids) or id=$DID;
 delete from app.revision_reviews rr using app.revisions r, app.materials m
  where rr.revision_id = r.id and r.material_id = m.id and m.entity_id in ($LID1,$LID2);
 delete from app.revisions rev using app.materials m
@@ -451,7 +456,7 @@ delete from app.tags where lower(title) like 'smoke-%';
 delete from app.parameter_sets where code like 'smoke%';
 delete from app.parameters where code like 'smoke%';
 " >/dev/null
-LEFT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d postgres -At -c "
+LEFT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
 select (select count(*) from app.entities where slug like 'smoke-%')
      + (select count(*) from app.places where country like 'smoke-%')
      + (select count(*) from app.tags where lower(title) like 'smoke-%')

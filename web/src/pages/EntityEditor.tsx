@@ -77,11 +77,10 @@ export function EntityEditor({ mode }: Props) {
   });
   const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [revisionId, setRevisionId] = useState<string | null>(null);
-  const [documentId, setDocumentId] = useState<number | null>(null);
-  const [documentRevision, setDocumentRevision] = useState<string | null>(null);
+  const [materialId, setMaterialId] = useState<string | null>(null);
+  const [publishedRevision, setPublishedRevision] = useState<string | null>(null);
   const [initialBlocks, setInitialBlocks] = useState<PartialBlock[] | null>(null);
   const [indicators, setIndicators] = useState<Indicator[]>([]);
-  const [hadIndicators, setHadIndicators] = useState(false);
   const [suggested, setSuggested] = useState<SuggestedParameter[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [media, setMedia] = useState<
@@ -129,22 +128,14 @@ export function EntityEditor({ mode }: Props) {
         title_la: entity.title_la ?? "",
       });
       setRevisionId(entity.latest_revision_id);
+      setMaterialId(entity.material_id);
+      setPublishedRevision((entity as unknown as {published_revision_id:string|null}).published_revision_id);
       setMedia((entity as unknown as { media?: typeof media }).media ?? []);
       setTags((entity as unknown as { tags?: Tag[] }).tags ?? []);
       const loaded = (entity as unknown as { indicators?: Indicator[] }).indicators ?? [];
       setIndicators(loaded);
-      setHadIndicators(loaded.length > 0);
 
-      const described = (entity as unknown as { description_document_id?: number })
-        .description_document_id;
-      if (described) {
-        const doc = await api.document(described);
-        setDocumentId(doc.id);
-        setDocumentRevision(doc.latest_revision_id);
-        setInitialBlocks((doc.body_json as PartialBlock[]) ?? []);
-      } else {
-        setInitialBlocks([]);
-      }
+      setInitialBlocks(((entity as unknown as {body_json?: PartialBlock[]}).body_json) ?? []);
     }).catch((e) => {
       setError(e.message);
       setInitialBlocks([]);
@@ -159,6 +150,7 @@ export function EntityEditor({ mode }: Props) {
     <EditorBody
       mode={mode}
       entityId={entityId}
+      setEntityId={setEntityId}
       form={form}
       setForm={setForm}
       slugTouched={slugTouched}
@@ -166,7 +158,6 @@ export function EntityEditor({ mode }: Props) {
       types={types}
       indicators={indicators}
       setIndicators={setIndicators}
-      hadIndicators={hadIndicators}
       suggested={suggested}
       media={media}
       tags={tags}
@@ -184,10 +175,10 @@ export function EntityEditor({ mode }: Props) {
       initialBlocks={editor}
       revisionId={revisionId}
       setRevisionId={setRevisionId}
-      documentId={documentId}
-      setDocumentId={setDocumentId}
-      documentRevision={documentRevision}
-      setDocumentRevision={setDocumentRevision}
+      materialId={materialId}
+      setMaterialId={setMaterialId}
+      publishedRevision={publishedRevision}
+      setPublishedRevision={setPublishedRevision}
       status={status}
       setStatus={setStatus}
       error={error}
@@ -203,11 +194,11 @@ export function EntityEditor({ mode }: Props) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function EditorBody(props: any) {
   const {
-    mode, entityId, form, setForm, slugTouched, setSlugTouched, types,
-    indicators, setIndicators, hadIndicators, suggested,
+    mode, entityId, setEntityId, form, setForm, slugTouched, setSlugTouched, types,
+    indicators, setIndicators, suggested,
     media, tags, setTags, reloadAttachments, initialBlocks,
-    revisionId, setRevisionId, documentId, setDocumentId,
-    documentRevision, setDocumentRevision, status, setStatus,
+    revisionId, setRevisionId, materialId, setMaterialId,
+    publishedRevision, setPublishedRevision, status, setStatus,
     error, setError, saving, setSaving, navigate,
   } = props;
 
@@ -227,6 +218,10 @@ function EditorBody(props: any) {
     initialContent: initialBlocks.length > 0 ? prepareEditorBlocks(initialBlocks) : undefined,
   });
 
+  const [versions, setVersions] = useState<Awaited<ReturnType<typeof api.entityVersions>>["items"]>([]);
+  useEffect(() => { if (entityId) api.entityVersions(entityId).then(result => setVersions(result.items)).catch(() => {}); }, [entityId, revisionId, publishedRevision]);
+  const [canPublish, setCanPublish] = useState(false);
+  useEffect(() => { api.me().then(me => setCanPublish(me.permissions.includes("publish") || me.permissions.includes("su"))).catch(() => setCanPublish(false)); }, []);
   const [problems, setProblems] = props.problemsState;
   const typeTitle = types.find((item: EntityType) => item.code === form.type)?.title_ru ?? "";
 
@@ -254,7 +249,7 @@ function EditorBody(props: any) {
     </label>
   );
 
-  const save = async () => {
+  const save = async (publish = false) => {
     setSaving(true);
     setError(null);
     setStatus(null);
@@ -267,17 +262,21 @@ function EditorBody(props: any) {
         title_en: form.title_en || null,
         title_original: form.title_original || null,
         title_la: form.title_la || null,
+        body_json: editor.document,
+        indicators,
+        tags: tags.map((tag: Tag) => tag.title),
       };
 
       let id = entityId;
-      // Версию ведём по ходу сохранения: правка записи создаёт новую, и
-      // показатели надо писать уже от неё, иначе сервер справедливо ответит
-      // «изменено другим редактором» и значения не сохранятся.
+      // Сведения, параметры, метки и МультиТекст — одна транзакция и версия.
       let revision = revisionId;
-      if (mode === "create") {
+      let material = materialId;
+      if (!entityId) {
         const created = await api.createEntity(payload);
         id = created.id;
+        setEntityId(id);
         revision = created.revision_id;
+        material = created.material_id;
       } else {
         const updated = await api.updateEntity(entityId!, {
           ...payload,
@@ -286,40 +285,13 @@ function EditorBody(props: any) {
         revision = updated.revision_id;
       }
       setRevisionId(revision);
+      setMaterialId(material);
 
-      if (id) await api.setEntityTags(id, tags.map((tag: Tag) => tag.title));
-
-      // Показатели — часть материала записи, поэтому пишутся после неё
-      // и от её же версии (Р-38). Пустой список тоже отправляем, если
-      // раньше величины были: иначе их нельзя стереть.
-      if (id && (indicators.length > 0 || hadIndicators)) {
-        const saved = await api.saveIndicators(id, indicators, revision);
-        if (saved.revision_id) {
-          revision = saved.revision_id;
-          setRevisionId(revision);
-        }
-        setIndicators(saved.items ?? indicators);
+      if (publish && material && revision) {
+        if (canPublish) { await api.publishMaterial(material, revision); setPublishedRevision(revision); }
+        else await api.submitMaterial(material);
       }
-
-      const blocks = editor.document;
-      if (documentId) {
-        const saved = await api.updateDocument(documentId, {
-          body: blocks,
-          base_revision_id: documentRevision,
-        });
-        setDocumentRevision(saved.revision_id);
-      } else {
-        const created = await api.createDocument({
-          title: `Описание: ${payload.title_ru}`,
-          body: blocks,
-          attach_to_entity_id: id,
-          role: "description",
-        });
-        setDocumentId(created.id);
-        setDocumentRevision(created.revision_id);
-      }
-
-      setStatus("Сохранено");
+      setStatus(publish ? (canPublish ? "Опубликовано" : "Отправлено на рассмотрение") : "Рабочая версия сохранена");
       if (mode === "create") navigate(`/entities/${id}`);
     } catch (e) {
       const apiError = e as ApiError;
@@ -340,8 +312,11 @@ function EditorBody(props: any) {
   // и искать кнопку в её конце неудобно.
   const actions = (
     <div className="row">
-      <button type="button" onClick={save} disabled={saving}>
+      <button type="button" onClick={() => save(false)} disabled={saving}>
         {saving ? "Сохраняем…" : "Сохранить версию"}
+      </button>
+      <button type="button" onClick={() => save(true)} disabled={saving}>
+        {canPublish ? "Сохранить и опубликовать" : "Сохранить и отправить на рассмотрение"}
       </button>
       {entityId && (
         <button type="button" className="ghost" onClick={() => globalThis.location.assign(`/entities/${entityId}`)}>
@@ -349,7 +324,7 @@ function EditorBody(props: any) {
         </button>
       )}
       {/* Итог сохранения виден там же, где нажимали: у обеих кнопок. */}
-      {status && <span className="save-mark ok">Сохранено</span>}
+      {status && <span className="save-mark ok">{status}</span>}
       {error && <span className="save-mark fail">Ошибка</span>}
     </div>
   );
@@ -363,9 +338,16 @@ function EditorBody(props: any) {
             : "Новая запись"
           : "Правка записи"}
       </h1>
-      <p className="sub">Свойства и описание. Каждое сохранение создаёт версию.</p>
+      <p className="sub">Свойства и описание сохраняются одной версией. {publishedRevision ? (publishedRevision === revisionId ? "Открыта опубликованная версия." : "Есть рабочие изменения; читатели видят прежнюю версию.") : "Запись ещё не опубликована."}</p>
 
       {actions}
+      {entityId && <details><summary>История версий</summary><ul>
+        {versions.map(version => <li key={version.id}>
+          {new Date(version.created_at).toLocaleString("ru-RU")} — {version.editor || "Редактор"}: {version.summary}
+          {version.is_public && " · публичная"}{version.is_working && " · в работе"}
+          {!version.complete && " · прежняя частичная редакция"}
+        </li>)}
+      </ul></details>}
 
       {error && <p className="error">{error}</p>}
       {status && <p className="notice">{status}</p>}

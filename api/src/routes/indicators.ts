@@ -36,7 +36,7 @@ interface ValueInput {
   note?: string | null;
 }
 
-interface IndicatorInput {
+export interface IndicatorInput {
   title?: string;
   is_current?: boolean;
   measured_year?: number | null;
@@ -55,7 +55,7 @@ function filled(value: ValueInput): boolean {
     value.date_start_year !== null && value.date_start_year !== undefined;
 }
 
-async function readAll(tx: Tx, entityId: number) {
+export async function readAll(tx: Tx, entityId: number) {
   return await tx<Record<string, unknown>>`
     select i.id, i.title, i.is_current, i.measured_year, i.measured_by, i.note, i.sort_order,
            coalesce((select jsonb_agg(jsonb_build_object(
@@ -70,7 +70,7 @@ async function readAll(tx: Tx, entityId: number) {
                         'place_id', iv.place_id,
                         'place', (select to_jsonb(pl) from app.places pl
                                    where pl.id = iv.place_id),
-                        'date_start_year', iv.date_start_year,
+                        'place_id', iv.place_id, 'date_start_month', iv.date_start_month, 'date_start_day', iv.date_start_day, 'date_end_month', iv.date_end_month, 'date_end_day', iv.date_end_day, 'date_start_year', iv.date_start_year,
                         'date_end_year', iv.date_end_year,
                         'is_approximate', iv.is_approximate, 'is_ongoing', iv.is_ongoing,
                         'note', iv.note)
@@ -84,41 +84,7 @@ async function readAll(tx: Tx, entityId: number) {
   `;
 }
 
-/**
- * Список задаётся целиком, как датировки: что прислали, то и осталось.
- * Так правка не зависит от того, что клиент видел раньше.
- */
-indicators.put("/:id", async (c: Context<AppEnv>) => {
-  const principal = requirePermission(c.get("principal"), "edit");
-  const entityId = Number(c.req.param("id"));
-  if (!Number.isInteger(entityId)) throw new ApiError("validation_failed", "Неверная запись");
-
-  const input = await c.req.json<{ indicators: IndicatorInput[]; base_revision_id?: string }>();
-  const items = input.indicators ?? [];
-  const baseRevisionId = input.base_revision_id ?? c.req.header("if-match") ?? null;
-
-  const result = await transaction(principal.contributorId, async (tx) => {
-    const found = await tx<{ id: number }>`select id from app.entities where id = ${entityId}`;
-    if (found.length === 0) throw new ApiError("not_found", "Запись не найдена");
-
-    const materials = await tx<{ material_id: string; latest_revision_id: string | null }>`
-      select m.id as material_id,
-             (select r.id from app.revisions r where r.material_id = m.id
-               order by r.created_at desc limit 1) as latest_revision_id
-        from app.materials m where m.entity_id = ${entityId}
-        for update
-    `;
-    const material = materials[0];
-    if (material && baseRevisionId && material.latest_revision_id &&
-      material.latest_revision_id !== baseRevisionId
-    ) {
-      throw new ApiError(
-        "version_conflict",
-        "Запись изменена другим редактором. Перечитайте карточку и повторите правку.",
-        { latest_revision_id: material.latest_revision_id },
-      );
-    }
-
+export async function writeIndicators(tx: Tx, entityId: number, items: IndicatorInput[]) {
     await tx`delete from app.indicators where entity_id = ${entityId}`;
 
     for (const [index, item] of items.entries()) {
@@ -171,6 +137,44 @@ indicators.put("/:id", async (c: Context<AppEnv>) => {
         `;
       }
     }
+
+}
+
+/**
+ * Список задаётся целиком, как датировки: что прислали, то и осталось.
+ * Так правка не зависит от того, что клиент видел раньше.
+ */
+indicators.put("/:id", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "edit");
+  const entityId = Number(c.req.param("id"));
+  if (!Number.isInteger(entityId)) throw new ApiError("validation_failed", "Неверная запись");
+
+  const input = await c.req.json<{ indicators: IndicatorInput[]; base_revision_id?: string }>();
+  const items = input.indicators ?? [];
+  const baseRevisionId = input.base_revision_id ?? c.req.header("if-match") ?? null;
+
+  const result = await transaction(principal.contributorId, async (tx) => {
+    const found = await tx<{ id: number }>`select id from app.entities where id = ${entityId}`;
+    if (found.length === 0) throw new ApiError("not_found", "Запись не найдена");
+
+    const materials = await tx<{ material_id: string; latest_revision_id: string | null }>`
+      select m.id as material_id,
+             (select working_revision_id from app.entities where id=m.entity_id) as latest_revision_id
+        from app.materials m where m.entity_id = ${entityId}
+        for update
+    `;
+    const material = materials[0];
+    if (material && baseRevisionId && material.latest_revision_id &&
+      material.latest_revision_id !== baseRevisionId
+    ) {
+      throw new ApiError(
+        "version_conflict",
+        "Запись изменена другим редактором. Перечитайте карточку и повторите правку.",
+        { latest_revision_id: material.latest_revision_id },
+      );
+    }
+
+    await writeIndicators(tx, entityId, items);
 
     // Показатели — часть материала записи: правка создаёт версию (Р-38).
     let revisionId: string | null = null;

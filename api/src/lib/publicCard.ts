@@ -8,7 +8,7 @@
  */
 import { sql } from "./db.ts";
 import { canSeeDrafts, type Principal } from "./auth.ts";
-import { extractRefs } from "../routes/documents.ts";
+import { extractRefs, extractText } from "../routes/documents.ts";
 import type { RefTarget } from "./blocksHtml.ts";
 
 export interface Resolved {
@@ -23,13 +23,13 @@ export interface Resolved {
  * Запись по адресу: слаг, прежний слаг из истории или номер.
  * Прежние адреса не умирают — они ведут на текущий (Р-65).
  */
-export async function resolveEntity(key: string): Promise<Resolved | null> {
+export async function resolveEntity(key: string, drafts = false): Promise<Resolved | null> {
   const numeric = /^\d+$/.test(key);
   const rows = numeric
     ? await sql<{ id: number; slug: string; is_published: boolean }>`
-        select id, slug, is_published from app.entities where id = ${Number(key)}`
+        select id, slug, is_published from app.read_entities(${drafts}) where id = ${Number(key)}`
     : await sql<{ id: number; slug: string; is_published: boolean }>`
-        select id, slug, is_published from app.entities where slug = ${key}`;
+        select id, slug, is_published from app.read_entities(${drafts}) where slug = ${key}`;
   if (rows.length > 0) {
     const row = rows[0];
     return { id: Number(row.id), slug: row.slug, isPublished: row.is_published, moved: numeric };
@@ -37,7 +37,7 @@ export async function resolveEntity(key: string): Promise<Resolved | null> {
   if (numeric) return null;
   const history = await sql<{ id: number; slug: string; is_published: boolean }>`
     select e.id, e.slug, e.is_published
-      from app.slug_history h join app.entities e on e.id = h.entity_id
+      from app.slug_history h join app.read_entities(${drafts}) e on e.id = h.entity_id
      where h.slug = ${key}
   `;
   if (history.length === 0) return null;
@@ -131,12 +131,12 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     select e.id, e.is_published, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
            ty.code as type, ty.title_ru as type_title,
            app.entity_type_path(e.type_id) as type_path,
-           (select r.created_at from app.revisions r where r.id = m.published_revision_id)
+           (select r.created_at from app.revisions r where r.id = e.published_revision_id)
              as published_at,
            greatest(e.updated_at,
-                    (select max(r.created_at) from app.revisions r where r.material_id = m.id))
+                    (select r.created_at from app.revisions r where r.id = case when ${drafts} then e.working_revision_id else e.published_revision_id end))
              as modified_at
-      from app.entities e
+      from app.read_entities(${drafts}) e
       join app.entity_types ty on ty.id = e.type_id
       left join app.materials m on m.entity_id = e.id
      where e.id = ${id} and (${drafts} or e.is_published)
@@ -151,15 +151,15 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
            (select o.title_ru from app.parameter_options o where o.id = iv.option_id) as option_title,
            (select to_jsonb(pl) from app.places pl where pl.id = iv.place_id) as place,
            iv.date_start_year, iv.date_end_year, iv.is_approximate, iv.is_ongoing
-      from app.indicators i
-      join app.indicator_values iv on iv.indicator_id = i.id
+      from app.read_indicators(${drafts}) i
+      join app.read_values(${drafts}) iv on iv.indicator_id = i.id
       join app.parameters p on p.id = iv.parameter_id
      where i.entity_id = ${id}
      order by i.sort_order, i.id, p.sort_order, p.title_ru, iv.sort_order
   `;
 
   const tags = await sql<{ title: string }>`
-    select t.title from app.entity_tags et join app.tags t on t.id = et.tag_id
+    select t.title from app.read_entity_tags(${drafts}) et join app.tags t on t.id = et.tag_id
      where et.entity_id = ${id} order by t.title
   `;
 
@@ -179,34 +179,21 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
      order by a.sort_order, a.id
   `;
 
-  const documents = await sql<{ id: number; body_json: unknown }>`
-    select d.id, d.body_json
-      from app.attachments a
-      join app.targets t on t.id = a.target_id
-      join app.attachment_roles ar on ar.id = a.role_id
-      join app.documents d on d.id = a.document_id
-      join app.materials dm on dm.document_id = d.id
-     where t.entity_id = ${id} and ar.code in ('description', 'wiki')
-       and (${drafts} or dm.status = 'published')
-       and dm.status <> 'archived'
-     order by a.sort_order, a.id
-     limit 1
-  `;
+  const documents = await sql<{body_json:unknown}>`
+    select r.snapshot->'body_json' as body_json from app.entities e
+    join app.revisions r on r.id=case when ${drafts} then e.working_revision_id else e.published_revision_id end
+    where e.id=${id}`;
   const document = documents[0] ?? null;
 
-  const links = await sql<PublicCard["links"][number]>`
+  const linkRows = await sql<PublicCard["links"][number] & {justification_blocks:unknown}>`
     select other.id as other_id, other.slug as other_slug, other.title_ru as other_title,
            (app.entity_type_path(other.type_id) -> 0 ->> 'code') as other_root,
            lr.code as role, lr.title_ru as role_title,
            case when l.from_entity_id = ${id} then 'outgoing' else 'incoming' end as direction,
-           (select d.body_text from app.attachments a
-              join app.targets t on t.id = a.target_id
-              join app.attachment_roles ar on ar.id = a.role_id
-              join app.documents d on d.id = a.document_id
-             where t.link_id = l.id and ar.code = 'justification'
-             order by a.sort_order limit 1) as justification
-      from app.links l
-      join app.entities other
+           (select r.snapshot->'body_json' from app.revisions r
+            where r.id=case when ${drafts} then l.working_revision_id else l.published_revision_id end) as justification_blocks
+      from app.read_links(${drafts}) l
+      join app.read_entities(${drafts}) other
         on other.id = case when l.from_entity_id = ${id} then l.to_entity_id
                            else l.from_entity_id end
       left join app.link_roles lr on lr.id = l.role_id
@@ -214,14 +201,14 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
      order by l.is_primary desc, l.sort_order, l.id
   `;
 
+  const links = linkRows.map(row => ({...row, justification:extractText(row.justification_blocks)}));
+
   // Где запись упоминается: текст и запись, которой он принадлежит (лекция).
   const mentions = await sql<PublicCard["mentions"][number]>`
     select distinct on (pm.document_id) pm.document_title,
            owner.slug as owner_slug, owner.title_ru as owner_title
       from app.published_entity_mentions pm
-      left join app.attachments a on a.document_id = pm.document_id
-      left join app.targets t on t.id = a.target_id
-      left join app.entities owner on owner.id = t.entity_id and owner.is_published
+      left join app.read_entities(${drafts}) owner on owner.id = pm.owner_entity_id and owner.is_published
      where pm.entity_id = ${id}
      order by pm.document_id, owner.id nulls last
   `;
@@ -247,7 +234,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     const ids = [...new Set(extractRefs(document.body_json).map((ref) => ref.entityId))];
     if (ids.length > 0) {
       const found = await sql<{ id: number; slug: string; title_ru: string }>`
-        select id, slug, title_ru from app.entities
+        select id, slug, title_ru from app.read_entities(${drafts})
          where id = any(${ids}::bigint[]) and (${drafts} or is_published)
       `;
       for (const row of found) refs.set(Number(row.id), { slug: row.slug, title: row.title_ru });

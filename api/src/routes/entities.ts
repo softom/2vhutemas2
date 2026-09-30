@@ -16,6 +16,10 @@ import { resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../lib/entityTypes.ts";
 import { entityAuthors, resolveEntity } from "../lib/publicCard.ts";
 import { absolute, citation, entityPath } from "../lib/site.ts";
 
+import { validateDocument, saveRefs } from "./documents.ts";
+import { writeIndicators, type IndicatorInput } from "./indicators.ts";
+import { writeEntityTags } from "./tags.ts";
+
 export const entities = new Hono<AppEnv>();
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -34,6 +38,9 @@ interface EntityInput {
   color?: string | null;
   sort_order?: number;
   profile?: Record<string, unknown>;
+  body_json?: unknown;
+  indicators?: IndicatorInput[];
+  tags?: string[];
 }
 
 function validate(input: Partial<EntityInput>, isCreate: boolean): void {
@@ -66,28 +73,18 @@ async function writeTypology(tx: Tx, entityId: number, typology: string | null):
   const indicatorId = indicators.length > 0 ? indicators[0].id : (await tx<{ id: string }>`
     insert into app.indicators (entity_id, title) values (${entityId}, 'Сведения') returning id
   `)[0].id;
+  await tx`delete from app.indicator_values where indicator_id=${indicatorId}
+    and parameter_id=(select id from app.parameters where code='typology')`;
   await tx`
     insert into app.indicator_values (indicator_id, parameter_id, text_value)
     select ${indicatorId}, p.id, ${typology} from app.parameters p where p.code = 'typology'
-    on conflict (indicator_id, parameter_id) do update set text_value = excluded.text_value
+
   `;
 }
 
-/** Снимок для версии: карточка вместе с типом и показателями. */
-async function snapshot(tx: Tx, id: number) {
-  const rows = await tx`
-    select to_jsonb(e) ||
-           jsonb_build_object(
-             'type', ty.code,
-             'type_path', app.entity_type_path(e.type_id),
-             'indicators', coalesce((select jsonb_agg(to_jsonb(i) order by i.sort_order)
-                                     from app.indicators i where i.entity_id = e.id),
-                                    '[]'::jsonb)) as data
-    from app.entities e
-    join app.entity_types ty on ty.id = e.type_id
-    where e.id = ${id}
-  `;
-  return (rows[0] as { data?: unknown })?.data ?? {};
+async function snapshot(tx: Tx, id: number, body?: unknown) {
+  const rows=await tx`select app.entity_snapshot(${id},${body===undefined?null:JSON.stringify(validateDocument(body))}::jsonb) as data`;
+  return rows[0].data;
 }
 
 entities.get("/", async (c: Context<AppEnv>) => {
@@ -120,7 +117,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
            ty.code as type, ty.title_ru as type_title,
            app.entity_type_path(e.type_id) as type_path,
            e.is_published, e.sort_order,
-           m.status as material_status,
+           e.status as material_status,
            -- Обложка — первое по порядку прикреплённое изображение (решение Р-36),
            -- но только то, которое спрашивающий может увидеть: иначе карточка
            -- обещает картинку, а на её месте выходит битый значок (Р-68).
@@ -137,26 +134,26 @@ entities.get("/", async (c: Context<AppEnv>) => {
                             coalesce(to_jsonb(iv.num_value), to_jsonb(iv.text_value),
                                      to_jsonb(o.title_ru), to_jsonb(iv.date_start_year),
                                      to_jsonb(iv.bool_value)) as value
-                       from app.indicator_values iv
-                       join app.indicators i on i.id = iv.indicator_id
+                       from app.read_values(${drafts}) iv
+                       join app.read_indicators(${drafts}) i on i.id = iv.indicator_id
                        join app.parameters p on p.id = iv.parameter_id
                        left join app.parameter_options o on o.id = iv.option_id
                       where i.entity_id = e.id and i.is_current
                         and p.code in (select jsonb_array_elements_text(${wanted}::jsonb))
                       order by p.code, i.sort_order, iv.sort_order) v),
              '{}'::jsonb) as values
-    from app.entities e
+    from app.read_entities(${drafts}) e
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
     left join lateral (
         select iv.num_value, iv.text_value
-          from app.indicator_values iv
-          join app.indicators i on i.id = iv.indicator_id
+          from app.read_values(${drafts}) iv
+          join app.read_indicators(${drafts}) i on i.id = iv.indicator_id
           join app.parameters p on p.id = iv.parameter_id
          where i.entity_id = e.id and i.is_current and p.code = ${parameter}
          order by i.sort_order limit 1) pv on ${parameter}::text is not null
     where (${drafts} or e.is_published)
-      and (${archived} or coalesce(m.status, 'draft') <> 'archived')
+      and (${archived} or e.status <> 'archived')
       and (${type}::text is null
            or e.type_id in (select app.entity_type_subtree(${type})))
       -- Тексты интерфейса проекта показываются в «О проекте», а не в общем каталоге.
@@ -189,30 +186,20 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
   // Запись ищется и по номеру, и по адресу — текущему или прежнему (Р-65):
   // адрес страницы теперь слаг, а в текстах и старых ссылках лежат номера.
   const key = c.req.param("id") ?? "";
-  const resolved = /^\d+$/.test(key) ? null : await resolveEntity(key);
+  const resolved = /^\d+$/.test(key) ? null : await resolveEntity(key, drafts);
   const id = resolved ? resolved.id : Number(key);
   if (!Number.isInteger(id)) throw new ApiError("not_found", "Сущность не найдена");
 
   const rows = await sql`
     select e.*, ty.code as type, ty.title_ru as type_title,
            app.entity_type_path(e.type_id) as type_path,
-           m.id as material_id, m.status as material_status,
-           m.published_revision_id,
-           (select r.id from app.revisions r where r.material_id = m.id
-             order by r.created_at desc limit 1) as latest_revision_id,
-           greatest(e.updated_at, (select max(r.created_at) from app.revisions r
-                                    where r.material_id = m.id)) as modified_at,
-           -- Описаний может оказаться несколько: архивное не показываем,
-           -- даже если оно прикреплено первым.
-           (select a.document_id from app.attachments a
-              join app.targets t on t.id = a.target_id
-              join app.attachment_roles ar on ar.id = a.role_id
-              left join app.materials dm on dm.document_id = a.document_id
-             where t.entity_id = e.id and a.document_id is not null
-               and ar.code in ('description', 'wiki')
-             order by case when dm.status = 'archived' then 1 else 0 end,
-                      a.sort_order, a.id
-             limit 1) as description_document_id,
+           m.id as material_id, e.status as material_status,
+           e.working_revision_id as latest_revision_id,
+           greatest(e.updated_at, (select r.created_at from app.revisions r
+                                    where r.id = case when ${drafts} then e.working_revision_id else e.published_revision_id end)) as modified_at,
+           e.legacy_description_id as description_document_id,
+           (select r.snapshot->'body_json' from app.revisions r where r.id=
+             case when ${drafts} then e.working_revision_id else e.published_revision_id end) as body_json,
            coalesce((select jsonb_agg(jsonb_build_object(
                         'attachment_id', a.id, 'asset_id', a.asset_id,
                         'role', ar.code, 'role_title', ar.title_ru,
@@ -232,12 +219,12 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                     '[]'::jsonb) as media,
            coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
                         order by t.title)
-                     from app.entity_tags et join app.tags t on t.id = et.tag_id
+                     from app.read_entity_tags(${drafts}) et join app.tags t on t.id = et.tag_id
                     where et.entity_id = e.id), '[]'::jsonb) as tags,
            coalesce((select jsonb_agg(jsonb_build_object(
                         'id', i.id, 'title', i.title, 'is_current', i.is_current,
                         'measured_year', i.measured_year, 'measured_by', i.measured_by,
-                        'note', i.note,
+                        'source_reference_item_id', i.source_reference_item_id, 'note', i.note,
                         'values', coalesce((select jsonb_agg(jsonb_build_object(
                                'parameter', p.code, 'title', p.title_ru, 'unit', p.unit,
                                'value_type', p.value_type,
@@ -249,16 +236,16 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                                                  where o.id = iv.option_id),
                                'place', (select to_jsonb(pl) from app.places pl
                                           where pl.id = iv.place_id),
-                               'date_start_year', iv.date_start_year,
+                               'place_id', iv.place_id, 'date_start_month', iv.date_start_month, 'date_start_day', iv.date_start_day, 'date_end_month', iv.date_end_month, 'date_end_day', iv.date_end_day, 'date_start_year', iv.date_start_year,
                                'date_end_year', iv.date_end_year,
                                'is_approximate', iv.is_approximate,
                                'is_ongoing', iv.is_ongoing, 'note', iv.note)
                                order by p.sort_order, p.title_ru, iv.sort_order)
-                            from app.indicator_values iv
+                            from app.read_values(${drafts}) iv
                             join app.parameters p on p.id = iv.parameter_id
                            where iv.indicator_id = i.id), '[]'::jsonb))
                         order by i.sort_order, i.id)
-                     from app.indicators i where i.entity_id = e.id), '[]'::jsonb) as indicators,
+                     from app.read_indicators(${drafts}) i where i.entity_id = e.id), '[]'::jsonb) as indicators,
            -- Что подсказывает ветвь дерева и собственные наборы записи (Р-38).
            coalesce((select jsonb_agg(jsonb_build_object(
                         'parameter', ep.code, 'title', ep.title_ru, 'unit', ep.unit,
@@ -273,7 +260,7 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                                      where o.parameter_id = ep.parameter_id), '[]'::jsonb))
                         order by ep.sort_order, ep.title_ru)
                      from app.entity_parameters(e.id) ep), '[]'::jsonb) as suggested_parameters
-    from app.entities e
+    from app.read_entities(${drafts}) e
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
     where e.id = ${id}
@@ -370,13 +357,16 @@ entities.post("/", async (c: Context<AppEnv>) => {
       values (${materialId}, ${principal.contributorId}, 'author')
     `;
 
-    const data = await snapshot(tx, entityId);
+    if (input.indicators !== undefined) await writeIndicators(tx, entityId, input.indicators);
+    if (input.tags !== undefined) await writeEntityTags(tx, entityId, input.tags);
+    const data = await snapshot(tx, entityId, input.body_json);
     const revisions = await tx`
       insert into app.revisions (material_id, edited_by, operation, summary, snapshot)
       values (${materialId}, ${principal.contributorId}, 'create', 'Создание карточки', ${JSON.stringify(data)}::jsonb)
       returning id
     `;
 
+    await saveRefs(tx, String(revisions[0].id), (data as {body_json:unknown}).body_json);
     return { id: entityId, material_id: materialId, revision_id: revisions[0].id };
   });
 
@@ -403,8 +393,7 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
   return c.json(await transaction(principal.contributorId, async (tx) => {
     const current = await tx`
       select m.id as material_id,
-             (select r.id from app.revisions r where r.material_id = m.id
-               order by r.created_at desc limit 1) as latest_revision_id
+             (select working_revision_id from app.entities where id=m.entity_id) as latest_revision_id
       from app.materials m where m.entity_id = ${id}
       for update
     `;
@@ -453,13 +442,34 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
 
     await writeTypology(tx, id, (input.profile?.typology as string | undefined) ?? null);
 
-    const data = await snapshot(tx, id);
+    if (input.indicators !== undefined) await writeIndicators(tx, id, input.indicators);
+    if (input.tags !== undefined) await writeEntityTags(tx, id, input.tags);
+    const data = await snapshot(tx, id, input.body_json);
     const revisions = await tx`
       insert into app.revisions (material_id, base_revision_id, edited_by, operation, summary, snapshot)
       values (${material_id}, ${latest_revision_id}, ${principal.contributorId}, 'edit',
               ${"Правка карточки"}, ${JSON.stringify(data)}::jsonb)
       returning id
     `;
+    await saveRefs(tx, String(revisions[0].id), (data as {body_json:unknown}).body_json);
     return { id, material_id, revision_id: revisions[0].id };
   }));
+});
+
+
+/** История одного владельца, включая прежние отдельные редакции его текста. */
+entities.get("/:id/versions", async (c: Context<AppEnv>) => {
+  const principal=c.get("principal");
+  if (!canSeeDrafts(principal)) throw new ApiError("permission_denied","История доступна редактору");
+  const id=Number(c.req.param("id"));
+  const rows=await sql`select r.id,r.created_at,r.summary,r.schema_version,
+    r.id=e.published_revision_id as is_public,r.id=e.working_revision_id as is_working,
+    c.display_name as editor,r.entity_id is not null and r.schema_version=2 as complete
+    from app.entities e join app.revisions r on r.entity_id=e.id or r.material_id in
+      (select m.id from app.materials m join app.attachments a on a.document_id=m.document_id
+       join app.targets t on t.id=a.target_id join app.attachment_roles ar on ar.id=a.role_id
+       where t.entity_id=e.id and ar.code in ('description','wiki'))
+    left join app.contributors c on c.id=r.edited_by
+    where e.id=${id} order by r.created_at desc,r.id limit 100`;
+  return c.json({items:rows});
 });

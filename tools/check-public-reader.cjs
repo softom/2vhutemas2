@@ -3,8 +3,8 @@ const { chromium } = require('C:/Users/tigra/.cache/codex-runtimes/codex-primary
 const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
-const origin = 'https://2vhutemas.ru';
-const outputDir = 'backups/reader-check';
+const origin = process.env.CHECK_ORIGIN || 'https://2vhutemas.ru';
+const outputDir = process.env.CHECK_OUTPUT || 'backups/reader-check';
 (async () => {
   const browser = await chromium.launch({ headless: true, executablePath: 'C:/Users/tigra/AppData/Local/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-win64/chrome-headless-shell.exe' });
   fs.mkdirSync(outputDir, { recursive: true });
@@ -41,7 +41,7 @@ const outputDir = 'backups/reader-check';
     }
     await page.goto(`${origin}/entities/taipei-performing-arts-center`, { waitUntil: 'domcontentloaded' });
     await page.locator('dialog.reader-lightbox').waitFor({ state: 'attached' });
-    await page.locator('[data-gallery]').first().click();
+    await page.locator('[data-gallery]:visible').first().click();
     assert.equal(await page.locator('dialog').evaluate(el => el.open), true);
     await page.keyboard.press('ArrowRight'); await page.keyboard.press('Escape');
     await page.locator('.cite-disclosure > summary').click();
@@ -112,6 +112,43 @@ const outputDir = 'backups/reader-check';
     // Старый адрес редактора по slug тоже загружает существующую запись.
     await editorPage.goto(`${origin}/entities/about-philosophy/edit`, { waitUntil: 'domcontentloaded' });
     await editorPage.locator('.bn-editor[contenteditable=true]').waitFor({ timeout: 45000 });
+    // Запись разрешена только в явно указанной изолированной среде.
+    if (process.env.CHECK_SAVE === '1') {
+      assert.equal(origin, 'http://127.0.0.1:17074');
+      const headers = { Authorization: `Bearer ${token}` };
+      const create = await signed.request.post(`${origin}/api/v1/entities`, {headers, data: {
+        type: 'what', slug: `r78-browser-${Date.now()}`, title_ru: 'Browser initial',
+        body_json: [{type:'paragraph',content:[{type:'text',text:'Initial text',styles:{}}]}]
+      }});
+      assert.equal(create.status(), 201);
+      const fixture = await create.json();
+      console.log('Browser fixture:', fixture.id);
+      const pub = await signed.request.post(`${origin}/api/v1/materials/${fixture.material_id}/publish`, {headers, data:{revision_id:fixture.revision_id}});
+      assert.equal(pub.status(),200);
+      await editorPage.goto(`${origin}/entities/${fixture.id}/edit`);
+      await editorPage.locator('.bn-editor[contenteditable=true]').waitFor();
+      await editorPage.getByLabel('Название по-русски', {exact:true}).fill('Browser working');
+      await editorPage.locator('.bn-editor[contenteditable=true]').click();
+      await editorPage.keyboard.press('Control+End');
+      await editorPage.keyboard.insertText(' edited');
+      await editorPage.getByRole('button',{name:'Сохранить версию',exact:true}).first().click();
+      await editorPage.locator('p.notice').filter({hasText:'Рабочая версия сохранена'}).waitFor();
+      const guestBefore = await browser.newContext();
+      const previous = await (await guestBefore.request.get(`${origin}/api/v1/entities/${fixture.id}`)).json();
+      assert.equal(previous.title_ru,'Browser initial');
+      assert.equal(JSON.stringify(previous.body_json).includes('edited'),false);
+      await editorPage.reload();
+      await editorPage.locator('.bn-editor[contenteditable=true]').waitFor();
+      assert.equal(await editorPage.getByLabel('Название по-русски',{exact:true}).inputValue(),'Browser working');
+      assert.match(await editorPage.locator('.bn-editor').innerText(),/edited/);
+      await editorPage.getByRole('button',{name:'Сохранить и опубликовать',exact:true}).first().click();
+      await editorPage.locator('p.notice').filter({hasText:'Опубликовано'}).waitFor();
+      const current = await (await guestBefore.request.get(`${origin}/api/v1/entities/${fixture.id}`)).json();
+      assert.equal(current.title_ru,'Browser working');
+      assert.equal(JSON.stringify(current.body_json).includes('edited'),true);
+      await guestBefore.close();
+      console.log('Verified browser save, reload, draft isolation and whole-version publication');
+    }
     assert.deepEqual(errors, []);
     const output = { results, guestCheckedThisRun: !process.argv.includes('--signed-only'), catalogNavigation: true, slugEditor: true, errors };
     fs.writeFileSync(`${outputDir}/results.json`, JSON.stringify(output, null, 2));

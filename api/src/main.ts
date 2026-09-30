@@ -56,7 +56,7 @@ app.get("/api/v1/health", async (c: Context<AppEnv>) => {
 app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
   // Виды дат больше не словарь: дата — такая же величина, и её вид стал
   // параметром (Р-39). Их отдаёт `GET /parameters`.
-  const dictionaries = await sql`
+  const dictionaries = await sql<{dictionary:string;code:string;title_ru:string}>`
     select 'attachment_roles' as dictionary, code, title_ru from app.attachment_roles
     union all select 'reference_kinds', code, title_ru from app.reference_kinds
     union all select 'link_roles', code, title_ru from app.link_roles

@@ -254,7 +254,7 @@ async function assetView(assetId: string) {
 
 media.get("/:id", async (c: Context<AppEnv>) => {
   const principal = c.get("principal");
-  const asset = await assetView(c.req.param("id")) as unknown as AssetRow;
+  const asset = await assetView((c.req.param("id") ?? "")) as unknown as AssetRow;
   if (!(asset.is_published && asset.visibility === "public") && !can(principal, "view") &&
       !canSeeDrafts(principal)) {
     throw new ApiError("not_found", "Файл не найден");
@@ -265,7 +265,7 @@ media.get("/:id", async (c: Context<AppEnv>) => {
 /** Выдача файла. Приватный файл требует прав; оригинал — отдельное действие. */
 media.get("/:id/file", async (c: Context<AppEnv>) => {
   const principal = c.get("principal");
-  const assetId = c.req.param("id");
+  const assetId = (c.req.param("id") ?? "");
   const variant = (c.req.query("variant") ?? "screen") as Variant;
   if (!["original", "screen", "thumbnail"].includes(variant)) {
     throw new ApiError("validation_failed", "Неизвестный вариант файла");
@@ -384,7 +384,7 @@ media.delete("/attachments/:id", async (c: Context<AppEnv>) => {
   requirePermission(c.get("principal"), "edit");
   const removed = await sql`
     delete from app.attachments
-     where id = ${Number(c.req.param("id"))} and asset_id is not null
+     where id = ${Number((c.req.param("id") ?? ""))} and asset_id is not null
     returning id
   `;
   if (removed.length === 0) throw new ApiError("not_found", "Привязка не найдена");
@@ -394,7 +394,7 @@ media.delete("/attachments/:id", async (c: Context<AppEnv>) => {
 /** Правка сведений об изображении. Файл при этом не меняется. */
 media.patch("/:id", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "edit");
-  const assetId = c.req.param("id");
+  const assetId = (c.req.param("id") ?? "");
   const input = await c.req.json<Record<string, unknown>>();
   const value = (name: string) => (input[name] ?? null) as string | null;
 
@@ -440,7 +440,7 @@ media.patch("/:id", async (c: Context<AppEnv>) => {
 /** Повтор обработки после ошибки. */
 media.post("/:id/derivatives", async (c: Context<AppEnv>) => {
   requirePermission(c.get("principal"), "edit");
-  const assetId = c.req.param("id");
+  const assetId = (c.req.param("id") ?? "");
   const rows = await sql<{ storage_key: string }>`
     select storage_key from app.media_files
     where asset_id = ${assetId} and variant = 'original' and is_current

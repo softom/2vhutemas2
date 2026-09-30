@@ -7,6 +7,7 @@
  */
 
 export type ErrorCode =
+  | "owned_content"
   | "validation_failed"
   | "unauthenticated"
   | "permission_denied"
@@ -18,6 +19,7 @@ export type ErrorCode =
   | "internal_error";
 
 const STATUS: Record<ErrorCode, number> = {
+  owned_content: 409,
   validation_failed: 400,
   unauthenticated: 401,
   permission_denied: 403,

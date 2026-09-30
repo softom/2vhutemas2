@@ -59,7 +59,7 @@ export function extractText(blocks: unknown): string {
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
-function validateDocument(body: unknown): Block[] {
+export function validateDocument(body: unknown): Block[] {
   if (!Array.isArray(body)) {
     throw new ApiError("validation_failed", "Тело документа должно быть списком блоков");
   }
@@ -173,7 +173,8 @@ export function extractRefs(blocks: unknown): EntityRef[] {
  * Записываем указатель вхождений в одной транзакции с версией и проверяем,
  * что упомянутые сущности существуют: ссылка в никуда не сохраняется.
  */
-async function saveRefs(tx: Tx, revisionId: string, blocks: unknown) {
+export async function saveRefs(tx: Tx, revisionId: string, blocks: unknown) {
+  await tx`delete from app.document_entity_refs where revision_id=${revisionId}`;
   const refs = extractRefs(blocks);
   if (refs.length === 0) return;
 
@@ -223,6 +224,7 @@ documents.post("/", async (c: Context<AppEnv>) => {
     role?: string;
   }>();
 
+  if (input.attach_to_entity_id) throw new ApiError("owned_content", "МультиТекст сохраняется вместе с сущностью: PATCH /entities/:id с body_json");
   const blocks = validateDocument(input.body ?? []);
   const text = extractText(blocks);
 
@@ -276,6 +278,20 @@ documents.post("/", async (c: Context<AppEnv>) => {
 documents.get("/:id", async (c: Context<AppEnv>) => {
   const principal = c.get("principal");
   const id = Number(c.req.param("id"));
+  const owners=await sql<{entity_id:number|null;link_id:number|null}>`select t.entity_id,t.link_id
+    from app.attachments a join app.targets t on t.id=a.target_id
+    join app.attachment_roles ar on ar.id=a.role_id
+    where a.document_id=${id} and ar.code in ('description','wiki','justification') limit 1`;
+  if (owners.length) {
+    const owner=owners[0];const drafts=canSeeDrafts(principal);
+    const content=owner.entity_id
+      ? await sql`select r.snapshot->'body_json' as body_json,e.status as material_status,r.id as latest_revision_id
+          from app.entities e join app.revisions r on r.id=case when ${drafts} then e.working_revision_id else e.published_revision_id end where e.id=${owner.entity_id}`
+      : await sql`select r.snapshot->'body_json' as body_json,l.status as material_status,r.id as latest_revision_id
+          from app.links l join app.revisions r on r.id=case when ${drafts} then l.working_revision_id else l.published_revision_id end where l.id=${owner.link_id}`;
+    if (!content.length) throw new ApiError("not_found","Текст не найден");
+    return c.json({id,...content[0],...owner});
+  }
   const rows = await sql<Record<string, unknown>>`
     select d.id, d.title, d.lang, d.body_format, d.body_schema_version, d.body_json,
            d.updated_at, m.id as material_id, m.status as material_status,
@@ -296,6 +312,10 @@ documents.get("/:id", async (c: Context<AppEnv>) => {
 documents.patch("/:id", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "edit");
   const id = Number(c.req.param("id"));
+  const owners=await sql`select t.entity_id,t.link_id from app.attachments a
+    join app.targets t on t.id=a.target_id join app.attachment_roles ar on ar.id=a.role_id
+    where a.document_id=${id} and ar.code in ('description','wiki','justification') limit 1`;
+  if (owners.length) throw new ApiError("owned_content","Текст сохраняется вместе с владельцем",owners[0]);
   const input = await c.req.json<{ title?: string; body?: unknown; base_revision_id?: string }>();
   const baseRevisionId = input.base_revision_id ?? c.req.header("if-match");
   if (!baseRevisionId) {

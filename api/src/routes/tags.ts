@@ -71,18 +71,8 @@ async function resolveTags(tx: Tx, titles: string[]): Promise<string[]> {
   return ids;
 }
 
-/** Метки записи задаются целиком: что прислали, то и остаётся. */
-tags.put("/entities/:id", async (c: Context<AppEnv>) => {
-  const principal = requirePermission(c.get("principal"), "edit");
-  const entityId = Number(c.req.param("id"));
-  if (!Number.isInteger(entityId)) throw new ApiError("validation_failed", "Неверный объект");
-  const input = await c.req.json<{ tags: string[] }>();
-
-  const result = await transaction(principal.contributorId, async (tx) => {
-    const found = await tx<{ id: number }>`select id from app.entities where id = ${entityId}`;
-    if (found.length === 0) throw new ApiError("not_found", "Объект не найден");
-
-    const ids = await resolveTags(tx, input.tags ?? []);
+export async function writeEntityTags(tx: Tx, entityId: number, titles: string[]) {
+    const ids = await resolveTags(tx, titles);
     await tx`
       delete from app.entity_tags
        where entity_id = ${entityId} and not (tag_id = any(${ids}::uuid[]))
@@ -93,6 +83,24 @@ tags.put("/entities/:id", async (c: Context<AppEnv>) => {
         on conflict do nothing
       `;
     }
+}
+
+/** Метки записи задаются целиком: что прислали, то и остаётся. */
+tags.put("/entities/:id", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "edit");
+  const entityId = Number(c.req.param("id"));
+  if (!Number.isInteger(entityId)) throw new ApiError("validation_failed", "Неверный объект");
+  const input = await c.req.json<{ tags: string[] }>();
+
+  const result = await transaction(principal.contributorId, async (tx) => {
+    await tx`select id from app.materials where entity_id=${entityId} for update`;
+    const found = await tx<{ id: number }>`select id from app.entities where id = ${entityId}`;
+    if (found.length === 0) throw new ApiError("not_found", "Объект не найден");
+
+    await writeEntityTags(tx, entityId, input.tags ?? []);
+    await tx`insert into app.revisions(material_id,base_revision_id,edited_by,operation,summary,snapshot)
+      select m.id,e.working_revision_id,${principal.contributorId},'edit','Правка сведений','{}'::jsonb
+      from app.entities e join app.materials m on m.entity_id=e.id where e.id=${entityId}`;
     return tx<{ id: string; title: string }>`
       select t.id, t.title from app.entity_tags et
       join app.tags t on t.id = et.tag_id

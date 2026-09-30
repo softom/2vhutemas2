@@ -17,6 +17,8 @@ import { type AppEnv, log } from "../lib/http.ts";
 import { entityPath } from "../lib/site.ts";
 import { notifyIndexNow } from "./pages.ts";
 
+import { ownedMaterial, publishOwned } from "../lib/ownedVersions.ts";
+
 export const materials = new Hono<AppEnv>();
 
 interface MaterialRow {
@@ -25,9 +27,13 @@ interface MaterialRow {
   kind: string;
   published_revision_id: string | null;
   latest_revision_id: string | null;
+  entity_id?: number | null;
+  link_id?: number | null;
 }
 
 async function loadMaterial(tx: Tx, materialId: string): Promise<MaterialRow> {
+  const owned = await ownedMaterial(tx, materialId);
+  if (owned) return {...owned, id:materialId} as unknown as MaterialRow;
   const rows = await tx<MaterialRow>`
     select m.id, m.status, m.kind, m.published_revision_id,
            (select r.id from app.revisions r where r.material_id = m.id
@@ -65,7 +71,7 @@ async function announce(requestId: string, materialId: string | undefined) {
 
 /** Состояние материала: что опубликовано, что предложено, как рассматривали. */
 materials.get("/:id", async (c: Context<AppEnv>) => {
-  const materialId = c.req.param("id");
+  const materialId = c.req.param("id") ?? "";
   const rows = await sql<Record<string, unknown>>`
     select m.id, m.status, m.kind, m.published_revision_id, m.archived_at,
            (select r.id from app.revisions r where r.material_id = m.id
@@ -81,18 +87,20 @@ materials.get("/:id", async (c: Context<AppEnv>) => {
   `;
   if (rows.length === 0) throw new ApiError("not_found", "Материал не найден");
 
+  const owned=await ownedMaterial(sql,materialId);
+  if (owned) Object.assign(rows[0],owned,{id:materialId});
   const material = rows[0] as unknown as { status: string };
   if (material.status !== "published" && !can(c.get("principal"), "view")) {
     throw new ApiError("not_found", "Материал не найден");
   }
-  return c.json(material);
+  return c.json(rows[0]);
 });
 
 /** Публикация: требует права publish. Указатель и состояние меняются вместе. */
 materials.post("/:id/publish", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "publish");
-  const materialId = c.req.param("id");
-  const input = await c.req.json<{ revision_id?: string; note?: string }>().catch(() => ({}));
+  const materialId = c.req.param("id") ?? "";
+  const input = await c.req.json<{ revision_id?: string; note?: string }>().catch(() => ({} as {revision_id?:string;note?:string}));
 
   const result = await transaction(principal.contributorId, async (tx) => {
     const material = await loadMaterial(tx, materialId);
@@ -111,11 +119,15 @@ materials.post("/:id/publish", async (c: Context<AppEnv>) => {
       throw new ApiError("duplicate", "Эта версия уже опубликована");
     }
 
+    if (material.entity_id || material.link_id) {
+      await publishOwned(tx,{entity_id:material.entity_id??null,link_id:material.link_id??null},String(revisionId));
+    } else {
     await tx`
       update app.materials
          set status = 'published', published_revision_id = ${revisionId}, archived_at = null
        where id = ${materialId}
     `;
+    }
     await tx`
       insert into app.revision_reviews (revision_id, reviewer_id, decision, note)
       values (${revisionId}, ${principal.contributorId}, 'published', ${input.note ?? null})
@@ -133,8 +145,8 @@ materials.post("/:id/publish", async (c: Context<AppEnv>) => {
  */
 materials.post("/:id/submit", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "edit");
-  const materialId = c.req.param("id");
-  const input = await c.req.json<{ note?: string }>().catch(() => ({}));
+  const materialId = c.req.param("id") ?? "";
+  const input = await c.req.json<{ note?: string }>().catch(() => ({} as {revision_id?:string;note?:string}));
 
   const result = await transaction(principal.contributorId, async (tx) => {
     const material = await loadMaterial(tx, materialId);
@@ -155,7 +167,7 @@ materials.post("/:id/submit", async (c: Context<AppEnv>) => {
 /** Решение по чужой версии: принять — значит опубликовать. */
 materials.post("/:id/review", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "review");
-  const materialId = c.req.param("id");
+  const materialId = c.req.param("id") ?? "";
   const input = await c.req.json<{ decision: "approved" | "rejected"; note?: string }>();
   if (input.decision !== "approved" && input.decision !== "rejected") {
     throw new ApiError("validation_failed", "Решение может быть approved или rejected");
@@ -172,11 +184,15 @@ materials.post("/:id/review", async (c: Context<AppEnv>) => {
     `;
 
     if (input.decision === "approved") {
+      if (material.entity_id || material.link_id) {
+        await publishOwned(tx,{entity_id:material.entity_id??null,link_id:material.link_id??null},String(revisionId));
+      } else {
       await tx`
         update app.materials
            set status = 'published', published_revision_id = ${revisionId}
          where id = ${materialId}
       `;
+      }
       await tx`
         insert into app.revision_reviews (revision_id, reviewer_id, decision, note)
         values (${revisionId}, ${principal.contributorId}, 'published', 'Принято при рассмотрении')
@@ -192,15 +208,19 @@ materials.post("/:id/review", async (c: Context<AppEnv>) => {
 /** Архивирование: материал уходит из показа, история и файлы остаются. */
 materials.delete("/:id", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "create_delete");
-  const materialId = c.req.param("id");
+  const materialId = c.req.param("id") ?? "";
 
   await transaction(principal.contributorId, async (tx) => {
     const material = await loadMaterial(tx, materialId);
+    if (material.entity_id) await tx`update app.entities set status='archived',published_revision_id=null where id=${material.entity_id}`;
+    else if (material.link_id) await tx`update app.links set status='archived',published_revision_id=null where id=${material.link_id}`;
+    else {
     await tx`
       update app.materials
          set status = 'archived', archived_at = now(), published_revision_id = null
        where id = ${materialId}
     `;
+    }
     if (material.latest_revision_id) {
       await tx`
         insert into app.revisions (material_id, base_revision_id, edited_by, operation, summary, snapshot)

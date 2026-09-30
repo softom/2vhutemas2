@@ -63,6 +63,7 @@ dates.put("/:id", async (c: Context<AppEnv>) => {
   validate(items);
 
   const result = await transaction(principal.contributorId, async (tx) => {
+    await tx`select id from app.materials where entity_id=${entityId} for update`;
     const found = await tx<{ id: number }>`select id from app.entities where id = ${entityId}`;
     if (found.length === 0) throw new ApiError("not_found", "Объект не найден");
 
@@ -101,6 +102,9 @@ dates.put("/:id", async (c: Context<AppEnv>) => {
       `;
     }
 
+    await tx`insert into app.revisions(material_id,base_revision_id,edited_by,operation,summary,snapshot)
+      select m.id,e.working_revision_id,${principal.contributorId},'edit','Правка сведений','{}'::jsonb
+      from app.entities e join app.materials m on m.entity_id=e.id where e.id=${entityId}`;
     return tx<Record<string, unknown>>`
       select p.code as kind, p.title_ru as kind_title, iv.date_start_year as start_year,
              iv.date_start_month as start_month, iv.date_start_day as start_day,

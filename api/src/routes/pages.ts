@@ -172,7 +172,7 @@ interface ListRow {
 async function publishedIn(branch: string | null): Promise<ListRow[]> {
   return await sql<ListRow>`
     select e.slug, e.title_ru, ty.title_ru as type_title
-      from app.entities e
+      from app.read_entities(false) e
       join app.entity_types ty on ty.id = e.type_id
      where e.is_published
        and ((${branch}::text is not null and e.type_id in
@@ -622,7 +622,7 @@ pages.get("/entities/:key", async (c) => {
 pages.get("/api/v1/entities/:key/card", async (c) => {
   c.header("cache-control", "private, no-store");
   const principal = c.get("principal");
-  const found = await resolveEntity(c.req.param("key"));
+  const found = await resolveEntity(c.req.param("key"), canSeeDrafts(principal));
   if (!found || (!found.isPublished && !canSeeDrafts(principal))) {
     throw new ApiError("not_found", "Сущность не найдена");
   }
@@ -668,13 +668,8 @@ pages.get("/robots.txt", (c) => {
 pages.get("/sitemap.xml", async (c) => {
   const rows = await sql<{ slug: string; modified_at: string }>`
     select e.slug,
-           greatest(e.updated_at,
-                    (select max(r.created_at) from app.revisions r where r.material_id = m.id),
-                    (select max(d.updated_at) from app.attachments a
-                       join app.targets t on t.id = a.target_id
-                       join app.documents d on d.id = a.document_id
-                      where t.entity_id = e.id)) as modified_at
-      from app.entities e
+           (select r.created_at from app.revisions r where r.id=e.published_revision_id) as modified_at
+      from app.read_entities(false) e
       left join app.materials m on m.entity_id = e.id
      where e.is_published
      order by e.id
