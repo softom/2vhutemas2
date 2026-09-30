@@ -338,3 +338,9 @@ button:disabled { opacity: .5; cursor: default; }
 .public-document { color-scheme: light; }
 .public-document h2 { font-size: 28px; }
 .public-document h3 { font-size: 23px; }
+
+/* Знак источника в строке текста (Р-76): ведёт к объекту, подсказка —
+   обстоятельства цитаты из обоснования связи. */
+.source-ref { display: inline-block; vertical-align: super; line-height: 0; margin: 0 2px; color: var(--accent); }
+.source-ref:hover { color: var(--text); }
+.source-mark { width: 12px; height: 12px; display: block; }

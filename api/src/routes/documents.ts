@@ -142,6 +142,10 @@ export function extractRefs(blocks: unknown): EntityRef[] {
       if (!item || typeof item !== "object") continue;
       const node = item as { type?: string; props?: Record<string, unknown>; content?: unknown };
       if (node.type === "entityMention" && node.props) take(node.props, blockId, "inline");
+      // Знак источника — тоже вхождение записи в текст (Р-76): по нему
+      // источник попадает в указатель упоминаний, а готовая страница узнаёт
+      // адрес объекта, на который ведёт знак.
+      if (node.type === "sourceRef" && node.props) take(node.props, blockId, "inline");
       if (node.content) walkInline(node.content, blockId);
     }
   };

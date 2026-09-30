@@ -200,6 +200,28 @@ if [ -n "$LID" ]; then
   check "публикация связи с обоснованием" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/links/$LID/publish)"
 fi
 
+echo "── Источники"
+# Цитируемое — объект, обстоятельства цитаты — связь (Р-76). В тексте стоит
+# только знак, ведущий к объекту.
+SRC=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"type":"web_page","slug":"smoke-istochnik","title_ru":"smoke: источник"}' $API/entities)
+SRCID=$(echo "$SRC" | field id)
+SRCREV=$(echo "$SRC" | field revision_id)
+check "веб-страница заводится записью" "да" "$([ -n "$SRCID" ] && echo да || echo нет)"
+code -X PUT -H "$AUTH" -H "$JSON" -d "{\"base_revision_id\":\"$SRCREV\",\"indicators\":[{\"title\":\"Сведения\",\"is_current\":true,\"values\":[{\"parameter\":\"url\",\"text_value\":\"https://example.org/smoke\"}]}]}" $API/entities-indicators/$SRCID >/dev/null
+contains "адрес — сведение объекта" 'https://example.org/smoke' "$(curl -s -H "$AUTH" $API/entities/$SRCID)"
+SRCLINK=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d "{\"from_entity_id\":$EID,\"to_entity_id\":$SRCID,\"role\":\"source\",\"justification\":{\"text\":\"smoke: на стр. 34 сказано так\"}}" $API/links)
+SRCLID=$(echo "$SRCLINK" | field id)
+check "связь с ролью «источник»" "да" "$([ -n "$SRCLID" ] && echo да || echo нет)"
+check "публикация связи-источника" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/links/$SRCLID/publish)"
+check "публикация источника" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/entities/$SRCID/publish)"
+contains "обстоятельства цитаты — в связи" 'на стр. 34' "$(curl -s -H "$AUTH" "$API/links?entity_id=$EID")"
+CURSRC=$(curl -s -H "$AUTH" $API/entities/$EID | field latest_revision_id)
+check "знак источника в тексте" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d "{\"base_revision_id\":\"$CURSRC\",\"body_json\":[{\"id\":\"src1\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"smoke текст со знаком\",\"styles\":{}},{\"type\":\"sourceRef\",\"props\":{\"entityId\":\"$SRCID\",\"linkId\":\"$SRCLID\",\"occurrenceId\":\"smoke-src-1\",\"title\":\"smoke: источник\",\"note\":\"smoke: на стр. 34 сказано так\"}}]}]}" $API/entities/$EID)"
+SRCREF=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
+select count(*) from app.document_entity_refs f join app.entities e on e.working_revision_id=f.revision_id
+ where e.id=$EID and f.entity_id=$SRCID")
+check "знак записан вхождением" 1 "$SRCREF"
+
 echo "── Документы"
 D=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: текст\",\"body\":[
   {\"id\":\"s1\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"smoke проверка текста\",\"styles\":{}}]},
@@ -250,6 +272,8 @@ contains "заголовок страницы — название записи"
 contains "канонический адрес по слагу" 'rel="canonical" href="https://2vhutemas.ru/entities/smoke-proverka"' "$PAGE"
 contains "разметка schema.org" 'application/ld+json' "$PAGE"
 contains "блок «Как цитировать»" 'Как цитировать' "$PAGE"
+contains "знак источника в готовой странице" 'class="source-ref"' "$PAGE"
+contains "знак ведёт к объекту-источнику" '/entities/smoke-istochnik' "$PAGE"
 contains "клиент оживляет страницу" '/assets/index-' "$PAGE"
 check "номер записи ведёт на слаг навсегда" "301 /entities/smoke-proverka" \
   "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' $SITE/entities/$EID | sed 's#https\?://[^/]*##')"
@@ -452,7 +476,7 @@ delete from app.material_credits mc using app.materials m where mc.material_id =
         or m.link_id in (select id from app.links where from_entity_id in ($EID,$EID2)));
 delete from app.materials where entity_id in ($EID,$EID2) or document_id in (select id from smoke_document_ids)
    or asset_id = '$AID' or link_id in (select id from app.links where from_entity_id in ($EID,$EID2));
-delete from app.links where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2);
+delete from app.links where from_entity_id in ($EID,$EID2,${SRCID:-0}) or to_entity_id in ($EID,$EID2,${SRCID:-0});
 delete from app.documents where id in (select id from smoke_document_ids) or id=$DID;
 delete from app.revision_reviews rr using app.revisions r, app.materials m
  where rr.revision_id = r.id and r.material_id = m.id and m.entity_id in ($LID1,$LID2);
@@ -461,7 +485,7 @@ delete from app.revisions rev using app.materials m
 delete from app.material_credits mc using app.materials m
  where mc.material_id = m.id and m.entity_id in ($LID1,$LID2);
 delete from app.materials where entity_id in ($LID1,$LID2);
-delete from app.entities where id in ($EID,$EID2,$LID1,$LID2);
+delete from app.entities where id in ($EID,$EID2,$LID1,$LID2,${SRCID:-0});
 delete from app.media_files where asset_id = '$AID';
 delete from app.media_assets where id = '$AID';
 delete from app.places where id = '$PID';

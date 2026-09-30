@@ -161,6 +161,62 @@ function EntityMentionView({ props }: { props: Record<string, string> }) {
 }
 
 /**
+ * Ссылка на источник: пиктограмма в строке, ведущая к объекту.
+ *
+ * Цитируемое — это объект: книга, статья, веб-страница (Р-76). Обстоятельства
+ * цитаты — «Камю в статье о Прекрасном, на стр. 34 говорил „…“» — принадлежат
+ * не тексту и не объекту, а связи между ними, и хранятся её обоснованием.
+ * В тексте стоит только знак: он ведёт к объекту, а подсказка показывает,
+ * что именно оттуда взято.
+ *
+ * Поэтому здесь лежат номер объекта и номер связи, а не адрес и не цитата:
+ * адрес принадлежит объекту, цитата — связи, и копия в тексте завела бы им
+ * вторых хозяев.
+ */
+export const SourceRef = createReactInlineContentSpec(
+  {
+    type: "sourceRef",
+    propSchema: {
+      entityId: { default: "" },
+      linkId: { default: "" },
+      occurrenceId: { default: "" },
+      title: { default: "" },
+      note: { default: "" },
+    },
+    content: "none",
+  },
+  {
+    render: ({ inlineContent }) => {
+      const props = inlineContent.props as Record<string, string>;
+      return <SourceRefView props={props} />;
+    },
+  },
+);
+
+/** Знак источника: лист с загнутым углом. Рисуется краской текста, поэтому
+ *  одинаково виден на светлом и тёмном. */
+export function SourceMark() {
+  return (
+    <svg className="source-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M4.5 2.5H11l2.5 2.5v8.5h-9z" fill="none" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M6.3 6.6h4.2M6.3 9h4.2M6.3 11.4h2.6" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
+function SourceRefView({ props }: { props: Record<string, string> }) {
+  const href = `/entities/${props.entityId}`;
+  const open = useInAppLink(href);
+  // Подсказка — то самое основание связи: откуда и что взято.
+  const hint = props.note || props.title || `источник ${props.entityId}`;
+  return (
+    <a className="source-ref" href={href} onClick={open} title={hint}>
+      <SourceMark />
+    </a>
+  );
+}
+
+/**
  * Изображение из медиатеки: в документе хранится идентификатор файла,
  * а не адрес. Адрес доставки вычисляется при показе — так приватность
  * и замена вариантов остаются на стороне сервера.
@@ -213,7 +269,11 @@ export function createSchema() {
       entityCard: EntityCardBlock,
       mediaImage: MediaImageBlock,
     },
-    inlineContentSpecs: { ...defaultInlineContentSpecs, entityMention: EntityMention },
+    inlineContentSpecs: {
+      ...defaultInlineContentSpecs,
+      entityMention: EntityMention,
+      sourceRef: SourceRef,
+    },
   });
 }
 

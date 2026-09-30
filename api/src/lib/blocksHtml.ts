@@ -67,6 +67,12 @@ interface Block {
   children?: Block[];
 }
 
+/** Тот же лист с загнутым углом, что и в редакторе: знак один на оба показа. */
+const SOURCE_MARK =
+  '<svg class="source-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+  '<path d="M4.5 2.5H11l2.5 2.5v8.5h-9z" fill="none" stroke="currentColor" stroke-width="1.3"/>' +
+  '<path d="M6.3 6.6h4.2M6.3 9h4.2M6.3 11.4h2.6" stroke="currentColor" stroke-width="1.3"/></svg>';
+
 function safeHref(href: unknown): string | null {
   const value = String(href ?? "").trim();
   return /^(https?:|mailto:|\/)/i.test(value) ? value : null;
@@ -84,6 +90,21 @@ function inline(content: unknown, ctx: RenderContext): string {
       if (!href) return text;
       const external = /^https?:/i.test(href) ? ' rel="noopener"' : "";
       return `<a href="${escapeHtml(href)}"${external}>${text}</a>`;
+    }
+    // Знак источника: в готовой странице он тоже ведёт к объекту, а
+    // обстоятельства цитаты подставляются подсказкой (Р-76).
+    if (item.type === "sourceRef") {
+      const id = Number(item.props?.entityId);
+      const target = ctx.entities.get(id);
+      const hint = escapeHtml(
+        String(item.props?.note ?? "") || String(item.props?.title ?? "") || target?.title || "",
+      );
+      // Источник ещё черновик — знак всё равно остаётся: цитата в тексте
+      // никуда не делась, просто идти пока некуда. Молча стирать знак хуже:
+      // читатель не узнает, что здесь была ссылка на источник.
+      if (!target) return `<span class="source-ref" title="${hint}">${SOURCE_MARK}</span>`;
+      return `<a class="source-ref" href="${escapeHtml(entityPath(target.slug))}" title="${hint}">` +
+        SOURCE_MARK + `</a>`;
     }
     if (item.type === "entityMention") {
       const id = Number(item.props?.entityId);
