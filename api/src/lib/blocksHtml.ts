@@ -83,8 +83,9 @@ export function modelSrc(src: unknown): string | null {
   return /^\/models\/[a-z0-9-]+\.html$/.test(value) ? value : null;
 }
 
-/** Выделенная рамка модели: фрейм и ссылка на полный экран — без скриптов
- *  она тоже работает, просто как ссылка. */
+/** Выделенная рамка модели: во фрейме — модель без обвязки страницы
+ *  (`?embed=1`), рядом ссылка на полную страницу; без скриптов рамка
+ *  работает как ссылка. */
 function modelHtml(props: Record<string, unknown>): string {
   const src = modelSrc(props.src);
   if (!src) return "";
@@ -92,7 +93,7 @@ function modelHtml(props: Record<string, unknown>): string {
   const caption = escapeHtml(String(props.caption ?? ""));
   const height = Math.min(Math.max(Number(props.height) || 560, 320), 900);
   return `<figure class="model-embed"><div class="model-embed-label">Интерактивная модель · ${title}</div>` +
-    `<iframe src="${escapeHtml(src)}" title="${title}" loading="lazy" style="height:${height}px"></iframe>` +
+    `<iframe src="${escapeHtml(src)}?embed=1" title="${title}" loading="lazy" style="height:${height}px"></iframe>` +
     `<figcaption>${caption ? caption + " · " : ""}<a href="${escapeHtml(src)}">Открыть на весь экран</a></figcaption></figure>`;
 }
 

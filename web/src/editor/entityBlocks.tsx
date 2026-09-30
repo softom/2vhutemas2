@@ -274,7 +274,7 @@ export const ModelEmbedBlock = createReactBlockSpec(
       return (
         <figure className="model-embed">
           <div className="model-embed-label">Интерактивная модель · {props.title || src}</div>
-          {src ? <iframe src={src} title={props.title} loading="lazy" style={{ height }} /> : null}
+          {src ? <iframe src={`${src}?embed=1`} title={props.title} loading="lazy" style={{ height }} /> : null}
           <figcaption>
             {props.caption ? `${props.caption} · ` : ""}
             {src ? <a href={src} target="_blank" rel="noopener">Открыть на весь экран</a> : "адрес модели не из /models/"}
