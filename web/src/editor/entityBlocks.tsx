@@ -250,6 +250,41 @@ export const MediaImageBlock = createReactBlockSpec(
   },
 );
 
+/**
+ * Интерактивная модель из `/models/` (Р-80): в тексте — выделенная рамка
+ * с живой моделью. Хранится только адрес страницы модели; чужие адреса
+ * не показываются, как и в готовой странице.
+ */
+export const ModelEmbedBlock = createReactBlockSpec(
+  {
+    type: "modelEmbed",
+    propSchema: {
+      src: { default: "" },
+      title: { default: "" },
+      caption: { default: "" },
+      height: { default: "560" },
+    },
+    content: "none",
+  },
+  {
+    render: ({ block }) => {
+      const props = block.props as Record<string, string>;
+      const src = /^\/models\/[a-z0-9-]+\.html$/.test(props.src) ? props.src : "";
+      const height = Math.min(Math.max(Number(props.height) || 560, 320), 900);
+      return (
+        <figure className="model-embed">
+          <div className="model-embed-label">Интерактивная модель · {props.title || src}</div>
+          {src ? <iframe src={src} title={props.title} loading="lazy" style={{ height }} /> : null}
+          <figcaption>
+            {props.caption ? `${props.caption} · ` : ""}
+            {src ? <a href={src} target="_blank" rel="noopener">Открыть на весь экран</a> : "адрес модели не из /models/"}
+          </figcaption>
+        </figure>
+      );
+    },
+  },
+);
+
 /** Цитата из старых документов проекта; сохраняем отдельным блочным типом. */
 export const QuoteBlock = createReactBlockSpec(
   { type: "quote", propSchema: {}, content: "inline" },
@@ -268,6 +303,7 @@ export function createSchema() {
       quote: QuoteBlock,
       entityCard: EntityCardBlock,
       mediaImage: MediaImageBlock,
+      modelEmbed: ModelEmbedBlock,
     },
     inlineContentSpecs: {
       ...defaultInlineContentSpecs,
@@ -278,7 +314,7 @@ export function createSchema() {
 }
 
 /** Блоки без собственного текста: курсор внутрь них поставить нельзя. */
-const VOID_BLOCKS = new Set(["entityCard", "mediaImage"]);
+const VOID_BLOCKS = new Set(["entityCard", "mediaImage", "modelEmbed"]);
 
 /**
  * Подготовка старых документов к текущей схеме BlockNote.

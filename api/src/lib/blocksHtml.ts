@@ -73,6 +73,29 @@ const SOURCE_MARK =
   '<path d="M4.5 2.5H11l2.5 2.5v8.5h-9z" fill="none" stroke="currentColor" stroke-width="1.3"/>' +
   '<path d="M6.3 6.6h4.2M6.3 9h4.2M6.3 11.4h2.6" stroke="currentColor" stroke-width="1.3"/></svg>';
 
+/**
+ * Интерактивная модель встраивается только своя: статичная страница из
+ * `/models/` (Р-80). Чужой адрес во фрейме — это чужой код на нашей
+ * странице, поэтому всё прочее отбрасывается.
+ */
+export function modelSrc(src: unknown): string | null {
+  const value = String(src ?? "").trim();
+  return /^\/models\/[a-z0-9-]+\.html$/.test(value) ? value : null;
+}
+
+/** Выделенная рамка модели: фрейм и ссылка на полный экран — без скриптов
+ *  она тоже работает, просто как ссылка. */
+function modelHtml(props: Record<string, unknown>): string {
+  const src = modelSrc(props.src);
+  if (!src) return "";
+  const title = escapeHtml(String(props.title ?? "") || "Интерактивная модель");
+  const caption = escapeHtml(String(props.caption ?? ""));
+  const height = Math.min(Math.max(Number(props.height) || 560, 320), 900);
+  return `<figure class="model-embed"><div class="model-embed-label">Интерактивная модель · ${title}</div>` +
+    `<iframe src="${escapeHtml(src)}" title="${title}" loading="lazy" style="height:${height}px"></iframe>` +
+    `<figcaption>${caption ? caption + " · " : ""}<a href="${escapeHtml(src)}">Открыть на весь экран</a></figcaption></figure>`;
+}
+
 function safeHref(href: unknown): string | null {
   const value = String(href ?? "").trim();
   return /^(https?:|mailto:|\/)/i.test(value) ? value : null;
@@ -165,6 +188,8 @@ function block(item: Block, ctx: RenderContext): string {
       if (credit) return figureHtml(mediaUrl(assetId), caption, credit);
       return caption ? `<p>${escapeHtml(caption)}</p>` : "";
     }
+    case "modelEmbed":
+      return modelHtml(props);
     case "image": {
       // Внешняя картинка без автора и источника — не цитата (Р-68):
       // показываем только подпись, если она есть.
