@@ -204,7 +204,8 @@ function joints(){
         for(let j=0;j<n;j++){const lp=m.localContactPoint1(j),im=m.contactImpulse(j);if(!lp||im<=0)continue;const r=rot(lp,a);imps.push(im);F+=im;x+=im*(r.x+p.x);y+=im*(r.y+p.y);}
         if(F<=0)return;
         const nr=m.normal();
-        out.push({x:x/F,y:y/F,F:F/DT,n:{x:nr.x,y:nr.y},bodies:[s,os],ab:!os,ctr:!!(ctrBody&&ob.handle===ctrBody.handle),e:imps.length<2?1:Math.abs(imps[0]/F-0.5)*2});
+        const k=os?(os.i-s.i===1?s.i+0.5:null):(ob.isAb?(ob.translation().x<CX?-0.5:N-0.5):null);
+        out.push({x:x/F,y:y/F,F:F/DT,n:{x:nr.x,y:nr.y},bodies:[s,os],ab:!os,k,ctr:!!(ctrBody&&ob.handle===ctrBody.handle),e:imps.length<2?1:Math.abs(imps[0]/F-0.5)*2});
       });
     });
   });
@@ -258,8 +259,9 @@ function draw(J){
   const main=J.filter(j=>!j.ctr);
   let hinges=0;
   main.forEach(j=>{if(j.e>=0.9){hinges++;ctx.strokeStyle='#E24B4A';ctx.lineWidth=2;ctx.beginPath();ctx.arc(sx(j.x),sy(j.y),6,0,Math.PI*2);ctx.stroke();}});
-  if($('tl').checked&&intact&&!ctrBody&&main.length>1){
-    const pts=main.map(j=>({x:sx(j.x),y:sy(j.y),a:Math.atan2(Math.max(j.y-CY,0),j.x-CX)})).sort((a,b)=>b.a-a.a);
+  const chain=main.filter(j=>j.k!==null).sort((a,b)=>a.k-b.k);
+  if($('tl').checked&&!ctrBody&&chain.length===N+1&&new Set(chain.map(j=>j.k)).size===N+1){
+    const pts=chain.map(j=>({x:sx(j.x),y:sy(j.y)}));
     ctx.strokeStyle='#D85A30';ctx.lineWidth=2;ctx.setLineDash([6,4]);
     ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.stroke();ctx.setLineDash([]);
   }

@@ -226,8 +226,8 @@ function draw(J){
     ctx.font='13px sans-serif';ctx.textAlign='center';ctx.fillStyle=tp;ctx.fillText(v.c.name,sx(v.c.cx),22);
     const vj=J.filter(j=>j.v===v&&j.k!==null);
     let hinges=0;vj.forEach(j=>{if(j.e>=0.9)hinges++;});
-    if($('tl').checked&&intact&&vj.length>1){
-      const pts=vj.slice().sort((a,b)=>a.k-b.k);
+    const pts=vj.slice().sort((a,b)=>a.k-b.k);
+    if($('tl').checked&&pts.length===N+1&&new Set(pts.map(j=>j.k)).size===N+1){
       ctx.strokeStyle='#D85A30';ctx.lineWidth=2;ctx.setLineDash([5,4]);
       ctx.beginPath();pts.forEach((j,i)=>i?ctx.lineTo(sx(j.x),sy(j.y)):ctx.moveTo(sx(j.x),sy(j.y)));ctx.stroke();ctx.setLineDash([]);
     }

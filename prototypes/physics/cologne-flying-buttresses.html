@@ -226,9 +226,9 @@ function draw(J){
   }
   let hinges=0;
   J.forEach(j=>{if(j.e>=0.9&&j.a.kind!=='ground'&&j.b.kind!=='ground'){hinges++;ctx.strokeStyle='#E24B4A';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(sx(j.x),sy(j.y),4,0,Math.PI*2);ctx.stroke();}});
-  if($('tl').checked&&intact){
+  if($('tl').checked){
     ctx.strokeStyle='#D85A30';ctx.lineWidth=2;ctx.setLineDash([6,4]);
-    chains.forEach(ch=>{const pts=chainPoints(ch,J);if(pts.length<2)return;ctx.beginPath();pts.forEach((j,i)=>i?ctx.lineTo(sx(j.x),sy(j.y)):ctx.moveTo(sx(j.x),sy(j.y)));ctx.stroke();});
+    chains.forEach(ch=>{const pts=chainPoints(ch,J);if(pts.length<(ch.end?ch.m.length+1:ch.m.length))return;ctx.beginPath();pts.forEach((j,i)=>i?ctx.lineTo(sx(j.x),sy(j.y)):ctx.moveTo(sx(j.x),sy(j.y)));ctx.stroke();});
     ctx.setLineDash([]);
   }
   return{intact,hinges};
