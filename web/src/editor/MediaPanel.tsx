@@ -20,7 +20,10 @@ export function MediaPanel({ entityId, attached, onInsert, onChanged }: Props) {
   const [items, setItems] = useState<MediaAsset[]>([]);
   const [query, setQuery] = useState("");
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Ошибка прикрепления показывается у той плитки, где нажимали (Р-51):
+  // общая строка вверху панели оставалась за краем прокрученного списка.
+  const [failed, setFailed] = useState<{ id: string; message: string } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const load = (q: string) =>
     api.media({ q: q || undefined })
@@ -33,16 +36,16 @@ export function MediaPanel({ entityId, attached, onInsert, onChanged }: Props) {
   }, [query]);
 
   const attach = async (asset: MediaAsset) => {
-    if (!entityId) {
-      setError("Сначала сохраните объект");
-      return;
-    }
-    setError(null);
+    if (!entityId) return;
+    setFailed(null);
+    setBusy(asset.id);
     try {
       await api.attachMedia({ entity_id: entityId, asset_id: asset.id, role: "gallery" });
       onChanged();
     } catch (e) {
-      setError((e as Error).message);
+      setFailed({ id: asset.id, message: (e as Error).message });
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -68,7 +71,19 @@ export function MediaPanel({ entityId, attached, onInsert, onChanged }: Props) {
       </button>
       {!isAttached && (
         <div className="panel-item-actions">
-          <button type="button" className="ghost" onClick={() => attach(asset)}>Прикрепить</button>
+          {/* Прикрепление — связь записи с изображением, а у несохранённой
+              записи ещё нет номера: связывать не с чем. */}
+          <button
+            type="button"
+            className="ghost"
+            disabled={!entityId || busy === asset.id}
+            title={entityId ? undefined : "Сначала сохраните запись"}
+            onClick={() => attach(asset)}
+          >
+            {busy === asset.id ? "Прикрепляем…" : "Прикрепить"}
+          </button>
+          {!entityId && <span className="hint">сначала сохраните запись</span>}
+          {failed?.id === asset.id && <span className="field-error">{failed.message}</span>}
         </div>
       )}
     </li>
@@ -86,13 +101,15 @@ export function MediaPanel({ entityId, attached, onInsert, onChanged }: Props) {
       <p className="hint">
         Перетащите файл в текст или щёлкните по нему. «Прикрепить» добавляет файл в карточку объекта.
       </p>
+      {!entityId && (
+        <p className="notice">Прикреплять можно после первого сохранения записи: вставлять в текст — уже сейчас.</p>
+      )}
 
       <input
         placeholder="Поиск по медиатеке"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
       />
-      {error && <p className="error">{error}</p>}
 
 
       <h4>Медиатека</h4>
