@@ -366,12 +366,13 @@ button:disabled { opacity: .5; cursor: default; }
 .ssr[data-catalog] .card.portrait img { height: auto; }
 .ssr[data-catalog] a.card { color: inherit; }
 
-/* Окно вставки и прикрепления — на весь экран, фильтры сверху. */
-.modal-backdrop.full { padding: 12px; }
-.modal.full { width: 100%; min-height: calc(100vh - 24px); display: flex; flex-direction: column; }
-.modal.full .modal-body { flex: 1; }
-.picker-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
-.picker-filters { position: sticky; top: -18px; z-index: 2; background: var(--surface); padding: 10px 0; margin-bottom: 6px; align-items: center; }
+/* Блок вставки и прикрепления — на странице, там где вызван; во всю ширину,
+   фильтры сверху, сетка прокручивается внутри блока, текст остаётся рядом. */
+.picker-block { border: 1px solid var(--accent); border-radius: var(--radius); background: var(--surface); margin: 10px 0 16px; }
+.picker-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.picker-tabs { display: flex; gap: 8px; margin: 0; }
+.picker-body { max-height: 70vh; overflow: auto; padding: 0 14px 14px; }
+.picker-filters { position: sticky; top: 0; z-index: 2; background: var(--surface); padding: 10px 0; margin-bottom: 6px; align-items: center; }
 .picker-filters input:not([type=checkbox]) { flex: 1 1 260px; }
 .picker-filters .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
 .picker-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }

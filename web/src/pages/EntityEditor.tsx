@@ -230,9 +230,23 @@ function EditorBody(props: any) {
   const [canPublish, setCanPublish] = useState(false);
   useEffect(() => { api.me().then(me => setCanPublish(me.permissions.includes("publish") || me.permissions.includes("su"))).catch(() => setCanPublish(false)); }, []);
   const [problems, setProblems] = props.problemsState;
-  // Окно вставки и прикрепления — на весь экран, с фильтрами (вместо
-  // прежней узкой колонки справа от текста).
-  const [picker, setPicker] = useState<PickerTab | null>(null);
+  // Блок вставки и прикрепления раскрывается там, где его вызвали: над
+  // текстом или в разделе изображений (вместо узкой колонки справа).
+  const [picker, setPicker] = useState<{ tab: PickerTab; at: "text" | "gallery" } | null>(null);
+  const pickerBlock = (at: "text" | "gallery") => picker?.at === at && (
+    <InsertPicker
+      key={`${at}-${picker.tab}`}
+      entityId={entityId}
+      types={types}
+      initialTab={picker.tab}
+      attached={media}
+      onInsertCard={(entity) => insertEntityCard(editor, entity)}
+      onInsertMention={(entity) => insertEntityMention(editor, entity)}
+      onInsertMedia={(asset) => insertMediaImage(editor, asset)}
+      onChanged={reloadAttachments}
+      onClose={() => setPicker(null)}
+    />
+  );
   const typeTitle = types.find((item: EntityType) => item.code === form.type)?.title_ru ?? "";
 
   // Какие разделы у формы и в каком порядке, решает тип записи (настройка
@@ -441,8 +455,9 @@ function EditorBody(props: any) {
                   onInsert={(item) =>
                     insertMediaImage(editor, { id: item.asset_id, caption_ru: item.caption })}
                   onChanged={reloadAttachments}
-                  onPick={() => setPicker("media")}
+                  onPick={() => setPicker({ tab: "media", at: "gallery" })}
                 />
+                {pickerBlock("gallery")}
               </div>
             );
           case "text":
@@ -450,13 +465,14 @@ function EditorBody(props: any) {
               <div key="text">
                 <h2>Описание</h2>
                 <div className="row picker-open">
-                  <button type="button" className="ghost" onClick={() => setPicker("entities")}>
+                  <button type="button" className="ghost" onClick={() => setPicker({ tab: "entities", at: "text" })}>
                     Вставить запись…
                   </button>
-                  <button type="button" className="ghost" onClick={() => setPicker("media")}>
+                  <button type="button" className="ghost" onClick={() => setPicker({ tab: "media", at: "text" })}>
                     Вставить или прикрепить изображение…
                   </button>
                 </div>
+                {pickerBlock("text")}
                 <div className="editor-layout single">
                   <div
                     className="editor-shell"
@@ -480,19 +496,6 @@ function EditorBody(props: any) {
         }
       })}
 
-      {picker && (
-        <InsertPicker
-          entityId={entityId}
-          types={types}
-          initialTab={picker}
-          attached={media}
-          onInsertCard={(entity) => insertEntityCard(editor, entity)}
-          onInsertMention={(entity) => insertEntityMention(editor, entity)}
-          onInsertMedia={(asset) => insertMediaImage(editor, asset)}
-          onChanged={reloadAttachments}
-          onClose={() => setPicker(null)}
-        />
-      )}
 
       <div style={{ marginTop: 18 }}>{actions}</div>
     </section>

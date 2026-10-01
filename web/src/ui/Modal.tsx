@@ -18,12 +18,10 @@ interface Props {
   children: ReactNode;
   footer?: ReactNode;
   dirty?: boolean;
-  /** На весь экран: для выбора из большого списка с фильтрами. */
-  full?: boolean;
   onClose: () => void;
 }
 
-export function Modal({ title, children, footer, dirty, full, onClose }: Props) {
+export function Modal({ title, children, footer, dirty, onClose }: Props) {
   const close = () => {
     if (dirty && !confirm("Закрыть окно? Несохранённые изменения пропадут.")) return;
     onClose();
@@ -56,11 +54,8 @@ export function Modal({ title, children, footer, dirty, full, onClose }: Props) 
   });
 
   return (
-    <div
-      className={full ? "modal-backdrop full" : "modal-backdrop"}
-      onMouseDown={(event) => event.target === event.currentTarget && close()}
-    >
-      <div className={full ? "modal full" : "modal"} role="dialog" aria-label={title}>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+      <div className="modal" role="dialog" aria-label={title}>
         <header className="modal-head">
           <h2>{title}</h2>
           <button type="button" className="ghost" onClick={close} aria-label="Закрыть">✕</button>

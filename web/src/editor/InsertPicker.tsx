@@ -1,9 +1,11 @@
 /**
- * Окно вставки и прикрепления — на весь экран, с фильтрами сверху.
+ * Блок вставки и прикрепления — во всю ширину страницы, с фильтрами сверху.
  *
  * Прежде это была узкая колонка справа от текста: список в одну плитку
  * шириной, без отбора, с кнопками за краем прокрутки. Здесь — сетка
- * крупных карточек и фильтры, которыми сужают поиск.
+ * крупных карточек и фильтры, которыми сужают поиск. Блок раскрывается там,
+ * где его вызвали — над текстом или в разделе изображений, — а не отдельным
+ * окном поверх страницы: текст и карточка остаются перед глазами.
  *
  * Два раздела, потому что в текст вставляются две вещи: записи и изображения.
  *   * Запись — карточкой отдельным блоком или упоминанием в строке. Вставка
@@ -12,7 +14,7 @@
  *   * Изображение — в текст блоком или прикреплением к записи: прикрепление —
  *     связь «иллюстрация» (Р-84), поэтому возможно только у сохранённой записи.
  *
- * Окно не закрывается после действия: в лекцию вставляют подряд.
+ * Блок не закрывается после действия: в лекцию вставляют подряд.
  */
 import { useEffect, useState } from "react";
 import {
@@ -22,7 +24,6 @@ import {
   type EntityType,
   type MediaAsset,
 } from "../api";
-import { Modal } from "../ui/Modal";
 import { type InsertableEntity, SourceMark } from "./entityBlocks";
 import { LinkDialog } from "./LinkDialog";
 import { MediaDialog } from "./MediaDialog";
@@ -55,24 +56,24 @@ export function InsertPicker(props: Props) {
   const mark = (key: string, text: string) => setDone((current) => ({ ...current, [key]: text }));
 
   return (
-    <Modal
-      full
-      title="Вставить или прикрепить"
-      onClose={props.onClose}
-      footer={<button type="button" onClick={props.onClose}>Готово</button>}
-    >
-      <div className="panel-tabs picker-tabs">
+    <section className="picker-block" aria-label="Вставить или прикрепить">
+      <header className="picker-head">
+        <div className="panel-tabs picker-tabs">
         <button type="button" className={tab === "entities" ? "active" : "ghost"} onClick={() => setTab("entities")}>
           Записи
         </button>
         <button type="button" className={tab === "media" ? "active" : "ghost"} onClick={() => setTab("media")}>
           Изображения
         </button>
+        </div>
+        <button type="button" onClick={props.onClose}>Готово</button>
+      </header>
+      <div className="picker-body">
+        {tab === "entities"
+          ? <EntitiesTab {...props} done={done} mark={mark} />
+          : <MediaTab {...props} done={done} mark={mark} />}
       </div>
-      {tab === "entities"
-        ? <EntitiesTab {...props} done={done} mark={mark} />
-        : <MediaTab {...props} done={done} mark={mark} />}
-    </Modal>
+    </section>
   );
 }
 
