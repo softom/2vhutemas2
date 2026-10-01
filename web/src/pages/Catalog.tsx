@@ -18,6 +18,28 @@ import {
   type SuggestedParameter,
 } from "../api";
 
+/**
+ * Первая страница каталога, вложенная сервером в готовую страницу: тот же
+ * ответ API, что каталог запросил бы сам. Начинаем с неё — и при загрузке
+ * клиента сетка не исчезает за «Загружаем…» и не перестраивается.
+ * Читается один раз: при переходах внутри приложения её уже нет.
+ */
+let initialCatalog: { branch: string; page: { items: EntityListItem[]; next_cursor: string | null } } | null =
+  (() => {
+    try {
+      const node = document.getElementById("catalog-initial");
+      return node?.textContent ? JSON.parse(node.textContent) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+function takeInitial(branch: string) {
+  const found = initialCatalog && initialCatalog.branch === branch ? initialCatalog.page : null;
+  initialCatalog = null;
+  return found;
+}
+
 interface Props {
   canCreate: boolean;
   /** Ветвь дерева, которой ограничен раздел; пусто — весь каталог. */
@@ -27,10 +49,11 @@ interface Props {
 }
 
 export function Catalog({ canCreate, branch, title, sub }: Props) {
-  const [items, setItems] = useState<EntityListItem[]>([]);
+  const [initial] = useState(() => takeInitial(branch ?? ""));
+  const [items, setItems] = useState<EntityListItem[]>(initial?.items ?? []);
   // Каталог отдаётся страницами; без этого записи за первой страницей
   // были не видны вовсе.
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(initial?.next_cursor ?? null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [types, setTypes] = useState<EntityType[]>([]);
   const [type, setType] = useState(branch ?? "");
@@ -40,7 +63,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   const [min, setMin] = useState("");
   const [max, setMax] = useState("");
   const [descending, setDescending] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initial);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -198,7 +221,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       )}
 
       {error && <p className="error">{error}</p>}
-      {loading && <p className="notice">Загружаем…</p>}
+      {loading && items.length === 0 && <p className="notice">Загружаем…</p>}
       {!loading && !error && items.length === 0 && (
         <p className="notice">
           Пока ничего нет. {canCreate ? "Создайте первый объект." : "Материалы появятся позже."}

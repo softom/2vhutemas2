@@ -38,6 +38,7 @@ export function compactParts(compact: CompactItem[] | undefined) {
   const items = compact ?? [];
   const picture = items.find((item) => item.component === "thumbnail" || item.component === "portrait");
   return {
+    picture: !!picture,
     image: picture?.asset ?? null,
     portrait: picture?.component === "portrait",
     mark: items.some((item) => item.component === "mark"),
@@ -124,7 +125,7 @@ interface Block {
 }
 
 /** Тот же лист с загнутым углом, что и в редакторе: знак один на оба показа. */
-const SOURCE_MARK =
+export const SOURCE_MARK =
   '<svg class="source-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
   '<path d="M4.5 2.5H11l2.5 2.5v8.5h-9z" fill="none" stroke="currentColor" stroke-width="1.3"/>' +
   '<path d="M6.3 6.6h4.2M6.3 9h4.2M6.3 11.4h2.6" stroke="currentColor" stroke-width="1.3"/></svg>';

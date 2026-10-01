@@ -358,3 +358,10 @@ button:disabled { opacity: .5; cursor: default; }
 .entity-mention .source-mark { display: inline-block; width: 0.9em; height: 0.9em; vertical-align: -0.1em; margin-right: 0.2em; }
 /* Значение параметра в компактном виде: «Красный пр., 36, Новосибирск». */
 .compact-param { color: var(--muted, #6f685c); }
+
+/* Каталог от сервера — той же ширины и разметки, что каталог приложения:
+   подмена при загрузке клиента не видна. */
+.ssr[data-catalog] { max-width: none; margin: 0; padding: 0; }
+.ssr[data-catalog] .card img { height: 150px; }
+.ssr[data-catalog] .card.portrait img { height: auto; }
+.ssr[data-catalog] a.card { color: inherit; }

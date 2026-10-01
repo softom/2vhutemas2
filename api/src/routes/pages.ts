@@ -15,6 +15,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { sql } from "../lib/db.ts";
+import { entities } from "./entities.ts";
 import { siteHeader } from "../lib/siteHeader.ts";
 import { canSeeDrafts } from "../lib/auth.ts";
 import { ApiError } from "../lib/errors.ts";
@@ -39,7 +40,9 @@ import {
   blocks as blocksHtml,
   type CompactItem,
   compactLine,
+  compactParts,
   figureHtml,
+  SOURCE_MARK,
   firstParagraph,
 } from "../lib/blocksHtml.ts";
 
@@ -73,6 +76,8 @@ interface Page {
   noindex?: boolean;
   /** Чтение без запуска React и BlockNote. */
   publicReader?: boolean;
+  /** Каталог: страница во всю ширину приложения, как его собственный каталог. */
+  catalog?: boolean;
   entityKey?: string;
 }
 
@@ -134,7 +139,7 @@ async function render(c: Context<AppEnv>, page: Page) {
     .replace(/<title>[\s\S]*?<\/title>/, head(page))
     .replace(
       '<div id="root"></div>',
-      `<div id="root"><div class="ssr"${page.publicReader ? ' data-public-page="true"' : ""}${page.entityKey ? ` data-entity-key="${escapeHtml(page.entityKey)}"` : ""}>${page.body}</div></div>`,
+      `<div id="root"><div class="ssr"${page.publicReader ? ' data-public-page="true"' : ""}${page.catalog ? ' data-catalog="true"' : ""}${page.entityKey ? ` data-entity-key="${escapeHtml(page.entityKey)}"` : ""}>${page.body}</div></div>`,
     );
   c.header("cache-control", "no-cache");
   c.header("content-type", "text/html; charset=utf-8");
@@ -172,13 +177,14 @@ const WEBSITE = {
 interface ListRow {
   slug: string;
   title_ru: string;
+  title_en: string | null;
   type_title: string;
   compact: CompactItem[];
 }
 
 async function publishedIn(branch: string | null): Promise<ListRow[]> {
   return await sql<ListRow>`
-    select e.slug, e.title_ru, ty.title_ru as type_title,
+    select e.slug, e.title_ru, e.title_en, ty.title_ru as type_title,
            app.compact_json(e.id, false) as compact
       from app.read_entities(false) e
       join app.entity_types ty on ty.id = e.type_id
@@ -202,6 +208,75 @@ function listHtml(rows: ListRow[], showType = true): string {
       (showType ? ` — ${escapeHtml(row.type_title)}` : "") + `</li>`
     ).join("")
   }</ul>`;
+}
+
+interface CatalogItem {
+  slug: string;
+  title_ru: string;
+  title_en: string | null;
+  type_title: string | null;
+  material_status: string | null;
+  compact?: CompactItem[];
+}
+
+interface CatalogPage {
+  items: CatalogItem[];
+  next_cursor: string | null;
+}
+
+/**
+ * Первая страница каталога — тот же ответ, что получает приложение
+ * (`GET /api/v1/entities`): те же записи, в том же порядке, столько же.
+ */
+async function firstCatalogPage(branch: string | null): Promise<CatalogPage> {
+  const response = await entities.request(branch ? `/?type=${encodeURIComponent(branch)}` : "/");
+  return await response.json() as CatalogPage;
+}
+
+function plural(count: number, [one, few, many]: [string, string, string]): string {
+  const tens = count % 100;
+  if (tens >= 11 && tens <= 14) return many;
+  const ones = count % 10;
+  if (ones === 1) return one;
+  if (ones >= 2 && ones <= 4) return few;
+  return many;
+}
+
+/** Счётчик списка — как ListCount в приложении. */
+function listCountHtml(shown: number, hasMore: boolean): string {
+  return `<div class="list-count"><span class="hint">Показано ${shown} ${plural(shown, ["запись", "записи", "записей"])}` +
+    `${hasMore ? " — есть ещё" : ""}</span>` +
+    (hasMore ? `<button type="button" class="ghost">Показать ещё</button>` : "") + `</div>`;
+}
+
+/**
+ * Каталог раздела той же разметкой и с теми же данными, что каталог
+ * приложения (Catalog.tsx): карточки по компактному виду типа. Данные
+ * вложены в страницу, и приложение начинает с них, — поэтому при загрузке
+ * клиента ничего не мигает и не перестраивается.
+ */
+function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string): string {
+  const cards = page.items.map((row) => {
+    const view = compactParts(row.compact);
+    const picture = !view.picture ? "" : view.image
+      ? `<img src="${escapeHtml(mediaUrl(view.image, "thumbnail"))}" alt="" loading="lazy" />`
+      : `<div class="card-no-cover">без изображения</div>`;
+    return `<a class="card${view.portrait ? " portrait" : ""}" href="${escapeHtml(entityPath(row.slug))}">${picture}` +
+      `<div class="kind">${escapeHtml(row.type_title ?? "")}</div>` +
+      `<div class="title">${view.mark ? SOURCE_MARK : ""}${escapeHtml(row.title_ru)}</div>` +
+      (view.params.length ? `<div class="kind">${escapeHtml(view.params.join(", "))}</div>` : "") +
+      (row.title_en ? `<div class="kind">${escapeHtml(row.title_en)}</div>` : "") +
+      `<div style="margin-top:8px"><span class="badge">${row.material_status === "published" ? "опубликовано" : "черновик"}</span></div></a>`;
+  }).join("");
+  // Поиск и отбор работают в приложении; здесь они держат место.
+  const filters = `<div class="filters"><input placeholder="Поиск по названию" disabled />` +
+    `<select disabled><option>${escapeHtml(typeLabel)}</option></select></div>`;
+  // «</» внутри строки закрыл бы тег скрипта раньше времени.
+  const data = JSON.stringify({ branch: branch ?? "", page }).replaceAll("</", "<\\/");
+  const count = listCountHtml(page.items.length, !!page.next_cursor);
+  return `<script type="application/json" id="catalog-initial">${data}</script>` +
+    `<section><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(lead)}</p>${filters}${count}` +
+    (page.items.length ? `<div class="grid">${cards}</div>${count}` : "") + `</section>`;
 }
 
 function listLd(path: string, title: string, rows: ListRow[]) {
@@ -240,19 +315,17 @@ const SECTIONS: Record<string, { branch: string; title: string; lead: string }> 
 };
 
 pages.get("/", async (c) => {
-  const [what, who, learning] = await Promise.all([
-    publishedIn("what"),
-    publishedIn("who"),
-    publishedIn("learning"),
-  ]);
-  const all = [...what, ...who, ...learning];
-  const body = layout(
-    `<h1>${escapeHtml(site.name)}</h1><p>${escapeHtml(site.description)}</p>` +
-      `<h2><a href="/objects">Проекты</a></h2>${listHtml(what)}` +
-      `<h2><a href="/authors">Авторы</a></h2>${listHtml(who)}` +
-      `<h2><a href="/lectures">Лекции</a></h2>${listHtml(learning)}`,
-  );
+  // Главная в приложении — общий каталог «Всё»; сервер отдаёт его же.
+  const [all, first] = await Promise.all([publishedIn(null), firstCatalogPage(null)]);
+  const body = layout(catalogHtml(
+    "Всё",
+    "Все записи подряд: объекты, авторы, периоды и служебные материалы.",
+    first,
+    null,
+    "Все типы",
+  ));
   return await render(c, {
+    catalog: true,
     status: 200,
     title: `${site.name} — курс «Квантовая архитектура»`,
     description: site.description,
@@ -264,14 +337,21 @@ pages.get("/", async (c) => {
 
 for (const [path, section] of Object.entries(SECTIONS)) {
   pages.get(path, async (c) => {
-    const rows = await publishedIn(section.branch);
+    const [rows, first] = await Promise.all([
+      publishedIn(section.branch),
+      section.branch === "learning" ? Promise.resolve(null) : firstCatalogPage(section.branch),
+    ]);
     return await render(c, {
       status: 200,
       title: `${section.title} — ${site.name}`,
       description: section.lead,
       canonical: path,
       jsonLd: [listLd(path, section.title, rows)],
-      body: layout(`<h1>${section.title}</h1><p>${escapeHtml(section.lead)}</p>${listHtml(rows)}`),
+      // Проекты и авторы в приложении — каталог раздела; лекции — своя таблица.
+      catalog: section.branch !== "learning",
+      body: layout(section.branch === "learning"
+        ? `<h1>${section.title}</h1><p>${escapeHtml(section.lead)}</p>${listHtml(rows)}`
+        : catalogHtml(section.title, section.lead, first!, section.branch, "Все в разделе")),
     });
   });
 }
@@ -287,7 +367,7 @@ const ABOUT_ALIASES: Record<string, string> = {
 };
 
 pages.get("/about", async (c) => {
-  const rows = await publishedIn("project_pages");
+  const [rows, first] = await Promise.all([publishedIn("project_pages"), firstCatalogPage("project_pages")]);
   const title = "О проекте";
   const lead = "Зачем создан 2ВХУТЕМАС, как устроен атлас и как связаться с проектом.";
   return await render(c, {
@@ -296,7 +376,8 @@ pages.get("/about", async (c) => {
     description: lead,
     canonical: "/about",
     jsonLd: [listLd("/about", title, rows)],
-    body: layout(`<h1>${title}</h1><p>${escapeHtml(lead)}</p>${listHtml(rows, false)}`),
+    catalog: true,
+    body: layout(catalogHtml(title, lead, first, "project_pages", "Все в разделе")),
   });
 });
 
