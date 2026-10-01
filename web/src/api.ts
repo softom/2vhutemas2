@@ -226,6 +226,8 @@ export interface Capabilities {
   /** Дерево типов в порядке обхода сверху вниз. */
   entity_types: EntityType[];
   dictionaries: Record<string, { code: string; title_ru: string }[]>;
+  /** Вид записи по типу: компоненты для режимов compact и card. */
+  presentations?: Record<string, Record<string, { component: string; parameter: string | null }[]>>;
 }
 
 export const api = {

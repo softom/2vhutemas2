@@ -19,7 +19,18 @@ import type { AppEnv } from "../lib/http.ts";
 export const parameters = new Hono<AppEnv>();
 export const parameterSets = new Hono<AppEnv>();
 
-const VALUE_TYPES = ["number", "integer", "text", "boolean", "option", "date", "place"];
+/**
+ * Виды ответа. «place» — ответ-запись из ветви «Где»: в базе это вид
+ * «entity» с назначенной ветвью (Р-85), в интерфейсе — «место». «blocks» —
+ * текст записи (Р-86).
+ */
+const VALUE_TYPES = ["number", "integer", "text", "boolean", "option", "date", "place", "blocks"];
+
+/** Вид ответа для базы: «место» хранится ответом-записью из ветви «Где». */
+function storedType(type: string | undefined): string | null {
+  if (type === undefined) return null;
+  return type === "place" ? "entity" : type;
+}
 const CODE = /^[a-z0-9]+(_[a-z0-9]+)*$/;
 
 interface ParameterInput {
@@ -59,7 +70,7 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
   const code = c.req.param("code");
   const rows = await sql`
     select distinct on (p.id)
-           p.code as parameter, p.title_ru as title, p.unit, p.value_type, p.definition,
+           p.code as parameter, p.title_ru as title, p.unit, app.api_value_type(p.id) as value_type, p.definition,
            p.is_repeatable,
            ps.code as set, ps.title_ru as set_title, i.hint, i.sort_order,
            coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru)
@@ -73,6 +84,8 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
       join app.parameter_set_items i on i.set_id = ps.id
       join app.parameters p on p.id = i.parameter_id
      where ty.code = ${code}
+       -- Текст записи правится своим редактором, среди величин ему не место.
+       and p.value_type <> 'blocks'
      order by p.id, ps.sort_order, i.sort_order
   `;
   // Порядок показа — по набору и месту в нём, а не по внутреннему ключу.
@@ -86,7 +99,7 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
 /** Справочник целиком: он невелик и нужен сразу весь. */
 parameters.get("/", async (c: Context<AppEnv>) => {
   const rows = await sql`
-    select p.id, p.code, p.title_ru, p.unit, p.value_type, p.definition, p.sort_order,
+    select p.id, p.code, p.title_ru, p.unit, app.api_value_type(p.id) as value_type, p.definition, p.sort_order,
            p.is_repeatable,
            coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru)
                         order by o.sort_order)
@@ -108,12 +121,17 @@ parameters.post("/", async (c: Context<AppEnv>) => {
     const rows = await tx<{ id: string }>`
       insert into app.parameters (code, title_ru, unit, value_type, definition, sort_order,
                                   is_repeatable)
-      values (${input.code}, ${input.title_ru}, ${input.unit ?? null}, ${input.value_type},
+      values (${input.code}, ${input.title_ru}, ${input.unit ?? null}, ${storedType(input.value_type)},
               ${input.definition ?? null}, ${input.sort_order ?? 0},
               ${input.is_repeatable ?? false})
       returning id
     `;
     const id = rows[0].id;
+    if (input.value_type === "place") {
+      await tx`update app.parameters
+                  set value_entity_type_id = (select id from app.entity_types where code = 'place')
+                where id = ${id}`;
+    }
     for (const [index, option] of (input.options ?? []).entries()) {
       await tx`
         insert into app.parameter_options (parameter_id, code, title_ru, sort_order)
@@ -136,7 +154,7 @@ parameters.patch("/:id", async (c: Context<AppEnv>) => {
   // стали бы бессмысленными. Нужен другой тип — заводится другой параметр.
   const result = await transaction(principal.contributorId, async (tx) => {
     const current = await tx<{ value_type: string; used: string }>`
-      select p.value_type,
+      select app.api_value_type(p.id) as value_type,
              (select count(*) from app.indicator_values iv where iv.parameter_id = p.id) as used
         from app.parameters p where p.id = ${id}
     `;
@@ -189,11 +207,15 @@ parameters.patch("/:id", async (c: Context<AppEnv>) => {
       update app.parameters set
         title_ru   = coalesce(${input.title_ru ?? null}, title_ru),
         unit       = coalesce(${input.unit ?? null}, unit),
-        value_type = coalesce(${input.value_type ?? null}, value_type),
+        value_type = coalesce(${storedType(input.value_type)}, value_type),
+        value_entity_type_id = case when ${input.value_type ?? null}::text = 'place'
+                                    then (select id from app.entity_types where code = 'place')
+                                    when ${input.value_type ?? null}::text is null then value_entity_type_id
+                                    else null end,
         definition = coalesce(${input.definition ?? null}, definition),
         sort_order = coalesce(${input.sort_order ?? null}, sort_order)
       where id = ${id}
-      returning id, code, title_ru, unit, value_type, definition, sort_order
+      returning id, code, title_ru, unit, app.api_value_type(id) as value_type, definition, sort_order
     `;
     return rows[0];
   });
@@ -229,7 +251,7 @@ parameterSets.get("/", async (c: Context<AppEnv>) => {
     select s.id, s.code, s.title_ru, s.note, s.sort_order,
            coalesce((select jsonb_agg(jsonb_build_object(
                         'code', p.code, 'title_ru', p.title_ru, 'unit', p.unit,
-                        'value_type', p.value_type, 'definition', p.definition,
+                        'value_type', app.api_value_type(p.id), 'definition', p.definition,
                         'is_repeatable', p.is_repeatable, 'hint', i.hint)
                         order by i.sort_order)
                      from app.parameter_set_items i

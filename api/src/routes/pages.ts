@@ -178,7 +178,8 @@ async function publishedIn(branch: string | null): Promise<ListRow[]> {
        and ((${branch}::text is not null and e.type_id in
              (select app.entity_type_subtree(${branch})))
             or (${branch}::text is null and e.type_id not in
-             (select app.entity_type_subtree('project_pages'))))
+             (select app.entity_type_subtree('project_pages')
+              union select app.entity_type_subtree('materials'))))
      order by e.title_ru
      limit 2000
   `;
@@ -503,27 +504,35 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     `</div>`);
   if (card.tags.length > 0) parts.push(`<p class="tags-line">${card.tags.map(t => `<span class="tag-chip">#${e(t)}</span>`).join(" ")}</p>`);
 
-  const groups = new Map<number, CardValue[]>();
-  for (const value of card.values) {
-    if (!groups.has(value.indicator_id)) groups.set(value.indicator_id, []);
-    groups.get(value.indicator_id)!.push(value);
-  }
-  for (const values of groups.values()) {
-    const group = values[0];
-    if (groups.size > 1 || !group.is_current) parts.push(`<h2>${e(group.indicator_title)}${group.measured_year ? ` · ${group.measured_year}` : ""}${group.is_current ? "" : " · не действующие"}</h2>`);
-    for (const [title, rows] of [
-      ["Показатели", values.filter(v => v.value_type !== "place" && v.value_type !== "date")],
-      ["Места", values.filter(v => v.value_type === "place")],
-      ["Датировки", values.filter(v => v.value_type === "date")],
-    ] as [string, CardValue[]][]) {
-      if (rows.length) parts.push(`<h2>${title}</h2><dl>${rows.map(v => `<dt>${e(v.title)}</dt><dd>${e(valueText(v))}</dd>`).join("")}</dl>`);
-    }
-  }
-
-  if (card.links.length > 0) {
+  // Разделы карточки идут в порядке, который задаёт тип в таблице
+  // отображений (схема данных, раздел 6). Код знает, как нарисовать каждый
+  // раздел, но не решает, какие и в каком порядке.
+  const sections: Record<string, () => string> = {
+    indicators: () => {
+      const out: string[] = [];
+      const groups = new Map<number, CardValue[]>();
+      for (const value of card.values) {
+        if (!groups.has(value.indicator_id)) groups.set(value.indicator_id, []);
+        groups.get(value.indicator_id)!.push(value);
+      }
+      for (const values of groups.values()) {
+        const group = values[0];
+        if (groups.size > 1 || !group.is_current) out.push(`<h2>${e(group.indicator_title)}${group.measured_year ? ` · ${group.measured_year}` : ""}${group.is_current ? "" : " · не действующие"}</h2>`);
+        for (const [title, rows] of [
+          ["Показатели", values.filter(v => v.value_type !== "place" && v.value_type !== "date")],
+          ["Места", values.filter(v => v.value_type === "place")],
+          ["Датировки", values.filter(v => v.value_type === "date")],
+        ] as [string, CardValue[]][]) {
+          if (rows.length) {
+            out.push(`<h2>${title}</h2><dl>${rows.map(v => `<dt>${e(v.title)}</dt><dd>${placeLink(v) ?? e(valueText(v))}</dd>`).join("")}</dl>`);
+          }
+        }
+      }
+      return out.join("");
+    },
     // Обоснование связи — наш собственный текст, которого нет в энциклопедиях.
     // Выводим его открыто, рядом со ссылкой, а не прячем в интерфейсе.
-    parts.push(
+    links: () => card.links.length === 0 ? "" :
       `<h2>Связи</h2><ul class="relations">${
         card.links.map((l) =>
           `<li><a href="${e(entityPath(l.other_slug))}">${e(l.other_title)}</a>` +
@@ -531,54 +540,57 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
           (l.justification ? `<p>${e(l.justification)}</p>` : "") + `</li>`
         ).join("")
       }</ul>`,
-    );
-  }
-
-  if (descriptionHtml) parts.push(`<h2>Описание</h2><div class="public-document">${descriptionHtml}</div>`);
-
-  if (card.media.length > 0) {
-    parts.push(
+    text: () => descriptionHtml ? `<h2>Описание</h2><div class="public-document">${descriptionHtml}</div>` : "",
+    // Изображение — цитата (Р-68): под каждым автор и источник.
+    gallery: () => card.media.length === 0 ? "" :
       `<h2>Изображения</h2><div class="public-gallery">${
-        // Изображение — цитата (Р-68): под каждым автор и источник.
-        card.media.map((m) =>
-          figureHtml(mediaUrl(m.asset_id, "thumbnail"), m.caption ?? card.title_ru, m)
-        ).join("")
+        card.media.map((m) => figureHtml(mediaUrl(m.asset_id, "thumbnail"), m.caption ?? card.title_ru, m)).join("")
       }</div>`,
-    );
-  }
-
-  if (card.sources.length > 0) {
-    parts.push(
+    // Источник — запись (Р-80): название ведёт на её страницу, адрес — наружу,
+    // обстоятельства цитаты — из обоснования связи.
+    sources: () => card.sources.length === 0 ? "" :
       `<h2>Источники</h2><ul>${
         card.sources.map((s) => {
-          const label = e(s.title || s.text || s.url || s.kind_title) + (s.year ? `, ${s.year}` : "");
-          return s.url && /^https?:/i.test(s.url)
-            ? `<li><a href="${e(s.url)}" rel="noopener">${label}</a></li>`
-            : `<li>${label}</li>`;
+          const label = e(s.title || s.url || s.kind_title) + (s.year ? `, ${s.year}` : "");
+          const title = s.slug ? `<a href="${e(entityPath(s.slug))}">${label}</a>` : label;
+          const out = s.url && /^https?:/i.test(s.url) ? ` — <a href="${e(s.url)}" rel="noopener">${e(s.url)}</a>` : "";
+          return `<li>${title}${out}${s.text ? `<p>${e(s.text)}</p>` : ""}</li>`;
         }).join("")
       }</ul>`,
-    );
+    mentions: () => {
+      const mentions = card.mentions.filter((m) => m.owner_slug);
+      return mentions.length === 0 ? "" :
+        `<h2>Упоминается в материалах</h2><ul>${
+          mentions.map((m) =>
+            `<li><a href="${e(entityPath(m.owner_slug!))}">${e(m.owner_title ?? m.document_title ?? "")}</a></li>`
+          ).join("")
+        }</ul>`;
+    },
+    citation: () => [
+      `<details class="cite-disclosure"><summary>Цитировать</summary><h2>Как цитировать</h2>`,
+      `<p><b>ГОСТ Р 7.0.100–2018:</b> <span id="cite-gost">${e(cite.gost)}</span></p><button type="button" class="ghost" data-copy="cite-gost">Скопировать ГОСТ</button>`,
+      `<p><b>APA:</b> <span id="cite-apa">${e(cite.apa)}</span></p><button type="button" class="ghost" data-copy="cite-apa">Скопировать APA</button>`,
+      `<p>Постоянная ссылка: <a href="${e(cite.url)}">${e(cite.url)}</a></p>`,
+      `</details>`,
+    ].join(""),
+  };
+  // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
+  const layout = card.layout.length > 0
+    ? card.layout
+    : ["indicators", "links", "text", "gallery", "sources", "mentions", "citation"];
+  for (const component of layout) {
+    const render = sections[component];
+    if (render) parts.push(render());
   }
-
-  const mentions = card.mentions.filter((m) => m.owner_slug);
-  if (mentions.length > 0) {
-    parts.push(
-      `<h2>Упоминается в материалах</h2><ul>${
-        mentions.map((m) =>
-          `<li><a href="${e(entityPath(m.owner_slug!))}">${e(m.owner_title ?? m.document_title ?? "")}</a></li>`
-        ).join("")
-      }</ul>`,
-    );
-  }
-
-  parts.push(
-    `<details class="cite-disclosure"><summary>Цитировать</summary><h2>Как цитировать</h2>`,
-    `<p><b>ГОСТ Р 7.0.100–2018:</b> <span id="cite-gost">${e(cite.gost)}</span></p><button type="button" class="ghost" data-copy="cite-gost">Скопировать ГОСТ</button>`,
-    `<p><b>APA:</b> <span id="cite-apa">${e(cite.apa)}</span></p><button type="button" class="ghost" data-copy="cite-apa">Скопировать APA</button>`,
-    `<p>Постоянная ссылка: <a href="${e(cite.url)}">${e(cite.url)}</a></p>`,
-    `</details></article>`,
-  );
+  parts.push(`</article>`);
   return parts.join("");
+}
+
+/** Место в карточке ведёт на свою страницу: место — такая же запись (Р-85). */
+function placeLink(value: CardValue): string | null {
+  const place = value.place as Record<string, unknown> | null;
+  if (!place || typeof place.slug !== "string") return null;
+  return `<a href="${escapeHtml(entityPath(place.slug))}">${escapeHtml(placeText(place))}</a>`;
 }
 
 pages.get("/entities/:key", async (c) => {
@@ -672,6 +684,10 @@ pages.get("/sitemap.xml", async (c) => {
       from app.read_entities(false) e
       left join app.materials m on m.entity_id = e.id
      where e.is_published
+       -- Изображения и документы — материалы о записях (Р-84): у них есть
+       -- страницы, но поисковику их предлагать не нужно — каждое видно на
+       -- странице той записи, которую иллюстрирует.
+       and e.type_id not in (select app.entity_type_subtree('materials'))
      order by e.id
   `;
   const newest = rows.reduce(

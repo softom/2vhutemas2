@@ -56,11 +56,13 @@ app.get("/api/v1/health", async (c: Context<AppEnv>) => {
 app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
   // Виды дат больше не словарь: дата — такая же величина, и её вид стал
   // параметром (Р-39). Их отдаёт `GET /parameters`.
+  // Виды изображения — варианты параметра «Вид изображения» записи
+  // «Изображение» (Р-84); под прежним именем словаря их ждёт медиатека.
   const dictionaries = await sql<{dictionary:string;code:string;title_ru:string}>`
-    select 'attachment_roles' as dictionary, code, title_ru from app.attachment_roles
-    union all select 'reference_kinds', code, title_ru from app.reference_kinds
-    union all select 'link_roles', code, title_ru from app.link_roles
-    union all select 'media_kinds', code, title_ru from app.media_kinds
+    select 'link_roles' as dictionary, code, title_ru from app.link_roles
+    union all select 'media_kinds', o.code, o.title_ru
+      from app.parameter_options o join app.parameters p on p.id = o.parameter_id
+     where p.code = 'image_kind'
     order by 1, 2
   `;
   const grouped: Record<string, { code: string; title_ru: string }[]> = {};
@@ -87,6 +89,33 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
      order by t.path, t.title_ru
   `;
 
+  // Отображения по типу: для каждого типа и режима — ближайшая настройка
+  // вверх по дереву (схема данных, раздел 6). Клиент и готовые страницы
+  // собирают вид по этому списку компонентов, а не по своему коду.
+  const presentationRows = await sql<{ type: string; mode: string; items: unknown[] }>`
+    with recursive up as (
+        select t.id as type_id, t.code as type, t.id as ancestor_id, 0 as distance
+          from app.entity_types t
+        union all
+        select up.type_id, up.type, p.parent_id, up.distance + 1
+          from up join app.entity_types p on p.id = up.ancestor_id
+         where p.parent_id is not null)
+    select distinct on (up.type, tp.mode) up.type, tp.mode,
+           coalesce((select jsonb_agg(jsonb_build_object(
+                        'component', i.component,
+                        'parameter', (select code from app.parameters where id = i.parameter_id),
+                        'link_role', (select code from app.link_roles where id = i.link_role_id),
+                        'settings', i.settings) order by i.sort_order)
+                       from app.type_presentation_items i where i.presentation_id = tp.id),
+                    '[]'::jsonb) as items
+      from up join app.type_presentations tp on tp.type_id = up.ancestor_id
+     order by up.type, tp.mode, up.distance
+  `;
+  const presentations: Record<string, Record<string, unknown[]>> = {};
+  for (const row of presentationRows) {
+    (presentations[row.type] ??= {})[row.mode] = row.items;
+  }
+
   return c.json({
     contract_version: config.contractVersion,
     blocknote_schema_version: config.blockNoteSchemaVersion,
@@ -98,6 +127,7 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
     },
     entity_types: types,
     dictionaries: grouped,
+    presentations,
   });
 });
 

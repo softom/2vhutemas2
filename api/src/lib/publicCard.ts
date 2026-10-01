@@ -94,14 +94,18 @@ export interface PublicCard {
     justification: string | null;
   }[];
   mentions: { document_title: string | null; owner_slug: string | null; owner_title: string | null }[];
+  /** Источники — связи «источник» с книгами, статьями, веб-страницами (Р-80). */
   sources: {
     kind: string;
     kind_title: string;
     title: string | null;
+    slug: string | null;
     text: string | null;
     url: string | null;
     year: number | null;
   }[];
+  /** Компоненты карточки по порядку — из таблицы отображений типа. */
+  layout: string[];
   authors: string[];
   /** Опубликованные записи, упомянутые в тексте: номер → адрес. */
   refs: Map<number, RefTarget>;
@@ -146,15 +150,18 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
 
   const values = await sql<CardValue>`
     select i.id as indicator_id, i.title as indicator_title, i.measured_year, i.is_current,
-           p.code as parameter, p.title_ru as title, p.unit, p.value_type,
+           p.code as parameter, p.title_ru as title, p.unit, app.api_value_type(p.id) as value_type,
            iv.num_value, iv.text_value, iv.bool_value,
            (select o.title_ru from app.parameter_options o where o.id = iv.option_id) as option_title,
-           (select to_jsonb(pl) from app.places pl where pl.id = iv.place_id) as place,
+           -- Ответ-место — запись «Место» (Р-85); её сведения из той же
+           -- редакции, которую видит спрашивающий.
+           case when iv.entity_value_id is not null
+                then app.place_json(iv.entity_value_id, ${drafts}) end as place,
            iv.date_start_year, iv.date_end_year, iv.is_approximate, iv.is_ongoing
       from app.read_indicators(${drafts}) i
       join app.read_values(${drafts}) iv on iv.indicator_id = i.id
       join app.parameters p on p.id = iv.parameter_id
-     where i.entity_id = ${id}
+     where i.entity_id = ${id} and p.value_type <> 'blocks'
      order by i.sort_order, i.id, p.sort_order, p.title_ru, iv.sort_order
   `;
 
@@ -163,21 +170,11 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
      where et.entity_id = ${id} order by t.title
   `;
 
-  // Только открытые и опубликованные файлы: закрытый файл гостю не отдаётся,
-  // и ссылка на него в разметке вела бы в 404. Открытым файл бывает только
-  // с автором и источником (Р-68) — второго условия здесь не нужно.
-  const media = await sql<PublicImage>`
-    select a.asset_id, ma.caption_ru as caption,
-           coalesce(nullif(ma.author, ''), nullif(ma.credit, '')) as author,
-           coalesce(nullif(ma.original_caption, ''), nullif(ma.holder, '')) as source,
-           nullif(ma.source_url, '') as source_url
-      from app.attachments a
-      join app.targets t on t.id = a.target_id
-      join app.media_assets ma on ma.id = a.asset_id
-     where t.entity_id = ${id} and (${drafts} or (ma.is_published and ma.visibility = 'public'))
-       and ma.archived_at is null
-     order by a.sort_order, a.id
-  `;
+  // Иллюстрации — связи с записями «Изображение» (Р-84). Гостю — только
+  // опубликованные: файл неопубликованной записи не отдаётся, и ссылка на
+  // него в разметке вела бы в 404.
+  const mediaRows = await sql<{ items: PublicImage[] }>`select app.illustrations_json(${id}, ${drafts}) as items`;
+  const media = mediaRows[0]?.items ?? [];
 
   const documents = await sql<{body_json:unknown}>`
     select r.snapshot->'body_json' as body_json from app.entities e
@@ -198,6 +195,8 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
                            else l.from_entity_id end
       left join app.link_roles lr on lr.id = l.role_id
      where (l.from_entity_id = ${id} or l.to_entity_id = ${id}) and (${drafts} or other.is_published)
+       -- Иллюстрации и источники — тоже связи, но у каждых свой раздел.
+       and coalesce(lr.code, '') not in ('illustration', 'source')
      order by l.is_primary desc, l.sort_order, l.id
   `;
 
@@ -213,15 +212,25 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
      order by pm.document_id, owner.id nulls last
   `;
 
-  const sources = await sql<PublicCard["sources"][number]>`
-    select rk.code as kind, rk.title_ru as kind_title, ri.title, ri.text, ri.url, ri.year
-      from app.attachments a
-      join app.targets t on t.id = a.target_id
-      join app.reference_items ri on ri.id = a.reference_item_id
-      join app.reference_kinds rk on rk.id = ri.kind_id
-     where t.entity_id = ${id} and (${drafts} or ri.is_published)
-     order by a.sort_order, ri.sort_order, ri.id
+  const sourceRows = await sql<{ items: PublicCard["sources"] }>`select app.sources_json(${id}, ${drafts}) as items`;
+  const sources = sourceRows[0]?.items ?? [];
+
+  // Порядок разделов карточки задаёт тип (таблица отображений): ближайшая
+  // настройка вверх по дереву.
+  const layoutRows = await sql<{ component: string }>`
+    with recursive up as (
+        select t.id, t.parent_id, 0 as distance from app.entity_types t
+         where t.id = (select type_id from app.entities where id = ${id})
+        union all
+        select p.id, p.parent_id, up.distance + 1 from up join app.entity_types p on p.id = up.parent_id)
+    select i.component
+      from app.type_presentation_items i
+     where i.presentation_id = (select tp.id from up join app.type_presentations tp
+                                  on tp.type_id = up.id and tp.mode = 'card'
+                                order by up.distance limit 1)
+     order by i.sort_order
   `;
+  const layout = layoutRows.map((row) => row.component);
 
   // Авторы материала — подписи карточки и её текста, без повторов. Тот же
   // расчёт, что в ответе клиенту: «как цитировать» везде одно.
@@ -233,22 +242,28 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   if (document) {
     const ids = [...new Set(extractRefs(document.body_json).map((ref) => ref.entityId))];
     if (ids.length > 0) {
-      const found = await sql<{ id: number; slug: string; title_ru: string }>`
-        select id, slug, title_ru from app.read_entities(${drafts})
+      const found = await sql<{ id: number; slug: string; title_ru: string; cover: string | null; compact: string[] }>`
+        select id, slug, title_ru, app.cover_asset(id, ${drafts}) as cover,
+               app.compact_components(type_id) as compact
+          from app.read_entities(${drafts})
          where id = any(${ids}::bigint[]) and (${drafts} or is_published)
       `;
-      for (const row of found) refs.set(Number(row.id), { slug: row.slug, title: row.title_ru });
+      for (const row of found) {
+        refs.set(Number(row.id), { slug: row.slug, title: row.title_ru, cover: row.cover, compact: row.compact });
+      }
     }
     const assetIds = collectAssets(document.body_json);
     if (assetIds.length > 0) {
       const open = await sql<PublicImage>`
-        select ma.id as asset_id, ma.caption_ru as caption,
-               coalesce(nullif(ma.author, ''), nullif(ma.credit, '')) as author,
-               coalesce(nullif(ma.original_caption, ''), nullif(ma.holder, '')) as source,
-               nullif(ma.source_url, '') as source_url
+        select ma.id as asset_id, x.info->>'title' as caption,
+               coalesce(x.info->>'author', x.info->>'credit') as author,
+               coalesce(x.info->>'original_caption', x.info->>'holder') as source,
+               x.info->>'source_url' as source_url
           from app.media_assets ma
+          join app.entities img on img.id = ma.entity_id
+          cross join lateral (select app.image_json(img.id, ${drafts}) as info) x
          where ma.id = any(${assetIds}::uuid[])
-           and (${drafts} or (ma.is_published and ma.visibility = 'public'))
+           and (${drafts} or img.status = 'published')
            and ma.archived_at is null
       `;
       for (const row of open) publicAssets.set(row.asset_id, row);
@@ -275,6 +290,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     links,
     mentions,
     sources,
+    layout,
     authors,
     refs,
     publicAssets,
@@ -305,11 +321,7 @@ export async function entityAuthors(entityId: number): Promise<string[]> {
       join app.material_credits mc on mc.material_id = m.id
       join app.contributors c on c.id = mc.contributor_id
      where (m.entity_id = ${entityId}
-            or m.document_id in (select a.document_id from app.attachments a
-                                   join app.targets t on t.id = a.target_id
-                                   join app.attachment_roles ar on ar.id = a.role_id
-                                  where t.entity_id = ${entityId}
-                                    and ar.code in ('description', 'wiki')))
+            or m.document_id in (select d.id from app.documents d where d.owner_entity_id = ${entityId}))
        and mc.credit_role in ('author', 'coauthor')
      group by c.id, c.display_name
      order by min(case mc.credit_role when 'author' then 0 else 1 end), c.display_name

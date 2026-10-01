@@ -217,75 +217,27 @@ async function saveSearchText(tx: Tx, documentId: number, text: string) {
   `;
 }
 
-/** Создание документа и, по желанию, прикрепление его к сущности. */
-documents.post("/", async (c: Context<AppEnv>) => {
-  const principal = requirePermission(c.get("principal"), "create_delete");
-  const input = await c.req.json<{
-    title?: string;
-    lang?: string;
-    body: unknown;
-    attach_to_entity_id?: number;
-    role?: string;
-  }>();
-
-  if (input.attach_to_entity_id) throw new ApiError("owned_content", "МультиТекст сохраняется вместе с сущностью: PATCH /entities/:id с body_json");
-  const blocks = validateDocument(input.body ?? []);
-  const text = extractText(blocks);
-
-  const result = await transaction(principal.contributorId, async (tx) => {
-    const created = await tx<{ id: number }>`
-      insert into app.documents (title, lang, body_format, body_schema_version, body_json)
-      values (${input.title ?? null}, ${input.lang ?? "ru"}, 'blocknote',
-              ${config.blockNoteSchemaVersion}, ${JSON.stringify(blocks)}::jsonb)
-      returning id
-    `;
-    const documentId = Number(created[0].id);
-    await saveSearchText(tx, documentId, text);
-
-    const materials = await tx<{ id: string }>`
-      insert into app.materials (kind, document_id, created_by)
-      values ('document', ${documentId}, ${principal.contributorId}) returning id
-    `;
-    await tx`
-      insert into app.material_credits (material_id, contributor_id, credit_role)
-      values (${materials[0].id}, ${principal.contributorId}, 'author')
-    `;
-    const revisions = await tx<{ id: string }>`
-      insert into app.revisions (material_id, edited_by, operation, summary, snapshot)
-      values (${materials[0].id}, ${principal.contributorId}, 'create', 'Создание текста',
-              ${JSON.stringify({ title: input.title ?? null, body_json: blocks })}::jsonb)
-      returning id
-    `;
-    await saveRefs(tx, revisions[0].id, blocks);
-
-    if (input.attach_to_entity_id) {
-      const targets = await tx<{ id: number }>`
-        select id from app.targets where entity_id = ${input.attach_to_entity_id}
-      `;
-      if (targets.length === 0) {
-        throw new ApiError("not_found", "Сущность для прикрепления не найдена");
-      }
-      await tx`
-        insert into app.attachments (target_id, role_id, document_id)
-        values (${targets[0].id},
-                (select id from app.attachment_roles where code = ${input.role ?? "description"}),
-                ${documentId})
-      `;
-    }
-
-    return { id: documentId, material_id: materials[0].id, revision_id: revisions[0].id };
-  });
-
-  return c.json(result, 201);
+/**
+ * Самостоятельный текст — запись типа «Документ» со своим МультиТекстом
+ * (Р-84). Отдельной таблицы текстов больше нет: `documents` хранит прежние
+ * тексты как историю, у каждого записан хозяин.
+ */
+documents.post("/", (c: Context<AppEnv>) => {
+  requirePermission(c.get("principal"), "create_delete");
+  throw new ApiError(
+    "owned_content",
+    "Самостоятельный текст — запись типа «Документ»: POST /entities с type: \"document\" и body_json; " +
+      "текст записи — PATCH /entities/{id} с body_json (Р-84, Р-86)",
+  );
 });
 
 documents.get("/:id", async (c: Context<AppEnv>) => {
   const principal = c.get("principal");
   const id = Number(c.req.param("id"));
-  const owners=await sql<{entity_id:number|null;link_id:number|null}>`select t.entity_id,t.link_id
-    from app.attachments a join app.targets t on t.id=a.target_id
-    join app.attachment_roles ar on ar.id=a.role_id
-    where a.document_id=${id} and ar.code in ('description','wiki','justification') limit 1`;
+  // Прежний текст читается как текст своего хозяина: записи или связи (Р-84).
+  const owners = await sql<{ entity_id: number | null; link_id: number | null }>`
+    select owner_entity_id as entity_id, owner_link_id as link_id from app.documents
+     where id = ${id} and (owner_entity_id is not null or owner_link_id is not null)`;
   if (owners.length) {
     const owner=owners[0];const drafts=canSeeDrafts(principal);
     const content=owner.entity_id
@@ -316,9 +268,9 @@ documents.get("/:id", async (c: Context<AppEnv>) => {
 documents.patch("/:id", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "edit");
   const id = Number(c.req.param("id"));
-  const owners=await sql`select t.entity_id,t.link_id from app.attachments a
-    join app.targets t on t.id=a.target_id join app.attachment_roles ar on ar.id=a.role_id
-    where a.document_id=${id} and ar.code in ('description','wiki','justification') limit 1`;
+  const owners = await sql`
+    select owner_entity_id as entity_id, owner_link_id as link_id from app.documents
+     where id = ${id} and (owner_entity_id is not null or owner_link_id is not null)`;
   if (owners.length) throw new ApiError("owned_content","Текст сохраняется вместе с владельцем",owners[0]);
   const input = await c.req.json<{ title?: string; body?: unknown; base_revision_id?: string }>();
   const baseRevisionId = input.base_revision_id ?? c.req.header("if-match");

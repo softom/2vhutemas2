@@ -111,11 +111,8 @@ links.get("/", async (c: Context<AppEnv>) => {
            (select ty.code from app.entity_types ty where ty.id = other.type_id) as other_type,
            (select ty.title_ru from app.entity_types ty where ty.id = other.type_id)
              as other_type_title,
-           -- Обложка связанной записи — её первое прикреплённое изображение (Р-36).
-           (select a.asset_id from app.attachments a
-              join app.targets t on t.id = a.target_id
-             where t.entity_id = other.id and a.asset_id is not null
-             order by a.sort_order, a.id limit 1) as other_cover_media_id,
+           -- Обложка связанной записи — её первая иллюстрация (Р-36, Р-84).
+           app.cover_asset(other.id, ${drafts}) as other_cover_media_id,
            (select r.snapshot->'body_json' from app.revisions r where r.id=
             case when ${drafts} then l.working_revision_id else l.published_revision_id end) as justification_blocks
     from app.read_links(${drafts}) l
@@ -126,6 +123,9 @@ links.get("/", async (c: Context<AppEnv>) => {
       -- Гость не видит черновиков — и связей с ними тоже: иначе название
       -- неопубликованной записи утекало через соседнюю карточку.
       and (${drafts} or other.is_published)
+      -- Иллюстрации — тоже связи (Р-84), но у них своё место: галерея
+      -- карточки. В окружении записи они только заслоняли бы отношения.
+      and coalesce((select code from app.link_roles lr where lr.id = l.role_id), '') <> 'illustration'
     order by l.is_primary desc, l.sort_order, l.id
   `;
   return c.json({ items: rows.map(row => ({...row, justification:extractText(row.justification_blocks)})) });
@@ -158,7 +158,8 @@ links.post("/:id/publish", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "publish");
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) throw new ApiError("not_found", "Связь не найдена");
-  const input = await c.req.json<{ revision_id?: string; note?: string }>().catch(() => ({}));
+  const input = await c.req.json<{ revision_id?: string; note?: string }>()
+    .catch(() => ({} as { revision_id?: string; note?: string }));
 
   const result = await transaction(principal.contributorId, (tx) =>
     publishOwnerRevision(tx, { kind: "link", id }, input.revision_id,

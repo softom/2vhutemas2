@@ -19,7 +19,7 @@ import { publishOwnerRevision } from "../lib/ownedVersions.ts";
 import { notifyIndexNow } from "./pages.ts";
 
 import { validateDocument, saveRefs } from "./documents.ts";
-import { writeIndicators, type IndicatorInput } from "./indicators.ts";
+import { writeIndicators, writeText, type IndicatorInput } from "./indicators.ts";
 import { writeEntityTags } from "./tags.ts";
 
 export const entities = new Hono<AppEnv>();
@@ -84,8 +84,14 @@ async function writeTypology(tx: Tx, entityId: number, typology: string | null):
   `;
 }
 
+/**
+ * Снимок рабочей копии записи. Присланный текст сначала ложится значением
+ * параметра «Текст» (Р-86): снимок всегда собирается из значений, а не из
+ * того, что прислал клиент. Не прислали текст — он остаётся прежним.
+ */
 async function snapshot(tx: Tx, id: number, body?: unknown) {
-  const rows=await tx`select app.entity_snapshot(${id},${body===undefined?null:JSON.stringify(validateDocument(body))}::jsonb) as data`;
+  if (body !== undefined) await writeText(tx, id, validateDocument(body));
+  const rows = await tx`select app.entity_snapshot(${id}) as data`;
   return rows[0].data;
 }
 
@@ -123,12 +129,8 @@ entities.get("/", async (c: Context<AppEnv>) => {
            -- Обложка — первое по порядку прикреплённое изображение (решение Р-36),
            -- но только то, которое спрашивающий может увидеть: иначе карточка
            -- обещает картинку, а на её месте выходит битый значок (Р-68).
-           (select a.asset_id from app.attachments a
-              join app.targets t on t.id = a.target_id
-              join app.media_assets ma on ma.id = a.asset_id
-             where t.entity_id = e.id and a.asset_id is not null
-               and (${drafts} or (ma.is_published and ma.visibility = 'public'))
-             order by a.sort_order, a.id limit 1) as cover_asset_id,
+           -- Иллюстрации — связи с записями «Изображение» (Р-84).
+           app.cover_asset(e.id, ${drafts}) as cover_asset_id,
            pv.num_value as parameter_value, pv.text_value as parameter_text,
            coalesce((
              select jsonb_object_agg(v.code, v.value)
@@ -158,9 +160,12 @@ entities.get("/", async (c: Context<AppEnv>) => {
       and (${archived} or e.status <> 'archived')
       and (${type}::text is null
            or e.type_id in (select app.entity_type_subtree(${type})))
-      -- Тексты интерфейса проекта показываются в «О проекте», а не в общем каталоге.
+      -- Тексты интерфейса проекта показываются в «О проекте», а изображения
+      -- и документы — материалы о записях — в медиатеке и самих карточках:
+      -- в общем каталоге они заслонили бы предметы (Р-84).
       and (${type}::text is not null or e.type_id not in
-           (select app.entity_type_subtree('project_pages')))
+           (select app.entity_type_subtree('project_pages')
+            union select app.entity_type_subtree('materials')))
       and (${search}::text is null or e.title_ru ilike ${"%" + (search ?? "") + "%"}
            or e.title_en ilike ${"%" + (search ?? "") + "%"})
       and (${min}::numeric is null or pv.num_value >= ${min})
@@ -202,23 +207,7 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            e.legacy_description_id as description_document_id,
            (select r.snapshot->'body_json' from app.revisions r where r.id=
              case when ${drafts} then e.working_revision_id else e.published_revision_id end) as body_json,
-           coalesce((select jsonb_agg(jsonb_build_object(
-                        'attachment_id', a.id, 'asset_id', a.asset_id,
-                        'role', ar.code, 'role_title', ar.title_ru,
-                        'caption', ma.caption_ru, 'kind',
-                        (select mk.code from app.media_kinds mk where mk.id = ma.kind_id),
-                        'author', coalesce(nullif(ma.author, ''), nullif(ma.credit, '')),
-                        'source_url', nullif(ma.source_url, ''),
-                        'source', coalesce(nullif(ma.original_caption, ''), nullif(ma.holder, '')),
-                        'sort_order', a.sort_order)
-                        order by a.sort_order, a.id)
-                     from app.attachments a
-                     join app.targets t on t.id = a.target_id
-                     join app.attachment_roles ar on ar.id = a.role_id
-                     join app.media_assets ma on ma.id = a.asset_id
-                    where t.entity_id = e.id and a.asset_id is not null
-                      and (${drafts} or (ma.is_published and ma.visibility = 'public'))),
-                    '[]'::jsonb) as media,
+           app.illustrations_json(e.id, ${drafts}) as media,
            coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
                         order by t.title)
                      from app.read_entity_tags(${drafts}) et join app.tags t on t.id = et.tag_id
@@ -226,32 +215,39 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            coalesce((select jsonb_agg(jsonb_build_object(
                         'id', i.id, 'title', i.title, 'is_current', i.is_current,
                         'measured_year', i.measured_year, 'measured_by', i.measured_by,
-                        'source_reference_item_id', i.source_reference_item_id, 'note', i.note,
+                        'source_entity_id', i.source_entity_id, 'note', i.note,
                         'values', coalesce((select jsonb_agg(jsonb_build_object(
                                'parameter', p.code, 'title', p.title_ru, 'unit', p.unit,
-                               'value_type', p.value_type,
+                               'value_type', app.api_value_type(p.id),
                                'num_value', iv.num_value, 'text_value', iv.text_value,
                                'bool_value', iv.bool_value,
                                'option', (select o.code from app.parameter_options o
                                            where o.id = iv.option_id),
                                'option_title', (select o.title_ru from app.parameter_options o
                                                  where o.id = iv.option_id),
-                               'place', (select to_jsonb(pl) from app.places pl
-                                          where pl.id = iv.place_id),
-                               'place_id', iv.place_id, 'date_start_month', iv.date_start_month, 'date_start_day', iv.date_start_day, 'date_end_month', iv.date_end_month, 'date_end_day', iv.date_end_day, 'date_start_year', iv.date_start_year,
+                               -- Ответ-запись: место приходит сведениями той
+                               -- редакции, которую видит спрашивающий (Р-85).
+                               'place', case when iv.entity_value_id is not null
+                                             then app.place_json(iv.entity_value_id, ${drafts}) end,
+                               'place_id', iv.entity_value_id::text,
+                               'entity_value_id', iv.entity_value_id, 'date_start_month', iv.date_start_month, 'date_start_day', iv.date_start_day, 'date_end_month', iv.date_end_month, 'date_end_day', iv.date_end_day, 'date_start_year', iv.date_start_year,
                                'date_end_year', iv.date_end_year,
                                'is_approximate', iv.is_approximate,
                                'is_ongoing', iv.is_ongoing, 'note', iv.note)
                                order by p.sort_order, p.title_ru, iv.sort_order)
                             from app.read_values(${drafts}) iv
                             join app.parameters p on p.id = iv.parameter_id
-                           where iv.indicator_id = i.id), '[]'::jsonb))
+                           where iv.indicator_id = i.id and p.value_type <> 'blocks'), '[]'::jsonb))
                         order by i.sort_order, i.id)
-                     from app.read_indicators(${drafts}) i where i.entity_id = e.id), '[]'::jsonb) as indicators,
+                     from app.read_indicators(${drafts}) i
+                    where i.entity_id = e.id
+                      and exists (select 1 from app.read_values(${drafts}) x
+                                   join app.parameters xp on xp.id = x.parameter_id
+                                  where x.indicator_id = i.id and xp.value_type <> 'blocks')), '[]'::jsonb) as indicators,
            -- Что подсказывает ветвь дерева и собственные наборы записи (Р-38).
            coalesce((select jsonb_agg(jsonb_build_object(
                         'parameter', ep.code, 'title', ep.title_ru, 'unit', ep.unit,
-                        'value_type', ep.value_type, 'definition', ep.definition,
+                        'value_type', app.api_value_type(ep.parameter_id), 'definition', ep.definition,
                         'is_repeatable', (select pr.is_repeatable from app.parameters pr
                                            where pr.id = ep.parameter_id),
                         'set', ep.set_code, 'set_title', ep.set_title, 'hint', ep.hint,
@@ -261,7 +257,8 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                                       from app.parameter_options o
                                      where o.parameter_id = ep.parameter_id), '[]'::jsonb))
                         order by ep.sort_order, ep.title_ru)
-                     from app.entity_parameters(e.id) ep), '[]'::jsonb) as suggested_parameters
+                     from app.entity_parameters(e.id) ep
+                    where ep.value_type <> 'blocks'), '[]'::jsonb) as suggested_parameters
     from app.read_entities(${drafts}) e
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
@@ -273,16 +270,10 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
     throw new ApiError("not_found", "Сущность не найдена");
   }
 
-  // Источники видны на карточке и ведут наружу (Р-65). Гостю — опубликованные.
-  const sources = await sql`
-    select ri.id, rk.code as kind, rk.title_ru as kind_title, ri.title, ri.text, ri.url, ri.year
-      from app.attachments a
-      join app.targets t on t.id = a.target_id
-      join app.reference_items ri on ri.id = a.reference_item_id
-      join app.reference_kinds rk on rk.id = ri.kind_id
-     where t.entity_id = ${id} and (${drafts} or ri.is_published)
-     order by a.sort_order, ri.sort_order, ri.id
-  `;
+  // Источники — связи «источник» с книгами, статьями, веб-страницами (Р-80).
+  // Гостю — опубликованные.
+  const sourceRows = await sql<{ items: unknown[] }>`select app.sources_json(${id}, ${drafts}) as items`;
+  const sources = sourceRows[0]?.items ?? [];
   const authors = await entityAuthors(id);
   // Год в ссылке — год последней правки: страница меняется, и так же
   // его считает готовая страница сайта.
@@ -306,7 +297,8 @@ entities.get("/:id/parameters", async (c: Context<AppEnv>) => {
   if (!Number.isInteger(id)) throw new ApiError("validation_failed", "Неверный идентификатор");
 
   const rows = await sql`
-    select ep.code as parameter, ep.title_ru as title, ep.unit, ep.value_type, ep.definition,
+    select ep.code as parameter, ep.title_ru as title, ep.unit,
+           app.api_value_type(ep.parameter_id) as value_type, ep.definition,
            ep.set_code as set, ep.set_title, ep.hint, ep.sort_order,
            (select pr.is_repeatable from app.parameters pr where pr.id = ep.parameter_id)
              as is_repeatable,
@@ -315,6 +307,7 @@ entities.get("/:id/parameters", async (c: Context<AppEnv>) => {
                      from app.parameter_options o where o.parameter_id = ep.parameter_id),
                     '[]'::jsonb) as options
       from app.entity_parameters(${id}) ep
+     where ep.value_type <> 'blocks'
      order by ep.sort_order, ep.title_ru
   `;
   return c.json({ items: rows });
@@ -469,7 +462,8 @@ entities.post("/:id/publish", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "publish");
   const id = Number(c.req.param("id"));
   if (!Number.isInteger(id)) throw new ApiError("not_found", "Запись не найдена");
-  const input = await c.req.json<{ revision_id?: string; note?: string }>().catch(() => ({}));
+  const input = await c.req.json<{ revision_id?: string; note?: string }>()
+    .catch(() => ({} as { revision_id?: string; note?: string }));
 
   const result = await transaction(principal.contributorId, (tx) =>
     publishOwnerRevision(tx, { kind: "entity", id }, input.revision_id,
@@ -491,9 +485,8 @@ entities.get("/:id/versions", async (c: Context<AppEnv>) => {
     r.id=e.published_revision_id as is_public,r.id=e.working_revision_id as is_working,
     c.display_name as editor,r.entity_id is not null and r.schema_version=2 as complete
     from app.entities e join app.revisions r on r.entity_id=e.id or r.material_id in
-      (select m.id from app.materials m join app.attachments a on a.document_id=m.document_id
-       join app.targets t on t.id=a.target_id join app.attachment_roles ar on ar.id=a.role_id
-       where t.entity_id=e.id and ar.code in ('description','wiki'))
+      (select m.id from app.materials m join app.documents d on d.id = m.document_id
+        where d.owner_entity_id = e.id)
     left join app.contributors c on c.id=r.edited_by
     where e.id=${id} order by r.created_at desc,r.id limit 100`;
   return c.json({items:rows});

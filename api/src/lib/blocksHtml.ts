@@ -11,6 +11,24 @@ import { entityPath, escapeHtml, mediaUrl } from "./site.ts";
 export interface RefTarget {
   slug: string;
   title: string;
+  /** Обложка записи — для компактного вида с миниатюрой. */
+  cover?: string | null;
+  /** Компоненты компактного вида типа (таблица отображений). */
+  compact?: string[];
+}
+
+/**
+ * Знак записи в строке по её компактному виду: миниатюра, портрет или знак
+ * источника. Вид решает тип (схема данных, раздел 6), а не код страницы.
+ */
+function compactMark(target: RefTarget): string {
+  const compact = target.compact ?? [];
+  if ((compact.includes("thumbnail") || compact.includes("portrait")) && target.cover) {
+    const shape = compact.includes("portrait") ? " portrait" : "";
+    return `<img class="mention-thumb${shape}" src="${escapeHtml(mediaUrl(target.cover, "thumbnail"))}" alt="" loading="lazy" />`;
+  }
+  if (compact.includes("mark")) return SOURCE_MARK;
+  return "";
 }
 
 export interface RenderContext {
@@ -134,7 +152,9 @@ function inline(content: unknown, ctx: RenderContext): string {
       const id = Number(item.props?.entityId);
       const target = ctx.entities.get(id);
       const title = escapeHtml(item.props?.title || target?.title || "");
-      return target ? `<a href="${escapeHtml(entityPath(target.slug))}">${title}</a>` : title;
+      return target
+        ? `<a class="entity-mention" href="${escapeHtml(entityPath(target.slug))}">${compactMark(target)}${title}</a>`
+        : title;
     }
     let html = escapeHtml(item.text ?? "");
     const styles = item.styles ?? {};

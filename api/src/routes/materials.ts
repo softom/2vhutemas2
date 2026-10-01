@@ -56,9 +56,8 @@ async function announce(requestId: string, materialId: string | undefined) {
     const rows = await sql<{ slug: string }>`
       select distinct e.slug
         from app.materials m
-        left join app.attachments a on a.document_id = m.document_id
-        left join app.targets t on t.id = a.target_id
-        join app.entities e on e.id = coalesce(m.entity_id, t.entity_id)
+        left join app.documents d on d.id = m.document_id
+        join app.entities e on e.id = coalesce(m.entity_id, d.owner_entity_id)
        where m.id = ${materialId} and e.is_published
     `;
     notifyIndexNow(requestId, rows.map((row) => entityPath(row.slug)));

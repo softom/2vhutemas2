@@ -21,8 +21,23 @@ import { api } from "../api";
  */
 const cardCache = new Map<
   string,
-  { title: string; kind: string; cover: string | null; root: string }
+  { title: string; kind: string; cover: string | null; root: string; compact: string[] }
 >();
+
+/**
+ * Компактный вид по типу (таблица отображений): показывать ли в строке
+ * миниатюру, портрет или знак источника. Загружается один раз на страницу.
+ */
+let compactByType: Promise<Record<string, string[]>> | null = null;
+function compactViews(): Promise<Record<string, string[]>> {
+  compactByType ??= api.capabilities()
+    .then((caps) => Object.fromEntries(
+      Object.entries(caps.presentations ?? {}).map(([type, modes]) =>
+        [type, (modes.compact ?? []).map((item) => item.component)]),
+    ))
+    .catch(() => ({}));
+  return compactByType;
+}
 
 /**
  * Переход внутри приложения: полная перезагрузка теряет место в тексте,
@@ -47,7 +62,7 @@ function useInAppLink(href: string) {
 
 function useEntityCard(entityId: string, fallback: { title: string; kind: string }) {
   const [card, setCard] = useState(
-    cardCache.get(entityId) ?? { ...fallback, cover: null, root: "" },
+    cardCache.get(entityId) ?? { ...fallback, cover: null, root: "", compact: [] as string[] },
   );
 
   useEffect(() => {
@@ -58,8 +73,8 @@ function useEntityCard(entityId: string, fallback: { title: string; kind: string
       return;
     }
     let cancelled = false;
-    api.entity(Number(entityId))
-      .then((entity) => {
+    Promise.all([api.entity(Number(entityId)), compactViews()])
+      .then(([entity, views]) => {
         const media = (entity as unknown as { media?: { asset_id: string }[] }).media ?? [];
         const path = (entity as unknown as { type_path?: { code: string }[] }).type_path ?? [];
         const next = {
@@ -68,6 +83,7 @@ function useEntityCard(entityId: string, fallback: { title: string; kind: string
           cover: media[0]?.asset_id ?? null,
           // Корневая ветвь решает, каким кадром показывать: у людей стоячим.
           root: path[0]?.code ?? "",
+          compact: views[entity.type ?? ""] ?? [],
         };
         cardCache.set(entityId, next);
         if (!cancelled) setCard(next);
@@ -153,9 +169,21 @@ export const EntityMention = createReactInlineContentSpec(
 function EntityMentionView({ props }: { props: Record<string, string> }) {
   const href = `/entities/${props.entityId}`;
   const open = useInAppLink(href);
+  const card = useEntityCard(props.entityId, { title: props.title || "", kind: "" });
+  // Знак в строке по компактному виду типа: миниатюра, портрет, знак
+  // источника (схема данных, раздел 6). Без настройки — одно название.
+  const thumb = (card.compact.includes("thumbnail") || card.compact.includes("portrait")) && card.cover;
   return (
     <a className="entity-mention" href={href} onClick={open}>
-      {props.title || `объект ${props.entityId}`}
+      {thumb && (
+        <img
+          className={card.compact.includes("portrait") ? "mention-thumb portrait" : "mention-thumb"}
+          src={api.mediaFileUrl(card.cover!, "thumbnail")}
+          alt=""
+        />
+      )}
+      {!thumb && card.compact.includes("mark") && <SourceMark />}
+      {props.title || card.title || `объект ${props.entityId}`}
     </a>
   );
 }

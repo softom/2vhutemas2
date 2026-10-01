@@ -16,11 +16,14 @@ export async function ownedMaterial(tx: Tx, materialId: string) {
     select entity_id,link_id,document_id from app.materials where id=${materialId} for update`;
   const m=rows[0];
   if (!m) throw new ApiError("not_found","Материал не найден");
+  // Прежний текст принадлежит записи или связи — это записано в самом
+  // документе (Р-84). Отдельно его не публикуют и не правят.
   if (m.document_id) {
-    const owners=await tx`select t.entity_id,t.link_id from app.attachments a
-      join app.targets t on t.id=a.target_id join app.attachment_roles ar on ar.id=a.role_id
-      where a.document_id=${m.document_id} and ar.code in ('description','wiki','justification') limit 1`;
-    if (owners.length) throw new ApiError("owned_content","Текст публикуется и редактируется вместе с владельцем",owners[0]);
+    const owners = await tx<{ entity_id: number | null; link_id: number | null }>`
+      select owner_entity_id as entity_id, owner_link_id as link_id
+        from app.documents where id = ${m.document_id}
+         and (owner_entity_id is not null or owner_link_id is not null)`;
+    if (owners.length) throw new ApiError("owned_content", "Текст публикуется и редактируется вместе с владельцем", owners[0]);
   }
   if (m.entity_id) {
     const r=await tx`select id,status,published_revision_id,working_revision_id as latest_revision_id

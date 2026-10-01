@@ -11,6 +11,7 @@ import { sql, transaction, type Tx } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
 import { require as requirePermission } from "../lib/auth.ts";
 import { type AppEnv, pageSize } from "../lib/http.ts";
+import { saveRevision, setPublished } from "../lib/records.ts";
 
 export const tags = new Hono<AppEnv>();
 
@@ -22,8 +23,7 @@ tags.get("/", async (c: Context<AppEnv>) => {
 
   const rows = await sql<{ id: string; title: string; usages: number }>`
     select t.id, t.title,
-           (select count(*) from app.entity_tags et where et.tag_id = t.id)
-         + (select count(*) from app.media_tags mt where mt.tag_id = t.id) as usages
+           (select count(*) from app.entity_tags et where et.tag_id = t.id) as usages
     from app.tags t
     where ${pattern}::text is null or t.title ilike ${pattern}
     order by usages desc, t.title
@@ -111,30 +111,30 @@ tags.put("/entities/:id", async (c: Context<AppEnv>) => {
   return c.json({ items: result });
 });
 
+/**
+ * Метки файла — метки его записи «Изображение» (Р-84): один справочник и
+ * одна таблица на все записи. Метки входят в версию, поэтому правка создаёт
+ * редакцию; опубликованное изображение остаётся опубликованным.
+ */
 tags.put("/media/:id", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "edit");
   const assetId = c.req.param("id");
   const input = await c.req.json<{ tags: string[] }>();
 
   const result = await transaction(principal.contributorId, async (tx) => {
-    const found = await tx<{ id: string }>`select id from app.media_assets where id = ${assetId}`;
-    if (found.length === 0) throw new ApiError("not_found", "Файл не найден");
-
-    const ids = await resolveTags(tx, input.tags ?? []);
-    await tx`
-      delete from app.media_tags
-       where asset_id = ${assetId} and not (tag_id = any(${ids}::uuid[]))
+    const found = await tx<{ entity_id: number; status: string }>`
+      select a.entity_id, e.status from app.media_assets a join app.entities e on e.id = a.entity_id
+       where a.id = ${assetId}
     `;
-    for (const tagId of ids) {
-      await tx`
-        insert into app.media_tags (asset_id, tag_id) values (${assetId}, ${tagId})
-        on conflict do nothing
-      `;
-    }
+    if (found.length === 0) throw new ApiError("not_found", "Файл не найден");
+    const entityId = Number(found[0].entity_id);
+    await writeEntityTags(tx, entityId, input.tags ?? []);
+    await saveRevision(tx, entityId, principal.contributorId, "Метки файла");
+    if (found[0].status === "published") await setPublished(tx, entityId, true);
     return tx<{ id: string; title: string }>`
-      select t.id, t.title from app.media_tags mt
-      join app.tags t on t.id = mt.tag_id
-      where mt.asset_id = ${assetId} order by t.title
+      select t.id, t.title from app.entity_tags et
+      join app.tags t on t.id = et.tag_id
+      where et.entity_id = ${entityId} order by t.title
     `;
   });
 

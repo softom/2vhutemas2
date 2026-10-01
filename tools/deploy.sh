@@ -20,6 +20,13 @@ tar --exclude=node_modules --exclude=dist --exclude=".env*" --exclude="*.tsbuild
 echo "── Миграции"
 python "$ROOT/tools/migrate.py" --host "$HOST"
 
+echo "── Проверка типов API"
+# Deno запускает сервис без проверки типов, поэтому ошибка типа в API
+# доживала до боевого сервера незамеченной (так было с публикацией Р-79).
+ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services && docker compose run --rm --no-deps -T api deno check src/main.ts 2>&1 | tail -15; exit ${PIPESTATUS[0]}' || {
+  echo "Проверка типов API не прошла — выкладка не считается состоявшейся"; exit 1; }
+echo "  ok"
+
 echo "── Перезапуск API"
 ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services && docker compose restart api >/dev/null 2>&1'
 sleep 8

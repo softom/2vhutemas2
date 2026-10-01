@@ -351,3 +351,8 @@ button:disabled { opacity: .5; cursor: default; }
 .model-embed iframe { display: block; width: 100%; border: 0; background: var(--bg); }
 .model-embed figcaption { color: var(--muted); font-size: 13px; padding: 8px 12px; margin: 0; }
 .model-embed figcaption a { color: var(--accent); }
+/* Компактный вид записи в строке текста (таблица отображений): миниатюра
+   или портрет перед названием, знак — у источника. */
+.mention-thumb { width: 1.5em; height: 1.5em; object-fit: cover; border-radius: 3px; vertical-align: -0.35em; margin-right: 0.3em; }
+.mention-thumb.portrait { width: 1.15em; height: 1.5em; object-position: top center; }
+.entity-mention .source-mark { display: inline-block; width: 0.9em; height: 0.9em; vertical-align: -0.1em; margin-right: 0.2em; }

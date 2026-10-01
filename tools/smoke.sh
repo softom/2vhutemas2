@@ -71,6 +71,9 @@ contains "корневая ветвь в дереве" '"who"' "$(body)"
 contains "ветвь ниже корня" '"architecture_object"' "$(body)"
 contains "словарь видов изображений" 'media_kinds' "$(body)"
 contains "виды изображений на месте" 'media_kinds' "$(body)"
+# Как запись выглядит, задаёт тип (схема данных, раздел 6).
+contains "отображения по типу" '"presentations"' "$(body)"
+contains "компактный вид источника — знак" '"component":"mark"' "$(body)"
 
 echo "── Объекты"
 check "каталог гостю" 200 "$(code $API/entities)"
@@ -145,6 +148,8 @@ check "заполненный файл задачи не ждёт" false "$(need
 contains "изображения закрыты от картиночного поиска" "noimageindex" "$(curl -s -D - -o /dev/null -H "$AUTH" "$API/media/$AID/file?variant=thumbnail")"
 code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"private"}' $API/media/$AID >/dev/null
 
+IMGID=$(curl -s -H "$AUTH" $API/media/$AID | field entity_id)
+contains "файл — запись типа «Изображение»" '"type":"image"' "$(curl -s -H "$AUTH" $API/entities/$IMGID)"
 check "привязка файла к объекту" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"asset_id\":\"$AID\",\"role\":\"gallery\"}" $API/media/attachments)"
 check "повторная привязка" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"asset_id\":\"$AID\",\"role\":\"gallery\"}" $API/media/attachments)"
 ATT=$(curl -s -H "$AUTH" $API/entities/$EID | python3 -c "
@@ -155,6 +160,8 @@ COVER=$(body | python3 -c "
 import json,sys
 print(next((1 for i in json.load(sys.stdin)['items'] if str(i['id']) == '$EID' and i.get('cover_asset_id')), 0))")
 check "обложка в каталоге" 1 "$COVER"
+contains "иллюстрация — связь" '"link_id"' "$(curl -s -H "$AUTH" $API/entities/$EID)"
+missing "иллюстрации не в окружении записи" '"role":"illustration"' "$(curl -s -H "$AUTH" "$API/links?entity_id=$EID")"
 check "автор изображения в карточке" "smoke: автор" "$(curl -s -H "$AUTH" $API/entities/$EID | python3 -c "
 import json,sys
 print(json.load(sys.stdin)['media'][0].get('author') or '')")"
@@ -173,6 +180,8 @@ check "пустое место отклоняется" 400 "$(code -X POST -H "$
 check "широта без долготы отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"settlement":"smoke","lat":10}' $API/places)"
 # Привязка места — теперь значение параметра, проверяется ниже вместе с величинами.
 check "справочник мест отвечает" 200 "$(code -H "$AUTH" $API/places/$PID/usage)"
+# Место — такая же запись, как человек или здание (Р-85).
+contains "место — запись типа «Место»" '"type":"place"' "$(curl -s -H "$AUTH" $API/entities/$PID)"
 
 echo "── Метки"
 check "справочник меток" 200 "$(code -H "$AUTH" $API/tags)"
@@ -223,25 +232,31 @@ select count(*) from app.document_entity_refs f join app.entities e on e.working
 check "знак записан вхождением" 1 "$SRCREF"
 
 echo "── Документы"
-D=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: текст\",\"body\":[
+# Самостоятельный текст — запись типа «Документ», текст записи — значение
+# параметра «Текст» (Р-84, Р-86). Таблица documents хранит только историю.
+check "отдельный текст вне записи не заводится" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"title":"smoke","body":[]}' $API/documents)"
+D=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d "{\"type\":\"document\",\"slug\":\"smoke-dokument\",\"title_ru\":\"smoke: текст\",\"body_json\":[
   {\"id\":\"s1\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"smoke проверка текста\",\"styles\":{}}]},
   {\"id\":\"s2\",\"type\":\"entityCard\",\"props\":{\"entityId\":\"$EID2\",\"occurrenceId\":\"s-c1\"}},
-  {\"id\":\"s3\",\"type\":\"mediaImage\",\"props\":{\"assetId\":\"$AID\",\"caption\":\"smoke\"}}]}" $API/documents)
+  {\"id\":\"s3\",\"type\":\"mediaImage\",\"props\":{\"assetId\":\"$AID\",\"caption\":\"smoke\"}}]}" $API/entities)
 DID=$(echo "$D" | field id)
 DREV=$(echo "$D" | field revision_id)
-check "создание документа" "да" "$([ -n "$DID" ] && echo да || echo нет)"
+check "текст — запись «Документ»" "да" "$([ -n "$DID" ] && echo да || echo нет)"
 REFS=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
 select count(*) from app.document_entity_refs where revision_id='$DREV'")
 check "вхождения объектов записаны" 1 "$REFS"
-check "ссылка в никуда отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"title":"smoke: плохая","body":[{"id":"x","type":"entityCard","props":{"entityId":"99999999","occurrenceId":"x1"}}]}' $API/documents)"
-TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
-select body_text from app.documents where id=$DID")
-contains "поисковый текст извлечён" 'smoke проверка текста' "$TEXT"
-D2=$(curl -s -X PATCH -H "$AUTH" -H "$JSON" -d "{\"title\":\"smoke: текст правлен\",\"body\":[{\"id\":\"su-edit\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"smoke правка текста SU\",\"styles\":{}}]}],\"base_revision_id\":\"$DREV\"}" $API/documents/$DID)
-DREV2=$(echo "$D2" | field revision_id)
-check "SU правит текст стандартного документа" "да" "$([ -n "$DREV2" ] && echo да || echo нет)"
-TEXT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "select body_text from app.documents where id=$DID")
-contains "новая версия текста сохранена" 'smoke правка текста SU' "$TEXT"
+check "ссылка в никуда отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"type":"document","slug":"smoke-plohoy","title_ru":"smoke: плохая","body_json":[{"id":"x","type":"entityCard","props":{"entityId":"99999999","occurrenceId":"x1"}}]}' $API/entities)"
+textval() { docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
+select coalesce(string_agg(v.blocks_value::text, ''), '') from app.indicator_values v
+  join app.indicators i on i.id = v.indicator_id join app.parameters p on p.id = v.parameter_id
+ where i.entity_id = $1 and p.code = 'text'"; }
+contains "текст лежит значением параметра" 'smoke проверка текста' "$(textval $DID)"
+check "правка текста записи" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d "{\"base_revision_id\":\"$DREV\",\"body_json\":[{\"id\":\"su-edit\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"smoke правка текста SU\",\"styles\":{}}]}]}" $API/entities/$DID)"
+contains "новая версия текста сохранена" 'smoke правка текста SU' "$(textval $DID)"
+DREV2=$(curl -s -H "$AUTH" $API/entities/$DID | field latest_revision_id)
+check "сохранение величин" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"base_revision_id\":\"$DREV2\",\"indicators\":[]}" $API/entities-indicators/$DID)"
+contains "сохранение величин не стирает текст" 'smoke правка текста SU' "$(textval $DID)"
+contains "текст отдаётся карточкой" 'smoke правка текста SU' "$(curl -s -H "$AUTH" $API/entities/$DID)"
 
 # Незаполненные свойства блока приходят пустыми строками; пустая строка
 # в колонке с UUID роняла сохранение внутренней ошибкой.
@@ -449,53 +464,45 @@ contains "счётчик Метрики на странице раздела" 'm
 contains "прежний сайт закрыт от индекса" 'noindex' "$(curl -s -D - -o /dev/null $SITE/old/ | tr 'A-Z' 'a-z')"
 
 echo "── Уборка"
+# Прогон заводит записи разных типов: объект, лекции, источник, место,
+# изображение, документ. Убираем их одним правилом — всё, что им
+# принадлежит, — а не перечнем таблиц, который отстаёт от модели.
 docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -q -c "
-update app.entities set status='draft',published_revision_id=null,working_revision_id=null where id in ($EID,$EID2,$LID1,$LID2);
-update app.links set status='draft',published_revision_id=null,working_revision_id=null where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2);
-create temporary table smoke_document_ids as
-select ${DID}::bigint as id
-union
-select a.document_id from app.attachments a join app.targets t on t.id = a.target_id
- where a.document_id is not null and (t.entity_id in ($EID,$EID2) or t.link_id in
-   (select id from app.links where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2)));
-delete from app.attachments a using app.targets t
- where a.target_id = t.id and (t.entity_id in ($EID,$EID2) or t.link_id in
-   (select id from app.links where from_entity_id in ($EID,$EID2) or to_entity_id in ($EID,$EID2)));
-delete from app.document_entity_refs r using app.revisions rev, app.materials m
- where r.revision_id = rev.id and rev.material_id = m.id
-   and (m.entity_id in ($EID,$EID2) or m.document_id in (select id from smoke_document_ids));
-delete from app.revision_reviews rr using app.revisions r, app.materials m
- where rr.revision_id = r.id and r.material_id = m.id and (m.entity_id in ($EID,$EID2) or m.document_id in (select id from smoke_document_ids));
-delete from app.entity_tags where entity_id in ($EID,$EID2);
-delete from app.media_tags where asset_id = '$AID';
-delete from app.revisions rev using app.materials m where rev.material_id = m.id
-   and (m.entity_id in ($EID,$EID2) or m.document_id in (select id from smoke_document_ids) or m.asset_id = '$AID'
-        or m.link_id in (select id from app.links where from_entity_id in ($EID,$EID2)));
+create temporary table smoke_e as
+  select id from app.entities
+   where slug like 'smoke-%' or title_ru like 'smoke%'
+      or id in ($EID,$EID2,$LID1,$LID2,${SRCID:-0},${DID:-0},${PID:-0},${IMGID:-0})
+      or id in (select entity_id from app.media_assets where id = '$AID');
+create temporary table smoke_l as
+  select id from app.links where from_entity_id in (select id from smoke_e) or to_entity_id in (select id from smoke_e);
+update app.entities set status='draft', published_revision_id=null, working_revision_id=null where id in (select id from smoke_e);
+update app.links set status='draft', published_revision_id=null, working_revision_id=null where id in (select id from smoke_l);
+delete from app.document_entity_refs r using app.revisions rev
+ where r.revision_id = rev.id and (rev.entity_id in (select id from smoke_e) or rev.link_id in (select id from smoke_l));
+delete from app.document_entity_refs where entity_id in (select id from smoke_e);
+delete from app.revision_reviews rr using app.revisions r
+ where rr.revision_id = r.id and (r.entity_id in (select id from smoke_e) or r.link_id in (select id from smoke_l)
+   or r.material_id in (select id from app.materials where asset_id = '$AID'));
+delete from app.revisions where entity_id in (select id from smoke_e) or link_id in (select id from smoke_l)
+   or material_id in (select id from app.materials where asset_id = '$AID'
+                      or entity_id in (select id from smoke_e) or link_id in (select id from smoke_l));
 delete from app.material_credits mc using app.materials m where mc.material_id = m.id
-   and (m.entity_id in ($EID,$EID2) or m.document_id in (select id from smoke_document_ids) or m.asset_id = '$AID'
-        or m.link_id in (select id from app.links where from_entity_id in ($EID,$EID2)));
-delete from app.materials where entity_id in ($EID,$EID2) or document_id in (select id from smoke_document_ids)
-   or asset_id = '$AID' or link_id in (select id from app.links where from_entity_id in ($EID,$EID2));
-delete from app.links where from_entity_id in ($EID,$EID2,${SRCID:-0}) or to_entity_id in ($EID,$EID2,${SRCID:-0});
-delete from app.documents where id in (select id from smoke_document_ids) or id=$DID;
-delete from app.revision_reviews rr using app.revisions r, app.materials m
- where rr.revision_id = r.id and r.material_id = m.id and m.entity_id in ($LID1,$LID2);
-delete from app.revisions rev using app.materials m
- where rev.material_id = m.id and m.entity_id in ($LID1,$LID2);
-delete from app.material_credits mc using app.materials m
- where mc.material_id = m.id and m.entity_id in ($LID1,$LID2);
-delete from app.materials where entity_id in ($LID1,$LID2);
-delete from app.entities where id in ($EID,$EID2,$LID1,$LID2,${SRCID:-0});
+   and (m.entity_id in (select id from smoke_e) or m.link_id in (select id from smoke_l) or m.asset_id = '$AID');
+delete from app.materials where entity_id in (select id from smoke_e) or link_id in (select id from smoke_l) or asset_id = '$AID';
+delete from app.links where id in (select id from smoke_l);
+delete from app.entity_tags where entity_id in (select id from smoke_e);
+delete from app.indicators where entity_id in (select id from smoke_e);
 delete from app.media_files where asset_id = '$AID';
-delete from app.media_assets where id = '$AID';
-delete from app.places where id = '$PID';
+delete from app.media_assets where id = '$AID' or entity_id in (select id from smoke_e);
+delete from app.slug_history where entity_id in (select id from smoke_e);
+delete from app.entity_parameter_sets where entity_id in (select id from smoke_e);
+delete from app.entities where id in (select id from smoke_e);
 delete from app.tags where lower(title) like 'smoke-%';
 delete from app.parameter_sets where code like 'smoke%';
 delete from app.parameters where code like 'smoke%';
 " >/dev/null
 LEFT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
-select (select count(*) from app.entities where slug like 'smoke-%')
-     + (select count(*) from app.places where country like 'smoke-%')
+select (select count(*) from app.entities where slug like 'smoke-%' or title_ru like 'smoke%')
      + (select count(*) from app.tags where lower(title) like 'smoke-%')
      + (select count(*) from app.parameters where code like 'smoke%')")
 check "тестовые записи убраны" 0 "$LEFT"
