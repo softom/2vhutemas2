@@ -149,8 +149,13 @@ async function render(c: Context<AppEnv>, page: Page) {
 
 // ── Общие куски ──────────────────────────────────────────────────────────────
 
+/** Красная лента знака проходит через всю страницу, от шапки до формулы в футере (Р-91). */
+export const SITE_FOOTER = `<footer class="site-foot"><div class="foot-axis"><span>Искусство</span><span class="eq">=</span><span>Вх<sup>2</sup>·м</span></div>` +
+  `<div class="foot-line"><span>2vhutemas · курс квантовой архитектуры</span><span>Прежний сайт — <a href="/old/">2vhutemas.ru/old</a></span></div></footer>`;
+
 function layout(inner: string): string {
-  return `<div class="shell"><header class="top" data-site-header>${siteHeader(null, "")}</header><main>${inner}</main></div>`;
+  return `<div class="shell"><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
+    `<header class="top" data-site-header>${siteHeader(null, "")}</header><main>${inner}</main>${SITE_FOOTER}</div>`;
 }
 
 // Оба клиента получают один и тот же элемент меню и ту же модель прав.
@@ -250,13 +255,41 @@ function listCountHtml(shown: number, hasMore: boolean): string {
     (hasMore ? `<button type="button" class="ghost">Показать ещё</button>` : "") + `</div>`;
 }
 
+interface TypeChip {
+  code: string;
+  title_ru: string;
+}
+
+/**
+ * Быстрый отбор над плашками — ближайшие ветви раздела, как в приложении
+ * (Catalog.tsx): кнопки видны сразу, без ожидания клиента.
+ */
+async function typeChips(branch: string | null): Promise<TypeChip[]> {
+  return await sql<TypeChip>`
+    select ty.code, ty.title_ru
+      from app.entity_types ty
+     where (${branch}::text is null and ty.parent_id is null
+            and ty.code not in ('project_pages', 'materials'))
+        or ty.parent_id = (select p.id from app.entity_types p where p.code = ${branch})
+     order by ty.sort_order, ty.title_ru
+  `;
+}
+
+function chipsHtml(chips: TypeChip[], allLabel: string): string {
+  // До загрузки клиента кнопки держат место и показывают выбор «всё».
+  return `<div class="type-chips" role="group" aria-label="Тип записи">` +
+    `<button type="button" class="on" aria-pressed="true" disabled>${escapeHtml(allLabel)}</button>` +
+    chips.map((chip) => `<button type="button" aria-pressed="false" disabled>${escapeHtml(chip.title_ru)}</button>`).join("") +
+    `</div>`;
+}
+
 /**
  * Каталог раздела той же разметкой и с теми же данными, что каталог
  * приложения (Catalog.tsx): карточки по компактному виду типа. Данные
  * вложены в страницу, и приложение начинает с них, — поэтому при загрузке
  * клиента ничего не мигает и не перестраивается.
  */
-function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string): string {
+function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string, chips: TypeChip[] = []): string {
   const cards = page.items.map((row) => {
     const view = compactParts(row.compact);
     const url = compactPicture(view, "thumbnail");
@@ -268,16 +301,17 @@ function catalogHtml(title: string, lead: string, page: CatalogPage, branch: str
       `<div class="title">${view.mark ? SOURCE_MARK : ""}${escapeHtml(row.title_ru)}</div>` +
       (view.params.length ? `<div class="kind">${escapeHtml(view.params.join(", "))}</div>` : "") +
       (row.title_en ? `<div class="kind">${escapeHtml(row.title_en)}</div>` : "") +
-      `<div style="margin-top:8px"><span class="badge">${row.material_status === "published" ? "опубликовано" : "черновик"}</span></div></a>`;
+      `<div style="margin-top:8px"><span class="badge status${row.material_status === "published" ? "" : " draft"}">${row.material_status === "published" ? "опубликовано" : "черновик"}</span></div></a>`;
   }).join("");
   // Поиск и отбор работают в приложении; здесь они держат место.
   const filters = `<div class="filters"><input placeholder="Поиск по названию" disabled />` +
     `<select disabled><option>${escapeHtml(typeLabel)}</option></select></div>`;
   // «</» внутри строки закрыл бы тег скрипта раньше времени.
-  const data = JSON.stringify({ branch: branch ?? "", page }).replaceAll("</", "<\\/");
+  const data = JSON.stringify({ branch: branch ?? "", page, chips }).replaceAll("</", "<\\/");
   const count = listCountHtml(page.items.length, !!page.next_cursor);
   return `<script type="application/json" id="catalog-initial">${data}</script>` +
-    `<section><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(lead)}</p>${filters}${count}` +
+    `<section><div class="catalog-head"><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(lead)}</p></div>` +
+    `${chipsHtml(chips, branch ? "Все в разделе" : "Все")}${filters}${count}` +
     (page.items.length ? `<div class="grid">${cards}</div>${count}` : "") + `</section>`;
 }
 
@@ -318,13 +352,14 @@ const SECTIONS: Record<string, { branch: string; title: string; lead: string }> 
 
 pages.get("/", async (c) => {
   // Главная в приложении — общий каталог «Всё»; сервер отдаёт его же.
-  const [all, first] = await Promise.all([publishedIn(null), firstCatalogPage(null)]);
+  const [all, first, chips] = await Promise.all([publishedIn(null), firstCatalogPage(null), typeChips(null)]);
   const body = layout(catalogHtml(
     "Всё",
     "Все записи подряд: объекты, авторы, периоды и служебные материалы.",
     first,
     null,
     "Все типы",
+    chips,
   ));
   return await render(c, {
     catalog: true,
@@ -339,9 +374,10 @@ pages.get("/", async (c) => {
 
 for (const [path, section] of Object.entries(SECTIONS)) {
   pages.get(path, async (c) => {
-    const [rows, first] = await Promise.all([
+    const [rows, first, chips] = await Promise.all([
       publishedIn(section.branch),
       section.branch === "learning" ? Promise.resolve(null) : firstCatalogPage(section.branch),
+      typeChips(section.branch),
     ]);
     return await render(c, {
       status: 200,
@@ -353,7 +389,7 @@ for (const [path, section] of Object.entries(SECTIONS)) {
       catalog: section.branch !== "learning",
       body: layout(section.branch === "learning"
         ? `<h1>${section.title}</h1><p>${escapeHtml(section.lead)}</p>${listHtml(rows)}`
-        : catalogHtml(section.title, section.lead, first!, section.branch, "Все в разделе")),
+        : catalogHtml(section.title, section.lead, first!, section.branch, "Все в разделе", chips)),
     });
   });
 }
@@ -369,7 +405,7 @@ const ABOUT_ALIASES: Record<string, string> = {
 };
 
 pages.get("/about", async (c) => {
-  const [rows, first] = await Promise.all([publishedIn("project_pages"), firstCatalogPage("project_pages")]);
+  const [rows, first, chips] = await Promise.all([publishedIn("project_pages"), firstCatalogPage("project_pages"), typeChips("project_pages")]);
   const title = "О проекте";
   const lead = "Зачем создан 2ВХУТЕМАС, как устроен атлас и как связаться с проектом.";
   return await render(c, {
@@ -379,7 +415,7 @@ pages.get("/about", async (c) => {
     canonical: "/about",
     jsonLd: [listLd("/about", title, rows)],
     catalog: true,
-    body: layout(catalogHtml(title, lead, first, "project_pages", "Все в разделе")),
+    body: layout(catalogHtml(title, lead, first, "project_pages", "Все в разделе", chips)),
   });
 });
 
@@ -586,7 +622,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   const e = escapeHtml;
   const parts: string[] = [];
   const editPath = `/entities/${card.id}/edit`;
-  parts.push(`<article class="public-card">`, `<h1>${e(card.title_ru)}<span class="reader-actions" data-reader-edit data-href="${e(editPath)}" hidden></span></h1>`);
+  parts.push(`<article class="public-card">`, `<header class="pc-head">`, `<h1>${e(card.title_ru)}<span class="reader-actions" data-reader-edit data-href="${e(editPath)}" hidden></span></h1>`);
   const alternate = [card.title_original, card.title_en, card.title_la].filter(Boolean);
   if (alternate.length > 0) parts.push(`<p class="sub">${e(alternate.join(" · "))}</p>`);
   const place = card.values.find(v => v.place)?.place;
@@ -595,6 +631,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     [place?.settlement, place?.country].filter(Boolean).map(v => `<span class="badge">${e(v)}</span>`).join("") +
     `</div>`);
   if (card.tags.length > 0) parts.push(`<p class="tags-line">${card.tags.map(t => `<span class="tag-chip">#${e(t)}</span>`).join(" ")}</p>`);
+  parts.push(`</header>`);
 
   // Разделы карточки идут в порядке, который задаёт тип в таблице
   // отображений (схема данных, раздел 6). Код знает, как нарисовать каждый
@@ -654,7 +691,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     // Изображение — цитата (Р-68): под каждым автор и источник.
     gallery: () => card.media.length === 0 ? "" :
       `<h2>Изображения</h2><div class="public-gallery">${
-        card.media.map((m) => figureHtml(mediaUrl(m.asset_id, "thumbnail"), m.caption ?? card.title_ru, m)).join("")
+        card.media.map((m) => figureHtml(mediaUrl(m.asset_id, "screen"), m.caption ?? card.title_ru, m)).join("")
       }</div>`,
     // Источник — запись (Р-80): название ведёт на её страницу, адрес — наружу,
     // обстоятельства цитаты — из обоснования связи.
@@ -690,7 +727,9 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     : ["indicators", "links", "text", "gallery", "sources", "mentions", "citation"];
   for (const component of layout) {
     const render = sections[component];
-    if (render) parts.push(render());
+    // Раздел — свой блок: облик решает, где ему стоять (Р-91), порядок — тип.
+    const html = render ? render() : "";
+    if (html) parts.push(`<section class="pc-${component}">${html}</section>`);
   }
   parts.push(`</article>`);
   return parts.join("");

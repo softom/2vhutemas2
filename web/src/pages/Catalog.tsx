@@ -25,7 +25,11 @@ import {
  * клиента сетка не исчезает за «Загружаем…» и не перестраивается.
  * Читается один раз: при переходах внутри приложения её уже нет.
  */
-let initialCatalog: { branch: string; page: { items: EntityListItem[]; next_cursor: string | null } } | null =
+let initialCatalog: {
+  branch: string;
+  page: { items: EntityListItem[]; next_cursor: string | null };
+  chips?: { code: string; title_ru: string }[];
+} | null =
   (() => {
     try {
       const node = document.getElementById("catalog-initial");
@@ -36,7 +40,7 @@ let initialCatalog: { branch: string; page: { items: EntityListItem[]; next_curs
   })();
 
 function takeInitial(branch: string) {
-  const found = initialCatalog && initialCatalog.branch === branch ? initialCatalog.page : null;
+  const found = initialCatalog && initialCatalog.branch === branch ? initialCatalog : null;
   initialCatalog = null;
   return found;
 }
@@ -51,10 +55,10 @@ interface Props {
 
 export function Catalog({ canCreate, branch, title, sub }: Props) {
   const [initial] = useState(() => takeInitial(branch ?? ""));
-  const [items, setItems] = useState<EntityListItem[]>(initial?.items ?? []);
+  const [items, setItems] = useState<EntityListItem[]>(initial?.page.items ?? []);
   // Каталог отдаётся страницами; без этого записи за первой страницей
   // были не видны вовсе.
-  const [cursor, setCursor] = useState<string | null>(initial?.next_cursor ?? null);
+  const [cursor, setCursor] = useState<string | null>(initial?.page.next_cursor ?? null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [types, setTypes] = useState<EntityType[]>([]);
   const [type, setType] = useState(branch ?? "");
@@ -90,6 +94,11 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   };
   const shown = types.filter((item) => inBranch(item.code));
   const depthShift = branch ? (types.find((item) => item.code === branch)?.depth ?? 0) : 0;
+  // Те же кнопки, что рисует сервер (pages.ts, typeChips): дети ветви или корни дерева.
+  // Пока список типов не пришёл, держим кнопки, вложенные сервером: без мигания.
+  const chips = types.length === 0 ? (initial?.chips ?? []) : branch
+    ? types.filter((item) => item.parent === branch)
+    : types.filter((item) => item.depth === 0 && item.code !== "project_pages" && item.code !== "materials");
 
   // Сортировать можно по числовым величинам выбранной ветви: ради этого
   // параметры и заведены (Р-38).
@@ -162,10 +171,27 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
   return (
     <section>
-      <h1>{title ?? "Всё"}</h1>
-      <p className="sub">
-        {sub ?? "Все записи подряд: объекты, авторы, периоды и служебные материалы."}
-      </p>
+      <div className="catalog-head">
+        <h1>{title ?? "Всё"}</h1>
+        <p className="sub">
+          {sub ?? "Все записи подряд: объекты, авторы, периоды и служебные материалы."}
+        </p>
+      </div>
+
+      {/* Быстрый отбор — ближайшие ветви раздела; глубже — список ниже (Р-91). */}
+      <div className="type-chips" role="group" aria-label="Тип записи">
+        {[{ code: branch ?? "", title_ru: branch ? "Все в разделе" : "Все" }, ...chips].map((chip) => (
+          <button
+            key={chip.code || "all"}
+            type="button"
+            className={type === chip.code ? "on" : undefined}
+            aria-pressed={type === chip.code}
+            onClick={() => setType(chip.code)}
+          >
+            {chip.title_ru}
+          </button>
+        ))}
+      </div>
 
       <div className="filters">
         <input
@@ -269,7 +295,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
             )}
             {item.title_en && <div className="kind">{item.title_en}</div>}
             <div style={{ marginTop: 8 }}>
-              <span className="badge">
+              <span className={item.material_status === "published" ? "badge status" : "badge status draft"}>
                 {item.material_status === "published" ? "опубликовано" : "черновик"}
               </span>
             </div>

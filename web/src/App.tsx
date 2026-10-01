@@ -155,9 +155,15 @@ export function App() {
   const can = (permission: string) =>
     viewer?.permissions.includes(permission) || viewer?.permissions.includes("su") || false;
 
+  // Лента знака идёт через публичные страницы; рабочие экраны — без неё (Р-91).
+  const reading = ["/", "/objects", "/authors", "/about", "/lectures"].includes(location.pathname) ||
+    (/^\/entities\/[^/]+$/.test(location.pathname) && location.pathname !== "/entities/new");
+
   return (
     <div className="shell">
       {splash && <Splash onDone={hideSplash} />}
+      {reading && <div className="through" aria-hidden="true" />}
+      {reading && <div className="through-marks" aria-hidden="true" />}
       <header className="top" data-site-header
         dangerouslySetInnerHTML={{ __html: headerHtml }}
         onClick={async (event) => {
@@ -231,8 +237,10 @@ export function App() {
         </ErrorBoundary>
       </main>
 
-      <footer>
-        Новый контур. Прежний сайт — <a href="/old/">2vhutemas.ru/old</a>.
+      {/* Тот же футер, что у готовых страниц сервера (pages.ts, SITE_FOOTER). */}
+      <footer className="site-foot">
+        <div className="foot-axis"><span>Искусство</span><span className="eq">=</span><span>Вх<sup>2</sup>·м</span></div>
+        <div className="foot-line"><span>2vhutemas · курс квантовой архитектуры</span><span>Прежний сайт — <a href="/old/">2vhutemas.ru/old</a></span></div>
       </footer>
     </div>
   );

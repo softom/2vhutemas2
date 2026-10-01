@@ -16,5 +16,9 @@ export function siteHeader(principal: Principal | null, path = "/"): string {
   const viewer = principal
     ? `<span title="${e([...principal.permissions].join(", "))}">${e(principal.displayName)}</span><button type="button" data-action="signout">Выйти</button>`
     : '<a href="/login">Войти</a>';
-  return `<a class="brand" href="/">${e(site.name)}</a><nav>${nav}</nav><div class="viewer">${viewer}</div>`;
+  // Знак Вх² стоит на красной ленте (Р-56, Р-91): черты и штриховка — из обложки.
+  const logo = `<span class="logo-mark"><span class="logo-bar"></span><span class="lg-line l1"></span>` +
+    `<span class="lg-hl"></span><span class="lg-hr"></span><span class="lg-line l2"></span><span class="lg-line l3"></span>` +
+    `<span class="logo-word">Вх<sup>2</sup></span></span><span class="logo-vert" aria-hidden="true">Два Вхутемас</span>`;
+  return `<a class="brand" href="/" aria-label="${e(site.name)} — на главную">${logo}</a><nav>${nav}</nav><div class="viewer">${viewer}</div>`;
 }
