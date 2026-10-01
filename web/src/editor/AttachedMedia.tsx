@@ -21,9 +21,14 @@ interface Props {
   items: AttachedItem[];
   onInsert: (item: AttachedItem) => void;
   onChanged: () => void;
+  /** Открыть окно выбора изображений — там их ищут и прикрепляют. */
+  onPick: () => void;
 }
 
-export function AttachedMedia({ entityId, items, onInsert, onChanged }: Props) {
+export function AttachedMedia({ entityId, items, onInsert, onChanged, onPick }: Props) {
+  const pick = (
+    <button type="button" className="ghost" onClick={onPick}>Прикрепить изображение…</button>
+  );
   const [order, setOrder] = useState<AttachedItem[]>(items);
   const [dragged, setDragged] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
@@ -52,8 +57,11 @@ export function AttachedMedia({ entityId, items, onInsert, onChanged }: Props) {
       <div className="block">
         <h3>Изображения</h3>
         <p className="hint">
-          Файлы прикрепляются в панели справа: найдите нужный и нажмите «Прикрепить».
+          {entityId
+            ? "Изображений пока нет: найдите нужные в медиатеке и прикрепите."
+            : "Прикреплять изображения можно после первого сохранения записи."}
         </p>
+        {pick}
       </div>
     );
   }
@@ -65,6 +73,7 @@ export function AttachedMedia({ entityId, items, onInsert, onChanged }: Props) {
         Порядок задаёте вы: перетащите за «хваталку». Первое изображение
         становится обложкой записи в каталоге.
       </p>
+      {pick}
       {error && <p className="error">{error}</p>}
       <ul className="attached-media">
         {order.map((item, index) => (

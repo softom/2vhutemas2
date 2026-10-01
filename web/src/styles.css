@@ -365,3 +365,19 @@ button:disabled { opacity: .5; cursor: default; }
 .ssr[data-catalog] .card img { height: 150px; }
 .ssr[data-catalog] .card.portrait img { height: auto; }
 .ssr[data-catalog] a.card { color: inherit; }
+
+/* Окно вставки и прикрепления — на весь экран, фильтры сверху. */
+.modal-backdrop.full { padding: 12px; }
+.modal.full { width: 100%; min-height: calc(100vh - 24px); display: flex; flex-direction: column; }
+.modal.full .modal-body { flex: 1; }
+.picker-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.picker-filters { position: sticky; top: -18px; z-index: 2; background: var(--surface); padding: 10px 0; margin-bottom: 6px; align-items: center; }
+.picker-filters input:not([type=checkbox]) { flex: 1 1 260px; }
+.picker-filters .check { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 14px; }
+.picker-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.picker-grid .card { display: flex; flex-direction: column; }
+.picker-caption { font-size: 15px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.picker-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 10px; }
+.picker-actions button { padding: 4px 10px; font-size: 13px; }
+.editor-layout.single { grid-template-columns: 1fr; }
+.picker-open { margin-bottom: 10px; }

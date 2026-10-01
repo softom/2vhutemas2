@@ -167,6 +167,14 @@ media.get("/", async (c: Context<AppEnv>) => {
   // Ссылки — задача, а не запрет (Р-68): медиатека умеет показать отдельно те
   // файлы, у которых нечем подписать автора или источник.
   const onlyNeedy = c.req.query("needs") === "attribution";
+  // Отбор для окна вставки: вид изображения и прикреплённость к записи —
+  // иллюстрация это связь (Р-84), поэтому смотрим связи записи.
+  const kind = c.req.query("kind") || null;
+  const forEntity = c.req.query("entity_id") ? Number(c.req.query("entity_id")) : null;
+  const attached = c.req.query("attached") ?? null;
+  if (attached && attached !== "yes" && attached !== "no") {
+    throw new ApiError("validation_failed", "attached: yes или no");
+  }
 
   const rows = await sql<Record<string, unknown>>`
     select a.id, a.asset_class, a.created_at, a.entity_id,
@@ -185,6 +193,12 @@ media.get("/", async (c: Context<AppEnv>) => {
      where a.archived_at is null and e.status <> 'archived'
        and (${drafts} or e.status = 'published')
        and (not ${onlyNeedy} or app.image_needs_attribution(a.entity_id))
+       and (${kind}::text is null or app.image_json(a.entity_id, ${drafts})->>'kind' = ${kind})
+       and (${forEntity}::bigint is null or ${attached}::text is null
+            or (${attached} = 'yes') = exists (
+                 select 1 from app.links l join app.link_roles r on r.id = l.role_id and r.code = 'illustration'
+                  where l.from_entity_id = ${forEntity} and l.to_entity_id = a.entity_id
+                    and l.status <> 'archived'))
        and (${after}::bigint is null or extract(epoch from a.created_at)::bigint > ${after})
        and (${pattern}::text is null
             or app.image_json(a.entity_id, ${drafts})::text ilike ${pattern}

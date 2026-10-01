@@ -139,6 +139,9 @@ export interface MediaAsset {
   visibility: string;
   /** Не указано, кому приписать или откуда взято: задача редактора (Р-68). */
   needs_attribution?: boolean;
+  /** Вид изображения (код), автор — для подписи в окне вставки. */
+  kind?: string | null;
+  author?: string | null;
   files: Record<string, { status: string; width: number | null; height: number | null }> | null;
 }
 
@@ -417,11 +420,25 @@ export const api = {
   /** Обмен токена на куку: без неё браузер не покажет приватные файлы. */
   openMediaSession: () => request<{ expires_at: string }>("/session", { method: "POST" }),
 
-  media: (params: { q?: string; cursor?: string; needsAttribution?: boolean } = {}) => {
+  media: (params: {
+    q?: string;
+    cursor?: string;
+    needsAttribution?: boolean;
+    /** Вид изображения — код из словаря media_kinds. */
+    kind?: string;
+    /** Прикреплён ли файл к записи entityId: "yes" или "no". */
+    attached?: "yes" | "no";
+    entityId?: number;
+  } = {}) => {
     const search = new URLSearchParams();
     if (params.q) search.set("q", params.q);
     if (params.cursor) search.set("cursor", params.cursor);
     if (params.needsAttribution) search.set("needs", "attribution");
+    if (params.kind) search.set("kind", params.kind);
+    if (params.attached && params.entityId) {
+      search.set("attached", params.attached);
+      search.set("entity_id", String(params.entityId));
+    }
     return request<{
       items: MediaAsset[];
       /** Сколько файлов ждут ссылок — задача видна числом (Р-68). */

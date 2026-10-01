@@ -28,7 +28,7 @@ import {
   insertMediaImage,
   prepareEditorBlocks,
 } from "../editor/entityBlocks";
-import { InsertPanel } from "../editor/InsertPanel";
+import { InsertPicker, type PickerTab } from "../editor/InsertPicker";
 import { type Tag, TagsField } from "../editor/TagsField";
 
 interface Props {
@@ -230,6 +230,9 @@ function EditorBody(props: any) {
   const [canPublish, setCanPublish] = useState(false);
   useEffect(() => { api.me().then(me => setCanPublish(me.permissions.includes("publish") || me.permissions.includes("su"))).catch(() => setCanPublish(false)); }, []);
   const [problems, setProblems] = props.problemsState;
+  // Окно вставки и прикрепления — на весь экран, с фильтрами (вместо
+  // прежней узкой колонки справа от текста).
+  const [picker, setPicker] = useState<PickerTab | null>(null);
   const typeTitle = types.find((item: EntityType) => item.code === form.type)?.title_ru ?? "";
 
   // Какие разделы у формы и в каком порядке, решает тип записи (настройка
@@ -438,6 +441,7 @@ function EditorBody(props: any) {
                   onInsert={(item) =>
                     insertMediaImage(editor, { id: item.asset_id, caption_ru: item.caption })}
                   onChanged={reloadAttachments}
+                  onPick={() => setPicker("media")}
                 />
               </div>
             );
@@ -445,7 +449,15 @@ function EditorBody(props: any) {
             return (
               <div key="text">
                 <h2>Описание</h2>
-                <div className="editor-layout">
+                <div className="row picker-open">
+                  <button type="button" className="ghost" onClick={() => setPicker("entities")}>
+                    Вставить запись…
+                  </button>
+                  <button type="button" className="ghost" onClick={() => setPicker("media")}>
+                    Вставить или прикрепить изображение…
+                  </button>
+                </div>
+                <div className="editor-layout single">
                   <div
                     className="editor-shell"
                     onDragOver={(event) => event.preventDefault()}
@@ -460,17 +472,6 @@ function EditorBody(props: any) {
                   >
                     <BlockNoteView editor={editor} theme="light" />
                   </div>
-                  <div className="editor-side">
-                    <InsertPanel
-                      entityId={entityId}
-                      types={types}
-                      attached={media}
-                      onInsertCard={(entity) => insertEntityCard(editor, entity)}
-                      onInsertMention={(entity) => insertEntityMention(editor, entity)}
-                      onInsertMedia={(asset) => insertMediaImage(editor, asset)}
-                      onChanged={reloadAttachments}
-                    />
-                  </div>
                 </div>
               </div>
             );
@@ -478,6 +479,20 @@ function EditorBody(props: any) {
             return null;
         }
       })}
+
+      {picker && (
+        <InsertPicker
+          entityId={entityId}
+          types={types}
+          initialTab={picker}
+          attached={media}
+          onInsertCard={(entity) => insertEntityCard(editor, entity)}
+          onInsertMention={(entity) => insertEntityMention(editor, entity)}
+          onInsertMedia={(asset) => insertMediaImage(editor, asset)}
+          onChanged={reloadAttachments}
+          onClose={() => setPicker(null)}
+        />
+      )}
 
       <div style={{ marginTop: 18 }}>{actions}</div>
     </section>
