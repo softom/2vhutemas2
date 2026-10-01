@@ -258,6 +258,15 @@ function EditorBody(props: any) {
     : ["title", "tags", "indicators", "gallery", "text"];
   const hasText = sections.includes("text");
 
+  // Адрес ролика подсказывает тип: ссылку на YouTube, VK Видео или Rutube
+  // заводят «Видео», а не «Веб-страницей». Тип не меняется сам — только
+  // предлагается; решает редактор.
+  const VIDEO_HOSTS = /(youtube\.com|youtu\.be|vk\.com\/video|vkvideo\.ru|rutube\.ru)/i;
+  const looksLikeVideo = form.type === "web_page" && types.some((t: EntityType) => t.code === "video") &&
+    (indicators as Indicator[]).some((indicator) =>
+      indicator.values.some((value) => value.parameter === "url" && VIDEO_HOSTS.test(value.text_value ?? ""))
+    );
+
   const field = (
     name: string,
     label: string,
@@ -408,6 +417,14 @@ function EditorBody(props: any) {
                       Верхняя ветвь — род записи, ниже — её тип
                     </span>
                   </label>
+                  {looksLikeVideo && (
+                    <p className="notice">
+                      Адрес ведёт на видеоролик.{" "}
+                      <button type="button" className="ghost" onClick={() => setForm({ ...form, type: "video" })}>
+                        Сделать «Видео»
+                      </button>
+                    </p>
+                  )}
                   {field("title_ru", "Название по-русски")}
                   {field(
                     "slug",

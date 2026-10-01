@@ -382,3 +382,9 @@ button:disabled { opacity: .5; cursor: default; }
 .picker-actions button { padding: 4px 10px; font-size: 13px; }
 .editor-layout.single { grid-template-columns: 1fr; }
 .picker-open { margin-bottom: 10px; }
+
+/* Видео: обложка — ссылка на ролик, под ней «Кадр: канал · площадка» (Р-68). */
+.video-cover { margin: 8px 0; }
+.video-cover img { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; display: block; }
+.video-cover figcaption { color: var(--muted, #6f685c); font-size: 13px; margin-top: 4px; }
+a.button { display: inline-block; padding: 6px 14px; border-radius: 8px; background: var(--accent); color: #17140f; text-decoration: none; }

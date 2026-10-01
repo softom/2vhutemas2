@@ -68,6 +68,8 @@ export interface EntityType {
 export interface CompactItem {
   component: string;
   asset?: string | null;
+  /** Внешний кадр, когда обложки нет: превью ролика (тип «Видео»). */
+  src?: string | null;
   parameter?: string;
   value?: string | null;
 }
@@ -79,10 +81,19 @@ export function compactParts(compact: CompactItem[] | undefined) {
   return {
     picture: !!picture,
     image: picture?.asset ?? null,
+    src: picture?.asset ? null : picture?.src ?? null,
     portrait: picture?.component === "portrait",
     mark: items.some((item) => item.component === "mark"),
     params: items.filter((item) => item.component === "parameter" && item.value).map((item) => String(item.value)),
   };
+}
+
+/** Адрес изображения компактного вида: файл медиатеки или внешний кадр. */
+export function compactPicture(
+  view: ReturnType<typeof compactParts>,
+  variant: "thumbnail" | "screen",
+): string | null {
+  return view.image ? api.mediaFileUrl(view.image, variant) : view.src;
 }
 
 export interface EntityListItem {

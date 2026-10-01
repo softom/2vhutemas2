@@ -41,6 +41,7 @@ import {
   type CompactItem,
   compactLine,
   compactParts,
+  compactPicture,
   figureHtml,
   SOURCE_MARK,
   firstParagraph,
@@ -258,8 +259,9 @@ function listCountHtml(shown: number, hasMore: boolean): string {
 function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string): string {
   const cards = page.items.map((row) => {
     const view = compactParts(row.compact);
-    const picture = !view.picture ? "" : view.image
-      ? `<img src="${escapeHtml(mediaUrl(view.image, "thumbnail"))}" alt="" loading="lazy" />`
+    const url = compactPicture(view, "thumbnail");
+    const picture = !view.picture ? "" : url
+      ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" />`
       : `<div class="card-no-cover">без изображения</div>`;
     return `<a class="card${view.portrait ? " portrait" : ""}" href="${escapeHtml(entityPath(row.slug))}">${picture}` +
       `<div class="kind">${escapeHtml(row.type_title ?? "")}</div>` +
@@ -630,6 +632,24 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
           (l.justification ? `<p>${e(l.justification)}</p>` : "") + `</li>`
         ).join("")
       }</ul>`,
+    // Видео: обложка — ссылка на сам ролик. Обложка — прикреплённое
+    // изображение или кадр-превью ролика с подписью «канал · площадка» (Р-68).
+    video: () => {
+      const url = card.values.find((v) => v.parameter === "url")?.text_value;
+      if (!url || !/^https?:/i.test(url)) return "";
+      const channel = card.values.find((v) => v.parameter === "video_channel")?.text_value;
+      const duration = card.values.find((v) => v.parameter === "duration")?.text_value;
+      const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } })();
+      const platform = /youtu\.?be/.test(host) ? "YouTube" : /vk\.com|vkvideo/.test(host) ? "VK Видео" : /rutube/.test(host) ? "Rutube" : host;
+      const own = card.media[0];
+      const cover = own ? mediaUrl(own.asset_id, "screen") : card.video_cover;
+      const credit = own ? null : [channel, platform].filter(Boolean).join(" · ");
+      return `<h2>Видео</h2><figure class="video-cover">` +
+        (cover ? `<a href="${e(url)}" rel="noopener"><img src="${e(cover)}" alt="${e(card.title_ru)}" loading="lazy" /></a>` : "") +
+        (credit ? `<figcaption>Кадр: ${e(credit)}</figcaption>` : "") + `</figure>` +
+        `<p><a class="button" href="${e(url)}" rel="noopener">Смотреть${platform ? ` на ${e(platform)}` : ""}</a>` +
+        (duration ? ` <span class="hint">${e(duration)}</span>` : "") + `</p>`;
+    },
     text: () => descriptionHtml ? `<h2>Описание</h2><div class="public-document">${descriptionHtml}</div>` : "",
     // Изображение — цитата (Р-68): под каждым автор и источник.
     gallery: () => card.media.length === 0 ? "" :

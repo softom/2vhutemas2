@@ -13,6 +13,7 @@ import {
   api,
   type Capabilities,
   compactParts,
+  compactPicture,
   type EntityListItem,
   type EntityType,
   type SuggestedParameter,
@@ -247,10 +248,10 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
             key={item.id}
             href={`/entities/${item.slug}`}
           >
-            {view.picture && (view.image
+            {view.picture && (compactPicture(view, "thumbnail")
               ? (
                 <img
-                  src={api.mediaFileUrl(view.image, "thumbnail")}
+                  src={compactPicture(view, "thumbnail")!}
                   alt=""
                   loading="lazy"
                 />

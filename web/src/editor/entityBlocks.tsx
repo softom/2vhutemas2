@@ -15,7 +15,7 @@ import {
   defaultInlineContentSpecs,
 } from "@blocknote/core";
 import { createReactBlockSpec } from "@blocknote/react";
-import { api, type CompactItem, compactParts } from "../api";
+import { api, type CompactItem, compactParts, compactPicture } from "../api";
 
 /**
  * Название, тип и компактный вид записи берутся у самой записи, а не
@@ -157,7 +157,7 @@ function EntityCardView({ props }: { props: Record<string, string> }) {
   });
   // Изображение, его форма, знак и значения — по компактному виду типа.
   const view = compactParts(card.compact);
-  const cover = view.image;
+  const cover = compactPicture(view, "screen");
   const href = `/entities/${props.entityId}`;
   const open = useInAppLink(href);
 
@@ -165,7 +165,7 @@ function EntityCardView({ props }: { props: Record<string, string> }) {
   const kind = [card.kind, ...view.params].filter(Boolean).join(" · ");
   return (
     <div className={cover ? `entity-card with-cover${shape}` : `entity-card${shape}`}>
-      {cover && <img src={api.mediaFileUrl(cover, "screen")} alt="" />}
+      {cover && <img src={cover} alt="" />}
       <div className="entity-card-text">
         <a href={href} onClick={open}>{view.mark && <SourceMark />}{card.title}</a>
         <div className="entity-card-kind">{kind}</div>
@@ -208,10 +208,11 @@ export const EntityMention = createInlineContentSpec(
           .then((card) => {
             if (!props.title && card.title) label.textContent = card.title;
             const view = compactParts(card.compact);
-            if (view.image) {
+            const picture = compactPicture(view, "thumbnail");
+            if (picture) {
               const img = document.createElement("img");
               img.className = view.portrait ? "mention-thumb portrait" : "mention-thumb";
-              img.src = api.mediaFileUrl(view.image, "thumbnail");
+              img.src = picture;
               img.alt = "";
               anchor.prepend(img);
             } else if (view.mark) {

@@ -106,6 +106,8 @@ export interface PublicCard {
   }[];
   /** Компоненты карточки по порядку — из таблицы отображений типа. */
   layout: string[];
+  /** Кадр-превью ролика по его адресу (тип «Видео»); пусто у прочих записей. */
+  video_cover: string | null;
   authors: string[];
   /** Опубликованные записи, упомянутые в тексте: номер → адрес. */
   refs: Map<number, RefTarget>;
@@ -224,6 +226,8 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
      order by i.sort_order
   `;
   const layout = layoutRows.map((row) => row.component);
+  const videoRows = await sql<{ cover: string | null }>`select app.video_cover(${id}, ${drafts}) as cover`;
+  const video_cover = videoRows[0]?.cover ?? null;
 
   // Авторы материала — подписи карточки и её текста, без повторов. Тот же
   // расчёт, что в ответе клиенту: «как цитировать» везде одно.
@@ -285,6 +289,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     mentions,
     sources,
     layout,
+    video_cover,
     authors,
     refs,
     publicAssets,

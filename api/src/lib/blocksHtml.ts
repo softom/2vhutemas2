@@ -15,6 +15,8 @@ import { entityPath, escapeHtml, mediaUrl } from "./site.ts";
 export interface CompactItem {
   component: string;
   asset?: string | null;
+  /** Внешний кадр, когда обложки нет: превью ролика (тип «Видео»). */
+  src?: string | null;
   parameter?: string;
   value?: string | null;
 }
@@ -40,17 +42,24 @@ export function compactParts(compact: CompactItem[] | undefined) {
   return {
     picture: !!picture,
     image: picture?.asset ?? null,
+    src: picture?.asset ? null : picture?.src ?? null,
     portrait: picture?.component === "portrait",
     mark: items.some((item) => item.component === "mark"),
     params: items.filter((item) => item.component === "parameter" && item.value).map((item) => String(item.value)),
   };
 }
 
+/** Адрес изображения компактного вида: файл медиатеки или внешний кадр. */
+export function compactPicture(parts: ReturnType<typeof compactParts>, variant: "thumbnail" | "screen"): string | null {
+  return parts.image ? mediaUrl(parts.image, variant) : parts.src;
+}
+
 /** Запись строкой: в абзаце и в списке. */
 export function compactLine(target: RefTarget, title = target.title): string {
   const parts = compactParts(target.compact);
-  const picture = parts.image
-    ? `<img class="mention-thumb${parts.portrait ? " portrait" : ""}" src="${escapeHtml(mediaUrl(parts.image, "thumbnail"))}" alt="" loading="lazy" />`
+  const url = compactPicture(parts, "thumbnail");
+  const picture = url
+    ? `<img class="mention-thumb${parts.portrait ? " portrait" : ""}" src="${escapeHtml(url)}" alt="" loading="lazy" />`
     : parts.mark ? SOURCE_MARK : "";
   const params = parts.params.length ? `<span class="compact-param">, ${escapeHtml(parts.params.join(", "))}</span>` : "";
   return `<a class="entity-mention" href="${escapeHtml(entityPath(target.slug))}">${picture}${escapeHtml(title)}${params}</a>`;
@@ -65,8 +74,9 @@ function compactCard(target: RefTarget, note: string): string {
     parts.mark ? SOURCE_MARK : ""}${escapeHtml(target.title)}</a>` +
     (kind ? `<div class="entity-card-kind">${escapeHtml(kind)}</div>` : "") +
     (note ? `<div class="entity-card-note">${escapeHtml(note)}</div>` : "") + `</div>`;
-  return parts.image
-    ? `<div class="entity-card with-cover${shape}"><img src="${escapeHtml(mediaUrl(parts.image, "screen"))}" alt="" loading="lazy" />${text}</div>`
+  const url = compactPicture(parts, "screen");
+  return url
+    ? `<div class="entity-card with-cover${shape}"><img src="${escapeHtml(url)}" alt="" loading="lazy" />${text}</div>`
     : `<div class="entity-card${shape}">${text}</div>`;
 }
 

@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import {
   api,
   compactParts,
+  compactPicture,
   type EntityListItem,
   type EntityType,
   type MediaAsset,
@@ -168,8 +169,8 @@ function EntitiesTab({ entityId, types, onInsertCard, onInsertMention, done, mar
           const key = `e${item.id}`;
           return (
             <div className={view.portrait ? "card portrait" : "card"} key={item.id}>
-              {view.picture && (view.image
-                ? <img src={api.mediaFileUrl(view.image, "thumbnail")} alt="" loading="lazy" />
+              {view.picture && (compactPicture(view, "thumbnail")
+                ? <img src={compactPicture(view, "thumbnail")!} alt="" loading="lazy" />
                 : <div className="card-no-cover">без изображения</div>)}
               <div className="kind">{item.type_title ?? item.type}</div>
               <div className="title">{view.mark && <SourceMark />}{item.title_ru}</div>
