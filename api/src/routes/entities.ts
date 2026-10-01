@@ -131,6 +131,8 @@ entities.get("/", async (c: Context<AppEnv>) => {
            -- обещает картинку, а на её месте выходит битый значок (Р-68).
            -- Иллюстрации — связи с записями «Изображение» (Р-84).
            app.cover_asset(e.id, ${drafts}) as cover_asset_id,
+           -- Как запись выглядит в списке, решает её тип (таблица отображений).
+           app.compact_json(e.id, ${drafts}) as compact,
            pv.num_value as parameter_value, pv.text_value as parameter_text,
            coalesce((
              select jsonb_object_agg(v.code, v.value)
@@ -208,6 +210,7 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            (select r.snapshot->'body_json' from app.revisions r where r.id=
              case when ${drafts} then e.working_revision_id else e.published_revision_id end) as body_json,
            app.illustrations_json(e.id, ${drafts}) as media,
+           app.compact_json(e.id, ${drafts}) as compact,
            coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'title', t.title)
                         order by t.title)
                      from app.read_entity_tags(${drafts}) et join app.tags t on t.id = et.tag_id

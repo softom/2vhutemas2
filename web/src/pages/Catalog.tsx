@@ -8,9 +8,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ListCount } from "../ui/ListCount";
+import { SourceMark } from "../editor/entityBlocks";
 import {
   api,
   type Capabilities,
+  compactParts,
   type EntityListItem,
   type EntityType,
   type SuggestedParameter,
@@ -212,23 +214,28 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       />
 
       <div className="grid">
-        {items.map((item) => (
+        {items.map((item) => {
+          // Что показать, решает компактный вид типа (таблица отображений):
+          // миниатюра или портрет, знак источника, значения параметров.
+          const view = compactParts(item.compact);
+          return (
           <a
-            className={item.type_path?.[0]?.code === "who" ? "card portrait" : "card"}
+            className={view.portrait ? "card portrait" : "card"}
             key={item.id}
             href={`/entities/${item.slug}`}
           >
-            {item.cover_asset_id
+            {view.picture && (view.image
               ? (
                 <img
-                  src={api.mediaFileUrl(item.cover_asset_id, "thumbnail")}
+                  src={api.mediaFileUrl(view.image, "thumbnail")}
                   alt=""
                   loading="lazy"
                 />
               )
-              : <div className="card-no-cover">без изображения</div>}
+              : <div className="card-no-cover">без изображения</div>)}
             <div className="kind">{item.type_title ?? item.type}</div>
-            <div className="title">{item.title_ru}</div>
+            <div className="title">{view.mark && <SourceMark />}{item.title_ru}</div>
+            {view.params.length > 0 && <div className="kind">{view.params.join(", ")}</div>}
             {parameter && item.parameter_value !== null &&
               item.parameter_value !== undefined && (
               <div className="badge">
@@ -243,7 +250,8 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
               </span>
             </div>
           </a>
-        ))}
+          );
+        })}
       </div>
 
       {items.length > 0 && (

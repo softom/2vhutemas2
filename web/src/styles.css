@@ -356,3 +356,5 @@ button:disabled { opacity: .5; cursor: default; }
 .mention-thumb { width: 1.5em; height: 1.5em; object-fit: cover; border-radius: 3px; vertical-align: -0.35em; margin-right: 0.3em; }
 .mention-thumb.portrait { width: 1.15em; height: 1.5em; object-position: top center; }
 .entity-mention .source-mark { display: inline-block; width: 0.9em; height: 0.9em; vertical-align: -0.1em; margin-right: 0.2em; }
+/* Значение параметра в компактном виде: «Красный пр., 36, Новосибирск». */
+.compact-param { color: var(--muted, #6f685c); }

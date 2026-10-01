@@ -74,6 +74,8 @@ contains "виды изображений на месте" 'media_kinds' "$(body
 # Как запись выглядит, задаёт тип (схема данных, раздел 6).
 contains "отображения по типу" '"presentations"' "$(body)"
 contains "компактный вид источника — знак" '"component":"mark"' "$(body)"
+contains "у редактора свои разделы" '"component":"tags"' "$(body)"
+contains "каталог рисует компактный вид" '"compact":[' "$(curl -s -H "$AUTH" "$API/entities?limit=3")"
 
 echo "── Объекты"
 check "каталог гостю" 200 "$(code $API/entities)"

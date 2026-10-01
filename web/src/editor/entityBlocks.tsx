@@ -10,34 +10,16 @@ import { type MouseEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
 import { createReactBlockSpec, createReactInlineContentSpec } from "@blocknote/react";
-import { api } from "../api";
+import { api, type CompactItem, compactParts } from "../api";
 
 /**
- * Обложка и название для карточки в тексте берутся у самой записи, а не
- * хранятся в документе: обложка — это первое прикреплённое изображение
- * ([Р-36]), и держать её копию в тексте значило бы иметь два источника
- * одного сведения. Ответы запоминаем, чтобы десяток карточек в лекции
- * не превращался в десяток одинаковых запросов.
+ * Название, тип и компактный вид записи берутся у самой записи, а не
+ * хранятся в документе: обложка — первое изображение записи (Р-36), вид —
+ * настройка её типа (таблица отображений), и копия в тексте завела бы им
+ * второй источник. Ответы запоминаем, чтобы десяток карточек в лекции не
+ * превращался в десяток одинаковых запросов.
  */
-const cardCache = new Map<
-  string,
-  { title: string; kind: string; cover: string | null; root: string; compact: string[] }
->();
-
-/**
- * Компактный вид по типу (таблица отображений): показывать ли в строке
- * миниатюру, портрет или знак источника. Загружается один раз на страницу.
- */
-let compactByType: Promise<Record<string, string[]>> | null = null;
-function compactViews(): Promise<Record<string, string[]>> {
-  compactByType ??= api.capabilities()
-    .then((caps) => Object.fromEntries(
-      Object.entries(caps.presentations ?? {}).map(([type, modes]) =>
-        [type, (modes.compact ?? []).map((item) => item.component)]),
-    ))
-    .catch(() => ({}));
-  return compactByType;
-}
+const cardCache = new Map<string, { title: string; kind: string; compact: CompactItem[] }>();
 
 /**
  * Переход внутри приложения: полная перезагрузка теряет место в тексте,
@@ -62,7 +44,7 @@ function useInAppLink(href: string) {
 
 function useEntityCard(entityId: string, fallback: { title: string; kind: string }) {
   const [card, setCard] = useState(
-    cardCache.get(entityId) ?? { ...fallback, cover: null, root: "", compact: [] as string[] },
+    cardCache.get(entityId) ?? { ...fallback, compact: [] as CompactItem[] },
   );
 
   useEffect(() => {
@@ -73,17 +55,12 @@ function useEntityCard(entityId: string, fallback: { title: string; kind: string
       return;
     }
     let cancelled = false;
-    Promise.all([api.entity(Number(entityId)), compactViews()])
-      .then(([entity, views]) => {
-        const media = (entity as unknown as { media?: { asset_id: string }[] }).media ?? [];
-        const path = (entity as unknown as { type_path?: { code: string }[] }).type_path ?? [];
+    api.entity(Number(entityId))
+      .then((entity) => {
         const next = {
           title: entity.title_ru,
           kind: entity.type_title ?? entity.type ?? "",
-          cover: media[0]?.asset_id ?? null,
-          // Корневая ветвь решает, каким кадром показывать: у людей стоячим.
-          root: path[0]?.code ?? "",
-          compact: views[entity.type ?? ""] ?? [],
+          compact: entity.compact ?? [],
         };
         cardCache.set(entityId, next);
         if (!cancelled) setCard(next);
@@ -129,17 +106,20 @@ function EntityCardView({ props }: { props: Record<string, string> }) {
     title: props.title || `Запись ${props.entityId}`,
     kind: props.kind ?? "",
   });
-  const cover = card.cover ?? (props.mediaAssetId || null);
+  // Изображение, его форма, знак и значения — по компактному виду типа.
+  const view = compactParts(card.compact);
+  const cover = view.image;
   const href = `/entities/${props.entityId}`;
   const open = useInAppLink(href);
 
-  const shape = card.root === "who" ? " portrait" : "";
+  const shape = view.portrait ? " portrait" : "";
+  const kind = [card.kind, ...view.params].filter(Boolean).join(" · ");
   return (
     <div className={cover ? `entity-card with-cover${shape}` : `entity-card${shape}`}>
       {cover && <img src={api.mediaFileUrl(cover, "screen")} alt="" />}
       <div className="entity-card-text">
-        <a href={href} onClick={open}>{card.title}</a>
-        <div className="entity-card-kind">{card.kind}</div>
+        <a href={href} onClick={open}>{view.mark && <SourceMark />}{card.title}</a>
+        <div className="entity-card-kind">{kind}</div>
         {props.note ? <div className="entity-card-note">{props.note}</div> : null}
       </div>
     </div>
@@ -171,19 +151,20 @@ function EntityMentionView({ props }: { props: Record<string, string> }) {
   const open = useInAppLink(href);
   const card = useEntityCard(props.entityId, { title: props.title || "", kind: "" });
   // Знак в строке по компактному виду типа: миниатюра, портрет, знак
-  // источника (схема данных, раздел 6). Без настройки — одно название.
-  const thumb = (card.compact.includes("thumbnail") || card.compact.includes("portrait")) && card.cover;
+  // источника, значения параметров. Без настройки — одно название.
+  const view = compactParts(card.compact);
   return (
     <a className="entity-mention" href={href} onClick={open}>
-      {thumb && (
+      {view.image && (
         <img
-          className={card.compact.includes("portrait") ? "mention-thumb portrait" : "mention-thumb"}
-          src={api.mediaFileUrl(card.cover!, "thumbnail")}
+          className={view.portrait ? "mention-thumb portrait" : "mention-thumb"}
+          src={api.mediaFileUrl(view.image, "thumbnail")}
           alt=""
         />
       )}
-      {!thumb && card.compact.includes("mark") && <SourceMark />}
+      {!view.image && view.mark && <SourceMark />}
       {props.title || card.title || `объект ${props.entityId}`}
+      {view.params.length > 0 && <span className="compact-param">, {view.params.join(", ")}</span>}
     </a>
   );
 }

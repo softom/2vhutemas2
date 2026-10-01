@@ -8,27 +8,65 @@
  */
 import { entityPath, escapeHtml, mediaUrl } from "./site.ts";
 
+/**
+ * Компонент компактного вида с готовым значением (`app.compact_json`):
+ * миниатюра или портрет — с номером файла обложки, параметр — со значением.
+ */
+export interface CompactItem {
+  component: string;
+  asset?: string | null;
+  parameter?: string;
+  value?: string | null;
+}
+
 export interface RefTarget {
   slug: string;
   title: string;
-  /** Обложка записи — для компактного вида с миниатюрой. */
-  cover?: string | null;
-  /** Компоненты компактного вида типа (таблица отображений). */
-  compact?: string[];
+  /** Название типа — подпись карточки в тексте. */
+  kind?: string;
+  /** Компактный вид записи (таблица отображений). */
+  compact?: CompactItem[];
 }
 
 /**
- * Знак записи в строке по её компактному виду: миниатюра, портрет или знак
- * источника. Вид решает тип (схема данных, раздел 6), а не код страницы.
+ * Разбор компактного вида: изображение (и его форма), знак источника,
+ * значения параметров. Что показывать, решает тип записи (Схема данных,
+ * «Отображение»); каталог, список, карточка в тексте и упоминание
+ * различаются только размером.
  */
-function compactMark(target: RefTarget): string {
-  const compact = target.compact ?? [];
-  if ((compact.includes("thumbnail") || compact.includes("portrait")) && target.cover) {
-    const shape = compact.includes("portrait") ? " portrait" : "";
-    return `<img class="mention-thumb${shape}" src="${escapeHtml(mediaUrl(target.cover, "thumbnail"))}" alt="" loading="lazy" />`;
-  }
-  if (compact.includes("mark")) return SOURCE_MARK;
-  return "";
+export function compactParts(compact: CompactItem[] | undefined) {
+  const items = compact ?? [];
+  const picture = items.find((item) => item.component === "thumbnail" || item.component === "portrait");
+  return {
+    image: picture?.asset ?? null,
+    portrait: picture?.component === "portrait",
+    mark: items.some((item) => item.component === "mark"),
+    params: items.filter((item) => item.component === "parameter" && item.value).map((item) => String(item.value)),
+  };
+}
+
+/** Запись строкой: в абзаце и в списке. */
+export function compactLine(target: RefTarget, title = target.title): string {
+  const parts = compactParts(target.compact);
+  const picture = parts.image
+    ? `<img class="mention-thumb${parts.portrait ? " portrait" : ""}" src="${escapeHtml(mediaUrl(parts.image, "thumbnail"))}" alt="" loading="lazy" />`
+    : parts.mark ? SOURCE_MARK : "";
+  const params = parts.params.length ? `<span class="compact-param">, ${escapeHtml(parts.params.join(", "))}</span>` : "";
+  return `<a class="entity-mention" href="${escapeHtml(entityPath(target.slug))}">${picture}${escapeHtml(title)}${params}</a>`;
+}
+
+/** Запись карточкой в тексте (Р-52): изображение крупно, название поверх. */
+function compactCard(target: RefTarget, note: string): string {
+  const parts = compactParts(target.compact);
+  const shape = parts.portrait ? " portrait" : "";
+  const kind = [target.kind ?? "", ...parts.params].filter(Boolean).join(" · ");
+  const text = `<div class="entity-card-text"><a href="${escapeHtml(entityPath(target.slug))}">${
+    parts.mark ? SOURCE_MARK : ""}${escapeHtml(target.title)}</a>` +
+    (kind ? `<div class="entity-card-kind">${escapeHtml(kind)}</div>` : "") +
+    (note ? `<div class="entity-card-note">${escapeHtml(note)}</div>` : "") + `</div>`;
+  return parts.image
+    ? `<div class="entity-card with-cover${shape}"><img src="${escapeHtml(mediaUrl(parts.image, "screen"))}" alt="" loading="lazy" />${text}</div>`
+    : `<div class="entity-card${shape}">${text}</div>`;
 }
 
 export interface RenderContext {
@@ -151,10 +189,8 @@ function inline(content: unknown, ctx: RenderContext): string {
     if (item.type === "entityMention") {
       const id = Number(item.props?.entityId);
       const target = ctx.entities.get(id);
-      const title = escapeHtml(item.props?.title || target?.title || "");
-      return target
-        ? `<a class="entity-mention" href="${escapeHtml(entityPath(target.slug))}">${compactMark(target)}${title}</a>`
-        : title;
+      const title = String(item.props?.title || target?.title || "");
+      return target ? compactLine(target, title) : escapeHtml(title);
     }
     let html = escapeHtml(item.text ?? "");
     const styles = item.styles ?? {};
@@ -197,10 +233,7 @@ function block(item: Block, ctx: RenderContext): string {
     case "entityCard": {
       const target = ctx.entities.get(Number(props.entityId));
       if (!target) return "";
-      const note = props.note ? ` — ${escapeHtml(props.note)}` : "";
-      return `<p><a href="${escapeHtml(entityPath(target.slug))}">${
-        escapeHtml(target.title)
-      }</a>${note}</p>`;
+      return compactCard(target, String(props.note ?? ""));
     }
     case "mediaImage": {
       const assetId = String(props.assetId ?? "");

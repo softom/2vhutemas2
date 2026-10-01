@@ -61,6 +61,30 @@ export interface EntityType {
   parent: string | null;
 }
 
+/**
+ * Компонент компактного вида записи с готовым значением: миниатюра или
+ * портрет — с номером файла обложки, параметр — со значением.
+ */
+export interface CompactItem {
+  component: string;
+  asset?: string | null;
+  parameter?: string;
+  value?: string | null;
+}
+
+/** Что показать компактно: изображение и его форма, знак, значения. */
+export function compactParts(compact: CompactItem[] | undefined) {
+  const items = compact ?? [];
+  const picture = items.find((item) => item.component === "thumbnail" || item.component === "portrait");
+  return {
+    picture: !!picture,
+    image: picture?.asset ?? null,
+    portrait: picture?.component === "portrait",
+    mark: items.some((item) => item.component === "mark"),
+    params: items.filter((item) => item.component === "parameter" && item.value).map((item) => String(item.value)),
+  };
+}
+
 export interface EntityListItem {
   id: number;
   slug: string;
@@ -74,6 +98,8 @@ export interface EntityListItem {
   material_status: string | null;
   /** Первое по порядку прикреплённое изображение; пусто, если файлов нет. */
   cover_asset_id: string | null;
+  /** Компактный вид записи по её типу (таблица отображений). */
+  compact?: CompactItem[];
   /** Значение величины, по которой шёл отбор; приходит только с ?parameter=. */
   parameter_value?: number | string | null;
   parameter_text?: string | null;
@@ -226,7 +252,7 @@ export interface Capabilities {
   /** Дерево типов в порядке обхода сверху вниз. */
   entity_types: EntityType[];
   dictionaries: Record<string, { code: string; title_ru: string }[]>;
-  /** Вид записи по типу: компоненты для режимов compact и card. */
+  /** Вид записи по типу: компоненты режимов compact, card и editor. */
   presentations?: Record<string, Record<string, { component: string; parameter: string | null }[]>>;
 }
 

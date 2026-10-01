@@ -35,7 +35,13 @@ import {
   type PublicImage,
   resolveEntity,
 } from "../lib/publicCard.ts";
-import { blocks as blocksHtml, figureHtml, firstParagraph } from "../lib/blocksHtml.ts";
+import {
+  blocks as blocksHtml,
+  type CompactItem,
+  compactLine,
+  figureHtml,
+  firstParagraph,
+} from "../lib/blocksHtml.ts";
 
 export const pages = new Hono<AppEnv>();
 
@@ -167,11 +173,13 @@ interface ListRow {
   slug: string;
   title_ru: string;
   type_title: string;
+  compact: CompactItem[];
 }
 
 async function publishedIn(branch: string | null): Promise<ListRow[]> {
   return await sql<ListRow>`
-    select e.slug, e.title_ru, ty.title_ru as type_title
+    select e.slug, e.title_ru, ty.title_ru as type_title,
+           app.compact_json(e.id, false) as compact
       from app.read_entities(false) e
       join app.entity_types ty on ty.id = e.type_id
      where e.is_published
@@ -189,7 +197,8 @@ function listHtml(rows: ListRow[], showType = true): string {
   if (rows.length === 0) return `<p>Опубликованных записей пока нет.</p>`;
   return `<ul>${
     rows.map((row) =>
-      `<li><a href="${escapeHtml(entityPath(row.slug))}">${escapeHtml(row.title_ru)}</a>` +
+      // Строка списка — компактный вид записи, тот же, что в тексте.
+      `<li>${compactLine({ slug: row.slug, title: row.title_ru, compact: row.compact })}` +
       (showType ? ` — ${escapeHtml(row.type_title)}` : "") + `</li>`
     ).join("")
   }</ul>`;

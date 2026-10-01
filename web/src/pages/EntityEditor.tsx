@@ -67,6 +67,8 @@ export function EntityEditor({ mode }: Props) {
   const requestedType = search.get("type");
 
   const [types, setTypes] = useState<EntityType[]>([]);
+  // Разделы формы по типу записи — настройка editor таблицы отображений.
+  const [editorViews, setEditorViews] = useState<Record<string, string[]>>({});
   const [form, setForm] = useState({
     type: requestedType ?? "what",
     slug: "",
@@ -94,6 +96,10 @@ export function EntityEditor({ mode }: Props) {
   useEffect(() => {
     api.capabilities().then((caps: Capabilities) => {
       setTypes(caps.entity_types ?? []);
+      setEditorViews(Object.fromEntries(
+        Object.entries(caps.presentations ?? {}).map(([type, modes]) =>
+          [type, (modes.editor ?? []).map((item) => item.component)]),
+      ));
     }).catch(() => {});
   }, []);
 
@@ -156,6 +162,7 @@ export function EntityEditor({ mode }: Props) {
       slugTouched={slugTouched}
       setSlugTouched={setSlugTouched}
       types={types}
+      editorViews={editorViews}
       indicators={indicators}
       setIndicators={setIndicators}
       suggested={suggested}
@@ -194,7 +201,7 @@ export function EntityEditor({ mode }: Props) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function EditorBody(props: any) {
   const {
-    mode, entityId, setEntityId, form, setForm, slugTouched, setSlugTouched, types,
+    mode, entityId, setEntityId, form, setForm, slugTouched, setSlugTouched, types, editorViews,
     indicators, setIndicators, suggested,
     media, tags, setTags, reloadAttachments, initialBlocks,
     revisionId, setRevisionId, materialId, setMaterialId,
@@ -224,6 +231,15 @@ function EditorBody(props: any) {
   useEffect(() => { api.me().then(me => setCanPublish(me.permissions.includes("publish") || me.permissions.includes("su"))).catch(() => setCanPublish(false)); }, []);
   const [problems, setProblems] = props.problemsState;
   const typeTitle = types.find((item: EntityType) => item.code === form.type)?.title_ru ?? "";
+
+  // Какие разделы у формы и в каком порядке, решает тип записи (настройка
+  // editor таблицы отображений). Название есть всегда: без него запись не
+  // сохранить. Пока настройки не пришли — прежний полный состав.
+  const configured: string[] = editorViews[form.type] ?? [];
+  const sections: string[] = configured.length > 0
+    ? (configured.includes("title") ? configured : ["title", ...configured])
+    : ["title", "tags", "indicators", "gallery", "text"];
+  const hasText = sections.includes("text");
 
   const field = (
     name: string,
@@ -262,7 +278,8 @@ function EditorBody(props: any) {
         title_en: form.title_en || null,
         title_original: form.title_original || null,
         title_la: form.title_la || null,
-        body_json: editor.document,
+        // Без раздела текста форма текст не трогает: прежний сохраняется.
+        ...(hasText ? { body_json: editor.document } : {}),
         indicators,
         tags: tags.map((tag: Tag) => tag.title),
       };
@@ -352,87 +369,115 @@ function EditorBody(props: any) {
       {error && <p className="error">{error}</p>}
       {status && <p className="notice">{status}</p>}
 
-      <div className="form">
-        <label>
-          Тип
-          <select
-            value={form.type}
-            onChange={(e) => setForm({ ...form, type: e.target.value })}
-          >
-            {types.map((t: EntityType) => (
-              <option key={t.code} value={t.code}>
-                {"  ".repeat(t.depth) + (t.depth > 0 ? "– " : "") + t.title_ru}
-              </option>
-            ))}
-          </select>
-          <span className="hint">
-            Верхняя ветвь — род записи, ниже — её тип
-          </span>
-        </label>
-        {field("title_ru", "Название по-русски")}
-        {field(
-          "slug",
-          "Адрес страницы",
-          "Часть ссылки на карточку, латиницей. Подставляется из названия, можно изменить.",
-          { placeholder: "muzey-terrakotovoy-armii" },
-        )}
-        <div className="row">
-          {field("title_en", "Название по-английски")}
-          {field("title_original", "Название на языке оригинала")}
-          {field("title_la", "Латинское наименование", "Научное латинское имя, если оно есть")}
-        </div>
-        <label>
-          Метки
-          <TagsField
-            value={tags}
-            onChange={setTags}
-            hint="Наберите # и выберите слово из справочника или добавьте новое"
-          />
-        </label>
-      </div>
-
-      <IndicatorsField
-        indicators={indicators}
-        suggested={suggested}
-        onChange={setIndicators}
-      />
-
-      <AttachedMedia
-        entityId={entityId}
-        items={media}
-        onInsert={(item) =>
-          insertMediaImage(editor, { id: item.asset_id, caption_ru: item.caption })}
-        onChanged={reloadAttachments}
-      />
-
-      <h2>Описание</h2>
-      <div className="editor-layout">
-        <div
-          className="editor-shell"
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            const entityPayload = event.dataTransfer.getData("application/x-2vhutemas-entity");
-            const mediaPayload = event.dataTransfer.getData("application/x-2vhutemas-media");
-            if (!entityPayload && !mediaPayload) return;
-            event.preventDefault();
-            if (entityPayload) insertEntityCard(editor, JSON.parse(entityPayload));
-            if (mediaPayload) insertMediaImage(editor, JSON.parse(mediaPayload));
-          }}
-        >
-          <BlockNoteView editor={editor} theme="light" />
-        </div>
-        <div className="editor-side">
-          <InsertPanel
-            entityId={entityId}
-            types={types}
-            attached={media}
-            onInsertCard={(entity) => insertEntityCard(editor, entity)}
-            onInsertMention={(entity) => insertEntityMention(editor, entity)}
-            onInsertMedia={(asset) => insertMediaImage(editor, asset)}
-            onChanged={reloadAttachments}
-          />
-        </div>
-      </div>
+      {sections.map((section) => {
+        switch (section) {
+          case "title":
+            return (
+              <div key="title">
+                <div className="form">
+                  <label>
+                    Тип
+                    <select
+                      value={form.type}
+                      onChange={(e) => setForm({ ...form, type: e.target.value })}
+                    >
+                      {types.map((t: EntityType) => (
+                        <option key={t.code} value={t.code}>
+                          {"  ".repeat(t.depth) + (t.depth > 0 ? "– " : "") + t.title_ru}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="hint">
+                      Верхняя ветвь — род записи, ниже — её тип
+                    </span>
+                  </label>
+                  {field("title_ru", "Название по-русски")}
+                  {field(
+                    "slug",
+                    "Адрес страницы",
+                    "Часть ссылки на карточку, латиницей. Подставляется из названия, можно изменить.",
+                    { placeholder: "muzey-terrakotovoy-armii" },
+                  )}
+                  <div className="row">
+                    {field("title_en", "Название по-английски")}
+                    {field("title_original", "Название на языке оригинала")}
+                    {field("title_la", "Латинское наименование", "Научное латинское имя, если оно есть")}
+                  </div>
+                </div>
+              </div>
+            );
+          case "tags":
+            return (
+              <div className="form" key="tags">
+                <label>
+                  Метки
+                  <TagsField
+                    value={tags}
+                    onChange={setTags}
+                    hint="Наберите # и выберите слово из справочника или добавьте новое"
+                  />
+                </label>
+              </div>
+            );
+          case "indicators":
+            return (
+              <div key="indicators">
+                <IndicatorsField
+                  indicators={indicators}
+                  suggested={suggested}
+                  onChange={setIndicators}
+                />
+              </div>
+            );
+          case "gallery":
+            return (
+              <div key="gallery">
+                <AttachedMedia
+                  entityId={entityId}
+                  items={media}
+                  onInsert={(item) =>
+                    insertMediaImage(editor, { id: item.asset_id, caption_ru: item.caption })}
+                  onChanged={reloadAttachments}
+                />
+              </div>
+            );
+          case "text":
+            return (
+              <div key="text">
+                <h2>Описание</h2>
+                <div className="editor-layout">
+                  <div
+                    className="editor-shell"
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      const entityPayload = event.dataTransfer.getData("application/x-2vhutemas-entity");
+                      const mediaPayload = event.dataTransfer.getData("application/x-2vhutemas-media");
+                      if (!entityPayload && !mediaPayload) return;
+                      event.preventDefault();
+                      if (entityPayload) insertEntityCard(editor, JSON.parse(entityPayload));
+                      if (mediaPayload) insertMediaImage(editor, JSON.parse(mediaPayload));
+                    }}
+                  >
+                    <BlockNoteView editor={editor} theme="light" />
+                  </div>
+                  <div className="editor-side">
+                    <InsertPanel
+                      entityId={entityId}
+                      types={types}
+                      attached={media}
+                      onInsertCard={(entity) => insertEntityCard(editor, entity)}
+                      onInsertMention={(entity) => insertEntityMention(editor, entity)}
+                      onInsertMedia={(asset) => insertMediaImage(editor, asset)}
+                      onChanged={reloadAttachments}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          default:
+            return null;
+        }
+      })}
 
       <div style={{ marginTop: 18 }}>{actions}</div>
     </section>

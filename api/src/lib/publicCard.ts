@@ -9,7 +9,7 @@
 import { sql } from "./db.ts";
 import { canSeeDrafts, type Principal } from "./auth.ts";
 import { extractRefs, extractText } from "../routes/documents.ts";
-import type { RefTarget } from "./blocksHtml.ts";
+import type { CompactItem, RefTarget } from "./blocksHtml.ts";
 
 export interface Resolved {
   id: number;
@@ -218,16 +218,9 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   // Порядок разделов карточки задаёт тип (таблица отображений): ближайшая
   // настройка вверх по дереву.
   const layoutRows = await sql<{ component: string }>`
-    with recursive up as (
-        select t.id, t.parent_id, 0 as distance from app.entity_types t
-         where t.id = (select type_id from app.entities where id = ${id})
-        union all
-        select p.id, p.parent_id, up.distance + 1 from up join app.entity_types p on p.id = up.parent_id)
     select i.component
       from app.type_presentation_items i
-     where i.presentation_id = (select tp.id from up join app.type_presentations tp
-                                  on tp.type_id = up.id and tp.mode = 'card'
-                                order by up.distance limit 1)
+     where i.presentation_id = app.presentation_for((select type_id from app.entities where id = ${id}), 'card')
      order by i.sort_order
   `;
   const layout = layoutRows.map((row) => row.component);
@@ -242,14 +235,15 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   if (document) {
     const ids = [...new Set(extractRefs(document.body_json).map((ref) => ref.entityId))];
     if (ids.length > 0) {
-      const found = await sql<{ id: number; slug: string; title_ru: string; cover: string | null; compact: string[] }>`
-        select id, slug, title_ru, app.cover_asset(id, ${drafts}) as cover,
-               app.compact_components(type_id) as compact
-          from app.read_entities(${drafts})
-         where id = any(${ids}::bigint[]) and (${drafts} or is_published)
+      const found = await sql<{ id: number; slug: string; title_ru: string; kind: string; compact: CompactItem[] }>`
+        select e.id, e.slug, e.title_ru, ty.title_ru as kind,
+               app.compact_json(e.id, ${drafts}) as compact
+          from app.read_entities(${drafts}) e
+          join app.entity_types ty on ty.id = e.type_id
+         where e.id = any(${ids}::bigint[]) and (${drafts} or e.is_published)
       `;
       for (const row of found) {
-        refs.set(Number(row.id), { slug: row.slug, title: row.title_ru, cover: row.cover, compact: row.compact });
+        refs.set(Number(row.id), { slug: row.slug, title: row.title_ru, kind: row.kind, compact: row.compact });
       }
     }
     const assetIds = collectAssets(document.body_json);
