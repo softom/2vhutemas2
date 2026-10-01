@@ -529,7 +529,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .entity-card, .entity-card img, .model-embed { border-radius: 0; }
 @media (min-width: 1001px) {
   /* Подпись выносится на поля, к нижнему краю снимка. */
-  .public-card figure:not(.model-embed):not(.video-cover) figcaption { position: absolute; left: calc(100% + 52px); bottom: 0; width: clamp(160px, calc(100vw - 840px), 420px); margin: 0; }
+  .public-card figure:not(.model-embed):not(.video-cover) figcaption { position: absolute; left: calc(100% + 84px); bottom: 0; width: clamp(160px, calc(100vw - 880px), 400px); margin: 0; }
 }
 
 @media (max-width: 1200px) {
