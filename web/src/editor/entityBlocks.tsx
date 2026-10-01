@@ -8,8 +8,13 @@
  */
 import { type MouseEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
-import { createReactBlockSpec, createReactInlineContentSpec } from "@blocknote/react";
+import {
+  BlockNoteSchema,
+  createInlineContentSpec,
+  defaultBlockSpecs,
+  defaultInlineContentSpecs,
+} from "@blocknote/core";
+import { createReactBlockSpec } from "@blocknote/react";
 import { api, type CompactItem, compactParts } from "../api";
 
 /**
@@ -42,6 +47,56 @@ function useInAppLink(href: string) {
   };
 }
 
+type CardInfo = { title: string; kind: string; compact: CompactItem[] };
+const cardLoads = new Map<string, Promise<CardInfo>>();
+
+/** Сведения записи для показа в тексте — один запрос на запись за страницу. */
+function loadCard(entityId: string): Promise<CardInfo> {
+  const known = cardCache.get(entityId);
+  if (known) return Promise.resolve(known);
+  let pending = cardLoads.get(entityId);
+  if (!pending) {
+    pending = api.entity(Number(entityId)).then((entity) => {
+      const next = {
+        title: entity.title_ru,
+        kind: entity.type_title ?? entity.type ?? "",
+        compact: entity.compact ?? [],
+      };
+      cardCache.set(entityId, next);
+      return next;
+    });
+    pending.catch(() => cardLoads.delete(entityId));
+    cardLoads.set(entityId, pending);
+  }
+  return pending;
+}
+
+/**
+ * Переход по вставке в строке. Вставки в строке рисуются обычным DOM, а не
+ * React (см. EntityMention), поэтому маршрутизатор им передаётся отсюда:
+ * приложение регистрирует его один раз (App.tsx).
+ */
+let inAppNavigate: ((to: string) => void) | null = null;
+export function setInAppNavigate(navigate: ((to: string) => void) | null) {
+  inAppNavigate = navigate;
+}
+
+function linkInApp(anchor: HTMLAnchorElement, href: string) {
+  anchor.href = href;
+  anchor.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey) return;
+    if (event.button !== 0 || !inAppNavigate) return;
+    event.preventDefault();
+    inAppNavigate(href.replace(/^\/new/, ""));
+  });
+}
+
+/** Знак источника строкой разметки — для вставок, нарисованных DOM. */
+const SOURCE_MARK_SVG =
+  `<svg class="source-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false">` +
+  `<path d="M4.5 2.5H11l2.5 2.5v8.5h-9z" fill="none" stroke="currentColor" stroke-width="1.3"/>` +
+  `<path d="M6.3 6.6h4.2M6.3 9h4.2M6.3 11.4h2.6" stroke="currentColor" stroke-width="1.3"/></svg>`;
+
 function useEntityCard(entityId: string, fallback: { title: string; kind: string }) {
   const [card, setCard] = useState(
     cardCache.get(entityId) ?? { ...fallback, compact: [] as CompactItem[] },
@@ -55,14 +110,8 @@ function useEntityCard(entityId: string, fallback: { title: string; kind: string
       return;
     }
     let cancelled = false;
-    api.entity(Number(entityId))
-      .then((entity) => {
-        const next = {
-          title: entity.title_ru,
-          kind: entity.type_title ?? entity.type ?? "",
-          compact: entity.compact ?? [],
-        };
-        cardCache.set(entityId, next);
+    loadCard(entityId)
+      .then((next) => {
         if (!cancelled) setCard(next);
       })
       .catch(() => {});
@@ -126,8 +175,17 @@ function EntityCardView({ props }: { props: Record<string, string> }) {
   );
 }
 
-/** Упоминание: ссылка внутри абзаца, «здание [НОВАТ] перестроено». */
-export const EntityMention = createReactInlineContentSpec(
+/**
+ * Упоминание: ссылка внутри абзаца, «здание [НОВАТ] перестроено».
+ *
+ * Рисуется обычным DOM, а не React. BlockNote 0.23 перерисовывает React-узлы
+ * порталами, и React-вставка в абзаце сразу за карточкой записи заставляла
+ * перерисоваться уже заменённый узел карточки: редактор падал с «Position
+ * undefined out of range» (лекция 563). Вид тот же: компактный вид типа —
+ * миниатюра, портрет или знак, значения параметров — дорисовывается, когда
+ * придут сведения записи.
+ */
+export const EntityMention = createInlineContentSpec(
   {
     type: "entityMention",
     propSchema: {
@@ -138,36 +196,40 @@ export const EntityMention = createReactInlineContentSpec(
     content: "none",
   },
   {
-    render: ({ inlineContent }) => {
+    render: (inlineContent) => {
       const props = inlineContent.props as Record<string, string>;
-      return <EntityMentionView props={props} />;
+      const anchor = document.createElement("a");
+      anchor.className = "entity-mention";
+      linkInApp(anchor, `/entities/${props.entityId}`);
+      const label = document.createTextNode(props.title || `объект ${props.entityId}`);
+      anchor.append(label);
+      if (props.entityId) {
+        loadCard(props.entityId)
+          .then((card) => {
+            if (!props.title && card.title) label.textContent = card.title;
+            const view = compactParts(card.compact);
+            if (view.image) {
+              const img = document.createElement("img");
+              img.className = view.portrait ? "mention-thumb portrait" : "mention-thumb";
+              img.src = api.mediaFileUrl(view.image, "thumbnail");
+              img.alt = "";
+              anchor.prepend(img);
+            } else if (view.mark) {
+              anchor.insertAdjacentHTML("afterbegin", SOURCE_MARK_SVG);
+            }
+            if (view.params.length > 0) {
+              const param = document.createElement("span");
+              param.className = "compact-param";
+              param.textContent = `, ${view.params.join(", ")}`;
+              anchor.append(param);
+            }
+          })
+          .catch(() => {});
+      }
+      return { dom: anchor };
     },
   },
 );
-
-/** Упоминание в строке: переход тоже внутренний. */
-function EntityMentionView({ props }: { props: Record<string, string> }) {
-  const href = `/entities/${props.entityId}`;
-  const open = useInAppLink(href);
-  const card = useEntityCard(props.entityId, { title: props.title || "", kind: "" });
-  // Знак в строке по компактному виду типа: миниатюра, портрет, знак
-  // источника, значения параметров. Без настройки — одно название.
-  const view = compactParts(card.compact);
-  return (
-    <a className="entity-mention" href={href} onClick={open}>
-      {view.image && (
-        <img
-          className={view.portrait ? "mention-thumb portrait" : "mention-thumb"}
-          src={api.mediaFileUrl(view.image, "thumbnail")}
-          alt=""
-        />
-      )}
-      {!view.image && view.mark && <SourceMark />}
-      {props.title || card.title || `объект ${props.entityId}`}
-      {view.params.length > 0 && <span className="compact-param">, {view.params.join(", ")}</span>}
-    </a>
-  );
-}
 
 /**
  * Ссылка на источник: пиктограмма в строке, ведущая к объекту.
@@ -182,7 +244,7 @@ function EntityMentionView({ props }: { props: Record<string, string> }) {
  * адрес принадлежит объекту, цитата — связи, и копия в тексте завела бы им
  * вторых хозяев.
  */
-export const SourceRef = createReactInlineContentSpec(
+export const SourceRef = createInlineContentSpec(
   {
     type: "sourceRef",
     propSchema: {
@@ -195,9 +257,17 @@ export const SourceRef = createReactInlineContentSpec(
     content: "none",
   },
   {
-    render: ({ inlineContent }) => {
+    // Обычный DOM, как у упоминания: React-вставка за карточкой роняла
+    // редактор (см. EntityMention).
+    render: (inlineContent) => {
       const props = inlineContent.props as Record<string, string>;
-      return <SourceRefView props={props} />;
+      const anchor = document.createElement("a");
+      anchor.className = "source-ref";
+      linkInApp(anchor, `/entities/${props.entityId}`);
+      // Подсказка — то самое основание связи: откуда и что взято.
+      anchor.title = props.note || props.title || `источник ${props.entityId}`;
+      anchor.innerHTML = SOURCE_MARK_SVG;
+      return { dom: anchor };
     },
   },
 );
@@ -210,18 +280,6 @@ export function SourceMark() {
       <path d="M4.5 2.5H11l2.5 2.5v8.5h-9z" fill="none" stroke="currentColor" strokeWidth="1.3" />
       <path d="M6.3 6.6h4.2M6.3 9h4.2M6.3 11.4h2.6" stroke="currentColor" strokeWidth="1.3" />
     </svg>
-  );
-}
-
-function SourceRefView({ props }: { props: Record<string, string> }) {
-  const href = `/entities/${props.entityId}`;
-  const open = useInAppLink(href);
-  // Подсказка — то самое основание связи: откуда и что взято.
-  const hint = props.note || props.title || `источник ${props.entityId}`;
-  return (
-    <a className="source-ref" href={href} onClick={open} title={hint}>
-      <SourceMark />
-    </a>
   );
 }
 

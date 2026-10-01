@@ -3,7 +3,8 @@
  * Интерфейс на русском, отдельного слоя перевода нет (решение Р-18).
  */
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Link, Route, Routes, useLocation, useNavigationType } from "react-router-dom";
+import { Link, Route, Routes, useLocation, useNavigate, useNavigationType } from "react-router-dom";
+import { setInAppNavigate } from "./editor/entityBlocks";
 import { useScrollMemory } from "./ui/scrollMemory";
 import { api, supabase } from "./api";
 import { Catalog } from "./pages/Catalog";
@@ -62,6 +63,13 @@ function PublicEntityPage() {
 }
 export function App() {
   const [headerHtml, setHeaderHtml] = useState("");
+  // Вставки в строке текста рисуются без React и переходят по ссылке через
+  // этот маршрутизатор — чтобы не терять место в тексте (см. entityBlocks).
+  const navigate = useNavigate();
+  useEffect(() => {
+    setInAppNavigate(navigate);
+    return () => setInAppNavigate(null);
+  }, [navigate]);
   const [viewer, setViewer] = useState<Viewer | null>(null);
   // Открытая вкладка продолжает работать на старом коде, пока её не
   // перезагрузят: после выкладки это выглядело как «кнопка не сохраняет».
