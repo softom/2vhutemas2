@@ -125,9 +125,10 @@ parameters:
   news.release.timezone:
     value: Europe/Moscow
     status: specified
+  # 1 в слот = 3 в день: по выбору редактора из первого блока (21 за неделю).
   news.release.per_slot:
     value: 1
-    status: proposed
+    status: specified
   news.crawl.schedule:
     value: "0 4 * * *"
     status: proposed
