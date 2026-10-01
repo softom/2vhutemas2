@@ -264,7 +264,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       />
 
       <div className="grid">
-        {items.map((item) => {
+        {items.map((item, index) => {
           // Что показать, решает компактный вид типа (таблица отображений):
           // миниатюра или портрет, знак источника, значения параметров.
           const view = compactParts(item.compact);
@@ -274,10 +274,10 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
             key={item.id}
             href={`/entities/${item.slug}`}
           >
-            {view.picture && (compactPicture(view, "thumbnail")
+            {view.picture && (compactPicture(view, index === 0 ? "screen" : "thumbnail")
               ? (
                 <img
-                  src={compactPicture(view, "thumbnail")!}
+                  src={compactPicture(view, index === 0 ? "screen" : "thumbnail")!}
                   alt=""
                   loading="lazy"
                 />

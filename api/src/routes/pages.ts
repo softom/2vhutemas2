@@ -290,9 +290,10 @@ function chipsHtml(chips: TypeChip[], allLabel: string): string {
  * клиента ничего не мигает и не перестраивается.
  */
 function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string, chips: TypeChip[] = []): string {
-  const cards = page.items.map((row) => {
+  const cards = page.items.map((row, index) => {
     const view = compactParts(row.compact);
-    const url = compactPicture(view, "thumbnail");
+    // Первая плашка мозаики крупная — ей нужен экранный размер снимка (Р-91).
+    const url = compactPicture(view, index === 0 ? "screen" : "thumbnail");
     const picture = !view.picture ? "" : url
       ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" />`
       : `<div class="card-no-cover">без изображения</div>`;
