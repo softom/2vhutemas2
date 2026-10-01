@@ -434,7 +434,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .top .brand { grid-column: 2; grid-row: 1; justify-self: center; display: inline-flex; flex-direction: column; align-items: center; color: var(--text); text-decoration: none; white-space: nowrap; margin-bottom: 30px; letter-spacing: 0; font-size: inherit; }
 .logo-mark { position: relative; display: block; height: 70px; padding: 0 6px; }
 .logo-bar { position: absolute; left: calc(50% - 10px); top: -10px; bottom: -80px; width: 20px; background: var(--accent); }
-.logo-word { position: relative; z-index: 2; font-weight: 800; font-size: 70px; line-height: 1; letter-spacing: -.03em; mix-blend-mode: multiply; }
+.logo-word { position: relative; z-index: 2; font-weight:700; font-size: 70px; line-height: 1; letter-spacing:-.01em; mix-blend-mode: multiply; }
 .logo-word sup { font-size: .5em; vertical-align: top; position: relative; top: -.08em; margin-left: 2px; }
 .lg-line { position: absolute; left: calc(50% - 20px); width: 40px; height: 1.5px; background: #231F1C; z-index: 2; }
 .lg-line.l1 { top: -6px; } .lg-line.l2 { top: 81px; } .lg-line.l3 { top: 129px; }
