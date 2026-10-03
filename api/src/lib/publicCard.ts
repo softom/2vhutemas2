@@ -58,6 +58,8 @@ export interface CardValue {
   text_value: string | null;
   bool_value: boolean | null;
   option_title: string | null;
+  /** Код варианта — по нему облик различает, например, темы новостей цветом. */
+  option_code?: string | null;
   place: Record<string, unknown> | null;
   date_start_year: number | null;
   date_start_month?: number | null;
@@ -157,6 +159,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
            p.code as parameter, p.title_ru as title, p.unit, app.api_value_type(p.id) as value_type,
            iv.num_value, iv.text_value, iv.bool_value,
            (select o.title_ru from app.parameter_options o where o.id = iv.option_id) as option_title,
+           (select o.code from app.parameter_options o where o.id = iv.option_id) as option_code,
            -- Ответ-место — запись «Место» (Р-85); её сведения из той же
            -- редакции, которую видит спрашивающий.
            case when iv.entity_value_id is not null

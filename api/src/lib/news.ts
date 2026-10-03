@@ -30,49 +30,78 @@ export interface Topic {
   title: string;
 }
 
+/** Новость в порядке ленты — лёгкие поля, без миниатюры и текста. */
+export interface NewsLite {
+  id: number;
+  slug: string;
+  title_ru: string;
+  release_date: string | null;
+  release_time: string | null;
+  published_at: string | null;
+}
+
 /**
- * Опубликованные новости, свежие сверху. `topic` — код варианта «Темы новости».
- * Возвращает на одну больше `limit`, чтобы знать, есть ли продолжение.
+ * Лента в порядке выхода: значения читаются один раз (read_values собирает
+ * все значения всех записей — вызов на каждую новость стоил минуты), порядок
+ * считается по лёгким полям. `topic` — код варианта «Темы новости».
+ */
+export async function newsOrder(topic: string | null): Promise<NewsLite[]> {
+  return await sql<NewsLite>`
+    with v as materialized (
+      select i.entity_id, p.code, iv.text_value, iv.date_start_year as y, iv.date_start_month as m,
+             iv.date_start_day as d, o.code as option_code, i.sort_order as i_sort, iv.sort_order as v_sort
+        from app.read_values(false) iv
+        join app.read_indicators(false) i on i.id = iv.indicator_id and i.is_current
+        join app.parameters p on p.id = iv.parameter_id
+                             and p.code in ('news_release', 'news_release_time', 'news_topic')
+        left join app.parameter_options o on o.id = iv.option_id),
+    n as materialized (
+      select e.id, e.slug, e.title_ru, e.published_revision_id
+        from app.read_entities(false) e
+       where e.is_published and e.type_id in (select app.entity_type_subtree('news')))
+    select n.id, n.slug, n.title_ru,
+           (select format('%s-%s-%s', v.y, lpad(coalesce(v.m, 1)::text, 2, '0'), lpad(coalesce(v.d, 1)::text, 2, '0'))
+              from v where v.entity_id = n.id and v.code = 'news_release' and v.y is not null
+             order by v.i_sort, v.v_sort limit 1) as release_date,
+           (select v.text_value from v where v.entity_id = n.id and v.code = 'news_release_time'
+             order by v.i_sort, v.v_sort limit 1) as release_time,
+           (select r.created_at from app.revisions r where r.id = n.published_revision_id) as published_at
+      from n
+     where ${topic}::text is null
+        or exists (select 1 from v where v.entity_id = n.id and v.code = 'news_topic' and v.option_code = ${topic})
+     order by release_date desc nulls last, release_time desc nulls last, published_at desc nulls last, n.id desc`;
+}
+
+/**
+ * Опубликованные новости, свежие сверху: страница ленты. Тяжёлое — миниатюра,
+ * текст, источник, темы — только для показываемых. Возвращает на одну больше
+ * `limit`, чтобы знать, есть ли продолжение.
  */
 export async function loadNews(topic: string | null, limit: number, offset: number): Promise<NewsRow[]> {
-  return await sql<NewsRow>`
-    select e.id, e.slug, e.title_ru, app.compact_json(e.id, false) as compact,
-           rd.release_date, rt.release_time,
-           (select r.created_at from app.revisions r where r.id = e.published_revision_id) as published_at,
-           coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru) order by o.sort_order)
-                       from app.read_values(false) iv
-                       join app.read_indicators(false) i on i.id = iv.indicator_id
-                       join app.parameters p on p.id = iv.parameter_id
-                       join app.parameter_options o on o.id = iv.option_id
-                      where i.entity_id = e.id and i.is_current and p.code = 'news_topic'), '[]'::jsonb) as topics,
+  const order = (await newsOrder(topic)).slice(offset, offset + limit + 1);
+  if (order.length === 0) return [];
+  const ids = order.map((row) => Number(row.id));
+  const details = await sql<{ id: number; compact: CompactItem[]; topics: NewsRow["topics"]; body: unknown; source_title: string | null }>`
+    with v as materialized (
+      select i.entity_id, o.code, o.title_ru, o.sort_order
+        from app.read_values(false) iv
+        join app.read_indicators(false) i on i.id = iv.indicator_id and i.is_current
+        join app.parameters p on p.id = iv.parameter_id and p.code = 'news_topic'
+        join app.parameter_options o on o.id = iv.option_id
+       where i.entity_id = any(${ids}::bigint[]))
+    select e.id, app.compact_json(e.id, false) as compact,
+           coalesce((select jsonb_agg(jsonb_build_object('code', v.code, 'title', v.title_ru) order by v.sort_order)
+                       from v where v.entity_id = e.id), '[]'::jsonb) as topics,
            (select r.snapshot->'body_json' from app.revisions r where r.id = e.published_revision_id) as body,
            (select s->>'title' from jsonb_array_elements(app.sources_json(e.id, false)) s limit 1) as source_title
-      from app.read_entities(false) e
-      left join lateral (
-          select format('%s-%s-%s', iv.date_start_year, lpad(coalesce(iv.date_start_month, 1)::text, 2, '0'),
-                        lpad(coalesce(iv.date_start_day, 1)::text, 2, '0')) as release_date
-            from app.read_values(false) iv
-            join app.read_indicators(false) i on i.id = iv.indicator_id
-            join app.parameters p on p.id = iv.parameter_id
-           where i.entity_id = e.id and i.is_current and p.code = 'news_release' and iv.date_start_year is not null
-           order by i.sort_order, iv.sort_order limit 1) rd on true
-      left join lateral (
-          select iv.text_value as release_time
-            from app.read_values(false) iv
-            join app.read_indicators(false) i on i.id = iv.indicator_id
-            join app.parameters p on p.id = iv.parameter_id
-           where i.entity_id = e.id and i.is_current and p.code = 'news_release_time'
-           order by i.sort_order, iv.sort_order limit 1) rt on true
-     where e.is_published
-       and e.type_id in (select app.entity_type_subtree('news'))
-       and (${topic}::text is null or exists (
-             select 1 from app.read_values(false) iv
-               join app.read_indicators(false) i on i.id = iv.indicator_id
-               join app.parameters p on p.id = iv.parameter_id
-               join app.parameter_options o on o.id = iv.option_id
-              where i.entity_id = e.id and i.is_current and p.code = 'news_topic' and o.code = ${topic}))
-     order by rd.release_date desc nulls last, rt.release_time desc nulls last, published_at desc nulls last, e.id desc
-     limit ${limit + 1} offset ${offset}`;
+      from app.entities e
+     where e.id = any(${ids}::bigint[])`;
+  const byId = new Map(details.map((row) => [Number(row.id), row]));
+  return order.map((row) => {
+    const more = byId.get(Number(row.id));
+    return { ...row, compact: more?.compact ?? [], topics: more?.topics ?? [], body: more?.body ?? null,
+      source_title: more?.source_title ?? null };
+  });
 }
 
 /** Темы для кнопок отбора — варианты параметра «Тема новости» (данные, не код). */
@@ -85,8 +114,9 @@ export async function newsTopics(): Promise<Topic[]> {
 }
 
 /** Соседи новости в ленте — для «Раньше / Позже» на её странице. */
-export async function newsNeighbours(id: number): Promise<{ before: NewsRow | null; after: NewsRow | null; sameDay: NewsRow[] }> {
-  const all = await loadNews(null, 500, 0);
+export async function newsNeighbours(id: number): Promise<{ before: NewsLite | null; after: NewsLite | null; sameDay: NewsLite[] }> {
+  // Соседям хватает лёгкого порядка ленты: без миниатюр и текстов.
+  const all = await newsOrder(null);
   const index = all.findIndex((row) => Number(row.id) === id);
   if (index < 0) return { before: null, after: null, sameDay: [] };
   const day = all[index].release_date;
@@ -107,7 +137,7 @@ export function dayTitle(iso: string): { title: string; weekday: string } {
 }
 
 /** День новости: выход, иначе дата публикации по Москве. */
-export function newsDay(row: NewsRow): string | null {
+export function newsDay(row: NewsLite): string | null {
   if (row.release_date) return row.release_date;
   if (!row.published_at) return null;
   return new Date(row.published_at).toLocaleDateString("sv-SE", { timeZone: "Europe/Moscow" });
@@ -121,8 +151,14 @@ function lead(row: NewsRow): string {
   return firstParagraph(row.body);
 }
 
+/** Тема новости — своим цветом (класс по коду варианта; цвета — в стилях). */
+export function topicHtml(code: string | null | undefined, title: string): string {
+  const cls = code && /^[a-z0-9_-]+$/.test(code) ? ` t-${code}` : "";
+  return `<span class="news-topic${cls}"><span class="sq"></span>${e(title)}</span>`;
+}
+
 function kicker(row: NewsRow): string {
-  const topic = row.topics.map((t) => e(t.title)).join(" · ");
+  const topic = row.topics.map((t) => topicHtml(t.code, t.title)).join("");
   return `<div class="kick">${topic || "Новость"}<span class="sl">//</span>` +
     (row.source_title ? `<span class="news-src">${e(row.source_title)}</span>` : "") + `</div>`;
 }
@@ -158,7 +194,7 @@ export interface FeedOptions {
   topics: Topic[];
   page: number;
   hasMore: boolean;
-  today: NewsRow[];
+  today: NewsLite[];
 }
 
 /** Лента новостей: шапка с темами и днём, дни с крупной датой, «Раньше». */
@@ -172,7 +208,8 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
   };
   const chips = [{ code: null as string | null, title: "Все" }, ...opts.topics].map((t) => {
     const on = (t.code ?? null) === opts.topic;
-    return `<a class="news-chip${on ? " on" : ""}" href="${e(link(t.code))}"${on ? ' aria-current="page"' : ""}>${e(t.title)}</a>`;
+    const cls = t.code && /^[a-z0-9_-]+$/.test(t.code) ? ` t-${t.code}` : "";
+    return `<a class="news-chip${cls}${on ? " on" : ""}" href="${e(link(t.code))}"${on ? ' aria-current="page"' : ""}>${t.code ? '<span class="sq"></span>' : ""}${e(t.title)}</a>`;
   }).join("");
   const today = todayIso();
   const todayList = opts.today.length
@@ -212,8 +249,8 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
 }
 
 /** «Раньше / Позже» и «Ещё за этот день» на странице новости. */
-export function newsNavHtml(nav: { before: NewsRow | null; after: NewsRow | null }): string {
-  const cell = (row: NewsRow | null, label: string, cls: string) => {
+export function newsNavHtml(nav: { before: NewsLite | null; after: NewsLite | null }): string {
+  const cell = (row: NewsLite | null, label: string, cls: string) => {
     if (!row) return `<span class="${cls} is-empty"></span>`;
     const day = newsDay(row);
     const when = [day ? dayTitle(day).title : "", row.release_time ?? ""].filter(Boolean).join(", ");
@@ -224,7 +261,7 @@ export function newsNavHtml(nav: { before: NewsRow | null; after: NewsRow | null
     cell(nav.before, "← Раньше", "news-flip-before") + cell(nav.after, "Позже →", "news-flip-after") + `</nav>`;
 }
 
-export function sameDayHtml(rows: NewsRow[], day: string | null): string {
+export function sameDayHtml(rows: NewsLite[], day: string | null): string {
   if (rows.length === 0 || !day) return "";
   return `<div class="news-sameday"><div class="kick">Ещё ${e(dayTitle(day).title)}</div><ul>${
     rows.map((row) => `<li><span class="news-time-sm">${e(row.release_time ?? "")}</span><a href="${e(entityPath(row.slug))}">${e(row.title_ru)}</a></li>`).join("")

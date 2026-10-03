@@ -18,7 +18,7 @@ import { sql } from "../lib/db.ts";
 import { entities } from "./entities.ts";
 import { siteFooter, siteHeader } from "../lib/siteHeader.ts";
 import { CATALOG_HIDDEN_ROOTS } from "../lib/entityTypes.ts";
-import { dayTitle, loadNews, newsDay, newsFeedHtml, newsNavHtml, newsNeighbours, newsTopics, sameDayHtml } from "../lib/news.ts";
+import { dayTitle, loadNews, newsDay, newsFeedHtml, newsNavHtml, newsNeighbours, newsOrder, newsTopics, sameDayHtml, topicHtml } from "../lib/news.ts";
 import { canSeeDrafts } from "../lib/auth.ts";
 import { ApiError } from "../lib/errors.ts";
 import { type AppEnv, log } from "../lib/http.ts";
@@ -363,7 +363,7 @@ async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
   const [rows, topics, latest] = await Promise.all([
     loadNews(topic, NEWS_PAGE, (page - 1) * NEWS_PAGE),
     newsTopics(),
-    loadNews(null, 6, 0),
+    newsOrder(null),
   ]);
   const known = !topic || topics.some((t) => t.code === topic);
   if (!known) return await notFound(c);
@@ -670,13 +670,14 @@ function newsHead(card: PublicCard, extra: NewsExtra): string {
   const day = release?.date_start_year
     ? dayTitle(`${release.date_start_year}-${String(release.date_start_month ?? 1).padStart(2, "0")}-${String(release.date_start_day ?? 1).padStart(2, "0")}`).title
     : "";
-  const topics = card.values.filter((v) => v.parameter === "news_topic").map((v) => v.option_title).filter(Boolean);
+  const topics = card.values.filter((v) => v.parameter === "news_topic" && v.option_title)
+    .map((v) => topicHtml(v.option_code, v.option_title!));
   const arrow = (row: NewsExtra["nav"]["before"], label: string, hint: string) => row
     ? `<a class="news-arrow" href="${e(entityPath(row.slug))}" aria-label="${e(hint)}: ${e(row.title_ru)}" title="${e(hint)} — клавиша ${label}">${label}</a>`
     : `<span class="news-arrow is-empty" aria-hidden="true">${label}</span>`;
   return `<div class="news-path"><span class="mono"><a href="/news">Новости</a>${day ? ` — ${e(day)}` : ""}${time ? `, ${e(time)}` : ""}</span>` +
     `<span class="news-arrows">${arrow(extra.nav.before, "←", "Раньше")}${arrow(extra.nav.after, "→", "Позже")}</span></div>` +
-    `<div class="kick"><span class="sq"></span>Новость<span class="sl">//</span>${e(topics.join(" · ") || card.type_title)}</div>`;
+    `<div class="kick">Новость<span class="sl">//</span>${topics.join("") || e(card.type_title)}</div>`;
 }
 
 function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<typeof citation>, news: NewsExtra | null = null) {
@@ -708,8 +709,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         const release = by("news_release")[0];
         const time = by("news_release_time")[0]?.text_value;
         if (release) rows.push(["Выход", e(valueText(release)) + (time ? `, ${e(time)}` : "")]);
-        const topics = by("news_topic").map((v) => v.option_title).filter(Boolean);
-        if (topics.length) rows.push([topics.length > 1 ? "Темы" : "Тема", e(topics.join(", "))]);
+        const topics = by("news_topic").filter((v) => v.option_title).map((v) => topicHtml(v.option_code, v.option_title!));
+        if (topics.length) rows.push([topics.length > 1 ? "Темы" : "Тема", topics.join("")]);
         const url = by("url")[0]?.text_value;
         if (url && /^https?:/i.test(url)) {
           const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } })();
