@@ -62,6 +62,80 @@ def _story_inputs(root: Path, run_id: str, key: str, pipeline):
     return cand, items, sources
 
 
+ORDER_SOURCE = {"id": "order", "title": "Заказ редактора", "trust": 7}
+
+
+def _order_inputs(rec: dict):
+    """Кандидат и материал заказа хранятся в самой записи подготовки (у заказа нет прогона)."""
+    o = rec.get("order") or {}
+    item = Item(**{k: v for k, v in (o.get("item") or {}).items() if k in Item.__dataclass_fields__})
+    return o.get("candidate"), {item.id: item}, {"order": {**ORDER_SOURCE, **(o.get("source") or {})}}
+
+
+def orders(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
+    """«Заказать новость» (Р-104): тема, ссылки, текст и указание редактора → новость-обзор.
+
+    Робот не ищет в интернете — работает по ссылкам редактора. Первая ссылка — главный
+    источник, остальные — дополнительные. Результат — обычная подготовленная новость:
+    превью, перегенерация, «В стек», слот, публикация.
+    """
+    odir = root / "inbox" / "orders"
+    done = 0
+    for req_path in sorted(odir.glob("*.json")) if odir.exists() else []:
+        req = _read(req_path) or {}
+        req_path.unlink(missing_ok=True)
+        key = req.get("story_key", "")
+        path = root / ".state" / "prepared" / f"{key}.json"
+        urls = req.get("urls") or []
+        if not key or (not urls and not req.get("text")):
+            continue
+        rec = {"story_key": key, "status": "переводится", "started_at": now(), "origin": "заказ редактора",
+               "attempts": 1, "order": {"topic": req.get("topic"), "section": req.get("section"), "urls": urls,
+                                        "text": req.get("text"), "note": req.get("note"), "by": req.get("by"),
+                                        "at": req.get("at")}}
+        _write(path, rec)
+        log("info", "order", "перевод начат", story=key, urls=len(urls))
+        main_url = urls[0] if urls else None
+        title, summary = req.get("topic") or key, ""
+        if main_url:
+            try:
+                from .lists import _meta
+                from bs4 import BeautifulSoup
+                page = BeautifulSoup(fetcher.get(main_url).content, "lxml")
+                title = _meta(page, "og:title") or (page.title.get_text(strip=True) if page.title else title)
+                summary = _meta(page, "og:description") or ""
+            except Exception as e:  # noqa: BLE001 — страница не открылась: пишем по остальному
+                log("warn", "order", "главная ссылка не открылась", story=key, error=str(e)[:150])
+        item = Item(id=f"{key}-main", source_id="order", url=main_url or "", title=title, summary=summary,
+                    published=None)
+        cand = {"story_key": key, "final": 100, "interest": 100, "title_ru": req.get("topic") or title,
+                "topic": req.get("section") or "neurogeneration", "kind": "review", "lead_item": item.id,
+                "order_topic": req.get("topic"), "reason": "заказ редактора",
+                "sources": [{"source": (main_url or "").split("/")[2] if main_url and "//" in main_url else "редактор",
+                             "url": main_url or "", "date": ""}]}
+        # Издание для подписей фото — домен главной ссылки, а не «Заказ редактора».
+        source = {"title": cand["sources"][0]["source"]}
+        rec["order"].update(candidate=cand, source=source,
+                            item={k: v for k, v in item.__dict__.items() if k != "content_html"})
+        holder = pipeline.Run(id=f"order-{key}", dir=root / "out" / "prepare", since=datetime.now(timezone.utc))
+        try:
+            if not main_url:
+                raise LLMError("нет ссылки — нужен хотя бы один источник")
+            story = pipeline.write_story(holder, cand, {item.id: item}, {"order": {**ORDER_SOURCE, **source}}, fetcher, llm,
+                                         extra_urls=urls[1:], extra_text=req.get("text") or None,
+                                         instructions=req.get("note") or None)
+        except Exception as e:  # noqa: BLE001
+            rec.update(status="ошибка", error=f"{type(e).__name__}: {e}"[:300], attempts=MAX_ATTEMPTS)
+            _write(path, rec)
+            log("error", "order", "заказ не выполнен", story=key, error=str(e)[:200])
+            continue
+        rec.update(status="готово", ready_at=now(), story=story)
+        _write(path, rec)
+        log("info", "order", "новость по заказу готова", story=key, issues=len(story.get("issues", [])))
+        done += 1
+    return done
+
+
 def regenerate(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
     """Запросы «Перегенерировать» со страницы превью (inbox/regenerate/<история>.json, Р-101)."""
     rdir = root / "inbox" / "regenerate"
@@ -75,7 +149,10 @@ def regenerate(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
         if not rec or not llm.live:
             log("warn", "regenerate", "нечего перегенерировать или LLM не настроена", story=key)
             continue
-        cand, items, sources = _story_inputs(root, rec.get("run_id"), key, pipeline)
+        if rec.get("order"):
+            cand, items, sources = _order_inputs(rec)
+        else:
+            cand, items, sources = _story_inputs(root, rec.get("run_id"), key, pipeline)
         if cand is None or cand.get("lead_item") not in items:
             rec.update(status="ошибка", error="история не найдена в прогоне — перегенерировать нельзя")
             _write(path, rec)
@@ -92,6 +169,10 @@ def regenerate(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
         _write(path, rec)
         log("info", "regenerate", "перегенерация начата", story=key, urls=len(req.get("urls") or []))
         holder = pipeline.Run(id=f"regenerate-{key}", dir=root / "out" / "prepare", since=datetime.now(timezone.utc))
+        if rec.get("order"):
+            # У заказа дополнительные ссылки и текст — из самого заказа и из нового запроса.
+            req["urls"] = [*(rec["order"].get("urls") or [])[1:], *(req.get("urls") or [])]
+            req["text"] = "\n".join(x for x in (rec["order"].get("text"), req.get("text")) if x)
         try:
             story = pipeline.write_story(holder, cand, items, sources, fetcher, llm, extra_urls=req.get("urls") or [],
                                          extra_text=req.get("text") or None, instructions=instructions or None)
@@ -114,6 +195,7 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
     done = 0
     fetcher: Fetcher | None = Fetcher()
     try:
+        done += orders(root, llm, log, pipeline, fetcher)
         done += regenerate(root, llm, log, pipeline, fetcher)
         for q in queue:
             key = q["story_key"]

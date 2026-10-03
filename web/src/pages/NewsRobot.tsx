@@ -272,6 +272,8 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const shownRows = topic ? rows.filter((c) => c.topic === topic) : rows;
   return (
     <>
+      <Orders ov={ov} act={act} />
+
       <h2>Переведено заранее</h2>
       <p className="hint">Лучшие истории прогона робот переводит сам; остальные — после «В стек». Готовая новость открывается по заголовку в таблице.</p>
       {run.news.length === 0 && <p className="hint">{run.running ? "Тексты появятся по мере готовности." : "В этом прогоне текстов нет."}</p>}
@@ -331,6 +333,80 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                 </tr>
               );
             })}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+}
+
+/**
+ * «Заказать новость» (Р-104): тема, раздел, ссылки и текст, указание — робот пишет новость-обзор
+ * по ссылкам редактора; дальше обычный путь: превью, перегенерация, «В стек», слот, публикация.
+ */
+function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
+  const [form, setForm] = useState({ topic: "", section: "neurogeneration", input: "", note: "" });
+  const [msg, setMsg] = useState<string | null>(null);
+  const inStack = new Set(ov.queue.items.map((i) => i.story_key));
+  const done = Object.entries(ov.prepared).filter(([, p]) => p.order).sort((a, b) =>
+    String(b[1].order?.at ?? "").localeCompare(String(a[1].order?.at ?? "")));
+  const send = async () => {
+    if (!form.topic.trim()) return setMsg("Нужна тема: о чём новость");
+    if (!/https?:\/\/\S+/.test(form.input)) return setMsg("Нужна хотя бы одна ссылка — робот пишет по источникам");
+    try {
+      await api.robotOrder(form);
+      setMsg("Заказ передан роботу: он возьмёт его в течение минуты, перевод занимает около минуты.");
+      setForm({ ...form, topic: "", input: "", note: "" });
+      await act(async () => {});
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  };
+  const toStack = (key: string, title?: string, section?: string) => act(() => api.robotQueue({
+    action: "add", story_key: key, run_id: "order", title, topic: section, final: 100,
+  }), "Новость поставлена в ближайший свободный слот.");
+  return (
+    <>
+      <h2>Заказать новость</h2>
+      <div className="block">
+        <p className="hint">
+          О чём робот не писал — сервис, программа, событие. Робот не ищет в интернете: он откроет ваши ссылки
+          (первая — главный источник), возьмёт оттуда факты и фото и напишет новость по тем же правилам.
+        </p>
+        <div className="row">
+          <input style={{ flex: 3 }} placeholder="Тема: сервис FORMAS.AI для архитекторов" value={form.topic}
+            onChange={(e) => setForm({ ...form, topic: e.target.value })} />
+          <select value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })}>
+            <option value="architecture">Архитектура</option>
+            <option value="neurogeneration">Нейрогенерация</option>
+            <option value="software">Архитектурное ПО</option>
+          </select>
+        </div>
+        <textarea rows={4} style={{ width: "100%" }} value={form.input} onChange={(e) => setForm({ ...form, input: e.target.value })}
+          placeholder={"https://formas.ai — ссылки, каждая с новой строки\nили текст: факты, цены, что важно"} />
+        <input style={{ width: "100%" }} placeholder="Что важно в новости (необязательно)" value={form.note}
+          onChange={(e) => setForm({ ...form, note: e.target.value })} />
+        <p><button type="button" onClick={send}>Заказать</button> {msg && <span className="hint">{msg}</span>}</p>
+      </div>
+      {((ov.orders_pending ?? []).length > 0 || done.length > 0) && (
+        <table className="grid-table">
+          <thead><tr><th>Заказ</th><th>Раздел</th><th>Состояние</th><th>Стек</th><th>Публикация</th></tr></thead>
+          <tbody>
+            {(ov.orders_pending ?? []).map((o) => (
+              <tr key={o.story_key}><td>{o.topic}</td><td>{TOPIC[o.section] ?? o.section}</td>
+                <td className="hint">ждёт робота</td><td /><td /></tr>
+            ))}
+            {done.map(([key, p]) => (
+              <tr key={key}>
+                <td>{p.status === "готово" ? <Link to={`/robot/preview/${key}`}><b>{p.title || p.order?.topic}</b></Link> : p.order?.topic}
+                  <br /><span className="hint">{p.order?.topic}{p.order?.by ? ` · ${p.order.by}` : ""}</span></td>
+                <td>{TOPIC[p.order?.section ?? ""] ?? p.order?.section}</td>
+                <td className={p.status === "ошибка" ? "error" : "hint"}>{p.status === "ошибка" ? `ошибка: ${p.error}` : p.status}</td>
+                <td>{p.status === "готово" && (inStack.has(key) ? <span className="hint">в стеке</span>
+                  : <button type="button" className="ghost" onClick={() => toStack(key, p.title, p.order?.section)}>В стек</button>)}</td>
+                <td><Publication storyKey={key} ov={ov} /></td>
+              </tr>
+            ))}
           </tbody>
         </table>
       )}

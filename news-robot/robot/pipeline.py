@@ -350,12 +350,14 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
     # видео-беседа, или если это сказано в заголовке (Р-98: отбор мог пройти до правила).
     work = facts.get("primary_work") or {}
     said = re.search(r"interview|in conversation|talks? (?:to|with)|интервью|беседа|разговор", f"{it.title} {work.get('title', '')}", re.I)
-    genre = "interview" if (cand.get("kind") == "interview" or work.get("kind") in ("interview", "lecture", "podcast")
+    genre = "review" if cand.get("kind") == "review" else "interview" if (cand.get("kind") == "interview" or work.get("kind") in ("interview", "lecture", "podcast")
                             or (work.get("kind") == "video" and facts.get("quotes")) or said) else "news"
     story["genre"] = genre
     if art.get("republished_from"):
         facts["republished_from"] = art["republished_from"]
     genre_rules = (ROOT / "prompts" / f"genre_{genre}.md").read_text(encoding="utf-8")
+    if cand.get("order_topic"):
+        genre_rules += f"\n\nТема заказа: {cand['order_topic']}"
     write_sys = prompt("write", source_title=src["title"], source_url=it.url, source_date=meta["дата"],
                        facts=json.dumps(facts, ensure_ascii=False, indent=1), genre_rules=genre_rules)
     ask = "Напиши новость."

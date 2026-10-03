@@ -294,6 +294,7 @@ newsRobot.get("/overview", async (c) => {
     learned,
     queue: await readQueue(),
     prepared: await preparedIndex(),
+    orders_pending: await pendingOrders(),
   });
 });
 
@@ -313,6 +314,8 @@ async function preparedIndex(): Promise<Record<string, Row>> {
       index[String(rec.story_key)] = {
         status: rec.status, ready_at: rec.ready_at, started_at: rec.started_at, error: rec.error,
         origin: rec.origin, title: rec.story?.news?.title,
+        order: rec.order ? { topic: (rec.order as Row).topic, section: (rec.order as Row).section,
+          by: (rec.order as Row).by, at: (rec.order as Row).at } : undefined,
         // Замечания и предупреждения, кроме «фото без автора» и «перепечатка» — они видны в превью.
         issues: [...(rec.story?.issues ?? []), ...(rec.story?.warnings ?? [])]
           .filter((x) => !x.startsWith("фото без автора") && !x.startsWith("перепечатка")),
@@ -521,3 +524,53 @@ newsRobot.get("/health", async (c) => {
   };
   return c.json({ now: new Date(now).toISOString(), crawl, worker, llm });
 });
+
+/**
+ * «Заказать новость» (Р-104): тема, раздел, ссылки и текст редактора, указание.
+ * Робот возьмёт заказ в течение минуты; новость появится в разделе «Новости» строкой заказа.
+ */
+newsRobot.post("/order", async (c) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const body = await c.req.json().catch(() => null) as Row | null;
+  const topic = typeof body?.topic === "string" ? body.topic.trim().slice(0, 200) : "";
+  if (!topic) throw new ApiError("validation_failed", "Нужна тема: о чём новость");
+  const section = ["architecture", "neurogeneration", "software"].includes(String(body?.section))
+    ? String(body?.section) : "neurogeneration";
+  const urls: string[] = [];
+  const text: string[] = [];
+  for (const line of String(body?.input ?? "").slice(0, 20000).split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    if (/^https?:\/\/\S+$/.test(t) && urls.length < 6) urls.push(t);
+    else text.push(t);
+  }
+  if (!urls.length) throw new ApiError("validation_failed", "Нужна хотя бы одна ссылка: робот пишет по источникам, а не по памяти");
+  const translit: Record<string, string> = { а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i",
+    й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "kh", ц: "ts",
+    ч: "ch", ш: "sh", щ: "shch", ы: "y", э: "e", ю: "yu", я: "ya" };
+  const base = [...topic.toLowerCase()].map((ch) => translit[ch] ?? ch).join("").replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "").slice(0, 60) || "zakaz";
+  const key = `zakaz-${base}-${crypto.randomUUID().slice(0, 4)}`;
+  const note = typeof body?.note === "string" ? body.note.slice(0, 2000) : "";
+  const req = { story_key: key, topic, section, urls, text: text.join("\n"), note, by: principal.displayName,
+    at: new Date().toISOString() };
+  await Deno.mkdir(`${ROOT}/inbox/orders`, { recursive: true });
+  await Deno.writeTextFile(`${ROOT}/inbox/orders/${key}.json`, JSON.stringify(req));
+  return c.json({ queued: req }, 202);
+});
+
+/** Заказы, ещё не взятые роботом (ящик inbox/orders). */
+async function pendingOrders(): Promise<Row[]> {
+  const list: Row[] = [];
+  try {
+    for await (const entry of Deno.readDir(`${ROOT}/inbox/orders`)) {
+      if (entry.isFile && entry.name.endsWith(".json")) {
+        const r = await readJson<Row>(`${ROOT}/inbox/orders/${entry.name}`);
+        if (r) list.push(r);
+      }
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  return list;
+}
