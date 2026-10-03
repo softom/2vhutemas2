@@ -1,0 +1,61 @@
+# Источники робота новостей — начальное наполнение таблицы news_sources (Р-88).
+# Проверены 2026-10-01: WIKI/Новости — источники и первый блок.md.
+#
+# Поля: id — постоянный ключ источника; feed — лента RSS/Atom; topics —
+# architecture | neurogeneration | software; trust — вес 0–10;
+# path — оставить только материалы, в адресе которых есть одна из строк;
+# keywords — шумная лента: оставить только материалы с этими словами
+# в заголовке или описании (регистр не важен); full_text — в ленте
+# полный текст статьи, страницу можно не загружать; enabled — обходить.
+
+sources:
+  # ── Архитектура ────────────────────────────────────────────────────────
+  - {id: dezeen-architecture, title: "Dezeen — архитектура", site: "https://www.dezeen.com", feed: "https://www.dezeen.com/architecture/feed/", lang: en, topics: [architecture], trust: 9, full_text: true}
+  - {id: architectural-record, title: "Architectural Record", site: "https://www.architecturalrecord.com", feed: "https://www.architecturalrecord.com/rss/articles", lang: en, topics: [architecture], trust: 9, note: "мягкий пейвол"}
+  - {id: architectural-review, title: "Architectural Review", site: "https://www.architectural-review.com", feed: "https://www.architectural-review.com/feed", lang: en, topics: [architecture], trust: 9, note: "пейвол, критика"}
+  - {id: archdaily, title: "ArchDaily", site: "https://www.archdaily.com", feed: "https://www.archdaily.com/feed", lang: en, topics: [architecture], trust: 8, note: "15–20 в день, лента на 1,5 дня — обходить чаще"}
+  - {id: archpaper, title: "The Architect's Newspaper", site: "https://www.archpaper.com", feed: "https://www.archpaper.com/feed/", lang: en, topics: [architecture], trust: 8, note: "отвечает 403 не-браузеру; User-Agent не подделываем"}
+  - {id: architects-journal, title: "Architects' Journal", site: "https://www.architectsjournal.co.uk", feed: "https://www.architectsjournal.co.uk/feed", lang: en, topics: [architecture], trust: 8, note: "жёсткий пейвол"}
+  - {id: designboom-architecture, title: "designboom — архитектура", site: "https://www.designboom.com", feed: "https://www.designboom.com/architecture/feed/", lang: en, topics: [architecture], trust: 7}
+  - {id: wallpaper, title: "Wallpaper*", site: "https://www.wallpaper.com", feed: "https://www.wallpaper.com/feeds/all", lang: en, topics: [architecture], trust: 7, path: ["/architecture/"]}
+  - {id: archined, title: "Archined", site: "https://www.archined.nl", feed: "https://www.archined.nl/feed/", lang: nl, topics: [architecture], trust: 7}
+  - {id: pritzker, title: "Pritzker Prize", site: "https://www.pritzkerprize.com", feed: "https://www.pritzkerprize.com/rss.xml", lang: en, topics: [architecture], trust: 10, note: "раз в год"}
+  - {id: interior-ru, title: "Интерьер+Дизайн", site: "https://www.interior.ru", feed: "https://www.interior.ru/feed-zen.rss", lang: ru, topics: [architecture], trust: 6, path: ["/architecture/"]}
+  - {id: stroygaz, title: "Строительная газета", site: "https://www.stroygaz.ru", feed: "https://www.stroygaz.ru/rss/", lang: ru, topics: [architecture], trust: 6, keywords: ["архитект", "градостро", "конкурс", "мастер-план", "реконструкц", "наследи", "музей", "театр", "библиотек", "набережн", "благоустро"]}
+  - {id: archnadzor, title: "Архнадзор", site: "https://archnadzor.ru", feed: "https://archnadzor.ru/feed/", lang: ru, topics: [architecture], trust: 7, enabled: false, note: "robots.txt закрывает /feed/ — не читаем"}
+
+  # ── Нейрогенерация ─────────────────────────────────────────────────────
+  - {id: parametric-ai, title: "Parametric Architecture", site: "https://parametric-architecture.com", feed: "https://parametric-architecture.com/feed/", lang: en, topics: [neurogeneration, architecture], trust: 7, keywords: ["ai", "artificial intelligence", "generative", "competition", "chatgpt", "midjourney", "diffusion", "machine learning", "parametric", "computational"], enabled: false, note: "robots.txt закрывает все ленты (/feed/, /*/feed/); статьи открыты — нужен разбор страницы списка"}
+  - {id: dezeen-ai, title: "Dezeen — ИИ", site: "https://www.dezeen.com", feed: "https://www.dezeen.com/tag/ai/feed/", lang: en, topics: [neurogeneration], trust: 8, full_text: true}
+  - {id: arxiv-gr, title: "arXiv cs.GR", site: "https://arxiv.org", feed: "https://rss.arxiv.org/rss/cs.GR", lang: en, topics: [neurogeneration], trust: 9}
+  - {id: arxiv-cv, title: "arXiv cs.CV", site: "https://arxiv.org", feed: "https://rss.arxiv.org/rss/cs.CV", lang: en, topics: [neurogeneration], trust: 9, keywords: ["3d", "scene", "world model", "splat", "nerf", "architect", "building", "floor plan", "interior", "urban", "facade", "render"]}
+  - {id: deepmind, title: "Google DeepMind", site: "https://deepmind.google", feed: "https://deepmind.google/blog/rss.xml", lang: en, topics: [neurogeneration], trust: 9}
+  - {id: openai, title: "OpenAI News", site: "https://openai.com", feed: "https://openai.com/news/rss.xml", lang: en, topics: [neurogeneration], trust: 9, keywords: ["image", "video", "3d", "sora", "design", "architect", "visual"]}
+  - {id: huggingface, title: "Hugging Face Blog", site: "https://huggingface.co", feed: "https://huggingface.co/blog/feed.xml", lang: en, topics: [neurogeneration], trust: 8, keywords: ["image", "video", "3d", "diffusion", "flux", "scene", "splat", "render"]}
+  - {id: nvidia-dev, title: "NVIDIA Developer", site: "https://developer.nvidia.com", feed: "https://developer.nvidia.com/blog/feed", lang: en, topics: [neurogeneration], trust: 8, keywords: ["3d", "omniverse", "cosmos", "scene", "render", "digital twin", "architect", "splat"]}
+  - {id: the-decoder, title: "The Decoder", site: "https://the-decoder.com", feed: "https://the-decoder.com/feed/", lang: en, topics: [neurogeneration], trust: 8, keywords: ["image", "video", "3d", "world model", "design", "architect", "midjourney", "flux", "veo", "sora", "runway"], enabled: false, note: "robots.txt закрывает ленты (*/feed/) — не читаем"}
+  - {id: mit-tr-ai, title: "MIT Technology Review — ИИ", site: "https://www.technologyreview.com", feed: "https://www.technologyreview.com/topic/artificial-intelligence/feed", lang: en, topics: [neurogeneration], trust: 9, keywords: ["image", "video", "3d", "design", "architect", "city", "building"]}
+  - {id: stability, title: "Stability AI", site: "https://stability.ai", feed: "https://stability.ai/news-updates?format=rss", lang: en, topics: [neurogeneration], trust: 8}
+  - {id: habr-image, title: "Хабр — обработка изображений", site: "https://habr.com", feed: "https://habr.com/ru/rss/hubs/image_processing/articles/?fl=ru", lang: ru, topics: [neurogeneration], trust: 6, keywords: ["3d", "генерац", "диффуз", "blender", "сцен", "архитект", "рендер", "gaussian", "nerf"]}
+  - {id: habr-ai, title: "Хабр — ИИ", site: "https://habr.com", feed: "https://habr.com/ru/rss/hubs/artificial_intelligence/articles/?fl=ru", lang: ru, topics: [neurogeneration], trust: 6, keywords: ["3d", "blender", "архитект", "изображен", "видео", "генерац изображ", "midjourney", "stable diffusion", "flux", "сцен"]}
+  - {id: hightech-plus, title: "Хайтек+", site: "https://hightech.plus", feed: "https://hightech.plus/feed.rss", lang: ru, topics: [neurogeneration], trust: 6, keywords: ["3d", "трёхмер", "трехмер", "архитект", "строит", "генерац", "изображен", "видео", "город"]}
+  - {id: nplus1, title: "N+1", site: "https://nplus1.ru", feed: "https://nplus1.ru/rss", lang: ru, topics: [neurogeneration], trust: 8, keywords: ["нейросет", "генерац", "3d", "трехмер", "трёхмер", "архитект", "изображен"]}
+
+  # ── Архитектурное ПО ───────────────────────────────────────────────────
+  - {id: aecmag, title: "AEC Magazine", site: "https://aecmag.com", feed: "https://aecmag.com/feed/", lang: en, topics: [software], trust: 8, note: "битый XML, метки sponsored"}
+  - {id: architosh, title: "Architosh", site: "https://www.architosh.com", feed: "https://www.architosh.com/feed/", lang: en, topics: [software], trust: 8}
+  - {id: buildingsmart, title: "buildingSMART", site: "https://www.buildingsmart.org", feed: "https://www.buildingsmart.org/feed/", lang: en, topics: [software], trust: 9}
+  - {id: blender, title: "Blender", site: "https://www.blender.org", feed: "https://www.blender.org/feed/", lang: en, topics: [software], trust: 8}
+  - {id: rhino-news, title: "Rhino News", site: "https://www.rhino3d.com", feed: "https://blog.rhino3d.com/feeds/posts/default?alt=rss", lang: en, topics: [software], trust: 7}
+  - {id: geoweek, title: "Geo Week News", site: "https://www.geoweeknews.com", feed: "https://www.geoweeknews.com/feed/", lang: en, topics: [software], trust: 7, keywords: ["architect", "bim", "building", "digital twin", "city", "urban", "scan", "heritage", "aec"]}
+  - {id: chaos, title: "Chaos (V-Ray, Enscape, Veras)", site: "https://blog.chaos.com", feed: "https://blog.chaos.com/rss.xml", lang: en, topics: [software], trust: 6, vendor: true}
+  - {id: autodesk, title: "Autodesk News", site: "https://adsknews.autodesk.com", feed: "https://adsknews.autodesk.com/en/feed/?post_type=news", lang: en, topics: [software], trust: 6, vendor: true}
+  - {id: unreal, title: "Unreal Engine", site: "https://www.unrealengine.com", feed: "https://www.unrealengine.com/en-US/rss", lang: en, topics: [software], trust: 6, vendor: true, keywords: ["twinmotion", "architect", "archviz", "visualization", "aec", "digital twin"]}
+  - {id: cadmaster, title: "CADmaster", site: "https://www.cadmaster.ru", feed: "https://www.cadmaster.ru/tools/rss.xml", lang: ru, topics: [software], trust: 6, vendor: true, keywords: ["тим", "bim", "архитект", "renga", "nanocad", "model studio", "revit", "проектир"]}
+  - {id: isicad, title: "isicad", site: "https://isicad.ru", feed: "https://isicad.ru/ru/rss/", lang: ru, topics: [software], trust: 7, keywords: ["тим", "bim", "архитект", "renga", "nanocad", "строит", "ifc", "проектир"]}
+
+  # ── Без ленты: нужен разбор страницы (list_url) — пока выключены ───────
+  - {id: prorus, title: "Проект Россия", site: "https://prorus.ru", list_url: "https://prorus.ru", lang: ru, topics: [architecture], trust: 7, enabled: false, note: "ленты нет"}
+  - {id: archi-ru, title: "Архи.ру", site: "https://archi.ru", feed: "https://archi.ru/rss", lang: ru, topics: [architecture], trust: 8, enabled: false, note: "с машины исследования 403; проверить с сервера"}
+  - {id: renga, title: "Renga", site: "https://rengabim.com", list_url: "https://rengabim.com/news/", lang: ru, topics: [software], trust: 7, enabled: false, vendor: true, note: "ленты нет"}
+  - {id: nanocad, title: "nanoCAD", site: "https://www.nanocad.ru", list_url: "https://www.nanocad.ru/about/news/", lang: ru, topics: [software], trust: 7, enabled: false, vendor: true, note: "ленты нет"}

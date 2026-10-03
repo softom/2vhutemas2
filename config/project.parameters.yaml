@@ -150,3 +150,19 @@ parameters:
   news.llm.daily_token_limit:
     value: null
     status: unresolved
+  # Ранжирование робота новостей (news-robot/robot/pipeline.py, RANK_DEFAULTS).
+  news.rank.trust_weight:
+    value: 2
+    status: proposed
+  news.rank.per_extra_source:
+    value: 4
+    status: proposed
+  news.rank.students_competition:
+    value: 10
+    status: proposed
+  news.rank.stale_after_days:
+    value: 2
+    status: proposed
+  news.rank.stale_penalty:
+    value: 3
+    status: proposed

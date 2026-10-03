@@ -20,3 +20,7 @@ web/dist-ssr/
 
 # TypeScript build cache
 *.tsbuildinfo
+
+# Робот новостей: состояние и прогоны — рабочие файлы, не код.
+news-robot/.state/
+news-robot/out/
