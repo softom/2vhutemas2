@@ -14,6 +14,7 @@ import { Lectures } from "./pages/Lectures";
 
 const MediaLibrary = lazy(() => import("./pages/MediaLibrary").then((m) => ({ default: m.MediaLibrary })));
 const Parameters = lazy(() => import("./pages/Parameters").then((m) => ({ default: m.Parameters })));
+const NewsRobot = lazy(() => import("./pages/NewsRobot").then((m) => ({ default: m.NewsRobot })));
 import { Login } from "./pages/Login";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { Splash } from "./ui/Splash";
@@ -219,6 +220,7 @@ export function App() {
           <Route path="/lectures" element={<Lectures canCreate={can("create_delete")} />} />
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
+          <Route path="/robot" element={!viewer ? <p className="notice">Проверяем права…</p> : <NewsRobot allowed={can("su")} />} />
           <Route path="/about" element={
             <Catalog
               canCreate={can("create_delete")}

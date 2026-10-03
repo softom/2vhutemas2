@@ -13,13 +13,14 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 import yaml
 
-from . import checks
+from . import checks, discover, lists
 from .article import fetch_article
-from .feeds import Item, NotAFeed, parse, passes_filters
+from .feeds import Item, NotAFeed, item_id, parse, passes_filters
 from .fetch import FetchError, Fetcher
 from .llm import LLM, LLMError, NoLLM, prompt
 from .state import State
@@ -63,11 +64,20 @@ def load_config() -> dict:
     return {k: v.get("value") for k, v in data["parameters"].items() if k.startswith("news.")}
 
 
-def load_sources(only: list[str] | None) -> list[dict]:
+def all_sources(state: State | None = None) -> list[dict]:
+    """Список из sources.yaml и источники, включённые редактором из кандидатов."""
     data = yaml.safe_load((ROOT / "sources.yaml").read_text(encoding="utf-8"))["sources"]
+    if state is not None:
+        ids = {s["id"] for s in data}
+        data += [s for s in state.added_sources() if s["id"] not in ids]
+    return data
+
+
+def load_sources(only: list[str] | None, state: State | None = None) -> list[dict]:
+    data = all_sources(state)
     if only:
         return [s for s in data if s["id"] in only]
-    return [s for s in data if s.get("enabled", True) and s.get("feed")]
+    return [s for s in data if s.get("enabled", True) and (s.get("feed") or s.get("list_url"))]
 
 
 @dataclass
@@ -80,6 +90,7 @@ class Run:
     filtered_out: int = 0
     already_seen: int = 0
     candidates: list[dict] = field(default_factory=list)
+    link_domains: list[dict] = field(default_factory=list)
     news: list[dict] = field(default_factory=list)
     llm_note: str | None = None
 
@@ -91,8 +102,11 @@ def crawl(run: Run, sources: list[dict], fetcher: Fetcher, state: State, ignore_
     """remember=False — не запоминать etag: без отбора материалы иначе пропали бы при следующем 304."""
     for src in sources:
         f = state.feed(src["id"])
-        rec = {"id": src["id"], "title": src["title"], "feed": src["feed"], "status": "ok",
-               "items": 0, "new": 0, "newest": None}
+        rec = {"id": src["id"], "title": src["title"], "feed": src.get("feed") or _first(src["list_url"]),
+               "status": "ok", "items": 0, "new": 0, "newest": None}
+        if not src.get("feed"):
+            _crawl_list(run, src, rec, fetcher, state, ignore_seen)
+            continue
         try:
             r = fetcher.get(src["feed"], etag=None if ignore_seen else f.get("etag"),
                             modified=None if ignore_seen else f.get("modified"))
@@ -139,6 +153,34 @@ def crawl(run: Run, sources: list[dict], fetcher: Fetcher, state: State, ignore_
     for it in run.items:
         unique.setdefault(it.id, it)
     run.items = list(unique.values())
+
+
+def _first(value):
+    return value[0] if isinstance(value, list) else value
+
+
+def _crawl_list(run: Run, src: dict, rec: dict, fetcher: Fetcher, state: State, ignore_seen: bool) -> None:
+    """Источник без ленты: страница-список и разметка самих статей (robot/lists.py)."""
+    seen = (lambda _id: False) if ignore_seen else state.seen
+    try:
+        items, old, count = lists.read(src, fetcher, seen, run.since, limit=src.get("max_pages", 15))
+    except FetchError as e:
+        fails = state.fail(src["id"], e.reason)
+        rec.update(status=f"ошибка: {e.reason}", fail_count=fails)
+        log(run, "warn", "crawl", "источник не прочитан", source=src["id"], error=e.reason, fails=fails)
+        run.feeds.append(rec)
+        return
+    # Старые статьи помечаются сразу: иначе каждый прогон заново открывал бы их страницы.
+    for url in old:
+        state.mark(item_id(url), url, src["id"])
+    kept = [it for it in items if passes_filters(src, it)]
+    run.filtered_out += len(items) - len(kept)
+    run.items.extend(kept)
+    newest = max((i.published for i in items if i.published), default=None)
+    rec.update(status="список", items=count["links"], new=len(kept), newest=newest)
+    state.ok(src["id"], None, None, newest)
+    run.feeds.append(rec)
+    log(run, "info", "crawl", "список прочитан", source=src["id"], new=len(kept), old=len(old), **count)
 
 
 # ── 2. Отбор ─────────────────────────────────────────────────────────────────
@@ -220,12 +262,14 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
             "заголовок": it.title, "автор": it.author, "откуда текст": art["text_origin"],
             "производитель о своём продукте": bool(src.get("vendor"))}
     article = (json.dumps(meta, ensure_ascii=False) + "\n\nТекст статьи:\n" + art["text"]
-               + "\n\nФотографии:\n" + json.dumps(art["images"], ensure_ascii=False, indent=1))
+               + "\n\nФотографии:\n" + json.dumps(art["images"], ensure_ascii=False, indent=1)
+               + "\n\nСсылки из статьи:\n" + json.dumps(art["links"], ensure_ascii=False, indent=1))
     story = {"candidate": cand, "source": meta, "warnings": list(art["warnings"])}
     facts = llm.chat_json("facts", prompt("facts", article=article), "Выпиши факты.", max_tokens=3000)
     if src.get("vendor"):
         facts["vendor_claims"] = True
     story["facts"] = facts
+    story["raw_links"] = art["links"]
     write_sys = prompt("write", source_title=src["title"], source_url=it.url, source_date=meta["дата"],
                        facts=json.dumps(facts, ensure_ascii=False, indent=1))
     news = llm.chat_json("write", write_sys, "Напиши новость.", max_tokens=2500)
@@ -244,6 +288,34 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
     return story
 
 
+# ── Внешние ссылки → кандидаты в источники ───────────────────────────────────
+
+def link_domains(news: list[dict], sources: dict[str, dict]) -> list[dict]:
+    """Домены, на которые ссылаются статьи: первоисточники и другие издания.
+
+    Издание, которого нет в sources.yaml и на которое ссылаются как на
+    первоисточник или соседнюю новость, — кандидат в список источников.
+    """
+    known = {urlsplit(s.get("site") or "").netloc.removeprefix("www.") for s in sources.values()}
+    stats: dict[str, dict] = {}
+    for st in news:
+        for link in (st.get("facts") or {}).get("links") or []:
+            kind = link.get("kind")
+            if kind not in ("primary", "news_portal", "research"):
+                continue
+            domain = urlsplit(link.get("url", "")).netloc.removeprefix("www.")
+            if not domain:
+                continue
+            d = stats.setdefault(domain, {"domain": domain, "count": 0, "kinds": {}, "examples": [],
+                                          "known": domain in known})
+            d["count"] += 1
+            d["kinds"][kind] = d["kinds"].get(kind, 0) + 1
+            if len(d["examples"]) < 3:
+                d["examples"].append({"url": link["url"], "about": link.get("about"),
+                                      "story": st["candidate"]["story_key"]})
+    return sorted(stats.values(), key=lambda d: (d["known"], -d["count"]))
+
+
 # ── Прогон ───────────────────────────────────────────────────────────────────
 
 def run(args) -> Run:
@@ -254,16 +326,23 @@ def run(args) -> Run:
     out = Path(args.out) / run_id
     out.mkdir(parents=True, exist_ok=True)
     r = Run(id=run_id, dir=out, since=since)
-    src_list = load_sources(args.sources)
-    sources = {s["id"]: s for s in yaml.safe_load((ROOT / "sources.yaml").read_text(encoding="utf-8"))["sources"]}
     state = State(ROOT / ".state" / "state.json")
+    src_list = load_sources(args.sources, state)
+    sources = {s["id"]: s for s in all_sources(state)}
     fetcher = Fetcher(delay=args.delay)
     llm = LLM(cfg.get("news.llm.base_url") or "https://api.polza.ai/api/v1",
               args.model or os.environ.get("NEWS_LLM_MODEL") or cfg.get("news.llm.model"),
               cfg.get("news.llm.api_key_env") or "POLZA_API_KEY", out / "llm",
               token_limit=args.token_limit)
     log(r, "info", "run", "старт", since=since.isoformat(), sources=len(src_list), llm=llm.live)
+    status = "ok"
     try:
+        applied = discover.apply_inbox(state, ROOT / "inbox" / "inbox.jsonl",
+                                       lambda lvl, st, msg, **kw: log(r, lvl, st, msg, **kw))
+        if applied:
+            log(r, "info", "inbox", "решения со страницы применены", count=applied)
+            src_list = load_sources(args.sources, state)
+            sources = {s["id"]: s for s in all_sources(state)}
         crawl(r, src_list, fetcher, state, args.ignore_seen, remember=llm.live and not args.no_llm)
         _dump(out / "items.json", [i.to_dict() for i in r.items])
         log(r, "info", "crawl", "сбор закончен", new=len(r.items), filtered=r.filtered_out, seen=r.already_seen)
@@ -296,16 +375,42 @@ def run(args) -> Run:
             except LLMError as e:
                 log(r, "error", "write", "новость не написана", story=cand["story_key"], error=str(e))
         _dump(out / "news.json", r.news)
+        r.link_domains = link_domains(r.news, sources)
+        _dump(out / "link_domains.json", r.link_domains)
+        added = state.add_link_candidates(r.link_domains)
+        checked = discover.refresh(state, fetcher, llm, limit=args.probe_limit,
+                                   log=lambda lvl, st, msg, **kw: log(r, lvl, st, msg, **kw))
+        log(r, "info", "discover", "кандидаты в источники", new=added, checked=checked)
         r.llm_note = (f"LLM: {llm.model}, вызовов {llm.used['calls']}, "
                       f"токенов {llm.used['prompt']} + {llm.used['completion']}")
         return r
     except Exception as e:
+        status = f"прерван: {type(e).__name__}: {e}"
         log(r, "error", "run", "прогон прерван", error=f"{type(e).__name__}: {e}")
         notify(r, f"Прогон прерван: {type(e).__name__}: {e}")
         raise
     finally:
         state.save()
         fetcher.close()
+        _dump(out / "summary.json", summary(r, status, state))
+
+
+def summary(r: Run, status: str, state: State) -> dict:
+    """Итог прогона для страницы робота (SU): то же, что report.html, но данными."""
+    return {
+        "id": r.id, "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "since": r.since.isoformat(), "status": status, "llm_note": r.llm_note,
+        "counts": {"feeds": len(r.feeds), "feeds_failed": sum(1 for f in r.feeds if f["status"].startswith("ошибка")),
+                   "items": len(r.items), "filtered": r.filtered_out, "seen": r.already_seen,
+                   "candidates": len(r.candidates), "news": len(r.news)},
+        "feeds": r.feeds,
+        "candidates": r.candidates[:60],
+        "news": [{"candidate": st["candidate"], "news": st.get("news"), "issues": st.get("issues", []),
+                  "warnings": st.get("warnings", []), "verify": st.get("verify")} for st in r.news],
+        "link_domains": r.link_domains,
+        "source_candidates": sorted(state.candidates().values(),
+                                    key=lambda c: (c.get("status") != "ждёт решения", -c.get("count", 0))),
+    }
 
 
 def _dump(path: Path, data) -> None:

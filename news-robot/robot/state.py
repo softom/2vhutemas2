@@ -52,3 +52,48 @@ class State:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.data, ensure_ascii=False, indent=1), encoding="utf-8")
         tmp.replace(self.path)
+
+    # ── Кандидаты в источники (robot/discover.py) ─────────────────────────
+
+    def candidates(self) -> dict:
+        return self.data.setdefault("candidates", {})
+
+    def add_link_candidates(self, domains: list[dict]) -> int:
+        """Домены из ссылок статей: новые — в кандидаты, известные — счёт растёт."""
+        added = 0
+        for d in domains:
+            if d.get("known"):
+                continue
+            c = self.candidates().get(d["domain"])
+            if c is None:
+                c = self.candidates()[d["domain"]] = {
+                    "domain": d["domain"], "count": 0, "kinds": {}, "examples": [],
+                    "first_seen": now(), "status": "новый", "proposed_by": "robot"}
+                added += 1
+            c["count"] += d["count"]
+            for k, v in d["kinds"].items():
+                c["kinds"][k] = c["kinds"].get(k, 0) + v
+            c["examples"] = (c["examples"] + d["examples"])[-6:]
+            c["last_seen"] = now()
+        return added
+
+    def propose(self, url: str, domain: str, note: str | None = None) -> dict:
+        """Редактор предлагает сайт сам: кандидат сразу идёт на пробу."""
+        c = self.candidates().setdefault(domain, {
+            "domain": domain, "count": 0, "kinds": {}, "examples": [], "first_seen": now()})
+        c.update(url=url, proposed_by="editor", status="новый", note=note, probe=None, assessment=None)
+        return c
+
+    def candidates_pending(self) -> list[dict]:
+        return [c for c in self.candidates().values() if c.get("status") == "новый"]
+
+    def decide(self, domain: str, decision: str, source: dict | None = None, note: str | None = None) -> dict:
+        c = self.candidates()[domain]
+        c.update(status=decision, decided_at=now(), decision_note=note)
+        if source is not None:
+            added = self.data.setdefault("added_sources", [])
+            added[:] = [s for s in added if s["id"] != source["id"]] + [source]
+        return c
+
+    def added_sources(self) -> list[dict]:
+        return list(self.data.get("added_sources", []))

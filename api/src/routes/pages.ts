@@ -876,8 +876,11 @@ function appOnly(c: Context<AppEnv>, title: string) {
   });
 }
 
-for (const path of ["/login", "/media", "/media/*", "/parameters"]) {
-  const title = path === "/login" ? "Вход" : path === "/parameters" ? "Параметры" : "Медиатека";
+const APP_ONLY_TITLES: Record<string, string> = {
+  "/login": "Вход", "/parameters": "Параметры", "/robot": "Робот новостей",
+};
+for (const path of ["/login", "/media", "/media/*", "/parameters", "/robot"]) {
+  const title = APP_ONLY_TITLES[path] ?? "Медиатека";
   pages.get(path, (c) => appOnly(c, title));
 }
 

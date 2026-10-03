@@ -71,6 +71,10 @@ def build(r: Run) -> str:
             parts.append(f"<p><b>Что посмотреть студенту:</b> {e(n.get('student_note'))}</p>")
             src = " · ".join(f"<a href='{e(s['url'])}'>{e(s['source'])}, {e(s['date'])}</a>" for s in c["sources"])
             parts.append(f"<p class=m>Первоисточник: {src}</p>")
+            extra = [x for x in (n.get("sources") or []) if x.get("url")]
+            if extra:
+                parts.append("<p class=m>Ещё источники: " + " · ".join(
+                    f"<a href='{e(x['url'])}'>{e(x.get('title') or x['url'])}</a>" for x in extra) + "</p>")
             if n.get("mentions"):
                 parts.append("<p class=m>Упоминания: " + " · ".join(e(m.get("name")) for m in n["mentions"]) + "</p>")
             v = st.get("verify") or {}
@@ -81,6 +85,18 @@ def build(r: Run) -> str:
                 parts.append(f"<p class=warn>{e(x)}</p>")
             parts.append(f"<details><summary>Факты</summary><pre>{e(_facts(st.get('facts')))}</pre></details>")
             parts.append("</article>")
+
+    if r.link_domains:
+        parts.append("<h2>Внешние ссылки статей</h2><p class=m>Первоисточники и другие издания, "
+                     "на которые ссылаются статьи. Новый домен с несколькими ссылками — кандидат в источники.</p>"
+                     "<div class=scroll><table><tr><th>Домен</th><th>Ссылок</th><th>Как</th><th>Примеры</th></tr>")
+        names = {"primary": "первоисточник", "news_portal": "издание", "research": "исследование"}
+        for d in r.link_domains:
+            kinds = ", ".join(f"{names.get(k, k)} {v}" for k, v in d["kinds"].items())
+            ex = "<br>".join(f"<a href='{e(x['url'])}'>{e(x.get('about') or x['url'])}</a>" for x in d["examples"])
+            mark = " <span class=m>(уже в списке)</span>" if d["known"] else " <b>новый</b>"
+            parts.append(f"<tr><td>{e(d['domain'])}{mark}</td><td>{d['count']}</td><td>{e(kinds)}</td><td>{ex}</td></tr>")
+        parts.append("</table></div>")
 
     if r.candidates:
         parts.append("<h2>Отбор на дату — по убыванию оценки</h2><div class=scroll><table>"

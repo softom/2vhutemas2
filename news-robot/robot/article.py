@@ -22,6 +22,39 @@ CREDIT = re.compile(
     r"credit\s*:|rendering\s*(by|:)|фото(граф(ия|ии|ии:))?\s*[:—-]|©)", re.I)
 GENERAL_CREDIT = re.compile(r"(photography|images?|photos?)\s+(is|are)\s+(by|courtesy of)\s+([^.]+)", re.I)
 MIN_TEXT = 600
+NOT_SOURCES = re.compile(
+    r"(facebook|twitter|x\.com|linkedin|pinterest|instagram|whatsapp|telegram\.me|t\.me/share|vk\.com/share|"
+    r"reddit|tumblr|mailto:|doubleclick|googleadservices|amazon\.[a-z.]+/|bit\.ly|addtoany|sharethis|"
+    r"gravatar|wp\.me|feedburner|youtube\.com/(channel|user|@)|apple\.com/app|play\.google)", re.I)
+
+
+def outbound_links(html: str, base: str) -> list[dict]:
+    """Внешние ссылки из тела статьи: адрес, текст ссылки и фраза вокруг.
+
+    Тело — тот элемент, где больше всего абзацев (article, .entry-content, main…):
+    меню, подвал и кнопки «поделиться» в него не входят.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    candidates = soup.select("article, .entry-content, .post-content, .article-body, .article__body, main") or [soup]
+    body = max(candidates, key=lambda el: len(el.find_all("p")))
+    host = urlsplit(base).netloc.removeprefix("www.")
+    found: dict[str, dict] = {}
+    for a in body.find_all("a", href=True):
+        url = urljoin(base, a["href"])
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https") or NOT_SOURCES.search(url):
+            continue
+        domain = parts.netloc.removeprefix("www.")
+        # Свой сайт и его поддомены (register.aecmag.com) — не внешняя ссылка.
+        if domain == host or domain.endswith("." + ".".join(host.split(".")[-2:])):
+            continue
+        context = a.find_parent(["p", "li", "figcaption"])
+        found.setdefault(url, {
+            "url": url, "domain": parts.netloc.removeprefix("www."),
+            "text": a.get_text(" ", strip=True)[:120],
+            "context": (context.get_text(" ", strip=True) if context else "")[:240],
+        })
+    return list(found.values())[:40]
 
 
 def _images_from_html(html: str, base: str) -> list[dict]:
@@ -116,7 +149,8 @@ def fetch_article(fetcher: Fetcher, item: Item, full_text_in_feed: bool) -> dict
         if not im["credit"] and general:
             im["credit"] = general
             im["credit_note"] = "общая строка статьи"
-    return {"text": text[:20000], "text_origin": origin, "images": images, "warnings": warnings}
+    links = outbound_links(html, item.url) if html else []
+    return {"text": text[:20000], "text_origin": origin, "images": images, "links": links, "warnings": warnings}
 
 
 def _charset(headers: dict[str, str]) -> str:

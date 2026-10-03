@@ -11,6 +11,7 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import feedparser
@@ -64,6 +65,17 @@ def _published(entry) -> str | None:
         value = entry.get(key)
         if value:
             return datetime(*value[:6], tzinfo=timezone.utc).isoformat()
+    # Нестандартный пояс «GMT+4» (archi.ru) feedparser не разбирает.
+    for key in ("published", "updated"):
+        raw = entry.get(key)
+        if not raw:
+            continue
+        fixed = re.sub(r"GMT([+-])(\d{1,2})(?::?(\d{2}))?$",
+                       lambda m: f"{m.group(1)}{int(m.group(2)):02d}{m.group(3) or '00'}", raw.strip())
+        try:
+            return parsedate_to_datetime(fixed).astimezone(timezone.utc).isoformat()
+        except (TypeError, ValueError):
+            continue
     return None
 
 

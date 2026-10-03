@@ -22,4 +22,4 @@ COPY deno.json /app/deno.json
 COPY src /app/src
 RUN deno cache src/main.ts || true
 
-CMD ["run", "--allow-net", "--allow-env", "--allow-read", "--allow-write=/data,/tmp", "--allow-run=/usr/local/bin/magickw", "src/main.ts"]
+CMD ["run", "--allow-net", "--allow-env", "--allow-read", "--allow-write=/data,/tmp,/news-robot/inbox", "--allow-run=/usr/local/bin/magickw", "src/main.ts"]

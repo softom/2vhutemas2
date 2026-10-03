@@ -15,11 +15,20 @@
 
 Если статья объявляет конкурс — заполни competition, иначе null.
 
+Ссылки: в статье есть внешние ссылки (список «Ссылки из статьи»: адрес, текст ссылки, фраза вокруг). Для каждой, что относится к сути новости, определи kind:
+- primary — первоисточник самой новости: пресс-релиз, официальное объявление, исходная публикация, на которую ссылается статья («по данным Reuters»);
+- news_portal — другое издание о той же или близкой новости;
+- official — сайт героя новости: бюро, компании, программы, конкурса, организатора, музея;
+- research — научная статья, препринт, отчёт;
+- other — прочее по теме.
+Рекламу, подписки, соседние новости сайта и ссылки не по теме не включай. about — одной фразой по-русски, что по ссылке.
+
 Ответь только JSON:
 {"facts": [{"text": "…", "kind": "who|what|where|when|number|material|idea|other", "uncertain": false}],
  "names": [{"name": "…", "kind": "person"}],
  "images": [{"url": "…", "shows": "…", "credit": null, "use": true}],
  "competition": {"name": "…", "organizers": ["…"], "url": "…", "registration_url": "…", "registration_until": "ГГГГ-ММ-ДД", "submission_deadline": "ГГГГ-ММ-ДД", "results_date": "ГГГГ-ММ-ДД", "prize_fund": "…", "eligibility": ["students|young|professionals|all"], "entry_fee": "…", "format": "…"},
+ "links": [{"url": "…", "kind": "primary|news_portal|official|research|other", "about": "…"}],
  "discrepancies": ["…"],
  "vendor_claims": false,
  "quote": {"text": "до 15 слов, по-русски", "who": "…"}}

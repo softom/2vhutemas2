@@ -24,3 +24,4 @@ web/dist-ssr/
 # Робот новостей: состояние и прогоны — рабочие файлы, не код.
 news-robot/.state/
 news-robot/out/
+news-robot/inbox/

@@ -1,24 +1,96 @@
-"""Робот новостей Вх² — запуск прогона.
+"""Робот новостей Вх² — запуск прогона и решения по источникам.
 
     python news-robot/run.py --no-llm                 # только сбор: какие ленты живы, что нового
     python news-robot/run.py                          # вся цепочка; ключ — в POLZA_API_KEY
     python news-robot/run.py --since 2026-09-28 --ignore-seen --top 5
 
+Кандидаты в источники (их находит робот по ссылкам статей или предлагает редактор):
+
+    python news-robot/run.py --candidates             # список на подтверждение
+    python news-robot/run.py --propose https://example.com --note "увидел в новости"
+    python news-robot/run.py --include example.com    # включить в обход
+    python news-robot/run.py --once example.com       # полезен как первоисточник, обходить не нужно
+    python news-robot/run.py --reject example.com
+
 Ключ LLM берётся только из окружения (имя — news.llm.api_key_env), модель —
 из --model, NEWS_LLM_MODEL или news.llm.model. Без ключа цепочка
 останавливается после сбора и сохраняет готовые запросы отбора в out/<прогон>/llm/.
-Описание — WIKI/Новости — робот: цепочка и промпты.md.
+Описание — WIKI/Новости — робот, цепочка и промпты.md.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from robot import pipeline, report  # noqa: E402
+from robot import discover, pipeline, report  # noqa: E402
+from robot.fetch import Fetcher  # noqa: E402
+from robot.llm import LLM  # noqa: E402
+from robot.state import State  # noqa: E402
+
+ROOT = Path(__file__).resolve().parent
+
+
+def candidates_command(args) -> int:
+    state = State(ROOT / ".state" / "state.json")
+    try:
+        applied = discover.apply_inbox(state, ROOT / "inbox" / "inbox.jsonl", lambda *a, **k: print(*a, k))
+        if applied:
+            print(f"Со страницы применено решений: {applied}")
+        if args.propose:
+            cfg = pipeline.load_config()
+            llm = LLM(cfg.get("news.llm.base_url") or "https://api.polza.ai/api/v1",
+                      args.model or os.environ.get("NEWS_LLM_MODEL") or cfg.get("news.llm.model"),
+                      cfg.get("news.llm.api_key_env") or "POLZA_API_KEY", ROOT / "out" / "proposals" / "llm",
+                      token_limit=20_000)
+            fetcher = Fetcher(delay=args.delay)
+            c = state.propose(args.propose, discover.domain_of(args.propose), args.note)
+            discover.refresh(state, fetcher, llm, limit=1, log=lambda *a, **k: None)
+            fetcher.close()
+            print_candidate(c)
+            if not llm.live:
+                print("  оценки LLM нет: ключ или модель не заданы")
+        for decision, domain in (("включён", args.include), ("разово", args.once), ("отклонён", args.reject)):
+            if not domain:
+                continue
+            domain = discover.domain_of(domain)
+            if domain not in state.candidates():
+                print(f"Кандидата {domain} нет. Сначала --propose.")
+                return 1
+            source = discover.to_source(state.candidates()[domain]) if decision == "включён" else None
+            c = state.decide(domain, decision, source, args.note)
+            print(f"{domain}: {decision}" + (f" → источник {source['id']}" + ("" if source.get("feed") else
+                  " (ленты нет — выключен до шаблона адресов)") if source else ""))
+        if args.candidates:
+            items = sorted(state.candidates().values(), key=lambda c: (c.get("status") != "ждёт решения", -c.get("count", 0)))
+            if not items:
+                print("Кандидатов пока нет.")
+            for c in items:
+                print_candidate(c)
+    finally:
+        state.save()
+    return 0
+
+
+def print_candidate(c: dict) -> None:
+    p, a = c.get("probe") or {}, c.get("assessment") or {}
+    kinds = ", ".join(f"{k} {v}" for k, v in c.get("kinds", {}).items())
+    print(f"\n{c['domain']} — {c.get('status')}" + (f" · предложил редактор" if c.get("proposed_by") == "editor" else
+                                                      f" · ссылок {c.get('count', 0)} ({kinds})"))
+    if p:
+        print(f"  {p.get('title') or ''} · язык {p.get('lang') or '?'} · лента {p.get('feed') or 'нет'}"
+              f" · {p.get('per_week', 0)} в неделю" + (f" · {p['note']}" if p.get("note") else ""))
+        for t in p.get("samples", [])[:3]:
+            print(f"    — {t}")
+    if a:
+        print(f"  LLM: {a.get('recommend')} · {a.get('kind')} · темы {', '.join(a.get('topics') or [])}"
+              f" · доверие {a.get('trust')} — {a.get('reason')}")
+    for ex in c.get("examples", [])[:2]:
+        print(f"  ссылка: {ex.get('about') or ''} {ex.get('url')}")
 
 
 def main() -> int:
@@ -33,9 +105,20 @@ def main() -> int:
     ap.add_argument("--top", type=int, default=6, help="сколько лучших историй довести до текста")
     ap.add_argument("--threshold", type=int, default=50, help="минимальный интерес для текста")
     ap.add_argument("--token-limit", type=int, default=400_000, help="предел токенов на прогон")
+    ap.add_argument("--probe-limit", type=int, default=5, help="сколько новых кандидатов в источники проверять за прогон")
     ap.add_argument("--delay", type=float, default=2.0, help="пауза между запросами к одному сайту, с")
-    ap.add_argument("--out", default=str(Path(__file__).resolve().parent / "out"), help="папка прогонов")
+    ap.add_argument("--out", default=str(ROOT / "out"), help="папка прогонов")
+    g = ap.add_argument_group("кандидаты в источники")
+    g.add_argument("--candidates", action="store_true", help="показать кандидатов")
+    g.add_argument("--propose", metavar="URL", help="предложить сайт: проверить и оценить")
+    g.add_argument("--include", metavar="ДОМЕН", help="включить кандидата в обход")
+    g.add_argument("--once", metavar="ДОМЕН", help="полезен разово, в обход не включать")
+    g.add_argument("--reject", metavar="ДОМЕН", help="отклонить кандидата")
+    g.add_argument("--note", help="пояснение к предложению или решению")
     args = ap.parse_args()
+
+    if args.candidates or args.propose or args.include or args.once or args.reject:
+        return candidates_command(args)
 
     run = pipeline.run(args)
     path = run.dir / "report.html"
