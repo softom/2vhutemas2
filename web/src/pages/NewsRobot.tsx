@@ -189,10 +189,21 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
     topic: p.topic, kind: p.kind, reason: p.reason, competition: p.competition,
     sources: [{ source: p.source ?? "", url: p.url ?? "" }], partial: true,
   }));
-  const toStack = (c: RobotStory, title?: string) => act(() => api.robotQueue({
-    action: "add", story_key: c.story_key, run_id: run.id, title: title ?? c.title_ru, topic: c.topic, final: c.final,
-    url: c.sources[0]?.url,
-  }), "Новость поставлена в ближайший свободный слот.");
+  // Ответ — прямо в строке: сообщение вверху страницы из середины таблицы не видно.
+  const [rowNote, setRowNote] = useState<Record<string, string>>({});
+  const toStack = async (c: RobotStory, title?: string) => {
+    setRowNote((r) => ({ ...r, [c.story_key]: "ставим…" }));
+    try {
+      await api.robotQueue({
+        action: "add", story_key: c.story_key, run_id: run.id, title: title ?? c.title_ru, topic: c.topic, final: c.final,
+        url: c.sources[0]?.url,
+      });
+      setRowNote((r) => ({ ...r, [c.story_key]: "" }));
+      await act(async () => {});
+    } catch (e) {
+      setRowNote((r) => ({ ...r, [c.story_key]: (e as Error).message }));
+    }
+  };
   const judge = (story: string, verdict: "yes" | "no") =>
     act(() => api.robotInbox({ action: "judge", run_id: run.id, story_key: story, verdict }));
   const written = new Set(run.news.map((n) => n.candidate.story_key));
@@ -243,7 +254,8 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                     <button type="button" className={v === "no" ? undefined : "ghost"} onClick={() => judge(c.story_key, "no")}>Нет</button>
                   </>}</td>
                   <td>{!c.partial && (inStack.has(c.story_key) ? <span className="hint">в стеке</span>
-                    : <button type="button" className="ghost" onClick={() => toStack(c)}>В стек</button>)}</td>
+                    : <button type="button" className="ghost" onClick={() => toStack(c)}>В стек</button>)}
+                    {rowNote[c.story_key] && <div className="error">{rowNote[c.story_key]}</div>}</td>
                   <td><Publication storyKey={c.story_key} ov={ov} /></td>
                 </tr>
               );
@@ -325,6 +337,7 @@ function Stack({ ov, act }: { ov: RobotOverview; act: Act }) {
   const bySlot = Object.fromEntries(q.items.map((i) => [`${i.date} ${i.time}`, i]));
   const options = q.days.flatMap((d) => q.times.map((t) => `${d} ${t}`));
   const dayName = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "long" });
+  const shown = q.days.filter((d, i) => i < 7 || q.items.some((it) => it.date === d));
   const later = q.items.filter((i) => !q.days.includes(i.date));
   return (
     <>
@@ -333,7 +346,7 @@ function Stack({ ov, act }: { ov: RobotOverview; act: Act }) {
         здесь её можно перенести (занятый слот меняется местами) или снять. Выпускать по стеку будет планировщик — пока это план.
       </p>
       <div className="robot-days">
-        {q.days.map((d) => (
+        {shown.map((d) => (
           <div className="block" key={d}>
             <h3>{dayName(d)}</h3>
             {q.times.map((t) => {

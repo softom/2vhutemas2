@@ -221,7 +221,8 @@ function moscowNow(): Date {
 async function readQueue() {
   const stored = await readJson<{ items: QueueItem[] }>(QUEUE());
   const today = moscowNow();
-  const days = [0, 1, 2, 3].map((i) => new Date(today.getTime() + i * 86400000).toISOString().slice(0, 10));
+  // Две недели вперёд: три слота в день, четырёх дней хватило на один вечер отбора (2026-10-03).
+  const days = Array.from({ length: 15 }, (_, i) => new Date(today.getTime() + i * 86400000).toISOString().slice(0, 10));
   return { items: stored?.items ?? [], times: SLOTS, days };
 }
 
