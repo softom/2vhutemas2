@@ -102,10 +102,12 @@ def _images_from_html(html: str, base: str) -> list[dict]:
         src = img.get("data-src") or img.get("src")
         srcset = img.get("srcset") or img.get("data-srcset")
         if srcset:
-            # Самый крупный вариант из srcset.
-            best = max((p.strip().split(" ") for p in srcset.split(",") if p.strip()),
-                       key=lambda p: int(re.sub(r"\D", "", p[1]) or 0) if len(p) > 1 else 0)
-            src = best[0]
+            # Самый крупный вариант из srcset; пустой или битый srcset — берём src (Snøhetta, 2026-10-03).
+            variants = [p.strip().split() for p in srcset.split(",") if p.strip()]
+            variants = [v for v in variants if v]
+            if variants:
+                best = max(variants, key=lambda v: int(re.sub(r"\D", "", v[1]) or 0) if len(v) > 1 else 0)
+                src = best[0]
         if not src or src.startswith("data:"):
             continue
         cap_el = fig.find("figcaption")

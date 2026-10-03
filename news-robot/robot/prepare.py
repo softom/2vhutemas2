@@ -63,7 +63,13 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
             key = q["story_key"]
             path = pdir / f"{key}.json"
             rec = _read(path) or {"story_key": key, "attempts": 0}
-            if rec.get("status") == "готово" or (rec.get("status") == "ошибка" and rec.get("attempts", 0) >= MAX_ATTEMPTS):
+            if rec.get("status") == "готово":
+                continue
+            if rec.get("attempts", 0) >= MAX_ATTEMPTS and rec.get("status") != "готово":
+                # Три попытки не удались (в том числе прерванные на полпути) — очередь идёт дальше.
+                if rec.get("status") != "ошибка":
+                    rec.update(status="ошибка", error=rec.get("error") or "три попытки не удались")
+                    _write(path, rec)
                 continue
             run_dir = root / "out" / str(q.get("run_id") or "")
             cand, story = _run_story(run_dir, key)
@@ -97,10 +103,10 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
             holder.dir.mkdir(parents=True, exist_ok=True)
             try:
                 story = pipeline.write_story(holder, cand, items, sources, fetcher, llm)
-            except LLMError as e:
-                rec.update(status="ошибка", error=str(e)[:300])
+            except Exception as e:  # noqa: BLE001 — сбой одной новости не держит очередь
+                rec.update(status="ошибка", error=f"{type(e).__name__}: {e}"[:300])
                 _write(path, rec)
-                log("error", "prepare", "перевод не удался", story=key, error=str(e)[:200])
+                log("error", "prepare", "перевод не удался", story=key, error=f"{type(e).__name__}: {e}"[:200])
                 continue
             rec.update(status="готово", ready_at=now(), origin="перевод по стеку", story=story, run_id=q.get("run_id"))
             _write(path, rec)
