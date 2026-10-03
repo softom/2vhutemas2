@@ -384,6 +384,35 @@ export interface RobotSourceRow {
   fail_count: number;
   last_error?: string | null;
 }
+/** Раздел «Робот»: сводка, вид прогона, стек (Р-96). */
+export interface RobotQueueItem { story_key: string; run_id?: string; title?: string; topic?: string; final?: number; url?: string; date: string; time: string; by?: string }
+export interface RobotQueue { items: RobotQueueItem[]; times: string[]; days: string[] }
+export interface RobotOverview {
+  connected: boolean;
+  runs: { id: string; done: boolean }[];
+  sources: RobotSourceRow[];
+  candidates: RobotSourceCandidate[];
+  judged: Record<string, "yes" | "no">;
+  pending: { action: string; domain?: string; url?: string; story_key?: string; verdict?: string; decision?: string }[];
+  learned: RobotLearned;
+  queue: RobotQueue;
+}
+export interface RobotStory {
+  story_key: string; final: number; interest: number; title_ru: string; topic?: string; kind?: string;
+  competition?: boolean; reason?: string; sources: { source: string; url: string; date?: string }[];
+}
+export interface RobotRunView {
+  id: string; running: boolean; status: string; since?: string; llm_note: string | null;
+  last: { ts?: string; stage?: string; msg?: string };
+  stages: Record<string, [number, number]>;
+  items: number;
+  feeds: { id: string; title: string; status: string; items: number; new: number }[];
+  candidates: RobotStory[];
+  partial: { id?: string; story_key?: string; interest?: number; title_ru?: string; title?: string; topic?: string; kind?: string; reason?: string; source?: string; url?: string; competition?: boolean }[];
+  news: { candidate: { story_key: string; final: number }; news?: { title?: string; lead?: string; paragraphs?: string[]; student_note?: string; images?: { url: string; caption?: string }[] } | null; issues: string[]; warnings: string[] }[];
+  link_domains: RobotRun["link_domains"];
+  errors: RobotLogLine[];
+}
 /** Чему робот научился по решениям редактора (Р-93). */
 export interface RobotLearned {
   profile_text?: string;
@@ -473,6 +502,10 @@ export const api = {
       `/news-robot/runs/${encodeURIComponent(id)}/log?from=${from}`,
     ),
   robotSources: () => request<{ items: RobotSourceRow[]; connected: boolean }>("/news-robot/sources"),
+  robotOverview: () => request<RobotOverview>("/news-robot/overview"),
+  robotRunView: (id: string) => request<RobotRunView>(`/news-robot/runs/${encodeURIComponent(id)}/view`),
+  robotQueue: (body: { action: "add" | "move" | "remove"; story_key: string; [key: string]: unknown }) =>
+    request<RobotQueue>("/news-robot/queue", { method: "POST", body: JSON.stringify(body) }),
   robotCandidates: () =>
     request<{ items: RobotSourceCandidate[]; pending: { action: string; domain?: string; url?: string; decision?: string; story_key?: string; verdict?: string }[]; learned: RobotLearned | null }>("/news-robot/candidates"),
   robotInbox: (body:

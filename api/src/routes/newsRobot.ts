@@ -164,3 +164,202 @@ newsRobot.post("/inbox", async (c) => {
   await Deno.writeTextFile(`${ROOT}/inbox/inbox.jsonl`, JSON.stringify(msg) + "\n", { append: true, create: true });
   return c.json({ queued: msg }, 202);
 });
+
+// ── Раздел «Робот» сайта: сводка, вид прогона, стек на публикацию (Р-96) ─
+
+type Row = Record<string, unknown>;
+
+async function logLines(id: string): Promise<Row[]> {
+  try {
+    const text = await Deno.readTextFile(`${ROOT}/out/${id}/log.jsonl`);
+    return text.split("\n").filter((l) => l.trim()).flatMap((l) => {
+      try {
+        return [JSON.parse(l) as Row];
+      } catch {
+        return [];
+      }
+    });
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) return [];
+    throw e;
+  }
+}
+
+async function runIds(): Promise<string[]> {
+  const ids: string[] = [];
+  try {
+    for await (const entry of Deno.readDir(`${ROOT}/out`)) {
+      if (entry.isDirectory && RUN_ID.test(entry.name)) ids.push(entry.name);
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  return ids.sort().reverse();
+}
+
+/** Слоты выхода — news.release.slots проекта; время московское. */
+const SLOTS = (Deno.env.get("NEWS_RELEASE_SLOTS") ?? "09:30,13:00,18:00").split(",").map((s) => s.trim());
+const QUEUE = () => `${ROOT}/inbox/queue.json`;
+
+interface QueueItem {
+  story_key: string;
+  run_id?: string;
+  title?: string;
+  topic?: string;
+  final?: number;
+  url?: string;
+  date: string;
+  time: string;
+  added_at: string;
+  by?: string;
+}
+
+function moscowNow(): Date {
+  return new Date(Date.now() + 3 * 3600 * 1000);
+}
+
+async function readQueue() {
+  const stored = await readJson<{ items: QueueItem[] }>(QUEUE());
+  const today = moscowNow();
+  const days = [0, 1, 2, 3].map((i) => new Date(today.getTime() + i * 86400000).toISOString().slice(0, 10));
+  return { items: stored?.items ?? [], times: SLOTS, days };
+}
+
+/** Сводка раздела: прогоны, сайты, рекомендации, решения, выученное, стек. */
+newsRobot.get("/overview", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  const ids = await runIds();
+  const runs = [];
+  for (const id of ids.slice(0, 30)) {
+    let done = true;
+    try {
+      await Deno.stat(`${ROOT}/out/${id}/summary.json`);
+    } catch {
+      done = false;
+    }
+    runs.push({ id, done });
+  }
+  const state = await readJson<
+    { candidates?: Record<string, Row>; judgments?: Record<string, Row>; learned?: Row }
+  >(`${ROOT}/state/state.json`);
+  const pending: Row[] = [];
+  try {
+    for (const line of (await Deno.readTextFile(`${ROOT}/inbox/inbox.jsonl`)).split("\n")) {
+      if (line.trim()) pending.push(JSON.parse(line));
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  const open = (s: unknown) => s === "новый" || s === "ждёт решения";
+  const candidates = Object.values(state?.candidates ?? {}).sort((a, b) =>
+    Number(!open(a.status)) - Number(!open(b.status)) || Number(b.count ?? 0) - Number(a.count ?? 0)
+  );
+  const learned = { ...(state?.learned ?? {}) };
+  delete learned.history;
+  return c.json({
+    connected: state !== null || runs.length > 0,
+    runs,
+    sources: (await readJson<Row[]>(`${ROOT}/state/sources.json`)) ?? [],
+    candidates,
+    judged: Object.fromEntries(Object.entries(state?.judgments ?? {}).map(([k, v]) => [k, v.verdict])),
+    pending,
+    learned,
+    queue: await readQueue(),
+  });
+});
+
+/** Вид прогона: итог, а пока его нет — собранное из журнала и промежуточных файлов робота. */
+newsRobot.get("/runs/:id/view", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  const id = c.req.param("id");
+  if (!RUN_ID.test(id)) throw new ApiError("validation_failed", "Неверный номер прогона");
+  const dir = `${ROOT}/out/${id}`;
+  const summary = await readJson<Row & { feeds: Row[]; candidates: Row[]; news: Row[] }>(`${dir}/summary.json`);
+  const log = await logLines(id);
+  const progress = await readJson<{ stages?: Record<string, [number, number]> }>(`${dir}/progress.json`);
+  const sources = (await readJson<Row[]>(`${ROOT}/state/sources.json`)) ?? [];
+  const titles = Object.fromEntries(sources.map((s) => [s.id, s.title]));
+  const start = log.find((r) => r.msg === "старт") ?? {};
+  const feeds = summary?.feeds ?? log.filter((r) => r.stage === "crawl" && r.source).map((r) => ({
+    id: r.source,
+    title: titles[String(r.source)] ?? r.source,
+    status: r.error ? `ошибка: ${r.error}` : "ok",
+    items: r.items ?? 0,
+    new: r.new ?? 0,
+  }));
+  const candidates = summary?.candidates ?? (await readJson<Row[]>(`${dir}/candidates.json`)) ?? [];
+  const partial = candidates.length ? [] : (await readJson<Row[]>(`${dir}/triage_partial.json`)) ?? [];
+  const news = summary?.news ?? ((await readJson<Row[]>(`${dir}/news.json`)) ?? []).map((s) => ({
+    candidate: s.candidate,
+    news: s.news,
+    issues: s.issues ?? [],
+    warnings: s.warnings ?? [],
+  }));
+  const items = ((await readJson<unknown[]>(`${dir}/items.json`)) ?? []).length;
+  const batches = log.filter((r) => r.stage === "triage" && String(r.msg).startsWith("пачка"));
+  const written = log.filter((r) => r.stage === "write").length;
+  const stages = progress?.stages ?? {
+    crawl: [feeds.length, Number(start.sources ?? feeds.length)],
+    triage: [batches.reduce((n, r) => n + Number(r.size ?? 0), 0), items],
+    write: [written, Math.max(written, news.length)],
+  };
+  const last = log[log.length - 1] ?? {};
+  return c.json({
+    id,
+    running: summary === null,
+    status: summary?.status ?? "идёт",
+    since: summary?.since ?? start.since,
+    llm_note: summary?.llm_note ?? null,
+    last: { ts: last.ts, stage: last.stage, msg: last.msg },
+    stages,
+    items,
+    feeds,
+    candidates,
+    partial,
+    news,
+    link_domains: summary?.link_domains ?? [],
+    errors: log.filter((r) => r.level === "warn" || r.level === "error").slice(-30),
+  });
+});
+
+/** Стек на публикацию: слоты выхода по дням. Стек принадлежит редактору (WIKI/Новости.md, раздел 5). */
+newsRobot.post("/queue", async (c) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const body = await c.req.json().catch(() => null) as Row | null;
+  const q = await readQueue();
+  const key = String(body?.story_key ?? "");
+  if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная история");
+  const taken = new Set(q.items.filter((i) => i.story_key !== key).map((i) => `${i.date} ${i.time}`));
+  if (body?.action === "add") {
+    if (q.items.some((i) => i.story_key === key)) throw new ApiError("duplicate", "История уже в стеке");
+    const now = moscowNow().toISOString().slice(0, 16).replace("T", " ");
+    const free = q.days.flatMap((d) => q.times.map((t) => `${d} ${t}`)).find((s) => !taken.has(s) && s > now);
+    if (!free) throw new ApiError("validation_failed", "Свободных слотов на ближайшие дни нет");
+    const [date, time] = free.split(" ");
+    const str = (v: unknown) => (typeof v === "string" ? v.slice(0, 300) : undefined);
+    q.items.push({
+      story_key: key, run_id: str(body.run_id), title: str(body.title), topic: str(body.topic),
+      final: typeof body.final === "number" ? body.final : undefined, url: str(body.url),
+      date, time, added_at: new Date().toISOString(), by: principal.displayName,
+    });
+  } else if (body?.action === "move") {
+    const date = String(body.date ?? ""), time = String(body.time ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !q.times.includes(time)) {
+      throw new ApiError("validation_failed", "Время — только из слотов выхода");
+    }
+    const mine = q.items.find((i) => i.story_key === key);
+    if (!mine) throw new ApiError("not_found", "Истории нет в стеке");
+    const other = q.items.find((i) => i.date === date && i.time === time && i.story_key !== key);
+    if (other) [other.date, other.time] = [mine.date, mine.time];
+    [mine.date, mine.time] = [date, time];
+  } else if (body?.action === "remove") {
+    q.items = q.items.filter((i) => i.story_key !== key);
+  } else {
+    throw new ApiError("validation_failed", "action: add, move или remove");
+  }
+  q.items.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  const tmp = `${QUEUE()}.tmp`;
+  await Deno.writeTextFile(tmp, JSON.stringify({ items: q.items }, null, 1));
+  await Deno.rename(tmp, QUEUE());
+  return c.json(await readQueue());
+});

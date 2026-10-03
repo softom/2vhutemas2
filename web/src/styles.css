@@ -574,3 +574,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 /* Кнопка слоя замечаний в шапке (Р-95): нажата — слой открыт. */
 .top .viewer .notes-toggle[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+
+/* Подменю пункта шапки (раздел «Робот», Р-96): раскрывается при наведении и с клавиатуры. */
+.top nav .nav-group { position: relative; display: inline-flex; }
+.top nav .nav-sub { display: none; position: absolute; top: 100%; left: 0; z-index: 30; min-width: 200px; flex-direction: column; padding: 6px 14px; background: var(--paper, #fff); border: 1px solid #CDBB98; }
+.top nav .nav-group:hover .nav-sub, .top nav .nav-group:focus-within .nav-sub { display: flex; }
+.top nav .nav-sub a { padding: 8px 0; font-size: 13px; border-bottom: 0; }
+/* Раздел «Робот». */
+.robot-tabs a { padding: 4px 0; border-bottom: 2px solid transparent; }
+.robot-tabs a.active { border-bottom-color: var(--accent); }
+.robot-bars { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.robot-bar h3 { margin: 0; font-size: 14px; }
+.robot-bar p { margin: 4px 0; }
+.robot-meter { height: 6px; background: rgba(0,0,0,.08); overflow: hidden; }
+.robot-meter i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+.robot-meter.done i { background: #2f6f3e; }
+.robot-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.robot-slot { border-top: 1px dashed #CDBB98; padding: 8px 0; min-height: 44px; }
+.robot-log { max-height: 60vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }

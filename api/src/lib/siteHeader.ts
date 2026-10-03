@@ -11,9 +11,18 @@ export function siteHeader(principal: Principal | null, path = "/"): string {
     ["/entities/new", "Создать запись", can(principal, "create_delete")],
     ["/about", "О проекте", true],
   ];
-  const nav = items.filter(([, , visible]) => visible).map(([href, label]) =>
-    `<a href="${href}"${path === href || (href !== "/" && path.startsWith(href + "/")) ? ' class="active"' : ""}>${label}</a>`
-  ).join("");
+  // Подменю пункта: раздел «Робот» (Р-96) — разделы страницы робота, только su.
+  const submenus: Record<string, [string, string][]> = {
+    "/robot": [["/robot/news", "Новости"], ["/robot/stack", "Стек"], ["/robot/sites", "Сайты"],
+      ["/robot/recs", "Рекомендации"], ["/robot/log", "Журнал"]],
+  };
+  const nav = items.filter(([, , visible]) => visible).map(([href, label]) => {
+    const link = `<a href="${href}"${path === href || (href !== "/" && path.startsWith(href + "/")) ? ' class="active"' : ""}>${label}</a>`;
+    const sub = submenus[href];
+    return sub
+      ? `<span class="nav-group">${link}<span class="nav-sub">${sub.map(([h, l]) => `<a href="${h}">${l}</a>`).join("")}</span></span>`
+      : link;
+  }).join("");
   // Замечания поверх страницы (Р-95) — только тем, кто правит: слой и его код
   // грузятся по нажатию, гостю страница не тяжелеет.
   const notes = can(principal, "edit")

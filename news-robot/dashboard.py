@@ -8,7 +8,7 @@
 
 Пульт читает рабочие папки робота (out/, .state/) и ничего в состоянии робота
 не меняет: решения «да / нет» уходят в ящик inbox/inbox.jsonl, как со страницы
-/robot на сайте. Стек принадлежит редактору — .state/queue.json; позже из него
+/robot на сайте. Стек принадлежит редактору — inbox/queue.json; позже из него
 будет брать планировщик (WIKI/Новости.md, раздел 6). Это рабочий инструмент
 до выкладки робота на сервер: те же данные покажет страница /robot.
 """
@@ -32,7 +32,7 @@ from robot.state import State  # noqa: E402
 OUT = ROOT / "out"
 STATE = ROOT / ".state"
 INBOX = ROOT / "inbox" / "inbox.jsonl"
-QUEUE = STATE / "queue.json"
+QUEUE = ROOT / "inbox" / "queue.json"  # там же, где у сайта: единственная папка робота, куда пишет API
 RUN_ID = re.compile(r"^\d{8}-\d{6}$")
 MSK = timezone(timedelta(hours=3))
 

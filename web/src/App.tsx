@@ -231,6 +231,7 @@ export function App() {
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
           <Route path="/robot" element={!viewer ? <p className="notice">Проверяем права…</p> : <NewsRobot allowed={can("su")} />} />
+          <Route path="/robot/:section" element={!viewer ? <p className="notice">Проверяем права…</p> : <NewsRobot allowed={can("su")} />} />
           <Route path="/about" element={
             <Catalog
               canCreate={can("create_delete")}
