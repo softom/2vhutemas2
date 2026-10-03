@@ -700,12 +700,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
    Код варианта темы — класс t-<код>; новая тема без цвета остаётся печатью. */
 .news-topic { --topic: var(--text); display: inline-flex; align-items: center; gap: 7px; color: var(--topic); }
 .news-topic + .news-topic { margin-left: 12px; }
-.news-topic .sq, .news-chip .sq { background: var(--topic); }
+.news-topic .sq, .news-chip .sq { background: var(--topic, var(--text)); }
 .t-architecture { --topic: #A9381F; }
 .t-neurogeneration { --topic: #2F5D9E; }
 .t-software { --topic: #8A6414; }
-.news-chip { --topic: var(--text); gap: 8px; }
-.ssr .news-chip.on, .news-chip.on { background: var(--topic); border-color: var(--topic); color: #fff; }
+.news-chip { gap: 8px; }
+.ssr .news-chip.on, .news-chip.on { background: var(--topic, var(--text)); border-color: var(--topic, var(--text)); color: #fff; }
 .news-chip.on .sq { background: #fff; }
-.news-chip:not(.on):hover { border-color: var(--topic); }
+.news-chip:not(.on):hover { border-color: var(--topic, var(--accent)); }
 .public-card .pc-indicators dd .news-topic { font-weight: 600; }
