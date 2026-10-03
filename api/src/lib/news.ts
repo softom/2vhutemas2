@@ -130,9 +130,10 @@ function kicker(row: NewsRow): string {
 function picture(row: NewsRow, large: boolean): string {
   const view = compactParts(row.compact);
   const url = compactPicture(view, large ? "screen" : "thumbnail");
+  // Нет снимка — нет и места под него: заглушка во всю ширину тяжелее пустоты.
   return url
     ? `<a class="news-pic" href="${e(entityPath(row.slug))}" tabindex="-1" aria-hidden="true"><img src="${e(url)}" alt="" loading="lazy" /></a>`
-    : `<a class="news-pic is-empty" href="${e(entityPath(row.slug))}" tabindex="-1" aria-hidden="true"></a>`;
+    : "";
 }
 
 /** Одна новость в ленте: первая — крупно, остальные — строкой. */
@@ -141,7 +142,7 @@ function itemHtml(row: NewsRow, large: boolean): string {
   const main = large
     ? `${picture(row, true)}${kicker(row)}<h2><a href="${e(entityPath(row.slug))}">${e(row.title_ru)}</a></h2>` +
       (text ? `<p class="news-lead">${e(text)}</p>` : "")
-    : `<div class="news-row">${picture(row, false)}<div class="news-body">${kicker(row)}` +
+    : `<div class="news-row${picture(row, false) ? "" : " no-pic"}">${picture(row, false)}<div class="news-body">${kicker(row)}` +
       `<h3><a href="${e(entityPath(row.slug))}">${e(row.title_ru)}</a></h3>` +
       (text ? `<p class="news-lead">${e(text)}</p>` : "") + `</div></div>`;
   const time = row.release_time ? `<div class="news-time">${e(row.release_time)}</div>` : "";

@@ -690,3 +690,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
   .news-flip > :last-child { border-left: 0; padding-left: 0; text-align: left; }
   .public-card > .pc-news-day { grid-column: 1; }
 }
+/* На готовых страницах ссылки красные (.ssr a); в новостях — печатью, красным при наведении. */
+.ssr .news-head a, .ssr .news-item a, .ssr .news-flip a, .ssr .news-sameday a, .ssr .news-path a, .ssr .news-pager a { color: var(--text); }
+.ssr .news-head a:hover, .ssr .news-item a:hover, .ssr .news-flip a:hover, .ssr .news-sameday a:hover, .ssr .news-path a:hover, .ssr .news-pager a:hover { color: var(--accent); }
+.ssr .news-chip.on, .ssr .news-chip.on:hover { color: var(--bg); }
+.news-row.no-pic { grid-template-columns: minmax(0, 1fr); }
