@@ -9,12 +9,16 @@
  * уходит роботу в ящик и применяется при следующем запуске.
  */
 import { useEffect, useState } from "react";
-import { api, type RobotRun, type RobotRunRow, type RobotSourceCandidate } from "../api";
+import { api, type RobotLearned, type RobotRun, type RobotRunRow, type RobotSourceCandidate } from "../api";
 
 const TOPIC: Record<string, string> = { architecture: "Архитектура", neurogeneration: "Нейрогенерация", software: "ПО" };
 const RECOMMEND: Record<string, string> = { include: "включить", once: "разово", skip: "не нужен" };
 const LINK_KIND: Record<string, string> = { primary: "первоисточник", news_portal: "издание", research: "исследование" };
 const OPEN = new Set(["новый", "ждёт решения"]);
+const KIND: Record<string, string> = {
+  building: "здание", material: "материал", tool: "инструмент", competition: "конкурс", education: "образование",
+  award: "премия", research: "исследование", event: "событие", business: "бизнес", policy: "политика", other: "прочее",
+};
 
 function when(iso?: string | null) {
   return iso ? new Date(iso).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }) : "—";
@@ -26,6 +30,8 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
   const [run, setRun] = useState<RobotRun | null>(null);
   const [candidates, setCandidates] = useState<RobotSourceCandidate[]>([]);
   const [queued, setQueued] = useState<Set<string>>(new Set());
+  const [learned, setLearned] = useState<RobotLearned | null>(null);
+  const [verdicts, setVerdicts] = useState<Record<string, "yes" | "no">>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [proposal, setProposal] = useState({ url: "", note: "" });
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +41,12 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
     api.robotCandidates().then((r) => {
       setCandidates(r.items ?? []);
       setQueued(new Set((r.pending ?? []).map((p) => p.domain ?? p.url ?? "")));
+      setLearned(r.learned ?? null);
+      const pendingVerdicts: Record<string, "yes" | "no"> = {};
+      for (const p of r.pending ?? []) {
+        if (p.action === "judge" && p.story_key) pendingVerdicts[p.story_key] = p.verdict as "yes" | "no";
+      }
+      setVerdicts((v) => ({ ...pendingVerdicts, ...v }));
     }).catch((e) => setError((e as Error).message));
 
   useEffect(() => {
@@ -72,6 +84,17 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       setStatus("Сайт передан роботу: он найдёт ленту, проверит robots.txt и оценит издание при следующем запуске.");
       setProposal({ url: "", note: "" });
       await loadCandidates();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const judge = async (story: string, verdict: "yes" | "no") => {
+    if (!run) return;
+    setError(null);
+    try {
+      await api.robotInbox({ action: "judge", run_id: run.id, story_key: story, verdict });
+      setVerdicts((v) => ({ ...v, [story]: verdict }));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -188,12 +211,63 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
           </select>
         </div>
       )}
-      {run && <RunView run={run} />}
+      {run && <RunView run={run} verdicts={{ ...(run.judged ?? {}), ...verdicts }} onJudge={judge} />}
+
+      <h2>Как робот понимает ваш выбор</h2>
+      <Learning learned={learned} />
     </section>
   );
 }
 
-function RunView({ run }: { run: RobotRun }) {
+function Learning({ learned }: { learned: RobotLearned | null }) {
+  if (!learned?.adjustments) {
+    return (
+      <p className="hint">
+        Отмечайте истории в отборе: «выпустил бы» или «нет». Когда наберётся 15 решений, робот пересчитает
+        поправки ранжирования и через LLM обновит описание вашего вкуса — оно заменит общее описание в промпте отбора.
+      </p>
+    );
+  }
+  const a = learned.adjustments;
+  const last = learned.history?.[learned.history.length - 1];
+  const sign = (n: number) => (n > 0 ? `+${n}` : String(n));
+  return (
+    <>
+      <p className="hint">
+        Решений: {a.n} · выбрано в среднем {Math.round(a.base_rate * 100)}%
+        {last?.agreement?.precision != null &&
+          ` · из трёх лучших историй робота вы выбирали ${Math.round(last.agreement.precision * 100)}%`}
+        {a.per_extra_source != null && ` · каждое следующее издание той же истории: ${sign(a.per_extra_source)} к оценке`}
+      </p>
+      {Object.keys(a.kind).length > 0 && (
+        <p>
+          Поправки по виду материала:{" "}
+          {Object.entries(a.kind).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${KIND[k] ?? k} ${sign(v)}`).join(" · ")}
+        </p>
+      )}
+      {learned.profile_text && (
+        <div className="block">
+          <h3>Ваш вкус — так его видит LLM</h3>
+          <p style={{ whiteSpace: "pre-line" }}>{learned.profile_text}</p>
+          {learned.profile?.changed && <p className="hint">Изменилось: {learned.profile.changed}</p>}
+          {learned.profile?.repetition && <p className="hint">Повторение в изданиях: {learned.profile.repetition}</p>}
+          {learned.profile?.surprises?.length ? (
+            <details>
+              <summary>Где робот ошибался сильнее всего</summary>
+              <ul>{learned.profile.surprises.map((s) => <li key={s}>{s}</li>)}</ul>
+            </details>
+          ) : null}
+        </div>
+      )}
+    </>
+  );
+}
+
+function RunView({ run, verdicts, onJudge }: {
+  run: RobotRun;
+  verdicts: Record<string, "yes" | "no">;
+  onJudge: (story: string, verdict: "yes" | "no") => void;
+}) {
   const c = run.counts;
   return (
     <>
@@ -220,12 +294,15 @@ function RunView({ run }: { run: RobotRun }) {
         <>
           <h3>Отбор — по убыванию оценки</h3>
           <table className="grid-table">
-            <thead><tr><th>Оценка</th><th>Тема</th><th>Материал</th><th>Почему</th></tr></thead>
+            <thead><tr><th>Оценка</th><th>Тема</th><th>Материал</th><th>Почему</th><th>Выпустил бы?</th></tr></thead>
             <tbody>
               {run.candidates.map((x) => (
                 <tr key={x.story_key}>
                   <td>{x.final}<br /><span className="hint">{x.interest}</span></td>
-                  <td>{TOPIC[x.topic ?? ""] ?? x.topic}{x.competition ? " · конкурс" : ""}</td>
+                  <td>
+                    {TOPIC[x.topic ?? ""] ?? x.topic}
+                    <br /><span className="hint">{KIND[x.kind ?? ""] ?? x.kind}{x.competition ? " · конкурс" : ""}</span>
+                  </td>
                   <td>
                     {x.title_ru}
                     <br />
@@ -234,6 +311,12 @@ function RunView({ run }: { run: RobotRun }) {
                     ))}
                   </td>
                   <td className="hint">{x.reason}</td>
+                  <td>
+                    <button type="button" className={verdicts[x.story_key] === "yes" ? undefined : "ghost"}
+                      onClick={() => onJudge(x.story_key, "yes")} aria-label="Выпустил бы">Да</button>{" "}
+                    <button type="button" className={verdicts[x.story_key] === "no" ? undefined : "ghost"}
+                      onClick={() => onJudge(x.story_key, "no")} aria-label="Не выпустил бы">Нет</button>
+                  </td>
                 </tr>
               ))}
             </tbody>

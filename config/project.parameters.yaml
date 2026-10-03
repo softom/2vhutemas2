@@ -166,3 +166,13 @@ parameters:
   news.rank.stale_penalty:
     value: 3
     status: proposed
+  # Обучение ранжирования на выборе редактора (news-robot/robot/learn.py, Р-93).
+  news.learn.min_new_judgments:
+    value: 15
+    status: proposed
+  news.learn.max_adjust:
+    value: 15
+    status: proposed
+  news.learn.story_window_days:
+    value: 7
+    status: proposed

@@ -304,6 +304,15 @@ export interface RobotRun {
   candidates: { story_key: string; final: number; interest: number; title_ru: string; topic?: string; kind?: string; competition?: boolean; students_eligible?: boolean | null; reason?: string; sources: { source: string; url: string; date: string }[] }[];
   news: { candidate: { story_key: string; final: number }; news?: { title?: string; lead?: string; paragraphs?: string[]; student_note?: string; images?: { url: string; caption?: string }[] } | null; issues: string[]; warnings: string[] }[];
   link_domains: { domain: string; count: number; kinds: Record<string, number>; known: boolean; examples: { url: string; about?: string | null }[] }[];
+  judged?: Record<string, "yes" | "no">;
+}
+/** Чему робот научился по решениям редактора (Р-93). */
+export interface RobotLearned {
+  profile_text?: string;
+  profile?: { likes?: string[]; dislikes?: string[]; surprises?: string[]; repetition?: string; changed?: string };
+  adjustments?: { base_rate: number; n: number; kind: Record<string, number>; topic: Record<string, number>; per_extra_source?: number };
+  judged_at_calibration?: number;
+  history?: { at: string; judged: number; agreement: { precision: number | null; hits: number; total: number } }[];
 }
 
 export const api = {
@@ -373,8 +382,11 @@ export const api = {
   robotRuns: () => request<{ items: RobotRunRow[]; connected: boolean }>("/news-robot/runs"),
   robotRun: (id: string) => request<RobotRun>(`/news-robot/runs/${encodeURIComponent(id)}`),
   robotCandidates: () =>
-    request<{ items: RobotSourceCandidate[]; pending: { action: string; domain?: string; url?: string; decision?: string }[] }>("/news-robot/candidates"),
-  robotInbox: (body: { action: "decide"; domain: string; decision: "include" | "once" | "reject"; note?: string } | { action: "propose"; url: string; note?: string }) =>
+    request<{ items: RobotSourceCandidate[]; pending: { action: string; domain?: string; url?: string; decision?: string; story_key?: string; verdict?: string }[]; learned: RobotLearned | null }>("/news-robot/candidates"),
+  robotInbox: (body:
+    | { action: "decide"; domain: string; decision: "include" | "once" | "reject"; note?: string }
+    | { action: "propose"; url: string; note?: string }
+    | { action: "judge"; run_id: string; story_key: string; verdict: "yes" | "no"; note?: string }) =>
     request<{ queued: unknown }>("/news-robot/inbox", { method: "POST", body: JSON.stringify(body) }),
   parametersForType: (code: string) =>
     request<{ items: SuggestedParameter[] }>(`/parameters/for-type/${code}`),

@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 import httpx
 import yaml
 
-from . import checks, discover, lists
+from . import checks, discover, learn, lists
 from .article import fetch_article
 from .feeds import Item, NotAFeed, item_id, parse, passes_filters
 from .fetch import FetchError, Fetcher
@@ -185,13 +185,31 @@ def _crawl_list(run: Run, src: dict, rec: dict, fetcher: Fetcher, state: State, 
 
 # ── 2. Отбор ─────────────────────────────────────────────────────────────────
 
-def examples_text() -> str:
-    ex = yaml.safe_load((ROOT / "prompts" / "examples.yaml").read_text(encoding="utf-8"))
-    return "\n".join([f"ДА — {t}" for t in ex["chosen"]] + [f"НЕТ — {t}" for t in ex["rejected"]])
+def seed_examples() -> dict:
+    return yaml.safe_load((ROOT / "prompts" / "examples.yaml").read_text(encoding="utf-8"))
 
 
-def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int) -> dict[str, dict]:
-    system = prompt("triage", examples=examples_text())
+def examples_text(state: State | None = None) -> str:
+    """Образцы: последние решения редактора (до 20 «да» и 20 «нет») и первый блок."""
+    ex = seed_examples()
+    chosen, rejected = list(ex["chosen"]), list(ex["rejected"])
+    if state is not None:
+        recent = sorted(learn.judgments(state), key=lambda j: j["at"], reverse=True)
+        chosen = [j["title"] for j in recent if j["verdict"] == "yes" and j.get("title")][:20] + chosen
+        rejected = [j["title"] for j in recent if j["verdict"] == "no" and j.get("title")][:20] + rejected
+    return "\n".join([f"ДА — {t}" for t in chosen[:40]] + [f"НЕТ — {t}" for t in rejected[:40]])
+
+
+def profile_text(state: State | None = None) -> str:
+    learned = (state.data.get("learned") or {}) if state is not None else {}
+    if learned.get("profile_text"):
+        return learned["profile_text"]
+    text = (ROOT / "prompts" / "profile_default.md").read_text(encoding="utf-8")
+    return "\n".join(ln for ln in text.splitlines() if not ln.startswith("<!--")).strip()
+
+
+def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int, state: State | None = None) -> dict[str, dict]:
+    system = prompt("triage", examples=examples_text(state), profile=profile_text(state))
     scores: dict[str, dict] = {}
     for i in range(0, len(run.items), batch):
         part = run.items[i:i + batch]
@@ -212,7 +230,8 @@ def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int) -> dict[str
 
 # ── 3. Склейка и ранжирование ────────────────────────────────────────────────
 
-def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: dict) -> list[dict]:
+def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: dict,
+         state: State | None = None) -> list[dict]:
     stories: dict[str, dict] = {}
     for it in run.items:
         s = scores.get(it.id)
@@ -247,6 +266,15 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
             "sources": [{"source": sources[i.source_id]["title"], "url": i.url, "title": i.title,
                          "date": (i.published or "")[:10]} for i in items],
         })
+    if state is not None:
+        # Повторение истории за неделю: издания, подхватившие её в прошлых прогонах, тоже считаются.
+        learn.track_stories(state, result)
+        learned = state.data.get("learned") or {}
+        for c in result:
+            run_n = len({s["source"] for s in c["sources"]})
+            earlier = min(max(c.get("sources_total", run_n) - run_n, 0), max(0, 3 - (run_n - 1)))
+            c["adjust"] = learn.apply(c, learned)
+            c["final"] = max(0, min(100, c["final"] + earlier * weights["per_extra_source"] + c["adjust"]))
     result.sort(key=lambda c: c["final"], reverse=True)
     return result
 
@@ -343,6 +371,8 @@ def run(args) -> Run:
             log(r, "info", "inbox", "решения со страницы применены", count=applied)
             src_list = load_sources(args.sources, state)
             sources = {s["id"]: s for s in all_sources(state)}
+        learn.calibrate(state, llm, seed_examples(), lambda lvl, st, msg, **kw: log(r, lvl, st, msg, **kw),
+                        min_new=args.learn_min_new)
         crawl(r, src_list, fetcher, state, args.ignore_seen, remember=llm.live and not args.no_llm)
         _dump(out / "items.json", [i.to_dict() for i in r.items])
         log(r, "info", "crawl", "сбор закончен", new=len(r.items), filtered=r.filtered_out, seen=r.already_seen)
@@ -353,7 +383,7 @@ def run(args) -> Run:
             r.llm_note = "LLM не вызывалась (--no-llm)" if args.no_llm else "новых материалов нет"
             return r
         try:
-            scores = triage(r, llm, sources, args.batch)
+            scores = triage(r, llm, sources, args.batch, state)
         except NoLLM:
             r.llm_note = ("Ключа или модели нет: запросы отбора сохранены в llm/ — "
                           "их можно отправить вручную. Остальные этапы ждут ответа.")
@@ -361,7 +391,10 @@ def run(args) -> Run:
             return r
         weights = {k: (cfg.get(f"news.rank.{k}") if cfg.get(f"news.rank.{k}") is not None else v)
                    for k, v in RANK_DEFAULTS.items()}
-        r.candidates = rank(r, scores, sources, weights)
+        learned_w = ((state.data.get("learned") or {}).get("adjustments") or {}).get("per_extra_source")
+        if learned_w is not None:
+            weights["per_extra_source"] = learned_w
+        r.candidates = rank(r, scores, sources, weights, state)
         _dump(out / "candidates.json", r.candidates)
         for it in r.items:
             if it.id in scores:
@@ -408,6 +441,9 @@ def summary(r: Run, status: str, state: State) -> dict:
         "news": [{"candidate": st["candidate"], "news": st.get("news"), "issues": st.get("issues", []),
                   "warnings": st.get("warnings", []), "verify": st.get("verify")} for st in r.news],
         "link_domains": r.link_domains,
+        "learned": {k: v for k, v in (state.data.get("learned") or {}).items() if k != "history"},
+        "agreement": learn.agreement(learn.judgments(state)),
+        "judged": {j["story_key"]: j["verdict"] for j in learn.judgments(state)},
         "source_candidates": sorted(state.candidates().values(),
                                     key=lambda c: (c.get("status") != "ждёт решения", -c.get("count", 0))),
     }

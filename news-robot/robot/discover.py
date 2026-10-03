@@ -140,6 +140,14 @@ def apply_inbox(state, inbox: Path, log) -> int:
                 msg = json.loads(ln)
                 if msg.get("action") == "propose":
                     state.propose(msg["url"], domain_of(msg["url"]), msg.get("note"))
+                elif msg.get("action") == "judge":
+                    from .learn import record
+                    run_dir = inbox.parent.parent / "out" / str(msg.get("run_id", ""))
+                    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8")) \
+                        if (run_dir / "summary.json").exists() else None
+                    if msg["verdict"] not in ("yes", "no"):
+                        raise ValueError("verdict: yes или no")
+                    record(state, summary, msg["story_key"], msg["verdict"], msg.get("by"), msg.get("note"))
                 elif msg.get("action") == "decide":
                     domain = domain_of(msg["domain"])
                     decision = {"include": "включён", "once": "разово", "reject": "отклонён"}[msg["decision"]]

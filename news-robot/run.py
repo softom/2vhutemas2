@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from robot import discover, pipeline, report  # noqa: E402
+from robot import discover, learn, pipeline, report  # noqa: E402
 from robot.fetch import Fetcher  # noqa: E402
 from robot.llm import LLM  # noqa: E402
 from robot.state import State  # noqa: E402
@@ -76,6 +76,33 @@ def candidates_command(args) -> int:
     return 0
 
 
+def learn_command(args) -> int:
+    import json as _json
+    state = State(ROOT / ".state" / "state.json")
+    try:
+        if args.judge:
+            run_id, story, verdict = args.judge
+            summary_path = ROOT / "out" / run_id / "summary.json"
+            summary = _json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else None
+            j = learn.record(state, summary, story, verdict, "командная строка", args.note)
+            print(f"{story}: {verdict} · {j.get('title') or 'история не найдена в итоге прогона — признаков нет'}")
+        if args.calibrate:
+            cfg = pipeline.load_config()
+            llm = LLM(cfg.get("news.llm.base_url") or "https://api.polza.ai/api/v1",
+                      args.model or os.environ.get("NEWS_LLM_MODEL") or cfg.get("news.llm.model"),
+                      cfg.get("news.llm.api_key_env") or "POLZA_API_KEY", ROOT / "out" / "calibration" / "llm",
+                      token_limit=60_000)
+            entry = learn.calibrate(state, llm, pipeline.seed_examples(), lambda *a, **k: print(*a, k), force=True)
+            print(_json.dumps({k: v for k, v in entry.items() if k != "profile"}, ensure_ascii=False, indent=1))
+            if entry.get("profile"):
+                print("\nПрофиль вкуса:\n" + entry["profile"].get("profile_text", ""))
+            elif not llm.live:
+                print("\nПрофиль вкуса не обновлён: ключ или модель LLM не заданы. Поправки по статистике посчитаны.")
+    finally:
+        state.save()
+    return 0
+
+
 def print_candidate(c: dict) -> None:
     p, a = c.get("probe") or {}, c.get("assessment") or {}
     kinds = ", ".join(f"{k} {v}" for k, v in c.get("kinds", {}).items())
@@ -107,6 +134,9 @@ def main() -> int:
     ap.add_argument("--token-limit", type=int, default=400_000, help="предел токенов на прогон")
     ap.add_argument("--probe-limit", type=int, default=5, help="сколько новых кандидатов в источники проверять за прогон")
     ap.add_argument("--delay", type=float, default=2.0, help="пауза между запросами к одному сайту, с")
+    ap.add_argument("--learn-min-new", type=int, default=15, help="новых решений редактора для калибровки")
+    ap.add_argument("--calibrate", action="store_true", help="пересчитать поправки и профиль вкуса сейчас")
+    ap.add_argument("--judge", nargs=3, metavar=("ПРОГОН", "ИСТОРИЯ", "yes|no"), help="решение по истории")
     ap.add_argument("--out", default=str(ROOT / "out"), help="папка прогонов")
     g = ap.add_argument_group("кандидаты в источники")
     g.add_argument("--candidates", action="store_true", help="показать кандидатов")
@@ -119,6 +149,8 @@ def main() -> int:
 
     if args.candidates or args.propose or args.include or args.once or args.reject:
         return candidates_command(args)
+    if args.calibrate or args.judge:
+        return learn_command(args)
 
     run = pipeline.run(args)
     path = run.dir / "report.html"

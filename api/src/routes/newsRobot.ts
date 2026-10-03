@@ -17,6 +17,7 @@ export const newsRobot = new Hono<AppEnv>();
 const ROOT = Deno.env.get("NEWS_ROBOT_DIR") ?? "/news-robot";
 const RUN_ID = /^\d{8}-\d{6}$/;
 const DOMAIN = /^[a-z0-9.-]+\.[a-z]{2,}$/;
+const STORY = /^[a-z0-9][a-z0-9-]{0,99}$/;
 
 async function readJson<T>(path: string): Promise<T | null> {
   try {
@@ -71,7 +72,9 @@ newsRobot.get("/runs/:id", async (c) => {
 /** Кандидаты в источники — из текущего состояния робота, а не из последнего прогона. */
 newsRobot.get("/candidates", async (c) => {
   requirePermission(c.get("principal"), "su");
-  const state = await readJson<{ candidates?: Record<string, unknown> }>(`${ROOT}/state/state.json`);
+  const state = await readJson<{ candidates?: Record<string, unknown>; learned?: Record<string, unknown> }>(
+    `${ROOT}/state/state.json`,
+  );
   const pending: unknown[] = [];
   try {
     const text = await Deno.readTextFile(`${ROOT}/inbox/inbox.jsonl`);
@@ -79,7 +82,8 @@ newsRobot.get("/candidates", async (c) => {
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
-  return c.json({ items: Object.values(state?.candidates ?? {}), pending });
+  const learned = state?.learned ?? null;
+  return c.json({ items: Object.values(state?.candidates ?? {}), pending, learned });
 });
 
 /** Решение по кандидату или предложенный адрес — в ящик робота. */
@@ -95,6 +99,13 @@ newsRobot.post("/inbox", async (c) => {
       throw new ApiError("validation_failed", "Решение: include, once или reject");
     }
     msg = { action: "decide", domain, decision: body.decision, note };
+  } else if (body?.action === "judge") {
+    // Решение редактора по истории: «выпустил бы» или «нет» — по нему робот учит ранжирование (Р-93).
+    const story = String(body.story_key ?? "");
+    const run = String(body.run_id ?? "");
+    if (!STORY.test(story) || !RUN_ID.test(run)) throw new ApiError("validation_failed", "Неверная история или прогон");
+    if (!["yes", "no"].includes(String(body.verdict))) throw new ApiError("validation_failed", "Решение: yes или no");
+    msg = { action: "judge", story_key: story, run_id: run, verdict: body.verdict, note };
   } else if (body?.action === "propose") {
     let url: URL;
     try {
@@ -105,7 +116,7 @@ newsRobot.post("/inbox", async (c) => {
     if (!["http:", "https:"].includes(url.protocol)) throw new ApiError("validation_failed", "Нужен адрес http(s)");
     msg = { action: "propose", url: url.toString(), note };
   } else {
-    throw new ApiError("validation_failed", "action: decide или propose");
+    throw new ApiError("validation_failed", "action: decide, judge или propose");
   }
   msg.by = principal.displayName;
   msg.contributor_id = principal.contributorId;
