@@ -99,4 +99,17 @@ export async function enhancePublicPage() {
       }
     });
   });
+  // Новость листается клавишами ← → (Р-88): стрелки ведут к соседям в ленте.
+  // Не мешаем просмотру фото, полям ввода и сочетаниям с модификаторами.
+  const flip = document.querySelector<HTMLElement>("[data-news-flip]");
+  if (flip) {
+    document.addEventListener("keydown", (event) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable], dialog[open]")) return;
+      const link = flip.querySelector<HTMLAnchorElement>(event.key === "ArrowLeft" ? "a.news-flip-before" : "a.news-flip-after");
+      if (link) location.href = link.href;
+    });
+  }
 }

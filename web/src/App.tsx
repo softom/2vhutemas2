@@ -161,7 +161,7 @@ export function App() {
     viewer?.permissions.includes(permission) || viewer?.permissions.includes("su") || false;
 
   // Лента знака идёт через публичные страницы; рабочие экраны — без неё (Р-91).
-  const reading = ["/", "/objects", "/authors", "/about", "/lectures"].includes(location.pathname) ||
+  const reading = ["/", "/news", "/objects", "/authors", "/about", "/lectures"].includes(location.pathname) ||
     (/^\/entities\/[^/]+$/.test(location.pathname) && location.pathname !== "/entities/new");
 
   return (
@@ -201,7 +201,10 @@ export function App() {
         <ErrorBoundary key={location.pathname}>
         <Suspense fallback={<p className="notice">Загружаем раздел…</p>}>
         <Routes>
-          <Route path="/" element={<Catalog canCreate={can("create_delete")} />} />
+          {/* Главная и архив — лента новостей, готовый HTML сервера (Р-88): своей
+              React-копии нет, как у страницы записи. */}
+          <Route path="/" element={<PublicEntityPage />} />
+          <Route path="/news" element={<PublicEntityPage />} />
           <Route
             path="/objects"
             element={

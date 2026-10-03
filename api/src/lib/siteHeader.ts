@@ -4,7 +4,7 @@ import { escapeHtml as e, site } from "./site.ts";
 
 export function siteHeader(principal: Principal | null, path = "/"): string {
   const items: [string, string, boolean][] = [
-    ["/", "Всё", true], ["/objects", "Проекты", true], ["/authors", "Авторы", true],
+    ["/", "Новости", true], ["/objects", "Проекты", true], ["/authors", "Авторы", true],
     ["/lectures", "Лекции", true], ["/media", "Медиатека", true],
     ["/parameters", "Параметры", can(principal, "edit")],
     ["/robot", "Робот", can(principal, "su")],
@@ -17,7 +17,10 @@ export function siteHeader(principal: Principal | null, path = "/"): string {
       ["/robot/recs", "Рекомендации"], ["/robot/log", "Журнал"]],
   };
   const nav = items.filter(([, , visible]) => visible).map(([href, label]) => {
-    const link = `<a href="${href}"${path === href || (href !== "/" && path.startsWith(href + "/")) ? ' class="active"' : ""}>${label}</a>`;
+    // «Новости» — главная и её архив /news.
+    const active = path === href || (href !== "/" && path.startsWith(href + "/")) ||
+      (href === "/" && (path === "/news" || path.startsWith("/news/")));
+    const link = `<a href="${href}"${active ? ' class="active"' : ""}>${label}</a>`;
     const sub = submenus[href];
     return sub
       ? `<span class="nav-group">${link}<span class="nav-sub">${sub.map(([h, l]) => `<a href="${h}">${l}</a>`).join("")}</span></span>`

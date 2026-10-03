@@ -60,6 +60,8 @@ export interface CardValue {
   option_title: string | null;
   place: Record<string, unknown> | null;
   date_start_year: number | null;
+  date_start_month?: number | null;
+  date_start_day?: number | null;
   date_end_year: number | null;
   is_approximate: boolean | null;
   is_ongoing: boolean | null;
@@ -159,7 +161,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
            -- редакции, которую видит спрашивающий.
            case when iv.entity_value_id is not null
                 then app.place_json(iv.entity_value_id, ${drafts}) end as place,
-           iv.date_start_year, iv.date_end_year, iv.is_approximate, iv.is_ongoing
+           iv.date_start_year, iv.date_start_month, iv.date_start_day, iv.date_end_year, iv.is_approximate, iv.is_ongoing
       from app.read_indicators(${drafts}) i
       join app.read_values(${drafts}) iv on iv.indicator_id = i.id
       join app.parameters p on p.id = iv.parameter_id

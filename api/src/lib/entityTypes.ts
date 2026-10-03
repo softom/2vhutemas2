@@ -36,4 +36,4 @@ export function resolveTypeCode(
  * медиатеке и карточках (Р-84). Одно правило для API, готовых страниц и
  * клиента — клиент получает его в `capabilities.catalog_hidden_roots`.
  */
-export const CATALOG_HIDDEN_ROOTS = ["project_pages", "materials"];
+export const CATALOG_HIDDEN_ROOTS = ["project_pages", "materials", "news"];

@@ -18,6 +18,7 @@ import { sql } from "../lib/db.ts";
 import { entities } from "./entities.ts";
 import { siteFooter, siteHeader } from "../lib/siteHeader.ts";
 import { CATALOG_HIDDEN_ROOTS } from "../lib/entityTypes.ts";
+import { dayTitle, loadNews, newsDay, newsFeedHtml, newsNavHtml, newsNeighbours, newsTopics, sameDayHtml } from "../lib/news.ts";
 import { canSeeDrafts } from "../lib/auth.ts";
 import { ApiError } from "../lib/errors.ts";
 import { type AppEnv, log } from "../lib/http.ts";
@@ -348,27 +349,51 @@ const SECTIONS: Record<string, { branch: string; title: string; lead: string }> 
   },
 };
 
-pages.get("/", async (c) => {
-  // Главная в приложении — общий каталог «Всё»; сервер отдаёт его же.
-  const [all, first, chips] = await Promise.all([publishedIn(null), firstCatalogPage(null), typeChips(null)]);
-  const body = layout(catalogHtml(
-    "Всё",
-    "Все записи подряд: объекты, авторы, периоды и служебные материалы.",
-    first,
-    null,
-    "Все типы",
-    chips,
-  ));
+/**
+ * Главная — лента опубликованных новостей (Р-88, ТЗ «Новости», раздел 6);
+ * `/news` — та же лента архивом, по страницам с постоянными адресами.
+ * Каталог «Всё» больше не главная: разделы — в меню сверху.
+ */
+const NEWS_PAGE = 12;
+const NEWS_LEAD = "Три в день — что интересно архитектору и студенту: здания, нейрогенерация, программы. Каждая — со ссылкой на первоисточник.";
+
+async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
+  const topic = c.req.query("topic") || null;
+  const page = Math.max(1, Math.min(500, Number(c.req.query("page")) || 1));
+  const [rows, topics, latest] = await Promise.all([
+    loadNews(topic, NEWS_PAGE, (page - 1) * NEWS_PAGE),
+    newsTopics(),
+    loadNews(null, 6, 0),
+  ]);
+  const known = !topic || topics.some((t) => t.code === topic);
+  if (!known) return await notFound(c);
+  const hasMore = rows.length > NEWS_PAGE;
+  const shown = rows.slice(0, NEWS_PAGE);
+  const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Moscow" });
+  const title = path === "/" ? "Новости" : "Архив новостей";
+  const query = new URLSearchParams();
+  if (topic) query.set("topic", topic);
+  if (page > 1) query.set("page", String(page));
+  const canonical = `${path}${query.toString() ? `?${query}` : ""}`;
   return await render(c, {
-    catalog: true,
     status: 200,
-    title: `${site.name} — курс «Квантовая архитектура»`,
-    description: site.description,
-    canonical: "/",
-    jsonLd: [{ "@context": "https://schema.org", ...WEBSITE }, listLd("/", site.name, all)],
-    body,
+    title: path === "/" ? `${site.name} — курс «Квантовая архитектура»` : `${title} — ${site.name}`,
+    description: path === "/" ? site.description : NEWS_LEAD,
+    canonical,
+    jsonLd: [
+      ...(path === "/" && page === 1 && !topic ? [{ "@context": "https://schema.org", ...WEBSITE }] : []),
+      listLd(canonical, title, shown.map((row) => ({ slug: row.slug, title_ru: row.title_ru } as ListRow))),
+    ],
+    publicReader: true,
+    body: layout(newsFeedHtml(shown, {
+      title, lead: NEWS_LEAD, path, topic, topics, page, hasMore,
+      today: latest.filter((row) => newsDay(row) === today),
+    })),
   });
-});
+}
+
+pages.get("/", (c) => newsPage(c, "/"));
+pages.get("/news", (c) => newsPage(c, "/news"));
 
 for (const [path, section] of Object.entries(SECTIONS)) {
   pages.get(path, async (c) => {
@@ -443,6 +468,11 @@ function valueText(value: CardValue): string {
   }
   if (value.option_title) return value.option_title;
   if (value.place) return placeText(value.place);
+  if (value.date_start_year && value.date_start_month && value.date_start_day && !value.date_end_year && !value.is_approximate) {
+    // Точный день — «3 октября 2026»: так у выхода новости и у событий.
+    const iso = `${value.date_start_year}-${String(value.date_start_month).padStart(2, "0")}-${String(value.date_start_day).padStart(2, "0")}`;
+    return `${dayTitle(iso).title} ${value.date_start_year}`;
+  }
   if (value.date_start_year) {
     const range = value.date_end_year
       ? `${value.date_start_year}–${value.date_end_year}`
@@ -496,6 +526,8 @@ function schemaTypes(card: PublicCard): string[] {
     return codes.includes("company") || codes.includes("group") ? ["Organization"] : ["Person"];
   }
   if (root === "learning") return ["LearningResource"];
+  // Новость сайта — статья-новость для поисковика (ТЗ «Новости», раздел 2).
+  if (codes.includes("news")) return ["NewsArticle"];
   if (root === "when") return ["Thing"];
   if (codes.some((code) => PLACE_TYPES.has(code))) {
     // Здание — одновременно место и произведение: у места есть адрес,
@@ -599,7 +631,9 @@ function cardLd(card: PublicCard, description: string, authors: string[]) {
 
 function breadcrumbsLd(card: PublicCard) {
   const root = card.type_path[0]?.code;
-  const section = root === "who"
+  const section = card.type_path.some((t) => t.code === "news")
+    ? ["/news", "Новости"]
+    : root === "who"
     ? ["/authors", "Авторы"]
     : root === "learning"
     ? ["/lectures", "Лекции"]
@@ -616,11 +650,40 @@ function breadcrumbsLd(card: PublicCard) {
   };
 }
 
-function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<typeof citation>) {
+/** Новость: соседи в ленте и день выхода — для листания на её странице. */
+interface NewsExtra {
+  nav: { before: Awaited<ReturnType<typeof newsNeighbours>>["before"]; after: Awaited<ReturnType<typeof newsNeighbours>>["after"] };
+  sameDay: Awaited<ReturnType<typeof newsNeighbours>>["sameDay"];
+}
+
+async function newsExtra(card: PublicCard): Promise<NewsExtra | null> {
+  if (!card.type_path.some((t) => t.code === "news")) return null;
+  const { before, after, sameDay } = await newsNeighbours(card.id);
+  return { nav: { before, after }, sameDay };
+}
+
+/** Надзаголовок новости: путь «Новости — день, слот», «Новость // тема», стрелки. */
+function newsHead(card: PublicCard, extra: NewsExtra): string {
+  const e = escapeHtml;
+  const release = card.values.find((v) => v.parameter === "news_release");
+  const time = card.values.find((v) => v.parameter === "news_release_time")?.text_value ?? "";
+  const day = release?.date_start_year
+    ? dayTitle(`${release.date_start_year}-${String(release.date_start_month ?? 1).padStart(2, "0")}-${String(release.date_start_day ?? 1).padStart(2, "0")}`).title
+    : "";
+  const topics = card.values.filter((v) => v.parameter === "news_topic").map((v) => v.option_title).filter(Boolean);
+  const arrow = (row: NewsExtra["nav"]["before"], label: string, hint: string) => row
+    ? `<a class="news-arrow" href="${e(entityPath(row.slug))}" aria-label="${e(hint)}: ${e(row.title_ru)}" title="${e(hint)} — клавиша ${label}">${label}</a>`
+    : `<span class="news-arrow is-empty" aria-hidden="true">${label}</span>`;
+  return `<div class="news-path"><span class="mono"><a href="/news">Новости</a>${day ? ` — ${e(day)}` : ""}${time ? `, ${e(time)}` : ""}</span>` +
+    `<span class="news-arrows">${arrow(extra.nav.before, "←", "Раньше")}${arrow(extra.nav.after, "→", "Позже")}</span></div>` +
+    `<div class="kick"><span class="sq"></span>Новость<span class="sl">//</span>${e(topics.join(" · ") || card.type_title)}</div>`;
+}
+
+function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<typeof citation>, news: NewsExtra | null = null) {
   const e = escapeHtml;
   const parts: string[] = [];
   const editPath = `/entities/${card.id}/edit`;
-  parts.push(`<article class="public-card">`, `<header class="pc-head">`, `<h1>${e(card.title_ru)}<span class="reader-actions" data-reader-edit data-href="${e(editPath)}" hidden></span></h1>`);
+  parts.push(`<article class="public-card${news ? " is-news" : ""}">`, `<header class="pc-head">`, news ? newsHead(card, news) : "", `<h1>${e(card.title_ru)}<span class="reader-actions" data-reader-edit data-href="${e(editPath)}" hidden></span></h1>`);
   const alternate = [card.title_original, card.title_en, card.title_la].filter(Boolean);
   if (alternate.length > 0) parts.push(`<p class="sub">${e(alternate.join(" · "))}</p>`);
   const place = card.values.find(v => v.place)?.place;
@@ -729,6 +792,16 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     const html = render ? render() : "";
     if (html) parts.push(`<section class="pc-${component}">${html}</section>`);
   }
+  if (news) {
+    // Листать ленту: «Раньше / Позже» в конце, «Ещё за этот день» — на полях.
+    parts.push(`<section class="pc-news-nav">${newsNavHtml(news.nav)}</section>`);
+    const release = card.values.find((v) => v.parameter === "news_release");
+    const day = release?.date_start_year
+      ? `${release.date_start_year}-${String(release.date_start_month ?? 1).padStart(2, "0")}-${String(release.date_start_day ?? 1).padStart(2, "0")}`
+      : null;
+    const same = sameDayHtml(news.sameDay, day);
+    if (same) parts.push(`<aside class="pc-news-day">${same}</aside>`);
+  }
   parts.push(`</article>`);
   return parts.join("");
 }
@@ -761,6 +834,7 @@ pages.get("/entities/:key", async (c) => {
   const yearOf = new Date(card.modified_at).getFullYear();
   const cite = citation({ title: card.title_ru, slug: card.slug, authors: card.authors, year: yearOf });
   const root = card.type_path[0]?.code;
+  const news = await newsExtra(card);
 
   return await render(c, {
     status: 200,
@@ -772,7 +846,7 @@ pages.get("/entities/:key", async (c) => {
     jsonLd: [cardLd(card, description, card.authors), breadcrumbsLd(card)],
     publicReader: true,
     entityKey: String(card.id),
-    body: layout(cardBody(card, descriptionHtml, cite)),
+    body: layout(cardBody(card, descriptionHtml, cite, news)),
   });
 });
 
@@ -792,7 +866,7 @@ pages.get("/api/v1/entities/:key/card", async (c) => {
   }) : "";
   const cite = citation({ title: card.title_ru, slug: card.slug, authors: card.authors,
     year: new Date(card.modified_at).getFullYear() });
-  return c.json({ html: cardBody(card, description, cite), title: `${card.title_ru} — ${site.name}`,
+  return c.json({ html: cardBody(card, description, cite, await newsExtra(card)), title: `${card.title_ru} — ${site.name}`,
     path: entityPath(card.slug) });
 });
 
@@ -842,7 +916,7 @@ pages.get("/sitemap.xml", async (c) => {
     0,
   );
   const lastmod = (time: number) => new Date(time).toISOString().slice(0, 10);
-  const statics = ["/", "/objects", "/authors", "/lectures", "/about"].map((path) =>
+  const statics = ["/", "/news", "/objects", "/authors", "/lectures", "/about"].map((path) =>
     `<url><loc>${escapeHtml(absolute(path))}</loc>${
       newest ? `<lastmod>${lastmod(newest)}</lastmod>` : ""
     }</url>`

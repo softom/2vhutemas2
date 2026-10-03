@@ -465,6 +465,15 @@ contains "счётчик Метрики на главной" 'mc.yandex.ru/metri
 contains "счётчик Метрики на странице раздела" 'mc.yandex.ru/metrika/tag.js?id=108525511' "$(curl -s $SITE/objects)"
 contains "прежний сайт закрыт от индекса" 'noindex' "$(curl -s -D - -o /dev/null $SITE/old/ | tr 'A-Z' 'a-z')"
 
+echo "── Новости на сайте"
+# Р-88: главная — лента опубликованных новостей, архив /news; разделы — в меню.
+contains "главная — лента новостей" 'class="news-head"' "$(curl -s $SITE/)"
+check "архив новостей открывается" 200 "$(code $SITE/news)"
+contains "архив описан для поисковика" 'rel="canonical" href="https://2vhutemas.ru/news"' "$(body)"
+check "неизвестная тема — 404" 404 "$(code "$SITE/news?topic=smoke-net-takoy-temy")"
+contains "меню ведёт к новостям" '>Новости</a>' "$(curl -s $API/site-header)"
+contains "архив новостей в sitemap" "<loc>$SITE/news</loc>" "$(curl -s $SITE/sitemap.xml)"
+
 echo "── Замечания на страницах"
 # Р-95: пометки видят и ставят только правящие; гость о них не узнаёт.
 check "гостю пометки закрыты" 401 "$(code "$API/page-notes?path=/smoke-zamechaniya")"
