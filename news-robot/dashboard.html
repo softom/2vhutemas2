@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Пульт робота новостей — Вх²</title>
+<style>
+:root{--bg:#f6f5f1;--fg:#1b1b19;--mut:#6b6a64;--line:#dcdad2;--card:#fff;--acc:#b3261e;--ok:#2f6f3e;--warn:#8a5a00;--bar:#e9e6dc}
+@media (prefers-color-scheme:dark){:root{--bg:#151514;--fg:#ecebe6;--mut:#9c9a93;--line:#33322f;--card:#1e1e1c;--acc:#f08a80;--ok:#7fc48f;--warn:#e0a54a;--bar:#2a2926}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif}
+header{position:sticky;top:0;z-index:2;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header b{font-size:17px} header nav a{margin-right:12px;color:inherit}
+main{max-width:1180px;margin:0 auto;padding:12px 16px 60px}
+h2{font-size:17px;font-weight:600;margin:28px 0 8px}
+.m{color:var(--mut);font-size:12px} a{color:inherit}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.card h3{margin:0 0 4px;font-size:13px;font-weight:600}
+.big{font-size:22px;font-weight:600}
+.bar{height:6px;border-radius:3px;background:var(--bar);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--acc);transition:width .4s}
+.bar.done i{background:var(--ok)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;background:var(--card)}
+th,td{border-top:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--mut);font-weight:400;background:var(--bg)}
+button{font:inherit;font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);cursor:pointer}
+button:hover{border-color:var(--mut)} button.on{background:var(--fg);color:var(--bg)} button.acc{border-color:var(--acc);color:var(--acc)}
+select{font:inherit;font-size:12px;padding:2px;border-radius:6px;background:var(--card);color:var(--fg);border:1px solid var(--line)}
+.err{color:var(--acc)} .warn{color:var(--warn)} .ok{color:var(--ok)}
+.news{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden}
+.news img{width:100%;max-height:320px;object-fit:cover;display:block}
+.news .in{padding:10px 14px}
+.news h4{font-size:16px;margin:4px 0}
+.slots{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.day{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.slot{border-top:1px dashed var(--line);padding:6px 0;min-height:42px}
+.slot .t{font-weight:600;font-size:12px;color:var(--mut)}
+.empty{color:var(--mut);font-style:italic}
+pre{white-space:pre-wrap;font-size:12px;max-height:340px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px}
+details summary{cursor:pointer}
+.pill{display:inline-block;font-size:11px;padding:0 6px;border-radius:8px;border:1px solid var(--line);margin-right:4px}
+</style>
+</head>
+<body>
+<header>
+  <b>Вх² · пульт робота новостей</b>
+  <nav><a href="#news">Новости</a><a href="#stack">Стек</a><a href="#sites">Сайты</a><a href="#recs">Рекомендации</a><a href="#log">Журнал</a></nav>
+  <span>Прогон <select id="run"></select></span>
+  <span id="status" class="m"></span>
+</header>
+<main>
+  <div class="grid4" id="progress"></div>
+  <p class="m" id="last"></p>
+
+  <h2 id="news">Новости — отбор, перевод, ранжирование</h2>
+  <div id="written"></div>
+  <div class="scroll"><table id="cands"></table></div>
+
+  <h2 id="stack">Стек на публикацию</h2>
+  <p class="m">Слоты выхода — из настроек проекта. «В стек» ставит историю в ближайший свободный слот; выбор слота переносит её, занятый слот меняется местами. Публиковать по стеку будет планировщик — пока это план.</p>
+  <div class="slots" id="slots"></div>
+
+  <h2 id="sites">Сайты, которые мониторим</h2>
+  <p class="m" id="sitesInfo"></p>
+  <div id="sites"></div>
+
+  <h2 id="recs">Сайты — рекомендации к добавлению</h2>
+  <p class="m">Робот находит издания по ссылкам статей (первоисточники и другие издания), проверяет у них ленту, robots.txt и частоту, LLM оценивает, подходит ли сайт. Решаете вы; решение применится при следующем запуске робота.</p>
+  <div id="recList"></div>
+  <div class="card" style="margin-top:10px">
+    <h3>Предложить сайт</h3>
+    <input id="propUrl" placeholder="https://archi.ru" style="width:40%;font:inherit;padding:3px 6px">
+    <input id="propNote" placeholder="Почему: где увидели, что там ценного" style="width:45%;font:inherit;padding:3px 6px">
+    <button class="acc" id="propose">Проверить</button>
+  </div>
+
+  <h2 id="log">Журнал прогона</h2>
+  <label class="m"><input type="checkbox" id="onlyProblems"> только предупреждения и ошибки</label>
+  <pre id="logbox"></pre>
+</main>
+<script>
+const TOPIC = {architecture: "Архитектура", neurogeneration: "Нейрогенерация", software: "ПО"};
+const KIND = {building:"здание",material:"материал",tool:"инструмент",competition:"конкурс",education:"образование",award:"премия",research:"исследование",event:"событие",business:"бизнес",policy:"политика",other:"прочее"};
+const STAGE = {run:"прогон",inbox:"решения",learn:"обучение",crawl:"сбор",triage:"отбор LLM",write:"текст",discover:"источники",notify:"уведомление"};
+const e = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = (id) => document.getElementById(id);
+let S = null, R = null, runId = null, logNext = 0, logRows = [], timer = null, follow = true;
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+
+function bar(done, total, label, sub) {
+  const pct = total ? Math.min(100, Math.round(done / total * 100)) : 0;
+  return `<div class="card"><h3>${label}</h3><div class="big">${done}<span class="m"> / ${total}</span></div>
+    <div class="bar ${total && done >= total ? "done" : ""}"><i style="width:${pct}%"></i></div><div class="m">${sub}</div></div>`;
+}
+
+function renderProgress() {
+  const st = R.stages || {};
+  const [cd, ct] = st.crawl || [0, 0], [td, tt] = st.triage || [0, 0], [wd, wt] = st.write || [0, 0];
+  const q = S.queue, totalSlots = q.days.length * q.times.length;
+  const failed = R.feeds.filter((f) => String(f.status).startsWith("ошибка")).length;
+  $("progress").innerHTML =
+    bar(cd, ct, "Сайты — сбор", `новых материалов ${R.items}${failed ? ` · ошибок ${failed}` : ""}`) +
+    bar(td, tt, "Отбор и ранжирование — LLM", `историй после склейки ${R.candidates.length || "—"}`) +
+    bar(wd, wt, "Перевод — тексты новостей", `готово ${R.news.filter((n) => n.news).length}`) +
+    bar(q.items.length, totalSlots, "Стек на публикацию", `слотов на ${q.days.length} дня по ${q.times.join(", ")}`);
+  const l = R.last || {};
+  $("last").innerHTML = R.running
+    ? `<b class="warn">Идёт прогон.</b> ${e(STAGE[l.stage] || l.stage)}: ${e(l.msg)} · ${e((l.ts || "").slice(11, 19))} UTC`
+    : `Прогон закончен: ${e(R.status)}. ${e(R.llm_note || "")}`;
+  $("status").textContent = R.running ? "обновляется каждые 3 с" : "обновляется каждые 15 с";
+}
+
+function verdictButtons(c) {
+  const v = S.judged[c.story_key] || (S.pending.find((p) => p.action === "judge" && p.story_key === c.story_key) || {}).verdict;
+  return `<button class="${v === "yes" ? "on" : ""}" data-judge="yes" data-key="${e(c.story_key)}">Да</button>
+          <button class="${v === "no" ? "on" : ""}" data-judge="no" data-key="${e(c.story_key)}">Нет</button>`;
+}
+
+function renderNews() {
+  const inStack = new Set(S.queue.items.map((i) => i.story_key));
+  $("written").innerHTML = R.news.length ? R.news.map((s) => {
+    const n = s.news || {}, c = s.candidate, img = (n.images || [])[0];
+    return `<details class="news" ${R.news.length < 4 ? "open" : ""}><summary class="in"><b>${e(n.title || c.story_key)}</b>
+      <span class="m"> · оценка ${c.final}${(s.issues || []).length ? ` · замечаний ${s.issues.length}` : ""}</span></summary>
+      ${img ? `<img src="${e(img.url)}" loading="lazy" alt=""><div class="in m">${e(img.caption)}</div>` : ""}
+      <div class="in"><p><b>${e(n.lead)}</b></p>${(n.paragraphs || []).map((p) => `<p>${e(p)}</p>`).join("")}
+      ${n.student_note ? `<p><b>Что посмотреть студенту:</b> ${e(n.student_note)}</p>` : ""}
+      ${(n.images || []).slice(1).map((i) => `<p class="m">${e(i.caption)}</p>`).join("")}
+      ${[...(s.issues || []), ...(s.warnings || [])].map((x) => `<p class="warn">${e(x)}</p>`).join("")}
+      <p>${inStack.has(c.story_key) ? `<span class="ok">в стеке</span>` : `<button class="acc" data-stack="${e(c.story_key)}">В стек</button>`}</p></div></details>`;
+  }).join("") : (R.running ? `<p class="m">Тексты появятся по мере готовности.</p>` : "");
+
+  const rows = R.candidates.length ? R.candidates : R.partial.map((p) => ({
+    story_key: p.story_key || p.id, final: p.interest, interest: p.interest, title_ru: p.title_ru || p.title,
+    topic: p.topic, kind: p.kind, reason: p.reason, competition: p.competition, sources: [{source: p.source, url: p.url}],
+    partial: true}));
+  if (!rows.length) { $("cands").innerHTML = `<tr><td class="m">${R.running ? "Отбор ещё не начался." : "Отбора в этом прогоне не было."}</td></tr>`; return; }
+  const written = new Set(R.news.map((n) => n.candidate.story_key));
+  $("cands").innerHTML = `<tr><th>#</th><th>Оценка</th><th>Тема</th><th>Новость</th><th>Почему</th><th>Выпустил бы?</th><th>Стек</th></tr>` +
+    rows.map((c, i) => `<tr><td>${i + 1}</td><td><b>${c.final}</b>${c.partial ? "" : `<br><span class="m">LLM ${c.interest}</span>`}</td>
+      <td>${e(TOPIC[c.topic] || c.topic || "")}<br><span class="m">${e(KIND[c.kind] || c.kind || "")}${c.competition ? " · конкурс" : ""}</span></td>
+      <td>${e(c.title_ru)}${written.has(c.story_key) ? ` <span class="pill ok">переведено</span>` : ""}<br>
+        ${(c.sources || []).map((s) => `<a class="m" href="${e(s.url)}" target="_blank">${e(s.source)}</a>`).join(" · ")}</td>
+      <td class="m">${e(c.reason)}</td><td>${c.partial ? "" : verdictButtons(c)}</td>
+      <td>${c.partial ? "" : inStack.has(c.story_key) ? `<span class="ok">в стеке</span>` : `<button data-stack="${e(c.story_key)}">В стек</button>`}</td></tr>`).join("");
+}
+
+function renderStack() {
+  const q = S.queue, byslot = {};
+  q.items.forEach((i) => byslot[i.date + " " + i.time] = i);
+  const options = q.days.flatMap((d) => q.times.map((t) => `${d} ${t}`));
+  const dayName = (d) => new Date(d + "T12:00:00").toLocaleDateString("ru-RU", {weekday: "short", day: "numeric", month: "long"});
+  $("slots").innerHTML = q.days.map((d) => `<div class="day"><b>${e(dayName(d))}</b>` + q.times.map((t) => {
+    const it = byslot[d + " " + t];
+    return `<div class="slot"><div class="t">${t}</div>` + (it
+      ? `<div>${e(it.title)}</div><div class="m">${e(TOPIC[it.topic] || "")} · оценка ${e(it.final)}</div>
+         <select data-move="${e(it.story_key)}">${options.map((o) => `<option ${o === d + " " + t ? "selected" : ""}>${o}</option>`).join("")}</select>
+         <button data-remove="${e(it.story_key)}">Снять</button>`
+      : `<div class="empty">свободно</div>`) + `</div>`;
+  }).join("") + `</div>`).join("");
+  const outside = q.items.filter((i) => !q.days.includes(i.date));
+  if (outside.length) $("slots").innerHTML += `<div class="day"><b>Позже</b>${outside.map((i) => `<div class="slot"><div class="t">${i.date} ${i.time}</div>${e(i.title)}</div>`).join("")}</div>`;
+}
+
+function renderSites() {
+  const thisRun = Object.fromEntries(R.feeds.map((f) => [f.id, f]));
+  const src = S.sources, on = src.filter((s) => s.enabled).length;
+  $("sitesInfo").textContent = `Включено ${on} из ${src.length}. В этом прогоне прочитано ${R.feeds.filter((f) => !String(f.status).startsWith("ошибка")).length}.`;
+  const groups = [["architecture", "Архитектура"], ["neurogeneration", "Нейрогенерация"], ["software", "Архитектурное ПО"]];
+  $("sites").innerHTML = groups.map(([code, title]) => {
+    const g = src.filter((s) => (s.topics || [])[0] === code);
+    return `<details ${code === "architecture" ? "open" : ""}><summary><b>${title}</b> <span class="m">${g.filter((s) => s.enabled).length} из ${g.length}</span></summary>
+      <div class="scroll"><table><tr><th>Сайт</th><th>Как читаем</th><th>Доверие</th><th>Этот прогон</th><th>Свежий материал</th><th>Состояние</th></tr>` +
+      g.map((s) => {
+        const f = thisRun[s.id], list = Array.isArray(s.list_url) ? s.list_url[0] : s.list_url;
+        const how = s.feed ? `<a href="${e(s.feed)}" target="_blank">лента</a>` : list ? `<a href="${e(list)}" target="_blank">страница-список</a>` : "—";
+        const run = !s.enabled ? "—" : f ? (String(f.status).startsWith("ошибка") ? `<span class="err">${e(f.status)}</span>` : `${f.items} · новых <b>${f.new}</b>`) : (R.running ? `<span class="m">ждёт</span>` : "—");
+        const state = !s.enabled ? `<span class="m">выключен${s.note ? ": " + e(s.note) : ""}</span>` : s.fail_count ? `<span class="err">ошибка ×${s.fail_count}: ${e(s.last_error)}</span>` : `<span class="m">${s.last_checked ? "прочитан " + e(s.last_checked.slice(0, 16).replace("T", " ")) : "ещё не обходили"}</span>`;
+        return `<tr style="${s.enabled ? "" : "opacity:.6"}"><td><a href="${e(s.site || s.feed || list)}" target="_blank">${e(s.title)}</a> <span class="m">${e(s.lang || "")}${s.vendor ? " · производитель" : ""}</span></td>
+          <td class="m">${how}${Object.keys(s.filters || {}).length ? " · фильтр" : ""}</td><td>${e(s.trust ?? "")}</td><td>${run}</td>
+          <td class="m">${e((s.last_item || "").slice(0, 10))}</td><td>${state}</td></tr>`;
+      }).join("") + `</table></div></details>`;
+  }).join("");
+}
+
+const REC = {include: "включить", once: "разово", skip: "не нужен"};
+const LINK = {primary: "первоисточник", news_portal: "издание", research: "исследование"};
+function renderRecs() {
+  const queued = new Set(S.pending.filter((p) => p.action === "decide").map((p) => p.domain));
+  const proposed = S.pending.filter((p) => p.action === "propose");
+  const open = S.candidates.filter((c) => c.status === "новый" || c.status === "ждёт решения");
+  const done = S.candidates.filter((c) => !(c.status === "новый" || c.status === "ждёт решения"));
+  const card = (c) => {
+    const p = c.probe || {}, a = c.assessment || {};
+    const origin = c.proposed_by === "editor" ? `предложили вы${c.note ? ": " + e(c.note) : ""}`
+      : `ссылок из статей ${c.count || 0} (${Object.entries(c.kinds || {}).map(([k, v]) => `${LINK[k] || k} ${v}`).join(", ")})`;
+    return `<div class="card" style="margin:8px 0"><div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+      <b style="flex:1">${e(p.title || c.domain)} <span class="m">${e(c.domain)}</span></b>
+      ${queued.has(c.domain) ? `<span class="m">решение в очереди</span>` :
+        `<button class="acc" data-decide="include" data-domain="${e(c.domain)}">Включить</button>
+         <button data-decide="once" data-domain="${e(c.domain)}">Разово</button>
+         <button data-decide="reject" data-domain="${e(c.domain)}">Отклонить</button>`}</div>
+      <div class="m">${origin}${c.probe ? ` · лента: ${p.feed ? "есть" : "нет"} · ${p.per_week || 0} в неделю · язык ${e(p.lang || "?")}${p.note ? " · " + e(p.note) : ""}` : " · робот ещё не проверял"}</div>
+      ${c.assessment ? `<div>LLM: <b>${e(REC[a.recommend] || a.recommend)}</b>${(a.topics || []).length ? " · " + a.topics.map((t) => TOPIC[t] || t).join(", ") : ""}${a.trust != null ? " · доверие " + a.trust : ""} — ${e(a.reason)}</div>` : ""}
+      ${(p.samples || []).length ? `<div class="m">${p.samples.slice(0, 4).map((t) => "— " + e(t)).join("<br>")}</div>` : ""}
+      ${(c.examples || []).slice(0, 2).map((x) => `<div class="m">ссылка: <a href="${e(x.url)}" target="_blank">${e(x.about || x.url)}</a></div>`).join("")}</div>`;
+  };
+  $("recList").innerHTML =
+    (open.length ? open.map(card).join("") : `<p class="m">Рекомендаций, ждущих решения, нет.</p>`) +
+    (proposed.length ? `<p class="m">Предложено, ждёт проверки роботом: ${proposed.map((p) => e(p.url)).join(", ")}</p>` : "") +
+    (done.length ? `<details><summary class="m">Решённые (${done.length})</summary><table><tr><th>Сайт</th><th>Решение</th><th>Когда</th></tr>${done.map((c) =>
+      `<tr><td>${e(c.domain)}</td><td>${e(c.status)}</td><td class="m">${e((c.decided_at || "").slice(0, 16).replace("T", " "))}</td></tr>`).join("")}</table></details>` : "");
+}
+
+function renderLog() {
+  const only = $("onlyProblems").checked;
+  const rows = only ? logRows.filter((l) => l.level === "warn" || l.level === "error") : logRows;
+  $("logbox").innerHTML = rows.slice(-300).map((l) => {
+    const {ts, level, stage, msg, run_id, ...rest} = l;
+    const extra = Object.entries(rest).map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : v}`).join(" ");
+    return `<div class="${level === "error" ? "err" : level === "warn" ? "warn" : ""}">${e((ts || "").slice(11, 19))} ${e(STAGE[stage] || stage)}: ${e(msg)} <span class="m">${e(extra)}</span></div>`;
+  }).join("");
+  if (follow) $("logbox").scrollTop = $("logbox").scrollHeight;
+}
+
+async function refresh() {
+  clearTimeout(timer);
+  try {
+    S = await api("/api/state");
+    if (!runId && S.runs.length) runId = S.runs[0].id;
+    $("run").innerHTML = S.runs.map((r) => `<option value="${r.id}" ${r.id === runId ? "selected" : ""}>${r.id}${r.done ? "" : " — идёт"}</option>`).join("");
+    if (runId) {
+      R = await api(`/api/runs/${runId}`);
+      const lg = await api(`/api/runs/${runId}/log?from=${logNext}`);
+      logRows = logRows.concat(lg.items); logNext = lg.next;
+      renderProgress(); renderNews(); renderStack(); renderSites(); renderRecs(); renderLog();
+    }
+  } catch (err) {
+    $("status").innerHTML = `<span class="err">${e(err.message)}</span>`;
+  }
+  timer = setTimeout(refresh, R && R.running ? 3000 : 15000);
+}
+
+document.addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button");
+  if (!b) return;
+  try {
+    if (b.dataset.judge) {
+      await api("/api/inbox", {action: "judge", run_id: runId, story_key: b.dataset.key, verdict: b.dataset.judge});
+    } else if (b.dataset.stack) {
+      const c = R.candidates.find((x) => x.story_key === b.dataset.stack) || {};
+      const n = R.news.find((x) => x.candidate.story_key === b.dataset.stack);
+      await api("/api/queue", {action: "add", story_key: b.dataset.stack, run_id: runId,
+        title: (n && n.news && n.news.title) || c.title_ru, topic: c.topic, final: c.final, url: ((c.sources || [])[0] || {}).url});
+    } else if (b.dataset.remove) {
+      await api("/api/queue", {action: "remove", story_key: b.dataset.remove});
+    } else if (b.dataset.decide) {
+      await api("/api/inbox", {action: "decide", domain: b.dataset.domain, decision: b.dataset.decide});
+    } else if (b.id === "propose") {
+      const url = $("propUrl").value.trim();
+      if (!/^https?:\/\/\S+\.\S+/.test(url)) return alert("Нужен адрес сайта, например https://archi.ru");
+      await api("/api/inbox", {action: "propose", url, note: $("propNote").value.trim() || null});
+      $("propUrl").value = ""; $("propNote").value = "";
+    }
+    refresh();
+  } catch (err) { alert(err.message); }
+});
+document.addEventListener("change", async (ev) => {
+  if (ev.target.id === "run") { runId = ev.target.value; logNext = 0; logRows = []; return refresh(); }
+  if (ev.target.id === "onlyProblems") return renderLog();
+  if (ev.target.dataset.move) {
+    const [date, time] = ev.target.value.split(" ");
+    try { await api("/api/queue", {action: "move", story_key: ev.target.dataset.move, date, time}); refresh(); }
+    catch (err) { alert(err.message); }
+  }
+});
+$("logbox").addEventListener("scroll", () => { const b = $("logbox"); follow = b.scrollTop + b.clientHeight >= b.scrollHeight - 20; });
+refresh();
+</script>
+</body>
+</html>

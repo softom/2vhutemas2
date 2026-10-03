@@ -53,7 +53,10 @@ def log(run: "Run", level: str, stage: str, msg: str, **extra) -> None:
     # Живое состояние для страницы робота: этап, последнее сообщение, счёт.
     progress = {"run_id": run.id, "stage": stage, "msg": msg, "ts": rec["ts"], "level": level,
                 "feeds": len(run.feeds), "items": len(run.items), "candidates": len(run.candidates),
-                "news": len(run.news)}
+                "news": len(run.news),
+                "stages": {"crawl": [len(run.feeds), run.feeds_total],
+                           "triage": [run.triage_done, run.triage_total],
+                           "write": [run.write_done, run.write_total]}}
     tmp = run.dir / "progress.json.tmp"
     tmp.write_text(json.dumps(progress, ensure_ascii=False), encoding="utf-8")
     tmp.replace(run.dir / "progress.json")
@@ -104,6 +107,12 @@ class Run:
     already_seen: int = 0
     candidates: list[dict] = field(default_factory=list)
     link_domains: list[dict] = field(default_factory=list)
+    # Прогресс по этапам для пульта: сколько всего и сколько сделано.
+    feeds_total: int = 0
+    triage_total: int = 0
+    triage_done: int = 0
+    write_total: int = 0
+    write_done: int = 0
     news: list[dict] = field(default_factory=list)
     llm_note: str | None = None
 
@@ -113,6 +122,7 @@ class Run:
 def crawl(run: Run, sources: list[dict], fetcher: Fetcher, state: State, ignore_seen: bool,
           remember: bool) -> None:
     """remember=False — не запоминать etag: без отбора материалы иначе пропали бы при следующем 304."""
+    run.feeds_total = len(sources)
     for src in sources:
         f = state.feed(src["id"])
         rec = {"id": src["id"], "title": src["title"], "feed": src.get("feed") or _first(src["list_url"]),
@@ -224,6 +234,7 @@ def profile_text(state: State | None = None) -> str:
 def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int, state: State | None = None) -> dict[str, dict]:
     system = prompt("triage", examples=examples_text(state), profile=profile_text(state))
     scores: dict[str, dict] = {}
+    run.triage_total = len(run.items)
     for i in range(0, len(run.items), batch):
         part = run.items[i:i + batch]
         payload = [{"id": it.id, "source": sources[it.source_id]["title"], "date": (it.published or "")[:10],
@@ -237,6 +248,12 @@ def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int, state: Stat
         for rec in result.get("items", []):
             if rec.get("id") in {p.id for p in part}:
                 scores[rec["id"]] = rec
+        run.triage_done = min(run.triage_total, i + len(part))
+        # Промежуточный итог отбора — пульт показывает оценки, не дожидаясь конца.
+        by_id = {it.id: it for it in run.items}
+        _dump(run.dir / "triage_partial.json", sorted(
+            [{**s, "source": sources[by_id[k].source_id]["title"], "url": by_id[k].url, "title": by_id[k].title}
+             for k, s in scores.items() if k in by_id], key=lambda s: -(s.get("interest") or 0)))
         log(run, "info", "triage", "пачка оценена", size=len(part), got=len(result.get("items", [])))
     return scores
 
@@ -413,12 +430,17 @@ def run(args) -> Run:
             if it.id in scores:
                 state.mark(it.id, it.url, it.source_id)
         by_id = {i.id: i for i in r.items}
-        for cand in [c for c in r.candidates if c["interest"] >= args.threshold][:args.top]:
+        chosen = [c for c in r.candidates if c["interest"] >= args.threshold][:args.top]
+        r.write_total = len(chosen)
+        for cand in chosen:
             try:
                 story = write_story(r, cand, by_id, sources, fetcher, llm)
                 r.news.append(story)
+                r.write_done += 1
+                _dump(out / "news.json", r.news)
                 log(r, "info", "write", "новость написана", story=cand["story_key"], issues=len(story["issues"]))
             except LLMError as e:
+                r.write_done += 1
                 log(r, "error", "write", "новость не написана", story=cand["story_key"], error=str(e))
         _dump(out / "news.json", r.news)
         r.link_domains = link_domains(r.news, sources)

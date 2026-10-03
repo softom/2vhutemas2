@@ -42,7 +42,8 @@ def check(news: dict, facts: dict) -> list[str]:
     if extra:
         issues.append("числа без опоры в фактах: " + ", ".join(extra))
     low = (body + " " + title).lower()
-    hits = [w for w in EVALUATIVE if w in low]
+    # По началу слова: «лучш» — это «лучший», а не «улучшения».
+    hits = [w for w in EVALUATIVE if re.search(r"(?<![а-яё])" + w, low)]
     if hits:
         issues.append("оценочные слова: " + ", ".join(hits))
     images = news.get("images") or []
