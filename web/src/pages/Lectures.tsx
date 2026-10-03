@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ListCount } from "../ui/ListCount";
+import { CompactLine } from "../ui/CompactLine";
 import { api, type EntityListItem } from "../api";
 
 export function Lectures({ canCreate }: { canCreate: boolean }) {
@@ -65,7 +66,8 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
               <tr key={item.id}>
                 <td>{item.values?.lecture_number ?? "—"}</td>
                 <td>
-                  <a href={`/entities/${item.slug}`}>{item.title_ru}</a>
+                  {/* Тот же компактный вид, что в списке сервера (compactLine). */}
+                  <CompactLine slug={item.slug} title={item.title_ru} compact={item.compact} />
                   {item.type !== "lecture" && (
                     <span className="hint">{item.type_title ?? item.type}</span>
                   )}
