@@ -68,7 +68,8 @@ def build(r: Run) -> str:
             for im in imgs[1:]:
                 parts.append(f"<figure><img src='{e(im.get('url'))}' loading=lazy>"
                              f"<figcaption>{e(im.get('caption'))}</figcaption></figure>")
-            parts.append(f"<p><b>Что посмотреть студенту:</b> {e(n.get('student_note'))}</p>")
+            if n.get("more"):
+                parts.append(f"<p class=m>{e(n.get('more'))}</p>")
             src = " · ".join(f"<a href='{e(s['url'])}'>{e(s['source'])}, {e(s['date'])}</a>" for s in c["sources"])
             parts.append(f"<p class=m>Первоисточник: {src}</p>")
             extra = [x for x in (n.get("sources") or []) if x.get("url")]

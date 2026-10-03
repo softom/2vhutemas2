@@ -132,7 +132,7 @@ function renderNews() {
       <span class="m"> · оценка ${c.final}${(s.issues || []).length ? ` · замечаний ${s.issues.length}` : ""}</span></summary>
       ${img ? `<img src="${e(img.url)}" loading="lazy" alt=""><div class="in m">${e(img.caption)}</div>` : ""}
       <div class="in"><p><b>${e(n.lead)}</b></p>${(n.paragraphs || []).map((p) => `<p>${e(p)}</p>`).join("")}
-      ${n.student_note ? `<p><b>Что посмотреть студенту:</b> ${e(n.student_note)}</p>` : ""}
+      ${n.more ? `<p class="m">${e(n.more)}</p>` : ""}
       ${(n.images || []).slice(1).map((i) => `<p class="m">${e(i.caption)}</p>`).join("")}
       ${[...(s.issues || []), ...(s.warnings || [])].map((x) => `<p class="warn">${e(x)}</p>`).join("")}
       <p>${inStack.has(c.story_key) ? `<span class="ok">в стеке</span>` : `<button class="acc" data-stack="${e(c.story_key)}">В стек</button>`}</p></div></details>`;

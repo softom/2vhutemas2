@@ -222,7 +222,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
             {img && <figure><img src={img.url} alt="" loading="lazy" style={{ maxWidth: "100%" }} /><figcaption className="hint">{img.caption}</figcaption></figure>}
             <p><b>{n.lead}</b></p>
             {n.paragraphs?.map((p, i) => <p key={i}>{p}</p>)}
-            {n.student_note && <p><b>Что посмотреть студенту:</b> {n.student_note}</p>}
+            {n.more && <p className="hint">{n.more}</p>}
             {[...s.issues, ...s.warnings].map((x, i) => <p className="error" key={i}>{x}</p>)}
             <p>{inStack.has(s.candidate.story_key) ? <span className="hint">в стеке</span>
               : cand && <button type="button" onClick={() => toStack(cand, n.title)}>В стек</button>}</p>
@@ -280,7 +280,11 @@ function Publication({ storyKey, ov, slot = true }: { storyKey: string; ov: Robo
   if (!p || p.status === "новый" || p.status === "ждёт") return <span className="hint">{place}ждёт перевода</span>;
   if (p.status === "переводится") return <span className="hint">{place}переводится…</span>;
   if (p.status === "ошибка") return <span className="error">{place}ошибка: {p.error}</span>;
-  return <span>{place}<Link to={`/robot/preview/${storyKey}`}>готово — превью</Link></span>;
+  const issues = p.issues ?? 0;
+  return (
+    <span>{place}<Link to={`/robot/preview/${storyKey}`}>готово — превью</Link>
+      {issues > 0 && <span className="error"> · замечаний {issues}</span>}</span>
+  );
 }
 
 /** Превью подготовленной новости — так, как она выйдет на сайте. */
@@ -312,7 +316,7 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
       {n.images?.slice(1).map((im) => (
         <figure key={im.url}><img src={im.url} alt="" style={{ maxWidth: "100%" }} loading="lazy" /><figcaption className="hint">{im.caption}</figcaption></figure>
       ))}
-      {n.student_note && <p><b>Что посмотреть студенту:</b> {n.student_note}</p>}
+      {n.more && <p className="hint">{n.more}</p>}
       <p className="hint">
         Первоисточник: {sources.map((src, i) => (
           <span key={src.url}>{i ? " · " : ""}<a href={src.url} target="_blank" rel="noreferrer">{src.source}{src.date ? `, ${src.date}` : ""}</a></span>

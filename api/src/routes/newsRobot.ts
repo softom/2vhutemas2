@@ -279,11 +279,16 @@ async function preparedIndex(): Promise<Record<string, Row>> {
   try {
     for await (const entry of Deno.readDir(`${ROOT}/state/prepared`)) {
       if (!entry.isFile || !entry.name.endsWith(".json")) continue;
-      const rec = await readJson<Row & { story?: { news?: { title?: string } } }>(`${ROOT}/state/prepared/${entry.name}`);
+      const rec = await readJson<Row & { story?: { news?: { title?: string }; issues?: string[]; warnings?: string[] } }>(
+        `${ROOT}/state/prepared/${entry.name}`,
+      );
       if (!rec) continue;
       index[String(rec.story_key)] = {
         status: rec.status, ready_at: rec.ready_at, started_at: rec.started_at, error: rec.error,
         origin: rec.origin, title: rec.story?.news?.title,
+        // Замечания и предупреждения, кроме «фото без автора» и «перепечатка» — они видны в превью.
+        issues: [...(rec.story?.issues ?? []), ...(rec.story?.warnings ?? [])]
+          .filter((x) => !x.startsWith("фото без автора") && !x.startsWith("перепечатка")).length,
       };
     }
   } catch (e) {

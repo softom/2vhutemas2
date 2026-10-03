@@ -76,6 +76,10 @@ def check(news: dict, facts: dict, article: str = "", genre: str = "news") -> li
     for im in images:
         if not im.get("credit"):
             issues.append("фото без автора — задача редактора (Р-68): " + im.get("url", "")[:80])
-    if not news.get("student_note"):
-        issues.append("нет блока «что посмотреть студенту»")
+    # Назидания и обращения к читателю — не тон сайта для архитекторов (Р-99).
+    text_all = " ".join([title, body, news.get("more") or ""]).lower()
+    lecturing = [w for w in ("изучите", "обратите внимание", "посмотрите", "попробуйте", "студентам стоит",
+                             "студенту стоит", "полезно для студентов", "полезно студентам") if w in text_all]
+    if lecturing:
+        issues.append("назидательный тон: " + ", ".join(lecturing))
     return issues

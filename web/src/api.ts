@@ -343,7 +343,7 @@ export interface RobotRun {
   counts: Record<string, number>;
   feeds: { id: string; title: string; feed: string; status: string; items: number; new: number; newest: string | null }[];
   candidates: { story_key: string; final: number; interest: number; title_ru: string; topic?: string; kind?: string; competition?: boolean; students_eligible?: boolean | null; reason?: string; sources: { source: string; url: string; date: string }[] }[];
-  news: { candidate: { story_key: string; final: number }; news?: { title?: string; lead?: string; paragraphs?: string[]; student_note?: string; images?: { url: string; caption?: string }[] } | null; issues: string[]; warnings: string[] }[];
+  news: { candidate: { story_key: string; final: number }; news?: { title?: string; lead?: string; paragraphs?: string[]; more?: string; images?: { url: string; caption?: string }[] } | null; issues: string[]; warnings: string[] }[];
   link_domains: { domain: string; count: number; kinds: Record<string, number>; known: boolean; examples: { url: string; about?: string | null }[] }[];
   judged?: Record<string, "yes" | "no">;
 }
@@ -399,11 +399,11 @@ export interface RobotOverview {
   prepared: Record<string, RobotPrepared>;
 }
 /** Подготовка новости из стека (Р-97). */
-export interface RobotPrepared { status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string }
+export interface RobotPrepared { status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string; issues?: number }
 export interface RobotPreparedFull extends RobotPrepared {
   story_key: string;
   story?: {
-    news?: { title?: string; lead?: string; paragraphs?: string[]; student_note?: string; images?: { url: string; caption?: string; credit?: string }[];
+    news?: { title?: string; lead?: string; paragraphs?: string[]; more?: string; images?: { url: string; caption?: string; credit?: string }[];
       mentions?: { name: string }[]; sources?: { url: string; title?: string }[] };
     candidate?: { sources?: { source: string; url: string; date?: string }[] };
     source?: Record<string, unknown>;
@@ -422,7 +422,7 @@ export interface RobotRunView {
   feeds: { id: string; title: string; status: string; items: number; new: number }[];
   candidates: RobotStory[];
   partial: { id?: string; story_key?: string; interest?: number; title_ru?: string; title?: string; topic?: string; kind?: string; reason?: string; source?: string; url?: string; competition?: boolean }[];
-  news: { candidate: { story_key: string; final: number }; news?: { title?: string; lead?: string; paragraphs?: string[]; student_note?: string; images?: { url: string; caption?: string }[] } | null; issues: string[]; warnings: string[] }[];
+  news: { candidate: { story_key: string; final: number }; news?: { title?: string; lead?: string; paragraphs?: string[]; more?: string; images?: { url: string; caption?: string }[] } | null; issues: string[]; warnings: string[] }[];
   link_domains: RobotRun["link_domains"];
   errors: RobotLogLine[];
 }
