@@ -699,6 +699,26 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   // раздел, но не решает, какие и в каком порядке.
   const sections: Record<string, () => string> = {
     indicators: () => {
+      // Новость: одни «Сведения» — выход днём и слотом, тема, первоисточник
+      // ссылкой, публикация в источнике. Значимость — оценка робота для
+      // редактора, читателю её не показываем.
+      if (news) {
+        const by = (code: string) => card.values.filter((v) => v.parameter === code);
+        const rows: [string, string][] = [];
+        const release = by("news_release")[0];
+        const time = by("news_release_time")[0]?.text_value;
+        if (release) rows.push(["Выход", e(valueText(release)) + (time ? `, ${e(time)}` : "")]);
+        const topics = by("news_topic").map((v) => v.option_title).filter(Boolean);
+        if (topics.length) rows.push([topics.length > 1 ? "Темы" : "Тема", e(topics.join(", "))]);
+        const url = by("url")[0]?.text_value;
+        if (url && /^https?:/i.test(url)) {
+          const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } })();
+          rows.push(["Первоисточник", `<a href="${e(url)}" rel="noopener">${e(host)}</a>`]);
+        }
+        const published = by("publication")[0];
+        if (published) rows.push(["Опубликовано в источнике", e(valueText(published))]);
+        return rows.length ? `<h2>Сведения</h2><dl>${rows.map(([t, v]) => `<dt>${t}</dt><dd>${v}</dd>`).join("")}</dl>` : "";
+      }
       const out: string[] = [];
       const groups = new Map<number, CardValue[]>();
       for (const value of card.values) {
@@ -748,7 +768,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         `<p><a class="button" href="${e(url)}" rel="noopener">Смотреть${platform ? ` на ${e(platform)}` : ""}</a>` +
         (duration ? ` <span class="hint">${e(duration)}</span>` : "") + `</p>`;
     },
-    text: () => descriptionHtml ? `<h2>Описание</h2><div class="public-document">${descriptionHtml}</div>` : "",
+    // У новости текст идёт сразу за заголовком, без «Описания».
+    text: () => descriptionHtml ? `${news ? "" : "<h2>Описание</h2>"}<div class="public-document">${descriptionHtml}</div>` : "",
     // Изображение — цитата (Р-68): под каждым автор и источник.
     gallery: () => card.media.length === 0 ? "" :
       `<h2>Изображения</h2><div class="public-gallery">${
