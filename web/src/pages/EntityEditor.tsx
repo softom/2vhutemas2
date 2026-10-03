@@ -351,6 +351,22 @@ function EditorBody(props: any) {
     }
   };
 
+  const unpublish = async () => {
+    if (!entityId) return;
+    if (!confirm("Снять запись с публикации? Читатели перестанут её видеть; версии сохранятся.")) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.unpublishEntity(entityId);
+      setPublishedRevision(null);
+      setStatus("Снято с публикации: запись — черновик");
+    } catch (e) {
+      setError((e as ApiError).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Кнопки сохранения стоят и сверху, и снизу: форма длиннее экрана,
   // и искать кнопку в её конце неудобно.
   const actions = (
@@ -361,6 +377,13 @@ function EditorBody(props: any) {
       <button type="button" onClick={() => save(true)} disabled={saving}>
         {canPublish ? "Сохранить и опубликовать" : "Сохранить и отправить на рассмотрение"}
       </button>
+      {/* Снятие с публикации — обратно в черновик; версии и история целы,
+          опубликовать снова можно той же кнопкой. */}
+      {entityId && canPublish && publishedRevision && (
+        <button type="button" className="ghost" onClick={unpublish} disabled={saving}>
+          Снять с публикации
+        </button>
+      )}
       {entityId && (
         <button type="button" className="ghost" onClick={() => globalThis.location.assign(`/entities/${entityId}`)}>
           К карточке

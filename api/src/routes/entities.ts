@@ -15,7 +15,7 @@ import { type AppEnv, decodeCursor, encodeCursor, pageSize } from "../lib/http.t
 import { CATALOG_HIDDEN_ROOTS, resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../lib/entityTypes.ts";
 import { entityAuthors, resolveEntity } from "../lib/publicCard.ts";
 import { absolute, citation, entityPath } from "../lib/site.ts";
-import { publishOwnerRevision } from "../lib/ownedVersions.ts";
+import { publishOwnerRevision, unpublishOwner } from "../lib/ownedVersions.ts";
 import { notifyIndexNow } from "./pages.ts";
 
 import { validateDocument, saveRefs } from "./documents.ts";
@@ -475,6 +475,25 @@ entities.post("/:id/publish", async (c: Context<AppEnv>) => {
   const rows = await sql<{ slug: string }>`
     select slug from app.entities where id = ${id} and is_published
   `;
+  if (rows.length > 0) notifyIndexNow(c.get("requestId"), [entityPath(rows[0].slug)]);
+  return c.json({ entity_id: id, ...result });
+});
+
+/**
+ * Снятие с публикации: запись уходит в черновик, читатель её больше не видит,
+ * версии и история сохраняются. Вернуть — тем же POST /publish.
+ */
+entities.post("/:id/unpublish", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "publish");
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) throw new ApiError("not_found", "Запись не найдена");
+  const input = await c.req.json<{ note?: string }>().catch(() => ({} as { note?: string }));
+
+  const rows = await sql<{ slug: string }>`select slug from app.entities where id = ${id}`;
+  const result = await transaction(principal.contributorId, (tx) =>
+    unpublishOwner(tx, { kind: "entity", id }, principal.contributorId, input.note ?? null));
+
+  // Адрес больше не отдаёт страницу: поисковику — повод перепроверить его.
   if (rows.length > 0) notifyIndexNow(c.get("requestId"), [entityPath(rows[0].slug)]);
   return c.json({ entity_id: id, ...result });
 });

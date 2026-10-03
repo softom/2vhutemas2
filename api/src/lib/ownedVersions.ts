@@ -48,6 +48,44 @@ export async function publishOwned(tx: Tx, owner: {entity_id: number|null;link_i
 }
 
 /**
+ * Снятие с публикации: запись или связь возвращается в черновик.
+ *
+ * Версии не трогаются — снимается только указатель публикации, и читатель
+ * больше её не видит. В журнал рассмотрений пишется, кто и какую редакцию
+ * снял: история публикаций остаётся полной. Опубликовать снова можно тем
+ * же маршрутом публикации.
+ */
+export async function unpublishOwner(
+  tx: Tx,
+  owner: { kind: "entity" | "link"; id: number },
+  contributorId: string,
+  note: string | null,
+): Promise<{ unpublished_revision_id: string; status: "draft" }> {
+  const table = owner.kind === "entity" ? "сущность" : "связь";
+  const rows = owner.kind === "entity"
+    ? await tx<{ status: string; published_revision_id: string | null }>`
+        select status, published_revision_id from app.entities where id = ${owner.id} for update`
+    : await tx<{ status: string; published_revision_id: string | null }>`
+        select status, published_revision_id from app.links where id = ${owner.id} for update`;
+  if (rows.length === 0) throw new ApiError("not_found", `Не найдена ${table}`);
+  const current = rows[0];
+  if (current.status !== "published" || !current.published_revision_id) {
+    throw new ApiError("duplicate", "Запись не опубликована");
+  }
+
+  if (owner.kind === "entity") {
+    await tx`update app.entities set status = 'draft', published_revision_id = null where id = ${owner.id}`;
+  } else {
+    await tx`update app.links set status = 'draft', published_revision_id = null where id = ${owner.id}`;
+  }
+  await tx`
+    insert into app.revision_reviews (revision_id, reviewer_id, decision, note)
+    values (${current.published_revision_id}, ${contributorId}, 'unpublished', ${note})
+  `;
+  return { unpublished_revision_id: current.published_revision_id, status: "draft" };
+}
+
+/**
  * Публикация выбранной редакции владельцем.
  *
  * Порядок один для сущности и связи: взять редакцию (по умолчанию — рабочую),

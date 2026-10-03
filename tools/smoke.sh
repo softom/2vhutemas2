@@ -276,6 +276,13 @@ check "гость публиковать не может" 401 "$(code -X POST -H
 check "публикация несуществующей записи" 404 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/entities/99999999/publish)"
 code -H "$AUTH" $API/entities/$EID/versions >/dev/null
 contains "история показывает публичную редакцию" '"is_public":true' "$(body)"
+# Снятие с публикации: запись — снова черновик, гостю не видна, история цела.
+check "снятие с публикации" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"note":"smoke"}' $API/entities/$EID/unpublish)"
+check "снятая запись не видна гостю" 404 "$(code $API/entities/$EID)"
+check "повторное снятие" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/entities/$EID/unpublish)"
+check "гость снимать не может" 401 "$(code -X POST -H "$JSON" -d '{}' $API/entities/$EID/unpublish)"
+check "снова опубликовать ту же редакцию" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/entities/$EID/publish)"
+check "запись снова видна гостю" 200 "$(code $API/entities/$EID)"
 
 echo "── Страница для поисковика"
 # Готовый HTML записи (Р-65) проверяем снаружи, через Caddy: ломается

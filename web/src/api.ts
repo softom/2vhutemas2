@@ -497,6 +497,9 @@ export const api = {
   entityCardHtml: (id: number | string) =>
     request<{ html: string; title: string; path: string }>(`/entities/${encodeURIComponent(String(id))}/card`),
   entityVersions: (id: number) => request<{items:{id:string;created_at:string;summary:string;editor:string|null;is_public:boolean;is_working:boolean;complete:boolean}[]}>(`/entities/${id}/versions`),
+  /** Снять запись с публикации: обратно в черновик, версии сохраняются. */
+  unpublishEntity: (id: number) =>
+    request<{ entity_id: number; status: "draft" }>(`/entities/${id}/unpublish`, { method: "POST", body: JSON.stringify({}) }),
   publishMaterial: (id: string, revision_id: string) => request(`/materials/${id}/publish`, {method:"POST", body:JSON.stringify({revision_id})}),
   submitMaterial: (id: string) => request(`/materials/${id}/submit`, {method:"POST", body:JSON.stringify({})}),
   createEntity: (body: unknown) =>
