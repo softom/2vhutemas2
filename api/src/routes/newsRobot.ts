@@ -185,6 +185,26 @@ async function logLines(id: string): Promise<Row[]> {
   }
 }
 
+/** Начало прогона — время первой строки журнала; без журнала — по номеру. */
+async function runStart(id: string): Promise<string> {
+  try {
+    const file = await Deno.open(`${ROOT}/out/${id}/log.jsonl`);
+    const buf = new Uint8Array(400);
+    const n = await file.read(buf);
+    file.close();
+    const ts = /"ts": ?"([^"]+)"/.exec(new TextDecoder().decode(buf.subarray(0, n ?? 0)))?.[1];
+    if (ts) return ts;
+  } catch {
+    // нет журнала — ниже
+  }
+  return `${id.slice(0, 4)}-${id.slice(4, 6)}-${id.slice(6, 8)}T${id.slice(9, 11)}:${id.slice(11, 13)}:${id.slice(13, 15)}+00:00`;
+}
+
+/**
+ * Прогоны по времени начала, новые первыми. Номер прогона — местное время машины, где он шёл:
+ * перенесённые с машины разработчика — МСК, серверные — UTC, поэтому по номеру сортировать нельзя
+ * (догоняющий прогон 2026-10-03 из-за этого не открывался по умолчанию).
+ */
 async function runIds(): Promise<string[]> {
   const ids: string[] = [];
   try {
@@ -194,7 +214,8 @@ async function runIds(): Promise<string[]> {
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
-  return ids.sort().reverse();
+  const starts = await Promise.all(ids.map(async (id) => [id, new Date(await runStart(id)).getTime()] as const));
+  return starts.sort((a, b) => b[1] - a[1]).map(([id]) => id);
 }
 
 /** Слоты выхода — news.release.slots проекта; время московское. */
@@ -238,7 +259,7 @@ newsRobot.get("/overview", async (c) => {
     } catch {
       done = false;
     }
-    runs.push({ id, done });
+    runs.push({ id, done, started_at: await runStart(id) });
   }
   const state = await readJson<
     { candidates?: Record<string, Row>; judgments?: Record<string, Row>; learned?: Row }
@@ -428,4 +449,69 @@ newsRobot.post("/regenerate", async (c) => {
   await Deno.mkdir(`${ROOT}/inbox/regenerate`, { recursive: true });
   await Deno.writeTextFile(`${ROOT}/inbox/regenerate/${key}.json`, JSON.stringify(req));
   return c.json({ queued: req }, 202);
+});
+
+/**
+ * Состояние робота (Р-103): идёт ли сбор, что делает минутное задание, как работает LLM.
+ * Источники — журнал последнего прогона, .state/heartbeat.json, .state/llm_calls.jsonl.
+ */
+newsRobot.get("/health", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  const now = Date.now();
+  const ids = await runIds();
+  const lastId = ids[0];
+  let crawl: Row = { state: "нет прогонов" };
+  if (lastId) {
+    const log = await logLines(lastId);
+    const last = log[log.length - 1] ?? {};
+    const done = (await readJson<Row>(`${ROOT}/out/${lastId}/summary.json`)) !== null;
+    const lastTs = last.ts ? new Date(String(last.ts)).getTime() : 0;
+    const progress = await readJson<Row>(`${ROOT}/out/${lastId}/progress.json`);
+    crawl = {
+      run_id: lastId, started_at: await runStart(lastId), last_at: last.ts ?? null,
+      state: done ? "ждёт расписания" : now - lastTs < 10 * 60000 ? "идёт" : "прерван или завис",
+      stage: last.stage ?? null, msg: last.msg ?? null, stages: progress?.stages ?? null,
+    };
+  }
+  // Следующий плановый прогон — 04:00 UTC (07:00 МСК), news.crawl.schedule.
+  const next = new Date();
+  next.setUTCHours(4, 0, 0, 0);
+  if (next.getTime() <= now) next.setUTCDate(next.getUTCDate() + 1);
+  crawl.next_at = next.toISOString();
+
+  const beat = await readJson<{ ts: string; doing: string }>(`${ROOT}/state/heartbeat.json`);
+  const beatAge = beat ? Math.round((now - new Date(beat.ts).getTime()) / 1000) : null;
+  const worker = {
+    last_at: beat?.ts ?? null, age_s: beatAge, doing: beat?.doing ?? null,
+    state: beatAge === null ? "ещё не запускалось" : beatAge < 180 ? "работает" : "не отвечает",
+  };
+
+  const calls: Row[] = [];
+  try {
+    const text = await Deno.readTextFile(`${ROOT}/state/llm_calls.jsonl`);
+    for (const line of text.split("\n").slice(-3000)) {
+      if (!line.trim()) continue;
+      try {
+        calls.push(JSON.parse(line));
+      } catch {
+        // битая строка журнала — пропускаем
+      }
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  const day = calls.filter((x) => now - new Date(String(x.ts)).getTime() < 86400000);
+  const lastCall = calls[calls.length - 1] ?? null;
+  const lastCallAge = lastCall ? Math.round((now - new Date(String(lastCall.ts)).getTime()) / 1000) : null;
+  const llm = {
+    model: lastCall?.model ?? null, last: lastCall, age_s: lastCallAge,
+    state: !lastCall ? "вызовов ещё не было" : lastCall.ok === false ? "ошибка последнего вызова" : "отвечает",
+    day: {
+      calls: day.length, errors: day.filter((x) => x.ok === false).length,
+      prompt_tokens: day.reduce((n, x) => n + Number(x.prompt_tokens ?? 0), 0),
+      completion_tokens: day.reduce((n, x) => n + Number(x.completion_tokens ?? 0), 0),
+    },
+    recent: calls.slice(-15).reverse(),
+  };
+  return c.json({ now: new Date(now).toISOString(), crawl, worker, llm });
 });

@@ -109,11 +109,29 @@ def prepare_command(args) -> int:
             f.write(_json.dumps(rec, ensure_ascii=False) + chr(10))
         print(_json.dumps(rec, ensure_ascii=False))
 
-    prepare.run(ROOT, llm, log, pipeline)
+    def beat(doing: str) -> None:
+        """Пульс минутного задания для панели «Состояние» (Р-103)."""
+        try:
+            (ROOT / ".state").mkdir(exist_ok=True)
+            (ROOT / ".state" / "heartbeat.json").write_text(_json.dumps(
+                {"ts": _dt.now(_tz.utc).isoformat(timespec="seconds"), "doing": doing}, ensure_ascii=False),
+                encoding="utf-8")
+        except OSError:
+            pass
+
+    def logged(level, stage, msg, **extra):
+        log(level, stage, msg, **extra)
+        if msg in ("перевод начат", "перегенерация начата"):
+            beat(f"{msg}: {extra.get('story')}")
+
+    beat("проверяет стек")
+    prepare.run(ROOT, llm, logged, pipeline)
     # Публикатор (Р-102): черновики «Новость», слоты, выход в слот.
     from robot import publish
+    beat("публикатор: черновики и слоты")
     only = set(args.publish_now) if args.publish_now and args.publish_now != ["all"] else None
     publish.run(ROOT, log, now_all=args.publish_now is not None, only=only)
+    beat("ждёт следующей минуты")
     return 0
 
 

@@ -13,11 +13,23 @@ import json
 import os
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
 
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
+# Журнал вызовов для панели «Состояние» (Р-103): время, этап, модель, итог, токены.
+CALLS = Path(__file__).resolve().parent.parent / ".state" / "llm_calls.jsonl"
+
+
+def _note_call(rec: dict) -> None:
+    try:
+        CALLS.parent.mkdir(parents=True, exist_ok=True)
+        with open(CALLS, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
 
 
 class NoLLM(Exception):
@@ -73,11 +85,21 @@ class LLM:
             raise NoLLM(stage)
         if self.used["prompt"] + self.used["completion"] >= self.token_limit:
             raise LLMError(f"исчерпан предел токенов прогона ({self.token_limit})")
-        data = self._post(body)
+        started = time.time()
+        note = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "stage": stage, "model": self.model,
+                "where": self.dump_dir.parent.name}
+        try:
+            data = self._post(body)
+        except LLMError as e:
+            _note_call({**note, "ok": False, "error": str(e)[:200], "ms": int((time.time() - started) * 1000)})
+            raise
         usage = data.get("usage") or {}
         self.used["prompt"] += usage.get("prompt_tokens", 0)
         self.used["completion"] += usage.get("completion_tokens", 0)
         self.used["calls"] += 1
+        _note_call({**note, "ok": data["choices"][0].get("finish_reason") != "length",
+                    "ms": int((time.time() - started) * 1000), "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0)})
         choice = data["choices"][0]
         content = choice["message"].get("content") or ""
         (self.dump_dir / f"{stem}.response.json").write_text(content, encoding="utf-8")

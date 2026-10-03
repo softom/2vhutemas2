@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   api,
+  type RobotHealth,
   type RobotLearned,
   type RobotLogLine,
   type RobotOverview,
@@ -48,6 +49,7 @@ function when(iso?: string | null) {
 export function NewsRobot({ allowed }: { allowed: boolean }) {
   const { section = "", key } = useParams();
   const [ov, setOv] = useState<RobotOverview | null>(null);
+  const [health, setHealth] = useState<RobotHealth | null>(null);
   const [run, setRun] = useState<RobotRunView | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,8 +61,9 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
     clearTimeout(timer.current);
     let running = false;
     try {
-      const o = await api.robotOverview();
+      const [o, h] = await Promise.all([api.robotOverview(), api.robotHealth().catch(() => null)]);
       setOv(o);
+      setHealth(h);
       preparing.current = o.queue.items.some((i) => !["готово", "ошибка"].includes(o.prepared[i.story_key]?.status ?? ""));
       const id = runId ?? o.runs[0]?.id ?? null;
       if (id && id !== runId) setRunId(id);
@@ -106,10 +109,16 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
         ))}
         {ov && ov.runs.length > 0 && (
           <select value={runId ?? ""} onChange={(e) => setRunId(e.target.value)} aria-label="Прогон">
-            {ov.runs.map((r) => <option key={r.id} value={r.id}>{r.id}{r.done ? "" : " — идёт"}</option>)}
+            {ov.runs.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.started_at ? new Date(r.started_at).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + " МСК" : r.id}
+                {r.done ? "" : " — идёт"}
+              </option>
+            ))}
           </select>
         )}
       </nav>
+      {health && <Health h={health} />}
       {error && <p className="error">{error}</p>}
       {status && <p className="notice">{status}</p>}
       {ov && !ov.connected && <p className="notice">Папки робота на сервере не подключены к API.</p>}
@@ -127,6 +136,57 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
 }
 
 type Act = (fn: () => Promise<unknown>, done?: string) => Promise<void>;
+
+function ago(s: number | null | undefined) {
+  if (s == null) return "—";
+  if (s < 90) return `${s} с назад`;
+  if (s < 5400) return `${Math.round(s / 60)} мин назад`;
+  return `${Math.round(s / 3600)} ч назад`;
+}
+
+/** Панель «Состояние» (Р-103): работает ли сбор, минутное задание и LLM — и чем заняты. */
+function Health({ h }: { h: RobotHealth }) {
+  const at = (iso?: string | null) => iso ? new Date(iso).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+  const ok = (good: boolean) => ({ color: good ? "#2f6f3e" : "var(--accent)" });
+  const c = h.crawl, w = h.worker, l = h.llm;
+  return (
+    <div className="robot-bars">
+      <div className="block robot-bar">
+        <h3>Сбор — «червяк»</h3>
+        <p style={ok(c.state !== "прерван или завис")}><b>{c.state}</b></p>
+        <p className="hint">
+          {c.state === "идёт" ? <>{STAGE[c.stage ?? ""] ?? c.stage}: {c.msg} · {at(c.last_at)}</> : <>последний прогон {at(c.started_at)}</>}
+          <br />следующий по расписанию: {at(c.next_at)}
+        </p>
+      </div>
+      <div className="block robot-bar">
+        <h3>Подготовка и публикатор</h3>
+        <p style={ok(w.state === "работает")}><b>{w.state}</b> <span className="hint">· {ago(w.age_s)}</span></p>
+        <p className="hint">{w.doing ?? "—"}<br />каждую минуту: перевод по стеку, черновики, выход в слот</p>
+      </div>
+      <div className="block robot-bar">
+        <h3>LLM — {l.model ?? "DeepSeek"} через Polza.AI</h3>
+        <p style={ok(l.state === "отвечает")}><b>{l.state}</b> <span className="hint">· последний вызов {ago(l.age_s)}</span></p>
+        <p className="hint">
+          {l.last ? <>{l.last.stage}{l.last.where ? ` (${l.last.where})` : ""} · {Math.round((l.last.ms ?? 0) / 1000)} с{l.last.error ? ` · ${l.last.error}` : ""}<br /></> : null}
+          за сутки: вызовов {l.day.calls}, ошибок {l.day.errors}, токенов {l.day.prompt_tokens + l.day.completion_tokens}
+        </p>
+        {l.recent.length > 0 && (
+          <details>
+            <summary className="hint">последние вызовы</summary>
+            <ul className="hint">
+              {l.recent.map((x, i) => (
+                <li key={i} style={x.ok ? undefined : { color: "var(--accent)" }}>
+                  {at(x.ts)} · {x.stage} · {Math.round((x.ms ?? 0) / 1000)} с{x.ok ? "" : ` · ${x.error ?? "обрезан"}`}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function Bar({ title, done, total, sub }: { title: string; done: number; total: number; sub: string }) {
   const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
