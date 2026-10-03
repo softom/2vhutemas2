@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -332,8 +333,12 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
         facts["vendor_claims"] = True
     story["facts"] = facts
     story["raw_links"] = art["links"]
-    genre = "interview" if cand.get("kind") == "interview" or (facts.get("primary_work") or {}).get("kind") in (
-        "interview", "lecture", "podcast") else "news"
+    # Интервью — если так решил отбор, если первоисточник — интервью, лекция, подкаст или
+    # видео-беседа, или если это сказано в заголовке (Р-98: отбор мог пройти до правила).
+    work = facts.get("primary_work") or {}
+    said = re.search(r"interview|in conversation|talks? (?:to|with)|интервью|беседа|разговор", f"{it.title} {work.get('title', '')}", re.I)
+    genre = "interview" if (cand.get("kind") == "interview" or work.get("kind") in ("interview", "lecture", "podcast")
+                            or (work.get("kind") == "video" and facts.get("quotes")) or said) else "news"
     story["genre"] = genre
     if art.get("republished_from"):
         facts["republished_from"] = art["republished_from"]
