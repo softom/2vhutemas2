@@ -396,6 +396,19 @@ export interface RobotOverview {
   pending: { action: string; domain?: string; url?: string; story_key?: string; verdict?: string; decision?: string }[];
   learned: RobotLearned;
   queue: RobotQueue;
+  prepared: Record<string, RobotPrepared>;
+}
+/** Подготовка новости из стека (Р-97). */
+export interface RobotPrepared { status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string }
+export interface RobotPreparedFull extends RobotPrepared {
+  story_key: string;
+  story?: {
+    news?: { title?: string; lead?: string; paragraphs?: string[]; student_note?: string; images?: { url: string; caption?: string; credit?: string }[];
+      mentions?: { name: string }[]; sources?: { url: string; title?: string }[] };
+    candidate?: { sources?: { source: string; url: string; date?: string }[] };
+    source?: Record<string, unknown>;
+    issues?: string[]; warnings?: string[];
+  };
 }
 export interface RobotStory {
   story_key: string; final: number; interest: number; title_ru: string; topic?: string; kind?: string;
@@ -503,6 +516,7 @@ export const api = {
     ),
   robotSources: () => request<{ items: RobotSourceRow[]; connected: boolean }>("/news-robot/sources"),
   robotOverview: () => request<RobotOverview>("/news-robot/overview"),
+  robotPrepared: (key: string) => request<RobotPreparedFull>(`/news-robot/prepared/${encodeURIComponent(key)}`),
   robotRunView: (id: string) => request<RobotRunView>(`/news-robot/runs/${encodeURIComponent(id)}/view`),
   robotQueue: (body: { action: "add" | "move" | "remove"; story_key: string; [key: string]: unknown }) =>
     request<RobotQueue>("/news-robot/queue", { method: "POST", body: JSON.stringify(body) }),

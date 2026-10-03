@@ -265,7 +265,39 @@ newsRobot.get("/overview", async (c) => {
     pending,
     learned,
     queue: await readQueue(),
+    prepared: await preparedIndex(),
   });
+});
+
+/**
+ * Подготовка к публикации (Р-97): «В стек» → робот переводит и готовит новость →
+ * в колонке «Публикация» слот и ссылка на превью. Файлы — .state/prepared/<история>.json.
+ */
+async function preparedIndex(): Promise<Record<string, Row>> {
+  const index: Record<string, Row> = {};
+  try {
+    for await (const entry of Deno.readDir(`${ROOT}/state/prepared`)) {
+      if (!entry.isFile || !entry.name.endsWith(".json")) continue;
+      const rec = await readJson<Row & { story?: { news?: { title?: string } } }>(`${ROOT}/state/prepared/${entry.name}`);
+      if (!rec) continue;
+      index[String(rec.story_key)] = {
+        status: rec.status, ready_at: rec.ready_at, started_at: rec.started_at, error: rec.error,
+        origin: rec.origin, title: rec.story?.news?.title,
+      };
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  return index;
+}
+
+newsRobot.get("/prepared/:key", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  const key = c.req.param("key");
+  if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная история");
+  const rec = await readJson<Row>(`${ROOT}/state/prepared/${key}.json`);
+  if (!rec) throw new ApiError("not_found", "Новость ещё не подготовлена");
+  return c.json(rec);
 });
 
 /** Вид прогона: итог, а пока его нет — собранное из журнала и промежуточных файлов робота. */

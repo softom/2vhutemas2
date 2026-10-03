@@ -91,6 +91,28 @@ def candidates_command(args) -> int:
     return 0
 
 
+def prepare_command(args) -> int:
+    import json as _json
+    from datetime import datetime as _dt, timezone as _tz
+    from robot import prepare
+    cfg = pipeline.load_config()
+    logdir = ROOT / "out" / "prepare"
+    logdir.mkdir(parents=True, exist_ok=True)
+    llm = LLM(cfg.get("news.llm.base_url") or "https://api.polza.ai/api/v1",
+              args.model or os.environ.get("NEWS_LLM_MODEL") or cfg.get("news.llm.model"),
+              cfg.get("news.llm.api_key_env") or "POLZA_API_KEY", logdir / "llm",
+              token_limit=120_000, extra=pipeline.llm_extra(cfg))
+
+    def log(level, stage, msg, **extra):
+        rec = {"ts": _dt.now(_tz.utc).isoformat(timespec="seconds"), "level": level, "stage": stage, "msg": msg, **extra}
+        with open(logdir / "log.jsonl", "a", encoding="utf-8") as f:
+            f.write(_json.dumps(rec, ensure_ascii=False) + chr(10))
+        print(_json.dumps(rec, ensure_ascii=False))
+
+    prepare.run(ROOT, llm, log, pipeline)
+    return 0
+
+
 def learn_command(args) -> int:
     import json as _json
     state = State(ROOT / ".state" / "state.json")
@@ -161,12 +183,16 @@ def main() -> int:
     g.add_argument("--once", metavar="ДОМЕН", help="полезен разово, в обход не включать")
     g.add_argument("--reject", metavar="ДОМЕН", help="отклонить кандидата")
     g.add_argument("--note", help="пояснение к предложению или решению")
+    ap.add_argument("--prepare", action="store_true",
+                    help="подготовить новости из стека: перевод, текст, сверка (cron каждую минуту)")
     args = ap.parse_args()
 
     if args.candidates or args.propose or args.include or args.once or args.reject:
         return candidates_command(args)
     if args.calibrate or args.judge:
         return learn_command(args)
+    if args.prepare:
+        return prepare_command(args)
 
     run = pipeline.run(args)
     path = run.dir / "report.html"

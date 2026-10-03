@@ -18,6 +18,7 @@ import {
   type RobotLearned,
   type RobotLogLine,
   type RobotOverview,
+  type RobotPreparedFull,
   type RobotRunView,
   type RobotSourceCandidate,
   type RobotSourceRow,
@@ -45,13 +46,14 @@ function when(iso?: string | null) {
 }
 
 export function NewsRobot({ allowed }: { allowed: boolean }) {
-  const { section = "" } = useParams();
+  const { section = "", key } = useParams();
   const [ov, setOv] = useState<RobotOverview | null>(null);
   const [run, setRun] = useState<RobotRunView | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
+  const preparing = useRef(false);
 
   const refresh = useCallback(async () => {
     clearTimeout(timer.current);
@@ -59,6 +61,7 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
     try {
       const o = await api.robotOverview();
       setOv(o);
+      preparing.current = o.queue.items.some((i) => !["готово", "ошибка"].includes(o.prepared[i.story_key]?.status ?? ""));
       const id = runId ?? o.runs[0]?.id ?? null;
       if (id && id !== runId) setRunId(id);
       if (id) {
@@ -70,7 +73,8 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
     } catch (e) {
       setError((e as Error).message);
     }
-    timer.current = setTimeout(refresh, running ? 3000 : 20000);
+    // Идёт прогон или в стеке есть новость в переводе — обновляем часто.
+    timer.current = setTimeout(refresh, running || preparing.current ? 3000 : 20000);
   }, [runId]);
 
   useEffect(() => {
@@ -116,6 +120,7 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       {ov && section === "sites" && <Sites ov={ov} run={run} />}
       {ov && section === "recs" && <Recs ov={ov} act={act} />}
       {run && section === "log" && <LogView key={run.id} runId={run.id} live={run.running} />}
+      {ov && section === "preview" && key && <Preview storyKey={key} ov={ov} />}
       {ov && !ov.runs.length && <p className="notice">Прогонов пока не было.</p>}
     </section>
   );
@@ -193,13 +198,14 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const written = new Set(run.news.map((n) => n.candidate.story_key));
   return (
     <>
-      <h2>Переведённые новости</h2>
+      <h2>Переведено заранее</h2>
+      <p className="hint">Лучшие истории прогона робот переводит сам; остальные — после «В стек». Готовая новость открывается по заголовку в таблице.</p>
       {run.news.length === 0 && <p className="hint">{run.running ? "Тексты появятся по мере готовности." : "В этом прогоне текстов нет."}</p>}
       {run.news.map((s) => {
         const n = s.news ?? {}, img = n.images?.[0];
         const cand = run.candidates.find((c) => c.story_key === s.candidate.story_key);
         return (
-          <details className="block" key={s.candidate.story_key} open={run.news.length < 4}>
+          <details className="block" key={s.candidate.story_key}>
             <summary><b>{n.title ?? s.candidate.story_key}</b> <span className="hint">· оценка {s.candidate.final}
               {s.issues.length ? ` · замечаний ${s.issues.length}` : ""}</span></summary>
             {img && <figure><img src={img.url} alt="" loading="lazy" style={{ maxWidth: "100%" }} /><figcaption className="hint">{img.caption}</figcaption></figure>}
@@ -215,7 +221,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       <h2>Отбор и ранжирование</h2>
       {rows.length === 0 ? <p className="hint">{run.running ? "Отбор ещё не начался." : "Отбора в этом прогоне не было."}</p> : (
         <table className="grid-table">
-          <thead><tr><th>#</th><th>Оценка</th><th>Тема</th><th>Новость</th><th>Почему</th><th>Выпустил бы?</th><th>Стек</th></tr></thead>
+          <thead><tr><th>#</th><th>Оценка</th><th>Тема</th><th>Новость</th><th>Почему</th><th>Выпустил бы?</th><th>Стек</th><th>Публикация</th></tr></thead>
           <tbody>
             {rows.map((c, i) => {
               const v = ov.judged[c.story_key] ?? pendingVerdict[c.story_key];
@@ -225,7 +231,10 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                   <td><b>{c.final}</b>{!c.partial && <><br /><span className="hint">LLM {c.interest}</span></>}</td>
                   <td>{TOPIC[c.topic ?? ""] ?? c.topic}<br /><span className="hint">{KIND[c.kind ?? ""] ?? c.kind}{c.competition ? " · конкурс" : ""}</span></td>
                   <td>
-                    {c.title_ru}{written.has(c.story_key) && <span className="hint"> · переведено</span>}<br />
+                    {ov.prepared[c.story_key]?.status === "готово" && inStack.has(c.story_key)
+                      ? <Link to={`/robot/preview/${c.story_key}`}><b>{ov.prepared[c.story_key].title || c.title_ru}</b></Link>
+                      : c.title_ru}
+                    {written.has(c.story_key) && <span className="hint"> · переведено</span>}<br />
                     {c.sources.map((s) => <a className="hint" key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.source} </a>)}
                   </td>
                   <td className="hint">{c.reason}</td>
@@ -235,6 +244,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                   </>}</td>
                   <td>{!c.partial && (inStack.has(c.story_key) ? <span className="hint">в стеке</span>
                     : <button type="button" className="ghost" onClick={() => toStack(c)}>В стек</button>)}</td>
+                  <td><Publication storyKey={c.story_key} ov={ov} /></td>
                 </tr>
               );
             })}
@@ -242,6 +252,71 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
         </table>
       )}
     </>
+  );
+}
+
+/**
+ * Колонка «Публикация» (Р-97): после «В стек» робот переводит и готовит новость;
+ * когда готово — слот выхода, а заголовок ведёт к превью.
+ */
+function Publication({ storyKey, ov, slot = true }: { storyKey: string; ov: RobotOverview; slot?: boolean }) {
+  const q = ov.queue.items.find((i) => i.story_key === storyKey);
+  if (!q) return null;
+  const p = ov.prepared[storyKey];
+  const day = new Date(`${q.date}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  const place = slot ? `${day}, ${q.time} · ` : "";
+  if (!p || p.status === "новый" || p.status === "ждёт") return <span className="hint">{place}ждёт перевода</span>;
+  if (p.status === "переводится") return <span className="hint">{place}переводится…</span>;
+  if (p.status === "ошибка") return <span className="error">{place}ошибка: {p.error}</span>;
+  return <span>{place}<Link to={`/robot/preview/${storyKey}`}>готово — превью</Link></span>;
+}
+
+/** Превью подготовленной новости — так, как она выйдет на сайте. */
+function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
+  const [rec, setRec] = useState<RobotPreparedFull | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    api.robotPrepared(storyKey).then(setRec).catch((e) => setErr((e as Error).message));
+  }, [storyKey]);
+  const q = ov.queue.items.find((i) => i.story_key === storyKey);
+  if (err) return <p className="error">{err}</p>;
+  if (!rec) return <p className="notice">Загружаем превью…</p>;
+  const n = rec.story?.news ?? {};
+  const sources = rec.story?.candidate?.sources ?? [];
+  const issues = [...(rec.story?.issues ?? []), ...(rec.story?.warnings ?? [])];
+  return (
+    <article className="robot-preview">
+      <p className="hint">
+        <Link to="/robot/news">← к отбору</Link>
+        {q && ` · выход ${new Date(`${q.date}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}, ${q.time}`}
+        {rec.ready_at && ` · подготовлено ${new Date(rec.ready_at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}`}
+      </p>
+      <h2>{n.title}</h2>
+      {n.images?.[0] && (
+        <figure><img src={n.images[0].url} alt="" style={{ maxWidth: "100%" }} /><figcaption className="hint">{n.images[0].caption}</figcaption></figure>
+      )}
+      <p><b>{n.lead}</b></p>
+      {n.paragraphs?.map((p, i) => <p key={i}>{p}</p>)}
+      {n.images?.slice(1).map((im) => (
+        <figure key={im.url}><img src={im.url} alt="" style={{ maxWidth: "100%" }} loading="lazy" /><figcaption className="hint">{im.caption}</figcaption></figure>
+      ))}
+      {n.student_note && <p><b>Что посмотреть студенту:</b> {n.student_note}</p>}
+      <p className="hint">
+        Первоисточник: {sources.map((src, i) => (
+          <span key={src.url}>{i ? " · " : ""}<a href={src.url} target="_blank" rel="noreferrer">{src.source}{src.date ? `, ${src.date}` : ""}</a></span>
+        ))}
+        {(n.sources ?? []).filter((x) => x.url && !sources.some((src) => src.url === x.url)).map((x) => (
+          <span key={x.url}> · <a href={x.url} target="_blank" rel="noreferrer">{x.title || x.url}</a></span>
+        ))}
+      </p>
+      {n.mentions?.length ? <p className="hint">Упоминания: {n.mentions.map((m) => m.name).join(" · ")}</p> : null}
+      {issues.length > 0 && (
+        <div className="block">
+          <h3>Замечания проверки</h3>
+          {issues.map((x, i) => <p className="error" key={i}>{x}</p>)}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -268,7 +343,9 @@ function Stack({ ov, act }: { ov: RobotOverview; act: Act }) {
                   <span className="hint">{t}</span>
                   {it ? (
                     <div>
-                      <div>{it.title}</div>
+                      <div>{ov.prepared[it.story_key]?.status === "готово"
+                        ? <Link to={`/robot/preview/${it.story_key}`}>{ov.prepared[it.story_key].title || it.title}</Link> : it.title}</div>
+                      <div><Publication storyKey={it.story_key} ov={ov} slot={false} /></div>
                       <div className="hint">{TOPIC[it.topic ?? ""] ?? ""}{it.final != null ? ` · оценка ${it.final}` : ""}{it.by ? ` · ${it.by}` : ""}</div>
                       <select value={`${d} ${t}`} onChange={(e) => {
                         const [date, time] = e.target.value.split(" ");
