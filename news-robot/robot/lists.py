@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup
@@ -87,7 +87,10 @@ def read(source: dict, fetcher: Fetcher, is_seen, since: datetime, limit: int) -
         soup = BeautifulSoup(html, "lxml")
         published = _date(soup)
         if published and datetime.fromisoformat(published) < since:
-            old.append(url)
+            # Виденным навсегда помечаем только по-настоящему старое: статья за день до окна
+            # прогона ещё может пригодиться догоняющему прогону (конкурс PA выпал так, Р-100).
+            if datetime.fromisoformat(published) < datetime.now(timezone.utc) - timedelta(days=30):
+                old.append(url)
             continue
         title = _meta(soup, "og:title") or (soup.title.string if soup.title else "") or ""
         image = _meta(soup, "og:image")

@@ -442,6 +442,8 @@ def run(args) -> Run:
             return r
         weights = {k: (cfg.get(f"news.rank.{k}") if cfg.get(f"news.rank.{k}") is not None else v)
                    for k, v in RANK_DEFAULTS.items()}
+        if args.stale_penalty is not None:
+            weights["stale_penalty"] = args.stale_penalty
         learned_w = ((state.data.get("learned") or {}).get("adjustments") or {}).get("per_extra_source")
         if learned_w is not None:
             weights["per_extra_source"] = learned_w
@@ -451,7 +453,12 @@ def run(args) -> Run:
             if it.id in scores:
                 state.mark(it.id, it.url, it.source_id)
         by_id = {i.id: i for i in r.items}
-        chosen = [c for c in r.candidates if c["interest"] >= args.threshold][:args.top]
+        # Лучшие по общему списку и по каждой теме: архитектурных изданий больше, и без этого
+        # ИИ и ПО не доходили до перевода (Р-100).
+        eligible = [c for c in r.candidates if c["interest"] >= args.threshold]
+        chosen = eligible[:args.top]
+        for topic in ("architecture", "neurogeneration", "software"):
+            chosen += [c for c in eligible if c.get("topic") == topic and c not in chosen][:args.per_topic]
         r.write_total = len(chosen)
         for cand in chosen:
             try:

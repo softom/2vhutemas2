@@ -168,6 +168,8 @@ def main() -> int:
     ap.add_argument("--model", help="модель LLM (перекрывает настройку)")
     ap.add_argument("--batch", type=int, default=15, help="материалов в одном запросе отбора")
     ap.add_argument("--top", type=int, default=6, help="сколько лучших историй довести до текста")
+    ap.add_argument("--per-topic", type=int, default=2, help="и сколько лучших по каждой теме сверх того")
+    ap.add_argument("--stale-penalty", type=int, help="штраф за день давности (для догоняющего прогона — 0)")
     ap.add_argument("--threshold", type=int, default=50, help="минимальный интерес для текста")
     ap.add_argument("--token-limit", type=int, default=400_000, help="предел токенов на прогон")
     ap.add_argument("--probe-limit", type=int, default=5, help="сколько новых кандидатов в источники проверять за прогон")

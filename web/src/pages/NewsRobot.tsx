@@ -189,6 +189,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
     topic: p.topic, kind: p.kind, reason: p.reason, competition: p.competition,
     sources: [{ source: p.source ?? "", url: p.url ?? "" }], partial: true,
   }));
+  const [topic, setTopic] = useState("");
   // Ответ — прямо в строке: сообщение вверху страницы из середины таблицы не видно.
   const [rowNote, setRowNote] = useState<Record<string, string>>({});
   const toStack = async (c: RobotStory, title?: string) => {
@@ -207,6 +208,8 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const judge = (story: string, verdict: "yes" | "no") =>
     act(() => api.robotInbox({ action: "judge", run_id: run.id, story_key: story, verdict }));
   const written = new Set(run.news.map((n) => n.candidate.story_key));
+  const counts = rows.reduce<Record<string, number>>((m, c) => ({ ...m, [c.topic ?? ""]: (m[c.topic ?? ""] ?? 0) + 1 }), {});
+  const shownRows = topic ? rows.filter((c) => c.topic === topic) : rows;
   return (
     <>
       <h2>Переведено заранее</h2>
@@ -230,11 +233,19 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
         );
       })}
       <h2>Отбор и ранжирование</h2>
+      <div className="robot-tabs filters">
+        {[["", "Все"], ["architecture", "Архитектура"], ["neurogeneration", "Нейрогенерация"], ["software", "ПО"]].map(([code, title]) => (
+          <a key={code} href="#" className={topic === code ? "active" : undefined}
+            onClick={(e) => { e.preventDefault(); setTopic(code); }}>
+            {title} ({code ? counts[code] ?? 0 : rows.length})
+          </a>
+        ))}
+      </div>
       {rows.length === 0 ? <p className="hint">{run.running ? "Отбор ещё не начался." : "Отбора в этом прогоне не было."}</p> : (
         <table className="grid-table">
           <thead><tr><th>#</th><th>Оценка</th><th>Тема</th><th>Новость</th><th>Почему</th><th>Выпустил бы?</th><th>Стек</th><th>Публикация</th></tr></thead>
           <tbody>
-            {rows.map((c, i) => {
+            {shownRows.map((c, i) => {
               const v = ov.judged[c.story_key] ?? pendingVerdict[c.story_key];
               return (
                 <tr key={c.story_key || i}>
