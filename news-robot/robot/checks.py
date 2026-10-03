@@ -25,12 +25,36 @@ def numbers(text: str) -> set[str]:
     return found
 
 
-def check(news: dict, facts: dict) -> list[str]:
+def _norm(text: str) -> str:
+    text = re.sub(r"[“”«»„\"’‘']", "", text or "")
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def check(news: dict, facts: dict, article: str = "", genre: str = "news") -> list[str]:
     issues: list[str] = []
+    # Цитата обязана быть в статье дословно: иначе это пересказ, выданный за прямую речь (Р-98).
+    source = _norm(article)
+    for q in facts.get("quotes") or []:
+        original = _norm(q.get("original", ""))
+        if source and original and original not in source:
+            issues.append("цитата не найдена в статье дословно: " + q.get("original", "")[:90])
+    if genre == "interview":
+        body_all = " ".join([news.get("lead", "")] + list(news.get("paragraphs", [])))
+        # Вне кавычек — ни одного глагола, приписывающего герою мнение (Р-98).
+        outside = re.sub(r"«[^»]*»|“[^”]*”|\([^)]*перевод Вх²[^)]*\)", " ", body_all.lower())
+        stems = ("по её мнению", "по его мнению", "считает", "думает", "уверен", "полагает", "размышля", "рассужда",
+                 "объясняет", "подчёркивает", "подчеркивает", "пересматрива", "оспарива", "находит", "смещает",
+                 "призывает", "критикует", "ставит под вопрос", "утверждает")
+        found = [s for s in stems if s in outside]
+        if found:
+            issues.append("интервью: пересказ речи героя вне цитат (" + ", ".join(found) + ") — только дословные цитаты")
+        if facts.get("quotes") and "перевод Вх²" not in body_all:
+            issues.append("интервью: цитаты без пометки «перевод Вх²» и оригинала")
     body = " ".join([news.get("lead", "")] + list(news.get("paragraphs", [])))
     n = words(body)
-    if not 150 <= n <= 250:
-        issues.append(f"объём {n} слов, нужно 150–250")
+    low_n, high_n = (120, 220) if genre == "interview" else (150, 250)
+    if not low_n <= n <= high_n:
+        issues.append(f"объём {n} слов, нужно {low_n}–{high_n}")
     title = news.get("title", "")
     if len(title) > 100:
         issues.append(f"заголовок {len(title)} знаков, нужно до 90")

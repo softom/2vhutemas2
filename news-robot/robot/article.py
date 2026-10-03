@@ -14,7 +14,7 @@ from urllib.parse import urljoin, urlsplit
 import trafilatura
 from bs4 import BeautifulSoup
 
-from .feeds import Item, html_text
+from .feeds import Item, html_text, republished_from
 from .fetch import FetchError, Fetcher
 
 CREDIT = re.compile(
@@ -54,7 +54,39 @@ def outbound_links(html: str, base: str) -> list[dict]:
             "text": a.get_text(" ", strip=True)[:120],
             "context": (context.get_text(" ", strip=True) if context else "")[:240],
         })
+    # Встроенные плееры: видео, о котором статья, часто есть только в iframe (ArchDaily, Dezeen).
+    for frame in soup.find_all("iframe", src=True):
+        src = urljoin(base, frame["src"])
+        m = re.search(r"(?:youtube(?:-nocookie)?\.com/embed/|youtu\.be/)([A-Za-z0-9_-]{11})", src)
+        if m:
+            src = f"https://www.youtube.com/watch?v={m.group(1)}"
+        elif "player.vimeo.com/video/" in src:
+            src = "https://vimeo.com/" + src.split("player.vimeo.com/video/")[1].split("?")[0]
+        else:
+            continue
+        found.setdefault(src, {"url": src, "domain": urlsplit(src).netloc.removeprefix("www."),
+                               "text": frame.get("title") or "встроенное видео", "context": "видео в статье"})
     return list(found.values())[:40]
+
+
+def page_author(html: str) -> str | None:
+    """Автор статьи из разметки страницы: JSON-LD author или meta author."""
+    soup = BeautifulSoup(html, "lxml")
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+        except (ValueError, TypeError):
+            continue
+        for node in data if isinstance(data, list) else data.get("@graph", [data]):
+            author = node.get("author") if isinstance(node, dict) else None
+            if isinstance(author, list):
+                author = author[0] if author else None
+            if isinstance(author, dict):
+                author = author.get("name")
+            if isinstance(author, str) and author.strip():
+                return author.strip()
+    meta = soup.find("meta", attrs={"name": "author"})
+    return meta["content"].strip() if meta and meta.get("content") else None
 
 
 def _images_from_html(html: str, base: str) -> list[dict]:
@@ -150,7 +182,11 @@ def fetch_article(fetcher: Fetcher, item: Item, full_text_in_feed: bool) -> dict
             im["credit"] = general
             im["credit_note"] = "общая строка статьи"
     links = outbound_links(html, item.url) if html else []
-    return {"text": text[:20000], "text_origin": origin, "images": images, "links": links, "warnings": warnings}
+    again = item.republished_from or republished_from(text)
+    if again:
+        warnings.append(f"перепечатка: впервые опубликовано {again}")
+    return {"text": text[:20000], "text_origin": origin, "images": images, "links": links, "warnings": warnings,
+            "republished_from": again, "author": page_author(html) if html else None}
 
 
 def _charset(headers: dict[str, str]) -> str:

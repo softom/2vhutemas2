@@ -10,6 +10,8 @@
 Шкала interest: 80–100 — выпустить обязательно; 60–79 — хорошая новость; 40–59 — можно, если день пустой; ниже 40 — нет.
 
 relevant = false, если материал вообще не о темах сайта.
+kind = interview — интервью, беседа, лекция, выступление, эссе от первого лица: главное в материале — речь человека.
+Если у материала есть republished_from — это перепечатка старого материала с указанной даты: для ленты новостей он не свежий, снизь interest и скажи об этом в reason.
 competition = true, если материал объявляет конкурс или его итоги; students_eligible — могут ли участвовать студенты (null, если неизвестно).
 story_key — короткий латинский ключ самого события, одинаковый для одной истории в разных изданиях: «zumthor-fondation-beyeler», «amd-buys-world-labs».
 title_ru — заголовок по-русски, по сути, без оценок, до 90 знаков.
@@ -19,5 +21,5 @@ reason — почему такая оценка, до 20 слов, по-русс
 {{examples}}
 
 Ответь только JSON такого вида:
-{"items": [{"id": "…", "relevant": true, "topic": "architecture|neurogeneration|software", "kind": "building|material|tool|competition|education|award|research|event|business|policy|other", "competition": false, "students_eligible": null, "interest": 0, "reason": "…", "story_key": "…", "title_ru": "…"}]}
+{"items": [{"id": "…", "relevant": true, "topic": "architecture|neurogeneration|software", "kind": "building|material|tool|competition|education|award|research|event|interview|business|policy|other", "competition": false, "students_eligible": null, "interest": 0, "reason": "…", "story_key": "…", "title_ru": "…"}]}
 Ровно по одному элементу на каждый материал из запроса, с тем же id.

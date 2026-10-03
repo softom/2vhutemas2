@@ -21,6 +21,36 @@ from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
 
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
+# Перепечатка: «Editor's Note: This article was originally published on May 01, 2026» (ArchDaily),
+# «First published …», «Впервые опубликовано …». Дата первой публикации — для свежести (Р-98).
+REPUBLISHED = re.compile(
+    r"(?:originally|first)\s+published\s+(?:on\s+|in\s+)?([A-Z][a-z]+\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Z][a-z]+\s+\d{4})"
+    r"|(?:впервые|первоначально)\s+опубликован[аоы]?\s+(\d{1,2}[.\s]\S+[.\s]\d{4})", re.I)
+RU_MONTHS = {"января": 1, "февраля": 2, "марта": 3, "апреля": 4, "мая": 5, "июня": 6, "июля": 7, "августа": 8,
+             "сентября": 9, "октября": 10, "ноября": 11, "декабря": 12}
+
+
+def republished_from(text: str | None) -> str | None:
+    """Дата первой публикации, если материал — перепечатка; иначе None."""
+    if not text:
+        return None
+    m = REPUBLISHED.search(text)
+    if not m:
+        return None
+    raw = (m.group(1) or m.group(2) or "").replace(",", " ").replace(".", " ").split()
+    try:
+        if m.group(1):
+            if raw[0].isdigit():
+                raw = [raw[1], raw[0], raw[2]]
+            month = datetime.strptime(raw[0][:3], "%b").month
+            return datetime(int(raw[2]), month, int(raw[1]), tzinfo=timezone.utc).date().isoformat()
+        day, month, year = raw[0], raw[1], raw[2]
+        month_n = int(month) if month.isdigit() else RU_MONTHS[month.lower()]
+        return datetime(int(year), month_n, int(day), tzinfo=timezone.utc).date().isoformat()
+    except (ValueError, KeyError, IndexError):
+        return None
+
+
 TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|yclid$|mc_|ref$|from$)")
 
 
@@ -53,6 +83,7 @@ class Item:
     author: str | None = None
     content_html: str | None = None
     images: list[dict] = field(default_factory=list)
+    republished_from: str | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -136,6 +167,7 @@ def parse(source: dict, body: bytes, headers: dict[str, str]) -> list[Item]:
             author=entry.get("author"),
             content_html=content_html,
             images=_images(entry, content_html or entry.get("summary")),
+            republished_from=republished_from(html_text(content_html) + " " + summary),
         ))
     return items
 

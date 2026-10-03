@@ -238,6 +238,7 @@ def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int, state: Stat
     for i in range(0, len(run.items), batch):
         part = run.items[i:i + batch]
         payload = [{"id": it.id, "source": sources[it.source_id]["title"], "date": (it.published or "")[:10],
+                    "republished_from": it.republished_from,
                     "title": it.title, "summary": it.summary[:600], "url": it.url} for it in part]
         user = "Материалы:\n" + json.dumps(payload, ensure_ascii=False, indent=1)
         try:
@@ -278,7 +279,9 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
         s, items = st["score"], st["items"]
         interest = int(s.get("interest") or 0)
         trust = max(sources[i.source_id].get("trust", 5) for i in items)
-        dated = [datetime.fromisoformat(i.published) for i in items if i.published]
+        # Перепечатка стареет с даты первой публикации, а не с даты в ленте (Р-98).
+        dated = [datetime.fromisoformat(i.republished_from + "T00:00:00+00:00") if i.republished_from
+                 else datetime.fromisoformat(i.published) for i in items if i.published or i.republished_from]
         age = (now - min(dated)).days if dated else 0
         final = interest
         final += (trust - 7) * weights["trust_weight"]
@@ -293,6 +296,7 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
             "title_ru": s.get("title_ru") or lead.title, "topic": s.get("topic"), "kind": s.get("kind"),
             "competition": bool(s.get("competition")), "students_eligible": s.get("students_eligible"),
             "reason": s.get("reason"), "lead_item": lead.id,
+            "republished_from": next((i.republished_from for i in items if i.republished_from), None),
             "sources": [{"source": sources[i.source_id]["title"], "url": i.url, "title": i.title,
                          "date": (i.published or "")[:10]} for i in items],
         })
@@ -317,7 +321,7 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
     src = sources[it.source_id]
     art = fetch_article(fetcher, it, bool(src.get("full_text")))
     meta = {"издание": src["title"], "адрес": it.url, "дата": (it.published or "")[:10],
-            "заголовок": it.title, "автор": it.author, "откуда текст": art["text_origin"],
+            "заголовок": it.title, "автор": it.author or art.get("author"), "откуда текст": art["text_origin"],
             "производитель о своём продукте": bool(src.get("vendor"))}
     article = (json.dumps(meta, ensure_ascii=False) + "\n\nТекст статьи:\n" + art["text"]
                + "\n\nФотографии:\n" + json.dumps(art["images"], ensure_ascii=False, indent=1)
@@ -328,8 +332,14 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
         facts["vendor_claims"] = True
     story["facts"] = facts
     story["raw_links"] = art["links"]
+    genre = "interview" if cand.get("kind") == "interview" or (facts.get("primary_work") or {}).get("kind") in (
+        "interview", "lecture", "podcast") else "news"
+    story["genre"] = genre
+    if art.get("republished_from"):
+        facts["republished_from"] = art["republished_from"]
+    genre_rules = (ROOT / "prompts" / f"genre_{genre}.md").read_text(encoding="utf-8")
     write_sys = prompt("write", source_title=src["title"], source_url=it.url, source_date=meta["дата"],
-                       facts=json.dumps(facts, ensure_ascii=False, indent=1))
+                       facts=json.dumps(facts, ensure_ascii=False, indent=1), genre_rules=genre_rules)
     news = llm.chat_json("write", write_sys, "Напиши новость.", max_tokens=12000)
     verdict = llm.chat_json("verify", prompt("verify", facts=json.dumps(facts, ensure_ascii=False),
                                              news=json.dumps(news, ensure_ascii=False)),
@@ -342,7 +352,13 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
                                 "Проверь новость.", max_tokens=8000)
     story["news"] = news
     story["verify"] = verdict
-    story["issues"] = checks.check(news, facts)
+    story["issues"] = checks.check(news, facts, art["text"], genre)
+    hard = [x for x in story["issues"] if x.startswith("интервью:") or x.startswith("цитата не найдена")]
+    if hard:
+        fix = "Исправь новость. Нарушены правила:\n" + "\n".join(hard)
+        news = llm.chat_json("rewrite", write_sys, fix, max_tokens=12000)
+        story["news"] = news
+        story["issues"] = checks.check(news, facts, art["text"], genre)
     return story
 
 
