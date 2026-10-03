@@ -120,6 +120,7 @@ Authorization: Bearer <access_token>
 | `POST /entities` | Создание; требует `create_delete` |
 | `PATCH /entities/{id}` | Правка; требует `edit` и `base_revision_id`. Одним запросом принимает свойства, `body_json` (собственный текст), `indicators` и `tags` — всё сохраняется одной версией |
 | `POST /entities/{id}/publish` | Публикация записи целиком вместе с текстом; требует `publish` |
+| `POST /entities/{id}/unpublish` | Снятие с публикации: запись — снова черновик, версии сохраняются, в журнал пишется `unpublished`; требует `publish`. Вернуть — `/publish` |
 | `GET /entities/{id}/versions` | История редакций: какая публичная, какая в работе, кто правил |
 
 ```json
@@ -263,7 +264,7 @@ POST /entities
 
 | Маршрут | Что делает |
 |---|---|
-| `GET /media?q=&cursor=&needs=attribution` | Список файлов: варианты, метки, сведения; `needs=attribution` — только ждущие автора и источника |
+| `GET /media?q=&cursor=&needs=attribution&kind=&entity_id=&attached=yes\|no` | Список файлов: варианты, метки, сведения; `needs=attribution` — только ждущие автора и источника; `kind` — вид изображения; `attached` с `entity_id` — прикреплённые к записи или нет |
 | `POST /media` | Загрузка оригинала, `multipart/form-data`; вместе с файлом заводится его запись-черновик |
 | `GET /media/{id}` | Сведения о файле |
 | `PATCH /media/{id}` | Правка сведений; файл не меняется. `visibility: "public"` публикует запись, `"private"` снимает с публикации |
@@ -321,6 +322,7 @@ PUT /entities-indicators/17
 | `GET /links?entity_id=` | Окружение объекта с обоснованиями. Гостю — только связи с опубликованными записями |
 | `GET /links/mentions?entity_id=` | В каких опубликованных материалах объект упомянут |
 | `POST /links/{id}/publish` | Публикация связи вместе с её обоснованием; требует `publish` |
+| `POST /links/{id}/unpublish` | Снятие связи с публикации; требует `publish` |
 | `DELETE /links/{id}` | Архивирование: связь уходит из показа, версии и обоснование остаются |
 
 ```json
