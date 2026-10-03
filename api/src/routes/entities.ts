@@ -12,7 +12,7 @@ import { sql, transaction, type Tx } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
 import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import { type AppEnv, decodeCursor, encodeCursor, pageSize } from "../lib/http.ts";
-import { resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../lib/entityTypes.ts";
+import { CATALOG_HIDDEN_ROOTS, resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../lib/entityTypes.ts";
 import { entityAuthors, resolveEntity } from "../lib/publicCard.ts";
 import { absolute, citation, entityPath } from "../lib/site.ts";
 import { publishOwnerRevision } from "../lib/ownedVersions.ts";
@@ -166,8 +166,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
       -- и документы — материалы о записях — в медиатеке и самих карточках:
       -- в общем каталоге они заслонили бы предметы (Р-84).
       and (${type}::text is not null or e.type_id not in
-           (select app.entity_type_subtree('project_pages')
-            union select app.entity_type_subtree('materials')))
+           (select s from unnest(${CATALOG_HIDDEN_ROOTS}::text[]) r, app.entity_type_subtree(r) s))
       and (${search}::text is null or e.title_ru ilike ${"%" + (search ?? "") + "%"}
            or e.title_en ilike ${"%" + (search ?? "") + "%"})
       and (${min}::numeric is null or pv.num_value >= ${min})

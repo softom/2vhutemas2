@@ -36,6 +36,7 @@ export interface RefTarget {
  * «Отображение»); каталог, список, карточка в тексте и упоминание
  * различаются только размером.
  */
+// Двойник — compactParts клиента (web/src/api.ts): менять оба.
 export function compactParts(compact: CompactItem[] | undefined) {
   const items = compact ?? [];
   const picture = items.find((item) => item.component === "thumbnail" || item.component === "portrait");

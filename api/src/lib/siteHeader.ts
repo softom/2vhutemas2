@@ -23,3 +23,13 @@ export function siteHeader(principal: Principal | null, path = "/"): string {
     `<span class="logo-word">Вх<sup>2</sup></span></span><span class="logo-vert" aria-hidden="true">Два Вхутемас</span>`;
   return `<a class="brand" href="/" aria-label="${e(site.name)} — на главную">${logo}</a><nav>${nav}</nav><div class="viewer">${viewer}</div>`;
 }
+
+/**
+ * Футер — один на готовые страницы и приложение, как и меню: приложение берёт
+ * его из того же ответа `/api/v1/site-header`. Формула знака, «=» стоит на
+ * красной ленте (Р-91).
+ */
+export function siteFooter(): string {
+  return `<div class="foot-axis"><span>Искусство</span><span class="eq">=</span><span>Вх<sup>2</sup>·м</span></div>` +
+    `<div class="foot-line"><span>2vhutemas · курс квантовой архитектуры</span><span>Прежний сайт — <a href="/old/">2vhutemas.ru/old</a></span></div>`;
+}

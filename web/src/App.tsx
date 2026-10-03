@@ -64,6 +64,9 @@ function PublicEntityPage() {
 }
 export function App() {
   const [headerHtml, setHeaderHtml] = useState("");
+  // Футер приходит с сервера вместе с меню; до ответа держим тот, что уже
+  // нарисовала готовая страница, — подмена не видна.
+  const [footerHtml, setFooterHtml] = useState(() => document.querySelector(".site-foot")?.innerHTML ?? "");
   // Вставки в строке текста рисуются без React и переходят по ссылке через
   // этот маршрутизатор — чтобы не терять место в тексте (см. entityBlocks).
   const navigate = useNavigate();
@@ -110,8 +113,9 @@ export function App() {
 
   const refresh = async () => {
     try {
-      const { html, viewer: me } = await api.siteHeader(location.pathname);
+      const { html, footer, viewer: me } = await api.siteHeader(location.pathname);
       setHeaderHtml(html);
+      setFooterHtml(footer);
       // Кука нужна, чтобы браузер показывал приватные файлы в тегах изображений.
       if (me.authenticated) api.openMediaSession().catch(() => {});
       setViewer(me);
@@ -239,11 +243,8 @@ export function App() {
         </ErrorBoundary>
       </main>
 
-      {/* Тот же футер, что у готовых страниц сервера (pages.ts, SITE_FOOTER). */}
-      <footer className="site-foot">
-        <div className="foot-axis"><span>Искусство</span><span className="eq">=</span><span>Вх<sup>2</sup>·м</span></div>
-        <div className="foot-line"><span>2vhutemas · курс квантовой архитектуры</span><span>Прежний сайт — <a href="/old/">2vhutemas.ru/old</a></span></div>
-      </footer>
+      {/* Тот же футер, что у готовых страниц: один на оба (siteHeader.ts, siteFooter). */}
+      <footer className="site-foot" dangerouslySetInnerHTML={{ __html: footerHtml }} />
     </div>
   );
 }

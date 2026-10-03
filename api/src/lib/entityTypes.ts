@@ -29,3 +29,11 @@ export function resolveTypeCode(
   if (kind) return LEGACY_KIND_TO_ROOT[kind] ?? kind;
   return null;
 }
+
+/**
+ * Ветви, которых нет в общем каталоге «Всё» и в его кнопках отбора: тексты
+ * «О проекте» живут в своём разделе, материалы (изображения, документы) — в
+ * медиатеке и карточках (Р-84). Одно правило для API, готовых страниц и
+ * клиента — клиент получает его в `capabilities.catalog_hidden_roots`.
+ */
+export const CATALOG_HIDDEN_ROOTS = ["project_pages", "materials"];

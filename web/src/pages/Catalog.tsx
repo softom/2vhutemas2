@@ -8,12 +8,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ListCount } from "../ui/ListCount";
-import { SourceMark } from "../editor/entityBlocks";
+import { EntityTile } from "../ui/EntityTile";
 import {
   api,
   type Capabilities,
-  compactParts,
-  compactPicture,
   type EntityListItem,
   type EntityType,
   type SuggestedParameter,
@@ -61,6 +59,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   const [cursor, setCursor] = useState<string | null>(initial?.page.next_cursor ?? null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [types, setTypes] = useState<EntityType[]>([]);
+  const [hiddenRoots, setHiddenRoots] = useState<string[]>([]);
   const [type, setType] = useState(branch ?? "");
   const [query, setQuery] = useState("");
   const [parameters, setParameters] = useState<SuggestedParameter[]>([]);
@@ -73,7 +72,10 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
   useEffect(() => {
     api.capabilities()
-      .then((caps: Capabilities) => setTypes(caps.entity_types ?? []))
+      .then((caps: Capabilities) => {
+        setTypes(caps.entity_types ?? []);
+        setHiddenRoots(caps.catalog_hidden_roots ?? []);
+      })
       .catch(() => setTypes([]));
   }, []);
 
@@ -94,11 +96,12 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   };
   const shown = types.filter((item) => inBranch(item.code));
   const depthShift = branch ? (types.find((item) => item.code === branch)?.depth ?? 0) : 0;
-  // Те же кнопки, что рисует сервер (pages.ts, typeChips): дети ветви или корни дерева.
+  // Те же кнопки, что рисует сервер (pages.ts, typeChips): дети ветви или корни
+  // дерева без скрытых ветвей — правило одно, приходит в capabilities.
   // Пока список типов не пришёл, держим кнопки, вложенные сервером: без мигания.
   const chips = types.length === 0 ? (initial?.chips ?? []) : branch
     ? types.filter((item) => item.parent === branch)
-    : types.filter((item) => item.depth === 0 && item.code !== "project_pages" && item.code !== "materials");
+    : types.filter((item) => item.depth === 0 && !hiddenRoots.includes(item.code));
 
   // Сортировать можно по числовым величинам выбранной ветви: ради этого
   // параметры и заведены (Р-38).
@@ -264,28 +267,15 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       />
 
       <div className="grid catalog-grid">
-        {items.map((item, index) => {
-          // Что показать, решает компактный вид типа (таблица отображений):
-          // миниатюра или портрет, знак источника, значения параметров.
-          const view = compactParts(item.compact);
-          return (
-          <a
-            className={view.portrait ? "card portrait" : "card"}
+        {items.map((item, index) => (
+          <EntityTile
             key={item.id}
             href={`/entities/${item.slug}`}
+            title={item.title_ru}
+            kind={item.type_title ?? item.type}
+            compact={item.compact}
+            large={index === 0}
           >
-            {view.picture && (compactPicture(view, index === 0 ? "screen" : "thumbnail")
-              ? (
-                <img
-                  src={compactPicture(view, index === 0 ? "screen" : "thumbnail")!}
-                  alt=""
-                  loading="lazy"
-                />
-              )
-              : <div className="card-no-cover">без изображения</div>)}
-            <div className="kind">{item.type_title ?? item.type}</div>
-            <div className="title">{view.mark && <SourceMark />}{item.title_ru}</div>
-            {view.params.length > 0 && <div className="kind">{view.params.join(", ")}</div>}
             {parameter && item.parameter_value !== null &&
               item.parameter_value !== undefined && (
               <div className="badge">
@@ -299,9 +289,8 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
                 {item.material_status === "published" ? "опубликовано" : "черновик"}
               </span>
             </div>
-          </a>
-          );
-        })}
+          </EntityTile>
+        ))}
       </div>
 
       {items.length > 0 && (

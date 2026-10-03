@@ -16,7 +16,8 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { sql } from "../lib/db.ts";
 import { entities } from "./entities.ts";
-import { siteHeader } from "../lib/siteHeader.ts";
+import { siteFooter, siteHeader } from "../lib/siteHeader.ts";
+import { CATALOG_HIDDEN_ROOTS } from "../lib/entityTypes.ts";
 import { canSeeDrafts } from "../lib/auth.ts";
 import { ApiError } from "../lib/errors.ts";
 import { type AppEnv, log } from "../lib/http.ts";
@@ -149,13 +150,9 @@ async function render(c: Context<AppEnv>, page: Page) {
 
 // ── Общие куски ──────────────────────────────────────────────────────────────
 
-/** Красная лента знака проходит через всю страницу, от шапки до формулы в футере (Р-91). */
-export const SITE_FOOTER = `<footer class="site-foot"><div class="foot-axis"><span>Искусство</span><span class="eq">=</span><span>Вх<sup>2</sup>·м</span></div>` +
-  `<div class="foot-line"><span>2vhutemas · курс квантовой архитектуры</span><span>Прежний сайт — <a href="/old/">2vhutemas.ru/old</a></span></div></footer>`;
-
 function layout(inner: string): string {
   return `<div class="shell"><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
-    `<header class="top" data-site-header>${siteHeader(null, "")}</header><main>${inner}</main>${SITE_FOOTER}</div>`;
+    `<header class="top" data-site-header>${siteHeader(null, "")}</header><main>${inner}</main><footer class="site-foot">${siteFooter()}</footer></div>`;
 }
 
 // Оба клиента получают один и тот же элемент меню и ту же модель прав.
@@ -164,6 +161,7 @@ pages.get("/api/v1/site-header", (c) => {
   const principal = c.get("principal");
   return c.json({
     html: siteHeader(principal, c.req.query("path") ?? "/"),
+    footer: siteFooter(),
     viewer: { authenticated: !!principal, displayName: principal?.displayName ?? "Гость",
       permissions: principal ? [...principal.permissions] : [] },
   });
@@ -198,8 +196,7 @@ async function publishedIn(branch: string | null): Promise<ListRow[]> {
        and ((${branch}::text is not null and e.type_id in
              (select app.entity_type_subtree(${branch})))
             or (${branch}::text is null and e.type_id not in
-             (select app.entity_type_subtree('project_pages')
-              union select app.entity_type_subtree('materials'))))
+             (select s from unnest(${CATALOG_HIDDEN_ROOTS}::text[]) r, app.entity_type_subtree(r) s)))
      order by e.title_ru
      limit 2000
   `;
@@ -269,7 +266,7 @@ async function typeChips(branch: string | null): Promise<TypeChip[]> {
     select ty.code, ty.title_ru
       from app.entity_types ty
      where (${branch}::text is null and ty.parent_id is null
-            and ty.code not in ('project_pages', 'materials'))
+            and ty.code <> all(${CATALOG_HIDDEN_ROOTS}::text[]))
         or ty.parent_id = (select p.id from app.entity_types p where p.code = ${branch})
      order by ty.sort_order, ty.title_ru
   `;

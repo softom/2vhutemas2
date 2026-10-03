@@ -19,13 +19,12 @@
 import { useEffect, useState } from "react";
 import {
   api,
-  compactParts,
-  compactPicture,
   type EntityListItem,
   type EntityType,
   type MediaAsset,
 } from "../api";
-import { type InsertableEntity, SourceMark } from "./entityBlocks";
+import { type InsertableEntity } from "./entityBlocks";
+import { EntityTile } from "../ui/EntityTile";
 import { LinkDialog } from "./LinkDialog";
 import { MediaDialog } from "./MediaDialog";
 
@@ -164,17 +163,10 @@ function EntitiesTab({ entityId, types, onInsertCard, onInsertMention, done, mar
       {!loading && shown.length === 0 && <p className="notice">Ничего не нашлось.</p>}
       <div className="grid picker-grid">
         {shown.map((item) => {
-          const view = compactParts(item.compact);
           const entity: InsertableEntity = { id: item.id, title_ru: item.title_ru, kind: item.type_title ?? item.type };
           const key = `e${item.id}`;
           return (
-            <div className={view.portrait ? "card portrait" : "card"} key={item.id}>
-              {view.picture && (compactPicture(view, "thumbnail")
-                ? <img src={compactPicture(view, "thumbnail")!} alt="" loading="lazy" />
-                : <div className="card-no-cover">без изображения</div>)}
-              <div className="kind">{item.type_title ?? item.type}</div>
-              <div className="title">{view.mark && <SourceMark />}{item.title_ru}</div>
-              {view.params.length > 0 && <div className="kind">{view.params.join(", ")}</div>}
+            <EntityTile key={item.id} title={item.title_ru} kind={item.type_title ?? item.type} compact={item.compact}>
               <div className="picker-actions">
                 <button type="button" className="ghost" onClick={() => { onInsertCard(entity); mark(key, "вставлена карточкой"); }}>
                   Карточкой
@@ -191,7 +183,7 @@ function EntitiesTab({ entityId, types, onInsertCard, onInsertMention, done, mar
                   ))}
               </div>
               {done[key] && <div className="save-mark ok">{done[key]}</div>}
-            </div>
+            </EntityTile>
           );
         })}
       </div>

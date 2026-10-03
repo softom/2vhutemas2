@@ -25,6 +25,7 @@ import { parameters, parameterSets } from "./routes/parameters.ts";
 import { newsRobot } from "./routes/newsRobot.ts";
 import { materials } from "./routes/materials.ts";
 import { pages } from "./routes/pages.ts";
+import { CATALOG_HIDDEN_ROOTS } from "./lib/entityTypes.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -127,6 +128,7 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
       media_allowed_mime_types: config.media.allowedMimeTypes,
     },
     entity_types: types,
+    catalog_hidden_roots: CATALOG_HIDDEN_ROOTS,
     dictionaries: grouped,
     presentations,
   });

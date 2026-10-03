@@ -74,7 +74,12 @@ export interface CompactItem {
   value?: string | null;
 }
 
-/** Что показать компактно: изображение и его форма, знак, значения. */
+/**
+ * Что показать компактно: изображение и его форма, знак, значения.
+ * Двойник `compactParts` сервера (api/src/lib/blocksHtml.ts): правила одни,
+ * менять оба. Разметка сводит компактный вид к картинке, знаку и параметрам —
+ * порядок параметров берётся из таблицы, порядок остальных частей постоянный.
+ */
 export function compactParts(compact: CompactItem[] | undefined) {
   const items = compact ?? [];
   const picture = items.find((item) => item.component === "thumbnail" || item.component === "portrait");
@@ -265,6 +270,8 @@ export interface Capabilities {
   limits: Record<string, unknown>;
   /** Дерево типов в порядке обхода сверху вниз. */
   entity_types: EntityType[];
+  /** Ветви вне общего каталога «Всё» и его кнопок отбора (сервер: CATALOG_HIDDEN_ROOTS). */
+  catalog_hidden_roots?: string[];
   dictionaries: Record<string, { code: string; title_ru: string }[]>;
   /** Вид записи по типу: компоненты режимов compact, card и editor. */
   presentations?: Record<string, Record<string, { component: string; parameter: string | null }[]>>;
@@ -316,7 +323,7 @@ export interface RobotLearned {
 }
 
 export const api = {
-  siteHeader: (path: string) => request<{ html: string; viewer: { authenticated: boolean; displayName: string; permissions: string[] } }>(`/site-header?path=${encodeURIComponent(path)}`),
+  siteHeader: (path: string) => request<{ html: string; footer: string; viewer: { authenticated: boolean; displayName: string; permissions: string[] } }>(`/site-header?path=${encodeURIComponent(path)}`),
   capabilities: () => request<Capabilities>("/capabilities"),
   me: () =>
     request<{ authenticated: boolean; display_name?: string; permissions: string[] }>("/me"),
