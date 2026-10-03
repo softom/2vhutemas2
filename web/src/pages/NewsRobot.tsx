@@ -339,23 +339,65 @@ function Stack({ ov, act }: { ov: RobotOverview; act: Act }) {
   const dayName = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "long" });
   const shown = q.days.filter((d, i) => i < 7 || q.items.some((it) => it.date === d));
   const later = q.items.filter((i) => !q.days.includes(i.date));
+  // Перетаскивание — как у изображений записи (AttachedMedia): ручка «⠿», слот подсвечивается.
+  // Сброс на занятый слот меняет новости местами — это делает сервер (POST /queue, move).
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const drop = (slot: string) => {
+    const key = dragged;
+    setDragged(null);
+    setOver(null);
+    if (!key || bySlot[slot]?.story_key === key) return;
+    const [date, time] = slot.split(" ");
+    act(() => api.robotQueue({ action: "move", story_key: key, date, time }));
+  };
   return (
     <>
       <p className="hint">
         Слоты выхода — {q.times.join(", ")} по Москве. «В стек» в разделе «Новости» ставит историю в ближайший свободный слот;
-        здесь её можно перенести (занятый слот меняется местами) или снять. Выпускать по стеку будет планировщик — пока это план.
+        здесь её можно перетащить за «⠿» в другой слот (занятый слот меняется местами), выбрать слот из списка или снять. Выпускать по стеку будет планировщик — пока это план.
       </p>
       <div className="robot-days">
         {shown.map((d) => (
           <div className="block" key={d}>
             <h3>{dayName(d)}</h3>
             {q.times.map((t) => {
-              const it = bySlot[`${d} ${t}`];
+              const slot = `${d} ${t}`;
+              const it = bySlot[slot];
               return (
-                <div className="robot-slot" key={t}>
+                <div
+                  className={`robot-slot${over === slot ? " drop-target" : ""}${it && dragged === it.story_key ? " dragging" : ""}`}
+                  key={t}
+                  onDragOver={(event) => {
+                    if (dragged === null) return;
+                    event.preventDefault();
+                    setOver(slot);
+                  }}
+                  onDragLeave={() => setOver((current) => (current === slot ? null : current))}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    drop(slot);
+                  }}
+                >
                   <span className="hint">{t}</span>
                   {it ? (
-                    <div>
+                    <div className="robot-slot-item">
+                      <span
+                        className="drag-handle"
+                        title="Перетащите в другой слот; на занятый — поменяются местами"
+                        draggable
+                        onDragStart={(event) => {
+                          setDragged(it.story_key);
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", it.story_key);
+                        }}
+                        onDragEnd={() => {
+                          setDragged(null);
+                          setOver(null);
+                        }}
+                      >
+                        ⠿
+                      </span>
                       <div>{ov.prepared[it.story_key]?.status === "готово"
                         ? <Link to={`/robot/preview/${it.story_key}`}>{ov.prepared[it.story_key].title || it.title}</Link> : it.title}</div>
                       <div><Publication storyKey={it.story_key} ov={ov} slot={false} /></div>
