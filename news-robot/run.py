@@ -110,6 +110,10 @@ def prepare_command(args) -> int:
         print(_json.dumps(rec, ensure_ascii=False))
 
     prepare.run(ROOT, llm, log, pipeline)
+    # Публикатор (Р-102): черновики «Новость», слоты, выход в слот.
+    from robot import publish
+    only = set(args.publish_now) if args.publish_now and args.publish_now != ["all"] else None
+    publish.run(ROOT, log, now_all=args.publish_now is not None, only=only)
     return 0
 
 
@@ -185,6 +189,8 @@ def main() -> int:
     g.add_argument("--once", metavar="ДОМЕН", help="полезен разово, в обход не включать")
     g.add_argument("--reject", metavar="ДОМЕН", help="отклонить кандидата")
     g.add_argument("--note", help="пояснение к предложению или решению")
+    ap.add_argument("--publish-now", nargs="*", metavar="ИСТОРИЯ",
+                    help="с --prepare: опубликовать готовое сейчас, не дожидаясь слота (all — всё готовое в стеке)")
     ap.add_argument("--prepare", action="store_true",
                     help="подготовить новости из стека: перевод, текст, сверка (cron каждую минуту)")
     args = ap.parse_args()
