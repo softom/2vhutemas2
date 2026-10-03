@@ -1,0 +1,42 @@
+/* Слой замечаний (Р-95). Грузится вместе со слоем, гостю не достаётся. */
+.notes-root { --ink: #231F1C; --paper: #FBF8F2; --red: #A9381F; font: 14px/1.45 "Golos Text", system-ui, sans-serif; color: var(--ink); }
+.notes-layer { position: absolute; left: 0; top: 0; z-index: 900; pointer-events: none; }
+.notes-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.notes-shape { pointer-events: visibleStroke; cursor: pointer; }
+.notes-shape:hover { stroke-width: 4; }
+.notes-capture { position: fixed; inset: 0; z-index: 950; cursor: crosshair; touch-action: none; }
+.notes-capture[data-tool="comment"], .notes-capture[data-tool="sticky"], .notes-capture[data-tool="text"] { cursor: copy; }
+
+.notes-item { position: absolute; pointer-events: auto; cursor: pointer; border: 0; padding: 0; font: inherit; color: var(--ink); }
+.notes-item.is-resolved, .notes-shape.is-resolved { opacity: .38; }
+.notes-item.is-lost { outline: 2px dashed var(--note, var(--red)); outline-offset: 2px; }
+.notes-comment { width: 28px; height: 28px; margin: -28px 0 0 0; border-radius: 50% 50% 50% 0; background: var(--note, var(--red)); color: #fff; font-weight: 700; font-size: 13px; box-shadow: 0 2px 6px rgba(35,31,28,.3); }
+.notes-sticky { width: 200px; min-height: 64px; padding: 10px 12px; text-align: left; white-space: pre-wrap; background: #F6E7A6; border-top: 4px solid var(--note, var(--red)); box-shadow: 0 6px 16px rgba(35,31,28,.18); }
+.notes-text { background: transparent; color: var(--note, var(--red)); font-weight: 700; font-size: 16px; white-space: pre-wrap; text-align: left; max-width: 360px; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.notes-item[data-replies]::after { content: attr(data-replies); position: absolute; right: -8px; top: -8px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--ink); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+
+.notes-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 1000; display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #fff; border: 1.5px solid var(--ink); box-shadow: 0 8px 24px rgba(35,31,28,.18); max-width: calc(100vw - 16px); overflow-x: auto; }
+.notes-tool { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ink); border: 0; border-radius: 2px; padding: 0; cursor: pointer; flex: none; }
+.notes-tool:hover { background: #EEE3CD; }
+.notes-tool[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.notes-color { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; outline: 1px solid rgba(35,31,28,.3); padding: 0; cursor: pointer; flex: none; }
+.notes-color[aria-pressed="true"] { outline: 2px solid var(--ink); }
+.notes-sep { width: 1px; height: 28px; background: #DDD0B6; margin: 0 4px; flex: none; }
+.notes-text-btn { background: transparent; color: var(--ink); border: 0; padding: 8px 10px; font: 600 13px "Golos Text", sans-serif; cursor: pointer; white-space: nowrap; flex: none; }
+.notes-text-btn:hover { color: var(--red); }
+.notes-count { font: 12px "PT Mono", monospace; color: #5A5047; white-space: nowrap; padding: 0 4px; flex: none; }
+
+.notes-pop { position: fixed; z-index: 1001; width: 320px; max-height: 70vh; overflow: auto; padding: 14px; background: #fff; border: 1.5px solid var(--ink); box-shadow: 0 12px 32px rgba(35,31,28,.22); }
+.notes-pop-head { font: 12px "PT Mono", monospace; color: #5A5047; margin-bottom: 6px; }
+.notes-body { margin: 0 0 10px; white-space: pre-wrap; }
+.notes-hint { margin: 0 0 10px; font-size: 12px; color: var(--red); }
+.notes-reply { border-top: 1px solid #DDD0B6; padding-top: 8px; margin-top: 8px; }
+.notes-input { width: 100%; box-sizing: border-box; font: inherit; border: 1.5px solid #DDD0B6; padding: 8px; resize: vertical; background: #fff; color: var(--ink); }
+.notes-input:focus { outline: 2px solid var(--red); outline-offset: 1px; }
+.notes-answer { display: grid; gap: 6px; margin-top: 10px; }
+.notes-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.notes-btn { background: var(--ink); color: #fff; border: 0; padding: 8px 12px; font: 600 13px "Golos Text", sans-serif; cursor: pointer; border-radius: 2px; }
+.notes-btn.is-quiet { background: transparent; color: var(--red); border: 1.5px solid var(--red); }
+.notes-btn:disabled { opacity: .5; }
+.notes-answer .notes-btn { justify-self: start; }
+.notes-toast { position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); z-index: 1002; background: var(--ink); color: #fff; padding: 10px 14px; font-size: 13px; }

@@ -173,6 +173,12 @@ export function App() {
         dangerouslySetInnerHTML={{ __html: headerHtml }}
         onClick={async (event) => {
           const target = event.target as HTMLElement;
+          // Замечания поверх страницы (Р-95): слой грузится только по нажатию.
+          if (target.closest('[data-action="notes"]')) {
+            const { toggleNotes } = await import("./notes/layer");
+            toggleNotes();
+            return;
+          }
           if (target.closest('[data-action="signout"]')) {
             await supabase.auth.signOut();
             await refresh();

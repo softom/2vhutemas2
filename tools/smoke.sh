@@ -465,6 +465,22 @@ contains "счётчик Метрики на главной" 'mc.yandex.ru/metri
 contains "счётчик Метрики на странице раздела" 'mc.yandex.ru/metrika/tag.js?id=108525511' "$(curl -s $SITE/objects)"
 contains "прежний сайт закрыт от индекса" 'noindex' "$(curl -s -D - -o /dev/null $SITE/old/ | tr 'A-Z' 'a-z')"
 
+echo "── Замечания на страницах"
+# Р-95: пометки видят и ставят только правящие; гость о них не узнаёт.
+check "гостю пометки закрыты" 401 "$(code "$API/page-notes?path=/smoke-zamechaniya")"
+missing "у гостя нет кнопки замечаний" 'data-action="notes"' "$(curl -s $API/site-header)"
+contains "у SU есть кнопка замечаний" 'data-action="notes"' "$(curl -s -H "$AUTH" $API/site-header)"
+NOTE=$(curl -s -X POST -H "$AUTH" -H "$JSON" \
+  -d '{"page_path":"/smoke-zamechaniya","kind":"comment","body":"smoke: замечание","anchor":{"pageX":10,"pageY":20},"viewport_width":1440}' \
+  $API/page-notes | field id)
+check "замечание поставлено" "да" "$([ -n "$NOTE" ] && echo да || echo нет)"
+check "ответ в ветке" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"kind\":\"reply\",\"parent_id\":\"$NOTE\",\"body\":\"smoke: ответ\"}" $API/page-notes)"
+contains "ветка с ответом" 'smoke: ответ' "$(curl -s -H "$AUTH" "$API/page-notes?path=/smoke-zamechaniya")"
+check "замечание решено" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"status":"resolved"}' $API/page-notes/$NOTE)"
+missing "решённое скрыто по умолчанию" "$NOTE" "$(curl -s -H "$AUTH" "$API/page-notes?path=/smoke-zamechaniya")"
+check "замечание удалено" 204 "$(code -X DELETE -H "$AUTH" $API/page-notes/$NOTE)"
+missing "готовая страница не несёт слоя" 'notes-layer' "$(curl -s $SITE/)"
+
 echo "── Уборка"
 # Прогон заводит записи разных типов: объект, лекции, источник, место,
 # изображение, документ. Убираем их одним правилом — всё, что им

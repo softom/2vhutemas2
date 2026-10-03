@@ -24,6 +24,40 @@ export class ApiError extends Error {
   }
 }
 
+/** Пометка на странице сайта (Р-95); ответы ветки — в `replies`. */
+export interface PageNote {
+  id: string;
+  page_path: string;
+  parent_id: string | null;
+  kind: "comment" | "sticky" | "text" | "pen" | "rect" | "arrow" | "reply";
+  anchor: NoteAnchor;
+  geometry: NoteGeometry;
+  body: string;
+  color: string;
+  viewport_width: number | null;
+  status: "open" | "resolved";
+  created_at: string;
+  created_by: string | null;
+  author: string | null;
+  replies?: PageNote[];
+}
+
+/** Элемент страницы и точка в нём — в долях его рамки; запасной ход — точка документа. */
+export interface NoteAnchor {
+  selector?: string;
+  x?: number;
+  y?: number;
+  pageX?: number;
+  pageY?: number;
+}
+
+/** Форма в долях рамки элемента привязки: точки карандаша, конец рамки и стрелки. */
+export interface NoteGeometry {
+  points?: [number, number][];
+  x2?: number;
+  y2?: number;
+}
+
 async function token(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
@@ -324,6 +358,15 @@ export interface RobotLearned {
 
 export const api = {
   siteHeader: (path: string) => request<{ html: string; footer: string; viewer: { authenticated: boolean; displayName: string; permissions: string[] } }>(`/site-header?path=${encodeURIComponent(path)}`),
+  // Пометки поверх страниц (Р-95): только для правящих.
+  pageNotes: (path: string, all = false) =>
+    request<{ items: PageNote[] }>(`/page-notes?path=${encodeURIComponent(path)}${all ? "&status=all" : ""}`),
+  openPageNotes: () => request<{ items: { page_path: string; open: number; last_at: string }[] }>("/page-notes/open"),
+  createPageNote: (note: Partial<PageNote> & { parent_id?: string }) =>
+    request<{ id: string }>("/page-notes", { method: "POST", body: JSON.stringify(note) }),
+  updatePageNote: (id: string, patch: Partial<Pick<PageNote, "body" | "status" | "color" | "geometry" | "anchor">>) =>
+    request<{ ok: boolean }>(`/page-notes/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  deletePageNote: (id: string) => request<void>(`/page-notes/${id}`, { method: "DELETE" }),
   capabilities: () => request<Capabilities>("/capabilities"),
   me: () =>
     request<{ authenticated: boolean; display_name?: string; permissions: string[] }>("/me"),

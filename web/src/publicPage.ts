@@ -13,6 +13,10 @@ async function authenticatedCard() {
         await supabase.auth.signOut();
         location.reload();
       });
+      header.querySelector('[data-action="notes"]')?.addEventListener("click", async () => {
+        const { toggleNotes } = await import("./notes/layer");
+        toggleNotes();
+      });
     }
     if (!me.authenticated) return;
     const key = document.querySelector<HTMLElement>("[data-entity-key]")?.dataset.entityKey;

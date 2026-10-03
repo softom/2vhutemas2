@@ -14,8 +14,13 @@ export function siteHeader(principal: Principal | null, path = "/"): string {
   const nav = items.filter(([, , visible]) => visible).map(([href, label]) =>
     `<a href="${href}"${path === href || (href !== "/" && path.startsWith(href + "/")) ? ' class="active"' : ""}>${label}</a>`
   ).join("");
+  // Замечания поверх страницы (Р-95) — только тем, кто правит: слой и его код
+  // грузятся по нажатию, гостю страница не тяжелеет.
+  const notes = can(principal, "edit")
+    ? `<button type="button" class="notes-toggle" data-action="notes" aria-pressed="false">Замечания</button>`
+    : "";
   const viewer = principal
-    ? `<span title="${e([...principal.permissions].join(", "))}">${e(principal.displayName)}</span><button type="button" data-action="signout">Выйти</button>`
+    ? notes + `<span title="${e([...principal.permissions].join(", "))}">${e(principal.displayName)}</span><button type="button" data-action="signout">Выйти</button>`
     : '<a href="/login">Войти</a>';
   // Знак Вх² стоит на красной ленте (Р-56, Р-91): черты и штриховка — из обложки.
   const logo = `<span class="logo-mark"><span class="logo-bar"></span><span class="lg-line l1"></span>` +

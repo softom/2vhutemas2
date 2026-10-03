@@ -23,6 +23,7 @@ import { dates } from "./routes/dates.ts";
 import { indicators } from "./routes/indicators.ts";
 import { parameters, parameterSets } from "./routes/parameters.ts";
 import { newsRobot } from "./routes/newsRobot.ts";
+import { pageNotes } from "./routes/pageNotes.ts";
 import { materials } from "./routes/materials.ts";
 import { pages } from "./routes/pages.ts";
 import { CATALOG_HIDDEN_ROOTS } from "./lib/entityTypes.ts";
@@ -159,6 +160,7 @@ app.route("/api/v1/parameters", parameters);
 app.route("/api/v1/parameter-sets", parameterSets);
 app.route("/api/v1/materials", materials);
 app.route("/api/v1/news-robot", newsRobot);
+app.route("/api/v1/page-notes", pageNotes);
 
 // Всё, что не API, — страницы сайта: готовый HTML для поисковиков и ссылок
 // (Р-65). Caddy присылает сюда адреса, которым не нашлось файла сборки.
