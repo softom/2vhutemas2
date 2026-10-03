@@ -291,10 +291,20 @@ function Publication({ storyKey, ov, slot = true }: { storyKey: string; ov: Robo
   if (!p || p.status === "новый" || p.status === "ждёт") return <span className="hint">{place}ждёт перевода</span>;
   if (p.status === "переводится") return <span className="hint">{place}переводится…</span>;
   if (p.status === "ошибка") return <span className="error">{place}ошибка: {p.error}</span>;
-  const issues = p.issues ?? 0;
+  const issues = p.issues ?? [];
   return (
-    <span>{place}<Link to={`/robot/preview/${storyKey}`}>готово — превью</Link>
-      {issues > 0 && <span className="error"> · замечаний {issues}</span>}</span>
+    <span className="robot-pub">
+      {slot && <span className="hint">{place.replace(/ · $/, "")}</span>}
+      <Link to={`/robot/preview/${storyKey}`}>готово — превью</Link>
+      {issues.length > 0 && (
+        <span className="robot-issues" tabIndex={0}>
+          замечаний: {issues.length}
+          <span className="robot-issues-pop" role="tooltip">
+            {issues.map((x, i) => <span key={i}>{x}</span>)}
+          </span>
+        </span>
+      )}
+    </span>
   );
 }
 

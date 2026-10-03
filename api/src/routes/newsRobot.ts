@@ -288,7 +288,7 @@ async function preparedIndex(): Promise<Record<string, Row>> {
         origin: rec.origin, title: rec.story?.news?.title,
         // Замечания и предупреждения, кроме «фото без автора» и «перепечатка» — они видны в превью.
         issues: [...(rec.story?.issues ?? []), ...(rec.story?.warnings ?? [])]
-          .filter((x) => !x.startsWith("фото без автора") && !x.startsWith("перепечатка")).length,
+          .filter((x) => !x.startsWith("фото без автора") && !x.startsWith("перепечатка")),
       };
     }
   } catch (e) {

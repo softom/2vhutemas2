@@ -595,3 +595,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .robot-slot.dragging { opacity: .5; }
 .robot-slot-item .drag-handle { float: left; margin-right: 6px; }
 .robot-log { max-height: 60vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+
+/* Колонка «Публикация»: слот, ссылка на превью, замечания — списком при наведении (2026-10-03). */
+.robot-pub { display: flex; flex-direction: column; gap: 2px; }
+.robot-issues { position: relative; align-self: flex-start; font-size: 12px; color: var(--accent); border-bottom: 1px dotted var(--accent); cursor: help; }
+.robot-issues-pop { display: none; position: absolute; right: 0; top: 100%; z-index: 40; width: 320px; margin-top: 4px; padding: 8px 10px; flex-direction: column; gap: 6px; background: var(--paper, #fff); border: 1px solid #CDBB98; color: var(--text); font-size: 12px; line-height: 1.4; }
+.robot-issues:hover .robot-issues-pop, .robot-issues:focus .robot-issues-pop { display: flex; }

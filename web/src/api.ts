@@ -399,7 +399,7 @@ export interface RobotOverview {
   prepared: Record<string, RobotPrepared>;
 }
 /** Подготовка новости из стека (Р-97). */
-export interface RobotPrepared { status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string; issues?: number }
+export interface RobotPrepared { status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string; issues?: string[] }
 export interface RobotPreparedFull extends RobotPrepared {
   story_key: string;
   story?: {

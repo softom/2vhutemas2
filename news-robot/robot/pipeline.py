@@ -419,6 +419,9 @@ def run(args) -> Run:
         applied = discover.apply_inbox(state, ROOT / "inbox" / "inbox.jsonl",
                                        lambda lvl, st, msg, **kw: log(r, lvl, st, msg, **kw))
         if applied:
+            # Сразу на диск: иначе до конца прогона решений нет ни в ящике, ни в состоянии,
+            # и на странице «Да / Нет» выглядят потерянными (2026-10-03).
+            state.save()
             log(r, "info", "inbox", "решения со страницы применены", count=applied)
             src_list = load_sources(args.sources, state)
             sources = {s["id"]: s for s in all_sources(state)}
