@@ -461,7 +461,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .site-foot::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(circle, rgba(35,31,28,.24) 0 .9px, transparent 1.3px); background-size: 5px 5px;
   -webkit-mask-image: linear-gradient(0deg, #000, rgba(0,0,0,.12)); mask-image: linear-gradient(0deg, #000, rgba(0,0,0,.12)); }
 .site-foot > * { position: relative; display: grid; grid-template-columns: minmax(0, var(--c1)) 20px minmax(0, 1fr); column-gap: 32px; }
-.foot-axis { align-items: center; font-size: 60px; font-weight: 800; letter-spacing: -.03em; line-height: 1; margin-bottom: 40px; }
+.foot-axis { align-items: center; font-size: 60px; font-weight: 700; letter-spacing: -.03em; line-height: 1; margin-bottom: 40px; }
 .foot-axis > :first-child { text-align: right; }
 .foot-axis .eq { position: relative; z-index: 2; mix-blend-mode: multiply; justify-self: center; }
 .foot-axis sup { font-size: .5em; }
