@@ -90,6 +90,8 @@ export interface RenderContext {
 
 /** Подпись изображения-цитаты (Р-68): кому приписать и откуда взято. */
 export interface Attribution {
+  /** Подпись записи «Изображение» — когда у вставки в тексте своей нет. */
+  caption?: string | null;
   author: string | null;
   source: string | null;
   source_url: string | null;
@@ -249,8 +251,10 @@ function block(item: Block, ctx: RenderContext): string {
     }
     case "mediaImage": {
       const assetId = String(props.assetId ?? "");
-      const caption = String(props.caption ?? "");
       const credit = ctx.publicAssets.get(assetId);
+      // Вставка в тексте подписана так же, как в галерее: своя подпись блока,
+      // иначе — подпись записи «Изображение», и всегда «Автор · Источник» (Р-68).
+      const caption = String(props.caption || credit?.caption || "");
       if (credit) return figureHtml(mediaUrl(assetId), caption, credit);
       return caption ? `<p>${escapeHtml(caption)}</p>` : "";
     }

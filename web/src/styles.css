@@ -416,14 +416,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 /* Лента и её ритм: короткие черты поперёк и штрихованные бруски по сторонам. */
 .through { position: absolute; top: 0; bottom: 0; left: calc(var(--pad) + 692px); width: 20px; background: var(--accent); z-index: 1; pointer-events: none; }
 .through-marks { position: absolute; top: 0; bottom: 0; left: calc(var(--pad) + 671px); width: 60px; z-index: 1; pointer-events: none;
-  background: linear-gradient(180deg, #231F1C 0 1.5px, transparent 1.5px 200px, #231F1C 200px 201.5px, transparent 201.5px 290px, #231F1C 290px 291.5px, transparent 291.5px) 11px 420px / 40px 560px repeat-y; }
-.through-marks::before, .through-marks::after { content: ""; position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, #231F1C 0 1px, transparent 1px 4px);
-  -webkit-mask-repeat: repeat-y; mask-repeat: repeat-y; -webkit-mask-position: 0 420px; mask-position: 0 420px; -webkit-mask-size: 100% 560px; mask-size: 100% 560px; }
+  /* Засечки — чёткий ритм: одна черта поперёк ленты через равный шаг. */
+  background: linear-gradient(180deg, #231F1C 0 1.5px, transparent 1.5px) 11px 420px / 40px 140px repeat-y; }
+/* Штриховка — свободный ритм и вдвое реже прежней: бруски слева и справа
+   повторяются с несоизмеримыми шагами (900, 1170, 1430 px) и не совпадают
+   с засечками — рисунок не складывается в навязчивый узор (замечание 2026-10-03). */
+.through-marks::before, .through-marks::after { content: ""; position: absolute; top: 420px; bottom: 0; background: repeating-linear-gradient(135deg, #231F1C 0 1px, transparent 1px 4px);
+  -webkit-mask-repeat: repeat-y; mask-repeat: repeat-y; }
 .through-marks::before { left: 0; width: 21px;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0 200px, #000 200px 310px, transparent 310px); mask-image: linear-gradient(180deg, transparent 0 200px, #000 200px 310px, transparent 310px); }
+  -webkit-mask-image: linear-gradient(180deg, transparent 0 310px, #000 310px 420px, transparent 420px); mask-image: linear-gradient(180deg, transparent 0 310px, #000 310px 420px, transparent 420px);
+  -webkit-mask-size: 100% 900px; mask-size: 100% 900px; }
 .through-marks::after { left: 41px; width: 19px;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0 221px, #000 221px 310px, transparent 310px 386px, #000 386px 454px, transparent 454px);
-  mask-image: linear-gradient(180deg, transparent 0 221px, #000 221px 310px, transparent 310px 386px, #000 386px 454px, transparent 454px); }
+  -webkit-mask-image: linear-gradient(180deg, transparent 0 640px, #000 640px 729px, transparent 729px), linear-gradient(180deg, transparent 0 1060px, #000 1060px 1128px, transparent 1128px);
+  mask-image: linear-gradient(180deg, transparent 0 640px, #000 640px 729px, transparent 729px), linear-gradient(180deg, transparent 0 1060px, #000 1060px 1128px, transparent 1128px);
+  -webkit-mask-size: 100% 1170px, 100% 1430px; mask-size: 100% 1170px, 100% 1430px; }
 
 /* Шапка: знак стоит на ленте, меню — одной строкой слева от неё. */
 .top { position: relative; display: grid; grid-template-columns: minmax(0, var(--c1)) 20px minmax(0, 1fr); column-gap: 32px; align-items: center;
@@ -508,7 +514,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 /* Запись: колонка текста до ленты, «Сведения» и подписи — за лентой. */
 .public-card { display: grid; grid-template-columns: minmax(0, var(--c1)) 20px minmax(0, 1fr); column-gap: 32px; align-items: start; }
 .public-card > * { grid-column: 1; min-width: 0; }
-.public-card > .pc-indicators { grid-column: 3; grid-row: 1 / span 3; position: relative; z-index: 2; padding-top: 8px; }
+.public-card > .pc-indicators { grid-column: 3; grid-row: 1 / span 3; position: relative; z-index: 2; padding-top: 8px; max-width: 67%; }
 .public-card > .pc-indicators h2 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 12px; padding-bottom: 14px; }
 .public-card > .pc-indicators dl { grid-template-columns: max-content 1fr; gap: 8px 16px; font-size: 14px; }
 .pc-head h1 { font-size: 56px; margin-top: 8px; }
