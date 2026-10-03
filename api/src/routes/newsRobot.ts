@@ -209,7 +209,13 @@ async function runIds(): Promise<string[]> {
   const ids: string[] = [];
   try {
     for await (const entry of Deno.readDir(`${ROOT}/out`)) {
-      if (entry.isDirectory && RUN_ID.test(entry.name)) ids.push(entry.name);
+      if (!entry.isDirectory || !RUN_ID.test(entry.name)) continue;
+      // Папка без журнала — прогон, упавший до первой строки; в списке и в «Состоянии» он только путает.
+      try {
+        if ((await Deno.stat(`${ROOT}/out/${entry.name}/log.jsonl`)).size > 0) ids.push(entry.name);
+      } catch {
+        // журнала нет
+      }
     }
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e;
