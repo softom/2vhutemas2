@@ -468,8 +468,8 @@ contains "прежний сайт закрыт от индекса" 'noindex' "$
 echo "── Замечания на страницах"
 # Р-95: пометки видят и ставят только правящие; гость о них не узнаёт.
 check "гостю пометки закрыты" 401 "$(code "$API/page-notes?path=/smoke-zamechaniya")"
-missing "у гостя нет кнопки замечаний" 'data-action="notes"' "$(curl -s $API/site-header)"
-contains "у SU есть кнопка замечаний" 'data-action="notes"' "$(curl -s -H "$AUTH" $API/site-header)"
+missing "у гостя нет кнопки замечаний" 'notes-toggle' "$(curl -s $API/site-header)"
+contains "у SU есть кнопка замечаний" 'notes-toggle' "$(curl -s -H "$AUTH" $API/site-header)"
 NOTE=$(curl -s -X POST -H "$AUTH" -H "$JSON" \
   -d '{"page_path":"/smoke-zamechaniya","kind":"comment","body":"smoke: замечание","anchor":{"pageX":10,"pageY":20},"viewport_width":1440}' \
   $API/page-notes | field id)
