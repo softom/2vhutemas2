@@ -313,7 +313,7 @@ function catalogHtml(title: string, lead: string, page: CatalogPage, branch: str
   return `<script type="application/json" id="catalog-initial">${data}</script>` +
     `<section><div class="catalog-head"><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(lead)}</p></div>` +
     `${chipsHtml(chips, branch ? "Все в разделе" : "Все")}${filters}${count}` +
-    (page.items.length ? `<div class="grid">${cards}</div>${count}` : "") + `</section>`;
+    (page.items.length ? `<div class="grid catalog-grid">${cards}</div>${count}` : "") + `</section>`;
 }
 
 function listLd(path: string, title: string, rows: ListRow[]) {

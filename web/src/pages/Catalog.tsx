@@ -263,7 +263,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         loading={loadingMore}
       />
 
-      <div className="grid">
+      <div className="grid catalog-grid">
         {items.map((item, index) => {
           // Что показать, решает компактный вид типа (таблица отображений):
           // миниатюра или портрет, знак источника, значения параметров.
