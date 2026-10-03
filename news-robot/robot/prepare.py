@@ -53,12 +53,68 @@ def _run_story(run_dir: Path, key: str) -> tuple[dict | None, dict | None]:
     return cand, story
 
 
+def _story_inputs(root: Path, run_id: str, key: str, pipeline):
+    run_dir = root / "out" / str(run_id or "")
+    cand, _ = _run_story(run_dir, key)
+    items = {d["id"]: Item(**{k: v for k, v in d.items() if k in Item.__dataclass_fields__})
+             for d in _read(run_dir / "items.json", []) or []}
+    sources = {s["id"]: s for s in pipeline.all_sources(State(root / ".state" / "state.json"))}
+    return cand, items, sources
+
+
+def regenerate(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
+    """Запросы «Перегенерировать» со страницы превью (inbox/regenerate/<история>.json, Р-101)."""
+    rdir = root / "inbox" / "regenerate"
+    done = 0
+    for req_path in sorted(rdir.glob("*.json")) if rdir.exists() else []:
+        req = _read(req_path) or {}
+        req_path.unlink(missing_ok=True)
+        key = req.get("story_key", "")
+        path = root / ".state" / "prepared" / f"{key}.json"
+        rec = _read(path)
+        if not rec or not llm.live:
+            log("warn", "regenerate", "нечего перегенерировать или LLM не настроена", story=key)
+            continue
+        cand, items, sources = _story_inputs(root, rec.get("run_id"), key, pipeline)
+        if cand is None or cand.get("lead_item") not in items:
+            rec.update(status="ошибка", error="история не найдена в прогоне — перегенерировать нельзя")
+            _write(path, rec)
+            continue
+        old = rec.get("story") or {}
+        notes = [*(old.get("issues") or []), *(old.get("warnings") or [])]
+        instructions = "\n".join(f"- {x}" for x in notes)
+        if req.get("note"):
+            instructions += f"\nУказание редактора: {req['note']}"
+        history = rec.get("history", [])
+        if old:
+            history = (history + [{"at": rec.get("ready_at"), "story": old}])[-5:]
+        rec.update(status="переделывается", started_at=now(), history=history, error=None)
+        _write(path, rec)
+        log("info", "regenerate", "перегенерация начата", story=key, urls=len(req.get("urls") or []))
+        holder = pipeline.Run(id=f"regenerate-{key}", dir=root / "out" / "prepare", since=datetime.now(timezone.utc))
+        try:
+            story = pipeline.write_story(holder, cand, items, sources, fetcher, llm, extra_urls=req.get("urls") or [],
+                                         extra_text=req.get("text") or None, instructions=instructions or None)
+        except Exception as e:  # noqa: BLE001
+            rec.update(status="готово", error=f"перегенерация не удалась: {type(e).__name__}: {e}"[:300])
+            _write(path, rec)
+            log("error", "regenerate", "перегенерация не удалась", story=key, error=str(e)[:200])
+            continue
+        rec.update(status="готово", ready_at=now(), origin="перегенерация по замечаниям", story=story,
+                   regenerated_by=req.get("by"), editor_input={k: req.get(k) for k in ("urls", "text", "note")})
+        _write(path, rec)
+        log("info", "regenerate", "новость перегенерирована", story=key, issues=len(story.get("issues", [])))
+        done += 1
+    return done
+
+
 def run(root: Path, llm: LLM, log, pipeline) -> int:
     queue = (_read(root / "inbox" / "queue.json") or {}).get("items", [])
     pdir = root / ".state" / "prepared"
     done = 0
-    fetcher: Fetcher | None = None
+    fetcher: Fetcher | None = Fetcher()
     try:
+        done += regenerate(root, llm, log, pipeline, fetcher)
         for q in queue:
             key = q["story_key"]
             path = pdir / f"{key}.json"

@@ -517,6 +517,8 @@ export const api = {
   robotSources: () => request<{ items: RobotSourceRow[]; connected: boolean }>("/news-robot/sources"),
   robotOverview: () => request<RobotOverview>("/news-robot/overview"),
   robotPrepared: (key: string) => request<RobotPreparedFull>(`/news-robot/prepared/${encodeURIComponent(key)}`),
+  robotRegenerate: (body: { story_key: string; input?: string; note?: string }) =>
+    request<{ queued: unknown }>("/news-robot/regenerate", { method: "POST", body: JSON.stringify(body) }),
   robotRunView: (id: string) => request<RobotRunView>(`/news-robot/runs/${encodeURIComponent(id)}/view`),
   robotQueue: (body: { action: "add" | "move" | "remove"; story_key: string; [key: string]: unknown }) =>
     request<RobotQueue>("/news-robot/queue", { method: "POST", body: JSON.stringify(body) }),

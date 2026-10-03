@@ -317,10 +317,23 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
 # ── 4–6. Статья → факты → текст → сверка ─────────────────────────────────────
 
 def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str, dict],
-                fetcher: Fetcher, llm: LLM) -> dict:
+                fetcher: Fetcher, llm: LLM, extra_urls: list[str] | None = None, extra_text: str | None = None,
+                instructions: str | None = None) -> dict:
+    """Новость по истории. extra_urls, extra_text, instructions — материалы и указания редактора
+    при перегенерации (Р-101): дополнительные источники текста и фото, его текст, замечания к прошлой версии."""
     it = items[cand["lead_item"]]
     src = sources[it.source_id]
     art = fetch_article(fetcher, it, bool(src.get("full_text")))
+    for url in extra_urls or []:
+        extra = fetch_article(fetcher, Item(id="extra", source_id=it.source_id, url=url, title=url, summary="",
+                                            published=None), False)
+        art["text"] += f"\n\nДополнительный источник (указал редактор): {url}\n{extra['text']}"
+        art["images"] = art["images"] + extra["images"]
+        art["links"] = art["links"] + [{"url": url, "domain": url.split("/")[2] if "//" in url else url,
+                                        "text": "указал редактор", "context": ""}] + extra["links"]
+        art["warnings"] += [f"{url}: {w}" for w in extra["warnings"]]
+    if extra_text:
+        art["text"] += "\n\nМатериал от редактора (сведения верны, их можно использовать как факты):\n" + extra_text
     meta = {"издание": src["title"], "адрес": it.url, "дата": (it.published or "")[:10],
             "заголовок": it.title, "автор": it.author or art.get("author"), "откуда текст": art["text_origin"],
             "производитель о своём продукте": bool(src.get("vendor"))}
@@ -345,7 +358,10 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
     genre_rules = (ROOT / "prompts" / f"genre_{genre}.md").read_text(encoding="utf-8")
     write_sys = prompt("write", source_title=src["title"], source_url=it.url, source_date=meta["дата"],
                        facts=json.dumps(facts, ensure_ascii=False, indent=1), genre_rules=genre_rules)
-    news = llm.chat_json("write", write_sys, "Напиши новость.", max_tokens=12000)
+    ask = "Напиши новость."
+    if instructions:
+        ask += "\n\nЭто новая версия. Устрани замечания к прошлой версии и учти указания редактора:\n" + instructions
+    news = llm.chat_json("write", write_sys, ask, max_tokens=12000)
     verdict = llm.chat_json("verify", prompt("verify", facts=json.dumps(facts, ensure_ascii=False),
                                              news=json.dumps(news, ensure_ascii=False)),
                             "Проверь новость.", max_tokens=8000)

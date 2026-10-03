@@ -401,3 +401,31 @@ newsRobot.post("/queue", async (c) => {
   await Deno.rename(tmp, QUEUE());
   return c.json(await readQueue());
 });
+
+/**
+ * «Перегенерировать с учётом замечаний» (Р-101): замечания прошлой версии, указание редактора,
+ * его ссылки (дополнительные источники текста и фото) и текст. Робот берёт запрос в течение минуты.
+ */
+newsRobot.post("/regenerate", async (c) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const body = await c.req.json().catch(() => null) as Row | null;
+  const key = String(body?.story_key ?? "");
+  if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная история");
+  if (!(await readJson<Row>(`${ROOT}/state/prepared/${key}.json`))) {
+    throw new ApiError("not_found", "Новость ещё не подготовлена — перегенерировать нечего");
+  }
+  const raw = typeof body?.input === "string" ? body.input.slice(0, 20000) : "";
+  const urls: string[] = [];
+  const text: string[] = [];
+  for (const line of raw.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    if (/^https?:\/\/\S+$/.test(t) && urls.length < 5) urls.push(t);
+    else text.push(t);
+  }
+  const note = typeof body?.note === "string" ? body.note.slice(0, 2000) : "";
+  const req = { story_key: key, urls, text: text.join("\n"), note, by: principal.displayName, at: new Date().toISOString() };
+  await Deno.mkdir(`${ROOT}/inbox/regenerate`, { recursive: true });
+  await Deno.writeTextFile(`${ROOT}/inbox/regenerate/${key}.json`, JSON.stringify(req));
+  return c.json({ queued: req }, 202);
+});

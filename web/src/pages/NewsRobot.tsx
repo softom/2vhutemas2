@@ -290,6 +290,7 @@ function Publication({ storyKey, ov, slot = true }: { storyKey: string; ov: Robo
   const place = slot ? `${day}, ${q.time} · ` : "";
   if (!p || p.status === "новый" || p.status === "ждёт") return <span className="hint">{place}ждёт перевода</span>;
   if (p.status === "переводится") return <span className="hint">{place}переводится…</span>;
+  if (p.status === "переделывается") return <span className="hint">{place}переделывается…</span>;
   if (p.status === "ошибка") return <span className="error">{place}ошибка: {p.error}</span>;
   const issues = p.issues ?? [];
   return (
@@ -301,6 +302,7 @@ function Publication({ storyKey, ov, slot = true }: { storyKey: string; ov: Robo
           замечаний: {issues.length}
           <span className="robot-issues-pop" role="tooltip">
             {issues.map((x, i) => <span key={i}>{x}</span>)}
+            <Link to={`/robot/preview/${storyKey}`}>Перегенерировать →</Link>
           </span>
         </span>
       )}
@@ -312,9 +314,25 @@ function Publication({ storyKey, ov, slot = true }: { storyKey: string; ov: Robo
 function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
   const [rec, setRec] = useState<RobotPreparedFull | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const [note, setNote] = useState("");
+  const [sent, setSent] = useState<string | null>(null);
+  const status = ov.prepared[storyKey]?.status;
+  // Перезагружаем превью, когда робот закончил переделку (статус меняется в сводке раздела).
   useEffect(() => {
     api.robotPrepared(storyKey).then(setRec).catch((e) => setErr((e as Error).message));
-  }, [storyKey]);
+  }, [storyKey, ov.prepared[storyKey]?.ready_at]);
+  const regenerate = async () => {
+    setSent("отправляем…");
+    try {
+      await api.robotRegenerate({ story_key: storyKey, input, note });
+      setSent("Запрос передан роботу: он возьмёт его в течение минуты, превью обновится само.");
+      setInput("");
+      setNote("");
+    } catch (e) {
+      setSent((e as Error).message);
+    }
+  };
   const q = ov.queue.items.find((i) => i.story_key === storyKey);
   if (err) return <p className="error">{err}</p>;
   if (!rec) return <p className="notice">Загружаем превью…</p>;
@@ -353,6 +371,28 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
           {issues.map((x, i) => <p className="error" key={i}>{x}</p>)}
         </div>
       )}
+      <div className="block">
+        <h3>Переделать</h3>
+        {status === "переделывается" || status === "переводится" ? (
+          <p className="notice">Робот переделывает новость…</p>
+        ) : (
+          <>
+            <p className="hint">
+              Робот передаст LLM замечания проверки и ваше указание и напишет новость заново. Ссылки (каждая с новой строки)
+              он откроет как дополнительные источники текста и фото; остальной текст возьмёт как материал от редактора.
+            </p>
+            <label className="hint">Добавить ссылку или текст</label>
+            <textarea rows={5} style={{ width: "100%" }} value={input} onChange={(e) => setInput(e.target.value)}
+              placeholder={"https://… — откуда взять медиа и текст\nили сам текст: факты, подписи, уточнения"} />
+            <label className="hint">Что исправить (необязательно)</label>
+            <input style={{ width: "100%" }} value={note} onChange={(e) => setNote(e.target.value)}
+              placeholder="Например: короче; без перечня проектов; фото с фасада" />
+            <p><button type="button" onClick={regenerate}>Перегенерировать с учётом замечаний</button></p>
+          </>
+        )}
+        {sent && <p className="hint">{sent}</p>}
+        {rec.origin && <p className="hint">Эта версия: {rec.origin}{rec.ready_at ? `, ${new Date(rec.ready_at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}` : ""}.</p>}
+      </div>
     </article>
   );
 }
