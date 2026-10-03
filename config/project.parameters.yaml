@@ -144,9 +144,14 @@ parameters:
   news.llm.api_key_env:
     value: POLZA_API_KEY
     status: specified
+  # Выбрано по стенду 2026-10-03 (news-robot/bench.py): лучшее совпадение с выбором редактора.
   news.llm.model:
-    value: null
-    status: unresolved
+    value: deepseek/deepseek-v4-pro
+    status: specified
+  # off — без рассуждения: быстрее, всегда полный JSON и на стенде точнее; low — короткое.
+  news.llm.reasoning:
+    value: "off"
+    status: specified
   news.llm.daily_token_limit:
     value: null
     status: unresolved

@@ -37,6 +37,12 @@ RANK_DEFAULTS = {
 }
 
 
+def llm_extra(cfg: dict) -> dict:
+    """Рассуждение модели — настройка news.llm.reasoning: off, low или пусто (как у модели)."""
+    mode = os.environ.get("NEWS_LLM_REASONING") or cfg.get("news.llm.reasoning")
+    return {"off": {"reasoning": {"enabled": False}}, "low": {"reasoning": {"effort": "low"}}}.get(mode or "", {})
+
+
 def log(run: "Run", level: str, stage: str, msg: str, **extra) -> None:
     rec = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "level": level,
            "run_id": run.id, "stage": stage, "msg": msg, **extra}
@@ -44,6 +50,13 @@ def log(run: "Run", level: str, stage: str, msg: str, **extra) -> None:
     print(line)
     with open(run.dir / "log.jsonl", "a", encoding="utf-8") as f:
         f.write(line + "\n")
+    # Живое состояние для страницы робота: этап, последнее сообщение, счёт.
+    progress = {"run_id": run.id, "stage": stage, "msg": msg, "ts": rec["ts"], "level": level,
+                "feeds": len(run.feeds), "items": len(run.items), "candidates": len(run.candidates),
+                "news": len(run.news)}
+    tmp = run.dir / "progress.json.tmp"
+    tmp.write_text(json.dumps(progress, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(run.dir / "progress.json")
 
 
 def notify(run: "Run", text: str) -> None:
@@ -217,7 +230,7 @@ def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int, state: Stat
                     "title": it.title, "summary": it.summary[:600], "url": it.url} for it in part]
         user = "Материалы:\n" + json.dumps(payload, ensure_ascii=False, indent=1)
         try:
-            result = llm.chat_json("triage", system, user, max_tokens=300 * len(part) + 500)
+            result = llm.chat_json("triage", system, user, max_tokens=16000)
         except LLMError as e:
             log(run, "error", "triage", "пачка не оценена", error=str(e), first=part[0].id)
             continue
@@ -293,23 +306,23 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
                + "\n\nФотографии:\n" + json.dumps(art["images"], ensure_ascii=False, indent=1)
                + "\n\nСсылки из статьи:\n" + json.dumps(art["links"], ensure_ascii=False, indent=1))
     story = {"candidate": cand, "source": meta, "warnings": list(art["warnings"])}
-    facts = llm.chat_json("facts", prompt("facts", article=article), "Выпиши факты.", max_tokens=3000)
+    facts = llm.chat_json("facts", prompt("facts", article=article), "Выпиши факты.", max_tokens=16000)
     if src.get("vendor"):
         facts["vendor_claims"] = True
     story["facts"] = facts
     story["raw_links"] = art["links"]
     write_sys = prompt("write", source_title=src["title"], source_url=it.url, source_date=meta["дата"],
                        facts=json.dumps(facts, ensure_ascii=False, indent=1))
-    news = llm.chat_json("write", write_sys, "Напиши новость.", max_tokens=2500)
+    news = llm.chat_json("write", write_sys, "Напиши новость.", max_tokens=12000)
     verdict = llm.chat_json("verify", prompt("verify", facts=json.dumps(facts, ensure_ascii=False),
                                              news=json.dumps(news, ensure_ascii=False)),
-                            "Проверь новость.", max_tokens=1500)
+                            "Проверь новость.", max_tokens=8000)
     if verdict.get("verdict") == "fix":
         fix = "Исправь новость. Замечания проверки:\n" + json.dumps(verdict, ensure_ascii=False, indent=1)
-        news = llm.chat_json("rewrite", write_sys, fix, max_tokens=2500)
+        news = llm.chat_json("rewrite", write_sys, fix, max_tokens=12000)
         verdict = llm.chat_json("verify", prompt("verify", facts=json.dumps(facts, ensure_ascii=False),
                                                  news=json.dumps(news, ensure_ascii=False)),
-                                "Проверь новость.", max_tokens=1500)
+                                "Проверь новость.", max_tokens=8000)
     story["news"] = news
     story["verify"] = verdict
     story["issues"] = checks.check(news, facts)
@@ -361,7 +374,7 @@ def run(args) -> Run:
     llm = LLM(cfg.get("news.llm.base_url") or "https://api.polza.ai/api/v1",
               args.model or os.environ.get("NEWS_LLM_MODEL") or cfg.get("news.llm.model"),
               cfg.get("news.llm.api_key_env") or "POLZA_API_KEY", out / "llm",
-              token_limit=args.token_limit)
+              token_limit=args.token_limit, extra=llm_extra(cfg))
     log(r, "info", "run", "старт", since=since.isoformat(), sources=len(src_list), llm=llm.live)
     status = "ok"
     try:
@@ -372,7 +385,7 @@ def run(args) -> Run:
             src_list = load_sources(args.sources, state)
             sources = {s["id"]: s for s in all_sources(state)}
         learn.calibrate(state, llm, seed_examples(), lambda lvl, st, msg, **kw: log(r, lvl, st, msg, **kw),
-                        min_new=args.learn_min_new)
+                        min_new=args.learn_min_new, default_profile=profile_text(None))
         crawl(r, src_list, fetcher, state, args.ignore_seen, remember=llm.live and not args.no_llm)
         _dump(out / "items.json", [i.to_dict() for i in r.items])
         log(r, "info", "crawl", "сбор закончен", new=len(r.items), filtered=r.filtered_out, seen=r.already_seen)
@@ -425,7 +438,35 @@ def run(args) -> Run:
     finally:
         state.save()
         fetcher.close()
+        write_sources_snapshot(state)
         _dump(out / "summary.json", summary(r, status, state))
+        log(r, "info", "run", "конец", status=status)
+
+
+def sources_snapshot(state: State) -> list[dict]:
+    """Список источников для страницы робота: настройка и состояние обхода каждого."""
+    rows = []
+    added = {s["id"] for s in state.added_sources()}
+    for s in all_sources(state):
+        f = state.data.get("feeds", {}).get(s["id"], {})
+        rows.append({
+            "id": s["id"], "title": s.get("title"), "site": s.get("site"), "feed": s.get("feed"),
+            "list_url": s.get("list_url"), "lang": s.get("lang"), "topics": s.get("topics", []),
+            "trust": s.get("trust"), "enabled": s.get("enabled", True), "vendor": bool(s.get("vendor")),
+            "filters": {k: s[k] for k in ("path", "keywords", "link_pattern") if s.get(k)},
+            "note": s.get("note"), "origin": "редактор" if s["id"] in added else "список",
+            "last_checked": f.get("last_checked"), "last_item": f.get("last_item"),
+            "fail_count": f.get("fail_count", 0), "last_error": f.get("last_error"),
+        })
+    return rows
+
+
+def write_sources_snapshot(state: State) -> None:
+    path = ROOT / ".state" / "sources.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(sources_snapshot(state), ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(path)
 
 
 def summary(r: Run, status: str, state: State) -> dict:

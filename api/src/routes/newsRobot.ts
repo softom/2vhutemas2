@@ -69,6 +69,46 @@ newsRobot.get("/runs/:id", async (c) => {
   return c.json(s);
 });
 
+/**
+ * Журнал прогона с нужной строки и живое состояние: страница опрашивает его,
+ * пока прогон идёт (итога summary.json ещё нет).
+ */
+newsRobot.get("/runs/:id/log", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  const id = c.req.param("id");
+  if (!RUN_ID.test(id)) throw new ApiError("validation_failed", "Неверный номер прогона");
+  const from = Math.max(0, Number(c.req.query("from") ?? 0) || 0);
+  let lines: string[] = [];
+  try {
+    lines = (await Deno.readTextFile(`${ROOT}/out/${id}/log.jsonl`)).split("\n").filter((l) => l.trim());
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  const items = lines.slice(from, from + 500).map((l) => {
+    try {
+      return JSON.parse(l);
+    } catch {
+      return { msg: l };
+    }
+  });
+  const progress = await readJson<Record<string, unknown>>(`${ROOT}/out/${id}/progress.json`);
+  let running = true;
+  try {
+    await Deno.stat(`${ROOT}/out/${id}/summary.json`);
+    running = false;
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  return c.json({ items, next: from + items.length, total: lines.length, progress, running });
+});
+
+/** Список источников: настройка и состояние обхода (снимок робота .state/sources.json). */
+newsRobot.get("/sources", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  const items = await readJson<unknown[]>(`${ROOT}/state/sources.json`);
+  return c.json({ items: items ?? [], connected: items !== null });
+});
+
 /** Кандидаты в источники — из текущего состояния робота, а не из последнего прогона. */
 newsRobot.get("/candidates", async (c) => {
   requirePermission(c.get("principal"), "su");

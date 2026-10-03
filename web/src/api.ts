@@ -347,6 +347,43 @@ export interface RobotRun {
   link_domains: { domain: string; count: number; kinds: Record<string, number>; known: boolean; examples: { url: string; about?: string | null }[] }[];
   judged?: Record<string, "yes" | "no">;
 }
+/** Строка журнала робота и живое состояние прогона. */
+export interface RobotLogLine {
+  ts?: string;
+  level?: string;
+  stage?: string;
+  msg: string;
+  [key: string]: unknown;
+}
+export interface RobotProgress {
+  run_id: string;
+  stage: string;
+  msg: string;
+  ts: string;
+  feeds: number;
+  items: number;
+  candidates: number;
+  news: number;
+}
+export interface RobotSourceRow {
+  id: string;
+  title: string;
+  site?: string;
+  feed?: string | null;
+  list_url?: string | string[] | null;
+  lang?: string;
+  topics: string[];
+  trust?: number;
+  enabled: boolean;
+  vendor: boolean;
+  filters: Record<string, unknown>;
+  note?: string | null;
+  origin: string;
+  last_checked?: string | null;
+  last_item?: string | null;
+  fail_count: number;
+  last_error?: string | null;
+}
 /** Чему робот научился по решениям редактора (Р-93). */
 export interface RobotLearned {
   profile_text?: string;
@@ -431,6 +468,11 @@ export const api = {
   parameters: () => request<{ items: ParameterRow[] }>("/parameters"),
   robotRuns: () => request<{ items: RobotRunRow[]; connected: boolean }>("/news-robot/runs"),
   robotRun: (id: string) => request<RobotRun>(`/news-robot/runs/${encodeURIComponent(id)}`),
+  robotLog: (id: string, from: number) =>
+    request<{ items: RobotLogLine[]; next: number; total: number; progress: RobotProgress | null; running: boolean }>(
+      `/news-robot/runs/${encodeURIComponent(id)}/log?from=${from}`,
+    ),
+  robotSources: () => request<{ items: RobotSourceRow[]; connected: boolean }>("/news-robot/sources"),
   robotCandidates: () =>
     request<{ items: RobotSourceCandidate[]; pending: { action: string; domain?: string; url?: string; decision?: string; story_key?: string; verdict?: string }[]; learned: RobotLearned | null }>("/news-robot/candidates"),
   robotInbox: (body:

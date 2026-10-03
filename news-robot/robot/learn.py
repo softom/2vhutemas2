@@ -137,7 +137,28 @@ def profile(llm: LLM, items: list[dict], seed: dict, current: str | None) -> dic
                          "Опиши вкус редактора.", max_tokens=2000)
 
 
-def calibrate(state, llm: LLM | None, seed: dict, log, force: bool = False, min_new: int = 15) -> dict | None:
+def _auc(pairs: list[tuple[float, bool]]) -> float | None:
+    pos = [s for s, y in pairs if y]
+    neg = [s for s, y in pairs if not y]
+    if not pos or not neg:
+        return None
+    return sum(1.0 if p > n else 0.5 if p == n else 0.0 for p in pos for n in neg) / (len(pos) * len(neg))
+
+
+def score_with(llm: LLM, profile_text: str, train: list[dict], test: list[dict]) -> float | None:
+    """Совпадение с редактором на отложенных решениях при данном профиле (AUC)."""
+    examples = "\n".join(f"{'ДА' if j['verdict'] == 'yes' else 'НЕТ'} — {j.get('title') or j['story_key']}"
+                         for j in train[-40:])
+    payload = [{"id": str(i), "source": "", "date": "", "title": j.get("title") or j["story_key"],
+                "summary": j.get("reason") or "", "url": ""} for i, j in enumerate(test)]
+    resp = llm.chat_json("validate", prompt("triage", examples=examples, profile=profile_text),
+                         "Материалы:\n" + json.dumps(payload, ensure_ascii=False, indent=1), max_tokens=16000)
+    got = {int(r["id"]): float(r.get("interest") or 0) for r in resp.get("items", []) if str(r.get("id", "")).isdigit()}
+    return _auc([(got.get(i, 0.0), j["verdict"] == "yes") for i, j in enumerate(test)])
+
+
+def calibrate(state, llm: LLM | None, seed: dict, log, force: bool = False, min_new: int = 15,
+              default_profile: str = "") -> dict | None:
     """Пересчитать поправки и профиль, если накопилось min_new новых решений (или force)."""
     items = judgments(state)
     learned = state.data.setdefault("learned", {"history": []})
@@ -148,11 +169,30 @@ def calibrate(state, llm: LLM | None, seed: dict, log, force: bool = False, min_
     adj = adjustments(items)
     entry = {"at": now(), "judged": len(items), "adjustments": adj, "agreement": before}
     if llm is not None and llm.live:
+        # Профиль строится по ранним решениям и проверяется на последней четверти: принимается,
+        # только если совпадение с редактором там не хуже, чем у прежнего профиля. На стенде
+        # 2026-10-03 профиль по 19 решениям то улучшал совпадение, то ухудшал — без проверки нельзя.
+        ordered = sorted(items, key=lambda j: j["at"])
+        cut = max(len(ordered) - max(len(ordered) // 4, 8), 0)
+        train, test = ordered[:cut], ordered[cut:]
+        current = learned.get("profile_text") or default_profile
         try:
-            prof = profile(llm, items, seed, learned.get("profile_text"))
+            prof = profile(llm, train or items, seed, current)
             entry["profile"] = prof
-            learned["profile_text"] = prof.get("profile_text")
-            learned["profile"] = prof
+            if train and len({j["verdict"] for j in test}) == 2:
+                old_auc = score_with(llm, current, train, test)
+                new_auc = score_with(llm, prof.get("profile_text") or current, train, test)
+                entry["validation"] = {"held_out": len(test), "auc_old": old_auc, "auc_new": new_auc}
+                accepted = new_auc is not None and (old_auc is None or new_auc >= old_auc)
+            else:
+                accepted = False
+                entry["validation"] = {"held_out": len(test), "note": "мало решений для проверки — профиль не принят"}
+            entry["accepted"] = accepted
+            if accepted:
+                learned["profile_text"] = prof.get("profile_text")
+                learned["profile"] = prof
+            log("info", "learn", "профиль вкуса", accepted=accepted, **{k: v for k, v in entry["validation"].items()
+                                                                          if k != "note"})
         except LLMError as e:
             log("warn", "learn", "профиль не обновлён", error=str(e))
     learned["adjustments"] = adj

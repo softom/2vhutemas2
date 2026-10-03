@@ -37,13 +37,16 @@ def prompt(name: str, **values: str) -> str:
 
 class LLM:
     def __init__(self, base_url: str, model: str | None, key_env: str, dump_dir: Path,
-                 token_limit: int, temperature: float = 0.2):
+                 token_limit: int, temperature: float = 0.2, extra: dict | None = None):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.key = os.environ.get(key_env) or None
         self.dump_dir = dump_dir
         self.token_limit = token_limit
         self.temperature = temperature
+        # Дополнительные поля запроса: у рассуждающих моделей (DeepSeek v4) — управление
+        # рассуждением, {"reasoning": {"enabled": false}} или {"reasoning": {"effort": "low"}}.
+        self.extra = extra or {}
         self.used = {"prompt": 0, "completion": 0, "calls": 0}
         self._n = 0
         self.client = httpx.Client(timeout=180)
@@ -60,6 +63,7 @@ class LLM:
             "max_tokens": max_tokens,
             "response_format": {"type": "json_object"},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            **self.extra,
         }
         self.dump_dir.mkdir(parents=True, exist_ok=True)
         stem = f"{self._n:03d}-{stage}"
@@ -74,8 +78,13 @@ class LLM:
         self.used["prompt"] += usage.get("prompt_tokens", 0)
         self.used["completion"] += usage.get("completion_tokens", 0)
         self.used["calls"] += 1
-        content = data["choices"][0]["message"]["content"] or ""
+        choice = data["choices"][0]
+        content = choice["message"].get("content") or ""
         (self.dump_dir / f"{stem}.response.json").write_text(content, encoding="utf-8")
+        if choice.get("finish_reason") == "length":
+            reasoning = ((usage.get("completion_tokens_details") or {}).get("reasoning_tokens")) or 0
+            raise LLMError(f"ответ обрезан на {max_tokens} токенах (из них рассуждение {reasoning}) — "
+                           "поднять max_tokens или ограничить рассуждение (news.llm.reasoning)")
         return parse_json(content)
 
     def _post(self, body: dict) -> dict:

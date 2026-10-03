@@ -35,6 +35,20 @@ from robot.state import State  # noqa: E402
 ROOT = Path(__file__).resolve().parent
 
 
+def load_env(path: Path) -> None:
+    """Секреты робота — из news-robot/.env (вне Git); окружение процесса главнее."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip())
+
+
+load_env(ROOT / ".env")
+
+
 def candidates_command(args) -> int:
     state = State(ROOT / ".state" / "state.json")
     try:
@@ -73,6 +87,7 @@ def candidates_command(args) -> int:
                 print_candidate(c)
     finally:
         state.save()
+        pipeline.write_sources_snapshot(state)
     return 0
 
 
@@ -91,8 +106,9 @@ def learn_command(args) -> int:
             llm = LLM(cfg.get("news.llm.base_url") or "https://api.polza.ai/api/v1",
                       args.model or os.environ.get("NEWS_LLM_MODEL") or cfg.get("news.llm.model"),
                       cfg.get("news.llm.api_key_env") or "POLZA_API_KEY", ROOT / "out" / "calibration" / "llm",
-                      token_limit=60_000)
-            entry = learn.calibrate(state, llm, pipeline.seed_examples(), lambda *a, **k: print(*a, k), force=True)
+                      token_limit=60_000, extra=pipeline.llm_extra(cfg))
+            entry = learn.calibrate(state, llm, pipeline.seed_examples(), lambda *a, **k: print(*a, k), force=True,
+                                    default_profile=pipeline.profile_text(None))
             print(_json.dumps({k: v for k, v in entry.items() if k != "profile"}, ensure_ascii=False, indent=1))
             if entry.get("profile"):
                 print("\nПрофиль вкуса:\n" + entry["profile"].get("profile_text", ""))
