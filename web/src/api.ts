@@ -166,6 +166,25 @@ export interface EntityListItem {
   values?: Record<string, string | number | boolean | null>;
 }
 
+/** Найденная запись (Р-109): где найдено, фрагмент, совпало ли по словам или по смыслу. */
+export interface SearchHit {
+  id: number;
+  slug: string;
+  title_ru: string;
+  type: string;
+  type_title: string | null;
+  type_path: { code: string; title: string }[];
+  status: string;
+  found_in: "title" | "params" | "text";
+  block_id: string | null;
+  /** Совпавшие слова — между U+E000 и U+E001; текст не экранирован. */
+  snippet: string | null;
+  matched: ("fulltext" | "vector")[];
+  similarity: number | null;
+  score: number;
+  compact?: CompactItem[];
+}
+
 export interface EntityCard extends EntityListItem {
   title_original: string | null;
   title_la: string | null;
@@ -477,6 +496,14 @@ export const api = {
   capabilities: () => request<Capabilities>("/capabilities"),
   me: () =>
     request<{ authenticated: boolean; display_name?: string; permissions: string[] }>("/me"),
+
+  search: (params: { q: string; kind?: string; type?: string; limit?: number }) => {
+    const search = new URLSearchParams({ q: params.q });
+    if (params.kind) search.set("kind", params.kind);
+    if (params.type) search.set("type", params.type);
+    if (params.limit) search.set("limit", String(params.limit));
+    return request<{ items: SearchHit[]; mode: "hybrid" | "fulltext" }>(`/search?${search}`);
+  },
 
   entities: (
     params: {

@@ -1,4 +1,5 @@
 /** Небольшие улучшения готового HTML. Данные и текст уже на странице. */
+import { bindSearchKeys, openSearch } from "./search/keys";
 
 /** Гость читает готовый HTML, без загрузки клиента авторизации. */
 async function authenticatedCard() {
@@ -48,6 +49,12 @@ async function authenticatedCard() {
 }
 
 export async function enhancePublicPage() {
+  // Поиск (Р-109) — и гостю: кнопка в шапке и клавиши «/», Ctrl+K. Слушатель на
+  // шапке, а не на кнопке: вошедшему шапку перерисовывает authenticatedCard.
+  document.querySelector("[data-site-header]")?.addEventListener("click", (event) => {
+    if ((event.target as HTMLElement).closest('[data-action="search"]')) openSearch();
+  });
+  bindSearchKeys();
   await authenticatedCard();
   const links = [...document.querySelectorAll<HTMLAnchorElement>("[data-gallery]")];
   let current = 0;

@@ -18,6 +18,10 @@ const NewsRobot = lazy(() => import("./pages/NewsRobot").then((m) => ({ default:
 import { Login } from "./pages/Login";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { Splash } from "./ui/Splash";
+import { bindSearchKeys, openSearch } from "./search/keys";
+
+// Поиск по «/» и Ctrl+K (Р-109) — один слушатель на всё приложение.
+bindSearchKeys();
 
 export interface Viewer {
   authenticated: boolean;
@@ -177,6 +181,10 @@ export function App() {
           if (target.closest('[data-action="notes"]')) {
             const { toggleNotes } = await import("./notes/layer");
             toggleNotes();
+            return;
+          }
+          if (target.closest('[data-action="search"]')) {
+            openSearch();
             return;
           }
           if (target.closest('[data-action="signout"]')) {

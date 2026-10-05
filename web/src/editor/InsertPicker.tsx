@@ -22,6 +22,7 @@ import {
   type EntityListItem,
   type EntityType,
   type MediaAsset,
+  type SearchHit,
 } from "../api";
 import { type InsertableEntity } from "./entityBlocks";
 import { EntityTile } from "../ui/EntityTile";
@@ -95,13 +96,34 @@ function TypeOptions({ types }: { types: EntityType[] }) {
   );
 }
 
+/** Строка выдачи: запись каталога или найденная поиском (Р-109) — со сведениями, где найдено. */
+type EntityRow = Pick<EntityListItem, "id" | "title_ru" | "type" | "type_title" | "compact"> & { hit?: SearchHit };
+
+const FOUND_IN: Record<SearchHit["found_in"], string> = {
+  title: "в названии", params: "в сведениях", text: "в тексте",
+};
+
+/** Фрагмент выдачи: совпавшие слова (между U+E000 и U+E001) — <mark>. */
+function Snippet({ text }: { text: string }) {
+  const parts = text.replace(/\n/g, " · ").split(/(\uE000[^\uE001]*\uE001)/);
+  return (
+    <div className="picker-snippet">
+      {parts.map((part, i) => part.startsWith("\uE000")
+        ? <mark key={i}>{part.slice(1, -1)}</mark>
+        : <span key={i}>{part}</span>)}
+    </div>
+  );
+}
+
 function EntitiesTab({ entityId, types, onInsertCard, onInsertMention, done, mark }: TabProps) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("");
+  const [where, setWhere] = useState("");
   const [scope, setScope] = useState<"all" | "linked">("all");
-  const [items, setItems] = useState<EntityListItem[]>([]);
+  const [items, setItems] = useState<EntityRow[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [linked, setLinked] = useState<Set<number>>(new Set());
   const [linking, setLinking] = useState<{ id: number; title: string } | null>(null);
 
@@ -113,38 +135,56 @@ function EntitiesTab({ entityId, types, onInsertCard, onInsertMention, done, mar
   };
   useEffect(reloadLinks, [entityId]);
 
+  // С запросом — гибридный поиск по названиям, сведениям и тексту, по словам и
+  // по смыслу (Р-109); без запроса — каталог по порядку, с подгрузкой.
   useEffect(() => {
     setLoading(true);
+    setFailed(false);
+    const search = query.trim();
     const timer = setTimeout(() => {
-      const search = query.trim();
-      api.entities({ q: search.length >= 2 ? search : undefined, type: type || undefined })
-        .then((page) => {
-          setItems(page.items.filter((item) => item.id !== entityId));
-          setCursor(page.next_cursor);
-        })
-        .catch(() => setItems([]))
+      const request = search.length >= 2
+        ? api.search({ q: search, type: type || undefined, kind: where || undefined, limit: 50 })
+          .then((page) => {
+            setItems(page.items.map((hit) => ({ ...hit, hit })));
+            setCursor(null);
+          })
+        : api.entities({ type: type || undefined })
+          .then((page) => {
+            setItems(page.items);
+            setCursor(page.next_cursor);
+          });
+      request
+        .catch(() => { setItems([]); setFailed(true); })
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, type, entityId]);
+  }, [query, type, where]);
 
   const more = () => {
     if (!cursor) return;
-    const search = query.trim();
-    api.entities({ q: search.length >= 2 ? search : undefined, type: type || undefined, cursor })
+    api.entities({ type: type || undefined, cursor })
       .then((page) => {
-        setItems((current) => [...current, ...page.items.filter((item) => item.id !== entityId)]);
+        setItems((current) => [...current, ...page.items]);
         setCursor(page.next_cursor);
       })
       .catch(() => {});
   };
 
-  const shown = scope === "linked" ? items.filter((item) => linked.has(item.id)) : items;
+  const searching = query.trim().length >= 2;
+  const exact = items.some((item) => item.hit?.matched.includes("fulltext"));
+  const shown = (scope === "linked" ? items.filter((item) => linked.has(item.id)) : items)
+    .filter((item) => item.id !== entityId);
 
   return (
     <>
       <div className="filters picker-filters">
-        <input autoFocus placeholder="Поиск по названию" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input autoFocus placeholder="Поиск: название, имя, мысль…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <select value={where} onChange={(e) => setWhere(e.target.value)} disabled={!searching} title="Где искать">
+          <option value="">Везде</option>
+          <option value="title">В названиях</option>
+          <option value="params">В сведениях</option>
+          <option value="text">В тексте</option>
+        </select>
         <select value={type} onChange={(e) => setType(e.target.value)}>
           <option value="">Все ветви и типы</option>
           <TypeOptions types={types} />
@@ -160,13 +200,25 @@ function EntitiesTab({ entityId, types, onInsertCard, onInsertMention, done, mar
       </p>
 
       {loading && items.length === 0 && <p className="notice">Загружаем…</p>}
-      {!loading && shown.length === 0 && <p className="notice">Ничего не нашлось.</p>}
+      {!loading && failed && <p className="notice">Поиск сейчас недоступен — попробуйте ещё раз.</p>}
+      {!loading && !failed && shown.length === 0 && <p className="notice">Ничего не нашлось.</p>}
+      {!loading && searching && shown.length > 0 && !exact && (
+        <p className="notice">Совпадений по словам нет — близкое по смыслу.</p>
+      )}
       <div className="grid picker-grid">
         {shown.map((item) => {
           const entity: InsertableEntity = { id: item.id, title_ru: item.title_ru, kind: item.type_title ?? item.type };
           const key = `e${item.id}`;
           return (
             <EntityTile key={item.id} title={item.title_ru} kind={item.type_title ?? item.type} compact={item.compact}>
+              {item.hit && (
+                <div className="picker-found">
+                  {FOUND_IN[item.hit.found_in]}
+                  {!item.hit.matched.includes("fulltext") && <span className="picker-sense"> · по смыслу</span>}
+                  {item.hit.status !== "published" && " · черновик"}
+                </div>
+              )}
+              {item.hit?.snippet && item.hit.found_in !== "title" && <Snippet text={item.hit.snippet} />}
               <div className="picker-actions">
                 <button type="button" className="ghost" onClick={() => { onInsertCard(entity); mark(key, "вставлена карточкой"); }}>
                   Карточкой
