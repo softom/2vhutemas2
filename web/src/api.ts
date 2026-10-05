@@ -87,6 +87,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload as T;
 }
 
+async function requestBlob(path: string): Promise<string> {
+  const headers = new Headers();
+  const accessToken = await token();
+  if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
+  const response = await fetch(`${API_BASE}${path}`, { headers });
+  if (!response.ok) throw new ApiError("not_found", "Картинка недоступна", null, "");
+  return URL.createObjectURL(await response.blob());
+}
+
 /** Узел дерева типов: вид записи — его корневая ветвь (Р-37). */
 export interface EntityType {
   code: string;
@@ -410,9 +419,15 @@ export interface RobotHealth {
 }
 /** Подготовка новости из стека (Р-97). */
 export interface RobotPrepared { status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string; issues?: string[];
-  order?: { topic?: string; section?: string; by?: string; at?: string } }
+  order?: { topic?: string; section?: string; by?: string; at?: string }; cover?: { status?: string } }
+export interface RobotCover {
+  status?: string; idea_ru?: string; prompt?: string; alt_ru?: string; model?: string; error?: string;
+  chosen?: string; applied_at?: string; variants?: { file: string; model: string; prompt: string; at: string }[];
+}
 export interface RobotPreparedFull extends RobotPrepared {
   story_key: string;
+  cover?: RobotCover;
+  entity_id?: number;
   story?: {
     news?: { title?: string; lead?: string; paragraphs?: string[]; more?: string; images?: { url: string; caption?: string; credit?: string }[];
       mentions?: { name: string }[]; sources?: { url: string; title?: string }[] };
@@ -538,6 +553,10 @@ export const api = {
   robotOrder: (body: { topic: string; section: string; input: string; note?: string }) =>
     request<{ queued: { story_key: string } }>("/news-robot/order", { method: "POST", body: JSON.stringify(body) }),
   robotPrepared: (key: string) => request<RobotPreparedFull>(`/news-robot/prepared/${encodeURIComponent(key)}`),
+  robotCover: (body: { story_key: string; action: "draft" | "generate" | "apply"; prompt?: string; model?: string; file?: string }) =>
+    request<{ queued: unknown }>("/news-robot/cover", { method: "POST", body: JSON.stringify(body) }),
+  /** Картинка варианта обложки: маршрут только для su, поэтому — с токеном, как объект URL. */
+  robotCoverImage: (file: string) => requestBlob(`/news-robot/covers/${encodeURIComponent(file)}`),
   robotRegenerate: (body: { story_key: string; input?: string; note?: string }) =>
     request<{ queued: unknown }>("/news-robot/regenerate", { method: "POST", body: JSON.stringify(body) }),
   robotRunView: (id: string) => request<RobotRunView>(`/news-robot/runs/${encodeURIComponent(id)}/view`),

@@ -359,6 +359,13 @@ def run(root: Path, log, now_all: bool = False, only: set[str] | None = None, ll
                 create_draft(api, rec, q, log, llm)
                 rec["publication"] = "черновик"
                 _write(path, rec)
+                # Обложку выбрали до черновика — ставим первой сейчас (Р-107).
+                if (rec.get("cover") or {}).get("chosen") and not rec["cover"].get("applied_at"):
+                    from .cover import apply as apply_cover
+                    v = next((x for x in rec["cover"].get("variants", []) if x["file"] == rec["cover"]["chosen"]), None)
+                    if v:
+                        apply_cover(root, rec, v, api, log)
+                        _write(path, rec)
             elif rec.get("release_slot") != f"{q['date']} {q['time']}":
                 update_release(api, rec, q, log)
                 _write(path, rec)

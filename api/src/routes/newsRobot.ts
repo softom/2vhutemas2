@@ -314,6 +314,7 @@ async function preparedIndex(): Promise<Record<string, Row>> {
       index[String(rec.story_key)] = {
         status: rec.status, ready_at: rec.ready_at, started_at: rec.started_at, error: rec.error,
         origin: rec.origin, title: rec.story?.news?.title,
+        cover: rec.cover ? { status: (rec.cover as Row).status } : undefined,
         order: rec.order ? { topic: (rec.order as Row).topic, section: (rec.order as Row).section,
           by: (rec.order as Row).by, at: (rec.order as Row).at } : undefined,
         // Замечания и предупреждения, кроме «фото без автора» и «перепечатка» — они видны в превью.
@@ -604,4 +605,48 @@ newsRobot.get("/stories", async (c) => {
     }
   }
   return c.json({ items, days });
+});
+
+/**
+ * Обложка, созданная ИИ (Р-107): draft — LLM готовит промпт со стилем Анненкова,
+ * generate — генерация по промпту редактора (Polza.AI), apply — поставить обложкой.
+ */
+newsRobot.post("/cover", async (c) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const body = await c.req.json().catch(() => null) as Row | null;
+  const key = String(body?.story_key ?? "");
+  if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная история");
+  const action = String(body?.action ?? "");
+  if (!["draft", "generate", "apply"].includes(action)) throw new ApiError("validation_failed", "action: draft, generate или apply");
+  if (!(await readJson<Row>(`${ROOT}/state/prepared/${key}.json`))) throw new ApiError("not_found", "Новость не подготовлена");
+  const req: Row = { story_key: key, action, by: principal.displayName, at: new Date().toISOString() };
+  if (action === "generate") {
+    const prompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, 4000) : "";
+    if (!prompt) throw new ApiError("validation_failed", "Нужен промпт");
+    req.prompt = prompt;
+    if (typeof body?.model === "string" && /^[a-z0-9./-]{3,80}$/.test(body.model)) req.model = body.model;
+  }
+  if (action === "apply") {
+    if (typeof body?.file !== "string" || !/^[a-z0-9-]+-\d+\.(png|jpg)$/.test(body.file)) {
+      throw new ApiError("validation_failed", "Неверный вариант");
+    }
+    req.file = body.file;
+  }
+  await Deno.mkdir(`${ROOT}/inbox/covers`, { recursive: true });
+  await Deno.writeTextFile(`${ROOT}/inbox/covers/${key}-${Date.now()}.json`, JSON.stringify(req));
+  return c.json({ queued: req }, 202);
+});
+
+/** Файл варианта обложки для превью (только su). */
+newsRobot.get("/covers/:file", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  const file = c.req.param("file");
+  if (!/^[a-z0-9-]+-\d+\.(png|jpg)$/.test(file)) throw new ApiError("validation_failed", "Неверный файл");
+  try {
+    const data = await Deno.readFile(`${ROOT}/state/covers/${file}`);
+    return new Response(data, { headers: { "content-type": file.endsWith(".png") ? "image/png" : "image/jpeg",
+      "cache-control": "private, max-age=3600" } });
+  } catch {
+    throw new ApiError("not_found", "Нет такого варианта");
+  }
 });

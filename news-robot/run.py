@@ -125,6 +125,9 @@ def prepare_command(args) -> int:
             beat(f"{msg}: {extra.get('story')}")
 
     beat("проверяет стек")
+    from robot import cover, publish as _publish
+    beat("обложки")
+    cover.run(ROOT, llm, logged, _publish.Api())
     prepare.run(ROOT, llm, logged, pipeline)
     # Публикатор (Р-102): черновики «Новость», слоты, выход в слот.
     from robot import publish

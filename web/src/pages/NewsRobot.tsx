@@ -64,7 +64,8 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       const [o, h] = await Promise.all([api.robotOverview(), api.robotHealth().catch(() => null)]);
       setOv(o);
       setHealth(h);
-      preparing.current = o.queue.items.some((i) => !["готово", "ошибка"].includes(o.prepared[i.story_key]?.status ?? ""));
+      preparing.current = o.queue.items.some((i) => !["готово", "ошибка"].includes(o.prepared[i.story_key]?.status ?? ""))
+        || Object.values(o.prepared).some((p) => ["промпт готовится", "генерируется"].includes(p.cover?.status ?? ""));
       const id = runId ?? o.runs[0]?.id ?? null;
       if (id && id !== runId) setRunId(id);
       if (id) {
@@ -470,6 +471,96 @@ function Publication({ storyKey, ov, slot = true }: { storyKey: string; ov: Robo
   );
 }
 
+const COVER_MODELS: [string, string][] = [
+  ["google/gemini-3-pro-image-preview", "Gemini 3 Pro Image (Nano Banana Pro)"],
+  ["google/gemini-3.1-flash-image", "Gemini 3.1 Flash Image — быстрее"],
+  ["black-forest-labs/flux.2-pro", "FLUX.2 Pro"],
+  ["openai/gpt-image-1.5", "GPT Image 1.5"],
+];
+
+/** Картинка варианта обложки — маршрут только для su, грузим с токеном. */
+function CoverImage({ file }: { file: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let url: string | null = null;
+    api.robotCoverImage(file).then((u) => { url = u; setSrc(u); }).catch(() => setSrc(null));
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [file]);
+  return src ? <img src={src} alt="" style={{ width: "100%", display: "block" }} /> : <p className="hint">загружаем…</p>;
+}
+
+/**
+ * «Создать обложку» (Р-107): LLM готовит промпт в стиле графики Анненкова к «Двенадцати» Блока,
+ * редактор правит, генерация через Polza.AI, «Поставить обложкой» — первой иллюстрацией новости.
+ * Для новостей о зданиях обложки не генерируются — там свои снимки.
+ */
+function CoverBlock({ storyKey, rec }: { storyKey: string; rec: RobotPreparedFull }) {
+  const cover = rec.cover ?? {};
+  const [promptText, setPromptText] = useState(cover.prompt ?? "");
+  const [model, setModel] = useState(cover.model ?? COVER_MODELS[0][0]);
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => { if (cover.prompt) setPromptText(cover.prompt); }, [cover.prompt]);
+  const busy = cover.status === "промпт готовится" || cover.status === "генерируется";
+  const send = async (body: Parameters<typeof api.robotCover>[0], note: string) => {
+    try {
+      await api.robotCover(body);
+      setMsg(note);
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  };
+  return (
+    <div className="block">
+      <h3>Обложка</h3>
+      <p className="hint">
+        Для новостей без своих снимков — конференция, вебинар, сервис, событие. Стиль — графика Юрия Анненкова
+        к «Двенадцати» Блока (1918): чёрная тушь, сломанные плоскости, штриховка. Подпись: «Иллюстрация создана ИИ для Вх²».
+      </p>
+      {cover.status && <p className={cover.status === "ошибка" ? "error" : "hint"}>
+        Состояние: {cover.status}{cover.error ? ` — ${cover.error}` : ""}{busy ? " (около минуты)" : ""}</p>}
+      {!cover.prompt && !busy && (
+        <button type="button" onClick={() => send({ story_key: storyKey, action: "draft" },
+          "LLM готовит промпт — он появится здесь в течение минуты.")}>Создать обложку</button>
+      )}
+      {cover.prompt && (
+        <>
+          {cover.idea_ru && <p><b>Идея:</b> {cover.idea_ru}</p>}
+          <label className="hint">Промпт для модели (можно править)</label>
+          <textarea rows={6} style={{ width: "100%" }} value={promptText} onChange={(e) => setPromptText(e.target.value)} />
+          <div className="row">
+            <select value={model} onChange={(e) => setModel(e.target.value)}>
+              {COVER_MODELS.map(([code, title]) => <option key={code} value={code}>{title}</option>)}
+            </select>
+            <button type="button" disabled={busy} onClick={() => send({ story_key: storyKey, action: "generate", prompt: promptText, model },
+              "Отправлено в генерацию — вариант появится здесь через минуту-две.")}>
+              {(cover.variants ?? []).length ? "Ещё вариант" : "Сгенерировать"}
+            </button>
+            <button type="button" className="ghost" disabled={busy} onClick={() => send({ story_key: storyKey, action: "draft" },
+              "LLM готовит новый промпт.")}>Новый промпт</button>
+          </div>
+        </>
+      )}
+      {(cover.variants ?? []).length > 0 && (
+        <div className="robot-covers">
+          {(cover.variants ?? []).slice().reverse().map((v) => (
+            <figure key={v.file} className={cover.chosen === v.file ? "chosen" : undefined}>
+              <CoverImage file={v.file} />
+              <figcaption className="hint">
+                {v.model.split("/").pop()} · {new Date(v.at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
+                {cover.chosen === v.file
+                  ? <> · <b>обложка{cover.applied_at ? "" : " (встанет при создании записи)"}</b></>
+                  : <> · <button type="button" className="ghost" onClick={() => send({ story_key: storyKey, action: "apply", file: v.file },
+                    "Ставим обложкой — в течение минуты она станет первой иллюстрацией новости.")}>Поставить обложкой</button></>}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+      {msg && <p className="hint">{msg}</p>}
+    </div>
+  );
+}
+
 /** Превью подготовленной новости — так, как она выйдет на сайте. */
 function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
   const [rec, setRec] = useState<RobotPreparedFull | null>(null);
@@ -481,7 +572,7 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
   // Перезагружаем превью, когда робот закончил переделку (статус меняется в сводке раздела).
   useEffect(() => {
     api.robotPrepared(storyKey).then(setRec).catch((e) => setErr((e as Error).message));
-  }, [storyKey, ov.prepared[storyKey]?.ready_at]);
+  }, [storyKey, ov.prepared[storyKey]?.ready_at, ov.prepared[storyKey]?.cover?.status]);
   const regenerate = async () => {
     setSent("отправляем…");
     try {
@@ -531,6 +622,7 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
           {issues.map((x, i) => <p className="error" key={i}>{x}</p>)}
         </div>
       )}
+      <CoverBlock storyKey={storyKey} rec={rec} />
       <div className="block">
         <h3>Переделать</h3>
         {status === "переделывается" || status === "переводится" ? (
@@ -625,7 +717,8 @@ function Stack({ ov, act }: { ov: RobotOverview; act: Act }) {
                       </span>
                       <div>{ov.prepared[it.story_key]?.status === "готово"
                         ? <Link to={`/robot/preview/${it.story_key}`}>{ov.prepared[it.story_key].title || it.title}</Link> : it.title}</div>
-                      <div><Publication storyKey={it.story_key} ov={ov} slot={false} /></div>
+                      <div><Publication storyKey={it.story_key} ov={ov} slot={false} />
+                        {ov.prepared[it.story_key]?.status === "готово" && <> · <Link to={`/robot/preview/${it.story_key}`}>обложка</Link></>}</div>
                       <div className="hint">{TOPIC[it.topic ?? ""] ?? ""}{it.final != null ? ` · оценка ${it.final}` : ""}{it.by ? ` · ${it.by}` : ""}</div>
                       <select value={`${d} ${t}`} onChange={(e) => {
                         const [date, time] = e.target.value.split(" ");

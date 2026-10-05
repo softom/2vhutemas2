@@ -709,3 +709,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .news-chip.on .sq { background: #fff; }
 .news-chip:not(.on):hover { border-color: var(--topic, var(--accent)); }
 .public-card .pc-indicators dd .news-topic { font-weight: 600; }
+
+/* Варианты обложки (Р-107). */
+.robot-covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
+.robot-covers figure { margin: 0; border: 1px solid #CDBB98; padding: 6px; }
+.robot-covers figure.chosen { border: 2px solid var(--accent); }
