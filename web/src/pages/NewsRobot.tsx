@@ -739,7 +739,11 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
 
 function Stack({ ov, act }: { ov: RobotOverview; act: Act }) {
   const q = ov.queue;
-  const bySlot = Object.fromEntries(q.items.map((i) => [`${i.date} ${i.time}`, i]));
+  // В слоте может быть несколько новостей (2026-10-05).
+  const bySlot: Record<string, typeof q.items> = {};
+  for (const i of q.items) (bySlot[`${i.date} ${i.time}`] ??= []).push(i);
+  const nowMsk = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 16).replace("T", " ");
+  const isOut = (k: string) => ov.prepared[k]?.publication === "вышла";
   const options = q.days.flatMap((d) => q.times.map((t) => `${d} ${t}`));
   const dayName = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "long" });
   const shown = q.days.filter((d, i) => i < 7 || q.items.some((it) => it.date === d));
@@ -748,19 +752,20 @@ function Stack({ ov, act }: { ov: RobotOverview; act: Act }) {
   // Сброс на занятый слот меняет новости местами — это делает сервер (POST /queue, move).
   const [dragged, setDragged] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
-  const drop = (slot: string) => {
+  // Бросить на слот — встать в слот рядом; бросить на новость — поменяться с ней местами.
+  const drop = (slot: string, swapWith?: string) => {
     const key = dragged;
     setDragged(null);
     setOver(null);
-    if (!key || bySlot[slot]?.story_key === key) return;
+    if (!key || (bySlot[slot] ?? []).some((i) => i.story_key === key && !swapWith)) return;
     const [date, time] = slot.split(" ");
-    act(() => api.robotQueue({ action: "move", story_key: key, date, time }));
+    act(() => api.robotQueue({ action: "move", story_key: key, date, time, ...(swapWith ? { swap_with: swapWith } : {}) }));
   };
   return (
     <>
       <p className="hint">
         Слоты выхода — {q.times.join(", ")} по Москве. «В стек» в разделе «Новости» ставит историю в ближайший свободный слот;
-        здесь её можно перетащить за «⠿» в другой слот (занятый слот меняется местами), выбрать слот из списка или снять. Выпускать по стеку будет планировщик — пока это план.
+        здесь её можно перетащить за «⠿»: на слот — встанет рядом с другими (в слоте может быть несколько новостей), на новость — поменяется с ней местами; выбрать слот из списка или снять. Вышедшие новости закреплены. Выпускать по стеку будет планировщик — пока это план.
       </p>
       <div className="robot-days">
         {shown.map((d) => (
@@ -768,10 +773,11 @@ function Stack({ ov, act }: { ov: RobotOverview; act: Act }) {
             <h3>{dayName(d)}</h3>
             {q.times.map((t) => {
               const slot = `${d} ${t}`;
-              const it = bySlot[slot];
+              const items = bySlot[slot] ?? [];
+              const past = slot <= nowMsk;
               return (
                 <div
-                  className={`robot-slot${over === slot ? " drop-target" : ""}${it && dragged === it.story_key ? " dragging" : ""}`}
+                  className={`robot-slot${over === slot ? " drop-target" : ""}`}
                   key={t}
                   onDragOver={(event) => {
                     if (dragged === null) return;
@@ -784,39 +790,65 @@ function Stack({ ov, act }: { ov: RobotOverview; act: Act }) {
                     drop(slot);
                   }}
                 >
-                  <span className="hint">{t}</span>
-                  {it ? (
-                    <div className="robot-slot-item">
-                      <span
-                        className="drag-handle"
-                        title="Перетащите в другой слот; на занятый — поменяются местами"
-                        draggable
-                        onDragStart={(event) => {
-                          setDragged(it.story_key);
-                          event.dataTransfer.effectAllowed = "move";
-                          event.dataTransfer.setData("text/plain", it.story_key);
+                  <span className="hint">{t}{past && " · время прошло — новость выйдет сразу"}</span>
+                  {items.length === 0 && <div className="hint">свободно</div>}
+                  {items.map((it) => {
+                    const out = isOut(it.story_key);
+                    return (
+                      <div key={it.story_key}
+                        className={`robot-slot-item${dragged === it.story_key ? " dragging" : ""}`}
+                        onDragOver={(event) => {
+                          if (dragged === null || dragged === it.story_key || out) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setOver(`${slot}|${it.story_key}`);
                         }}
-                        onDragEnd={() => {
-                          setDragged(null);
-                          setOver(null);
+                        onDrop={(event) => {
+                          if (out) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          drop(slot, it.story_key);
                         }}
+                        style={over === `${slot}|${it.story_key}` ? { outline: "1px dashed var(--accent)" } : undefined}
                       >
-                        ⠿
-                      </span>
-                      <div>{ov.prepared[it.story_key]?.status === "готово"
-                        ? <Link to={`/robot/preview/${it.story_key}`}>{ov.prepared[it.story_key].title || it.title}</Link> : it.title}</div>
-                      <div><Publication storyKey={it.story_key} ov={ov} slot={false} />
-                        {ov.prepared[it.story_key]?.status === "готово" && <> · <Link to={`/robot/preview/${it.story_key}`}>обложка</Link></>}</div>
-                      <div className="hint">{TOPIC[it.topic ?? ""] ?? ""}{it.final != null ? ` · оценка ${it.final}` : ""}{it.by ? ` · ${it.by}` : ""}</div>
-                      <select value={`${d} ${t}`} onChange={(e) => {
-                        const [date, time] = e.target.value.split(" ");
-                        act(() => api.robotQueue({ action: "move", story_key: it.story_key, date, time }));
-                      }}>
-                        {options.map((o) => <option key={o}>{o}</option>)}
-                      </select>{" "}
-                      <button type="button" className="ghost" onClick={() => act(() => api.robotQueue({ action: "remove", story_key: it.story_key }))}>Снять</button>
-                    </div>
-                  ) : <div className="hint">свободно</div>}
+                        {!out && (
+                          <span
+                            className="drag-handle"
+                            title="Перетащите: на слот — встанет рядом; на новость — поменяются местами"
+                            draggable
+                            onDragStart={(event) => {
+                              setDragged(it.story_key);
+                              event.dataTransfer.effectAllowed = "move";
+                              event.dataTransfer.setData("text/plain", it.story_key);
+                            }}
+                            onDragEnd={() => {
+                              setDragged(null);
+                              setOver(null);
+                            }}
+                          >
+                            ⠿
+                          </span>
+                        )}
+                        <div>{ov.prepared[it.story_key]?.status === "готово"
+                          ? <Link to={`/robot/preview/${it.story_key}`}>{ov.prepared[it.story_key].title || it.title}</Link> : it.title}</div>
+                        <div><Publication storyKey={it.story_key} ov={ov} slot={false} />
+                          {out ? <b> · вышла</b> : ov.prepared[it.story_key]?.status === "готово" &&
+                            <> · <Link to={`/robot/preview/${it.story_key}`}>обложка</Link></>}</div>
+                        <div className="hint">{TOPIC[it.topic ?? ""] ?? ""}{it.final != null ? ` · оценка ${it.final}` : ""}{it.by ? ` · ${it.by}` : ""}</div>
+                        {!out && (
+                          <>
+                            <select value={`${d} ${t}`} onChange={(e) => {
+                              const [date, time] = e.target.value.split(" ");
+                              act(() => api.robotQueue({ action: "move", story_key: it.story_key, date, time }));
+                            }}>
+                              {options.map((o) => <option key={o}>{o}</option>)}
+                            </select>{" "}
+                            <button type="button" className="ghost" onClick={() => act(() => api.robotQueue({ action: "remove", story_key: it.story_key }))}>Снять</button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}

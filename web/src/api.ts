@@ -418,7 +418,7 @@ export interface RobotHealth {
     day: { calls: number; errors: number; prompt_tokens: number; completion_tokens: number }; recent: RobotLlmCall[] };
 }
 /** Подготовка новости из стека (Р-97). */
-export interface RobotPrepared { status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string; issues?: string[];
+export interface RobotPrepared { publication?: string; status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string; issues?: string[];
   order?: { topic?: string; section?: string; by?: string; at?: string };
   cover?: { status?: string; started_at?: string; pending?: { action: string; at: string } } }
 export interface RobotCover {

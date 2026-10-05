@@ -329,7 +329,7 @@ async function preparedIndex(): Promise<Record<string, Row>> {
       if (!rec) continue;
       index[String(rec.story_key)] = {
         status: rec.status, ready_at: rec.ready_at, started_at: rec.started_at, error: rec.error,
-        origin: rec.origin, title: rec.story?.news?.title,
+        origin: rec.origin, title: rec.story?.news?.title, publication: rec.publication,
         cover: rec.cover || covers[String(rec.story_key)] ? {
           status: (rec.cover as Row | undefined)?.status, started_at: (rec.cover as Row | undefined)?.started_at,
           pending: covers[String(rec.story_key)],
@@ -420,6 +420,10 @@ newsRobot.post("/queue", async (c) => {
   const key = String(body?.story_key ?? "");
   if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная история");
   const taken = new Set(q.items.filter((i) => i.story_key !== key).map((i) => `${i.date} ${i.time}`));
+  // Вышедшая новость закреплена: её не переносят, не снимают и не сдвигают обменом (2026-10-05:
+  // обмен с уже вышедшей Levanger увёл её в стеке на другой день, а Astra вышла в прошедший слот).
+  const published = async (k: string) =>
+    (await readJson<Row>(`${ROOT}/state/prepared/${k}.json`))?.publication === "вышла";
   if (body?.action === "add") {
     if (q.items.some((i) => i.story_key === key)) throw new ApiError("duplicate", "История уже в стеке");
     const now = moscowNow().toISOString().slice(0, 16).replace("T", " ");
@@ -439,10 +443,18 @@ newsRobot.post("/queue", async (c) => {
     }
     const mine = q.items.find((i) => i.story_key === key);
     if (!mine) throw new ApiError("not_found", "Истории нет в стеке");
-    const other = q.items.find((i) => i.date === date && i.time === time && i.story_key !== key);
-    if (other) [other.date, other.time] = [mine.date, mine.time];
+    if (await published(key)) throw new ApiError("validation_failed", "Новость уже вышла — её слот не меняется");
+    // В слоте может быть несколько новостей. Обмен — только если явно указана новость, с которой меняемся,
+    // и она ещё не вышла; иначе новость встаёт в слот рядом с остальными.
+    const swapKey = typeof body.swap_with === "string" ? body.swap_with : null;
+    const other = swapKey ? q.items.find((i) => i.story_key === swapKey && i.date === date && i.time === time) : undefined;
+    if (other) {
+      if (await published(other.story_key)) throw new ApiError("validation_failed", "С вышедшей новостью меняться нельзя");
+      [other.date, other.time] = [mine.date, mine.time];
+    }
     [mine.date, mine.time] = [date, time];
   } else if (body?.action === "remove") {
+    if (await published(key)) throw new ApiError("validation_failed", "Новость уже вышла — снять её со стека нельзя");
     q.items = q.items.filter((i) => i.story_key !== key);
   } else {
     throw new ApiError("validation_failed", "action: add, move или remove");
