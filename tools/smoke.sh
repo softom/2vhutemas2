@@ -99,6 +99,19 @@ check "прямая страница черновика сохраняет 404" 
 contains "страница черновика не запускает React повторно" 'data-public-page' "$(body)"
 missing "гость не получает название черновика" 'smoke: проверка' "$(body)"
 
+echo "── Поиск (Р-109)"
+check "поиск гостю" 200 "$(code "$API/search?q=%D0%B0%D1%80%D1%85%D0%B8%D1%82%D0%B5%D0%BA%D1%82%D1%83%D1%80%D0%B0")"
+contains "поиск отдаёт выдачу" '"items"' "$(body)"
+contains "поиск называет режим" '"mode"' "$(body)"
+check "короткий запрос отклоняется" 400 "$(code "$API/search?q=a")"
+check "неизвестный вид куска отклоняется" 400 "$(code "$API/search?q=smoke&kind=nope")"
+check "поиск только по названиям" 200 "$(code "$API/search?q=smoke&kind=title")"
+missing "гость не находит черновик поиском" "\"id\":$EID," "$(curl -s "$API/search?q=smoke%20%D0%BF%D1%80%D0%BE%D0%B2%D0%B5%D1%80%D0%BA%D0%B0")"
+check "состояние индекса гостю закрыто" 401 "$(code $API/search/status)"
+check "состояние индекса под входом" 200 "$(code -H "$AUTH" $API/search/status)"
+contains "состояние индекса считает куски" '"chunks"' "$(body)"
+check "пересборка индекса гостю закрыта" 401 "$(code -X POST $API/search/reindex)"
+
 check "неизвестный тип отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"type":"net-takogo","slug":"smoke-net-tipa","title_ru":"smoke: нет типа"}' $API/entities)"
 # Записей в базе больше страницы, поэтому ищем свою по имени, а не наугад.
 code -H "$AUTH" "$API/entities?type=what&q=smoke" >/dev/null

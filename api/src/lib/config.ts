@@ -53,6 +53,19 @@ export const config = {
     quality: Number(optional("MEDIA_QUALITY", "82")),
     recipeVersion: optional("MEDIA_RECIPE_VERSION", "v1"),
   },
+  /**
+   * Поиск (Р-109). Векторы — через Polza.AI; без ключа поиск только по словам.
+   * Размерность закреплена таблицей (vector(1536)): другая модель режется
+   * до неё параметром dimensions.
+   */
+  search: {
+    apiKey: Deno.env.get("POLZA_API_KEY")?.trim() || null,
+    baseUrl: optional("POLZA_BASE_URL", "https://api.polza.ai/api/v1"),
+    model: optional("SEARCH_EMBED_MODEL", "openai/text-embedding-3-large"),
+    dimensions: 1536,
+    batchSize: Number(optional("SEARCH_EMBED_BATCH", "64")),
+    intervalMs: Number(optional("SEARCH_INDEX_INTERVAL_MS", "15000")),
+  },
   /** Версия контракта: клиент сверяет её через GET /capabilities. */
   contractVersion: "1.0.0-draft",
   blockNoteSchemaVersion: 1,

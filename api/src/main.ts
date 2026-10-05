@@ -24,6 +24,8 @@ import { indicators } from "./routes/indicators.ts";
 import { parameters, parameterSets } from "./routes/parameters.ts";
 import { newsRobot } from "./routes/newsRobot.ts";
 import { pageNotes } from "./routes/pageNotes.ts";
+import { search } from "./routes/search.ts";
+import { startSearchIndexer } from "./lib/search.ts";
 import { materials } from "./routes/materials.ts";
 import { pages } from "./routes/pages.ts";
 import { CATALOG_HIDDEN_ROOTS } from "./lib/entityTypes.ts";
@@ -161,6 +163,7 @@ app.route("/api/v1/parameter-sets", parameterSets);
 app.route("/api/v1/materials", materials);
 app.route("/api/v1/news-robot", newsRobot);
 app.route("/api/v1/page-notes", pageNotes);
+app.route("/api/v1/search", search);
 
 // Всё, что не API, — страницы сайта: готовый HTML для поисковиков и ссылок
 // (Р-65). Caddy присылает сюда адреса, которым не нашлось файла сборки.
@@ -176,3 +179,5 @@ Deno.addSignalListener("SIGINT", shutdown);
 
 log("info", "system", "запуск сервиса", { port: config.port, db: config.db.host });
 Deno.serve({ port: config.port }, app.fetch);
+// Поисковый индекс досчитывается фоном (Р-109): правка и публикация его не ждут.
+startSearchIndexer();
