@@ -310,6 +310,9 @@ button:disabled { opacity: .5; cursor: default; }
 .public-gallery img { aspect-ratio: 4 / 3; background: var(--surface); }
 .public-card table { display: block; overflow-x: auto; border-collapse: collapse; }
 .public-card td { padding: 8px; border: 1px solid #aaa; }
+/* anywhere у карточки сжимает колонку таблицы до пары букв («Про/гра/мма»):
+   в таблице слово переносится, только если не помещается целиком. */
+.public-card table, .public-card td { overflow-wrap: break-word; }
 .public-card pre { overflow-x: auto; }
 .reader-lightbox { width: min(1200px, 96vw); max-height: 94vh; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); padding: 16px; }
 .reader-lightbox::backdrop { background: #000d; }
