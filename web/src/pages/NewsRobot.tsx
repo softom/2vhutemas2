@@ -258,14 +258,19 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
     sources: [{ source: p.source ?? "", url: p.url ?? "" }], partial: true,
   }));
   const allRows: Row[] = (stories ?? runRows).slice().sort((a, b) => b.final - a.final);
-  // Просмотрена — есть ваше «Да / Нет» или история в стеке.
-  const reviewed = (c: Row) => Boolean(ov.judged[c.story_key] ?? pendingVerdict[c.story_key]) || inStack.has(c.story_key);
+  // Просмотрена — есть ваше «Да / Нет» или история в стеке. Тронутые за этот заход остаются в списке,
+  // пока редактор на странице: можно нажать следующую кнопку или передумать (2026-10-05).
+  const [stay, setStay] = useState<Set<string>>(new Set());
+  const keep = (key: string) => setStay((s0) => (s0.has(key) ? s0 : new Set(s0).add(key)));
+  const reviewed = (c: Row) => !stay.has(c.story_key)
+    && (Boolean(ov.judged[c.story_key] ?? pendingVerdict[c.story_key]) || inStack.has(c.story_key));
   const [view, setView] = useState<"new" | "seen" | "all">("new");
   const rows = allRows.filter((c) => view === "all" || (view === "new" ? !reviewed(c) : reviewed(c)));
   const [topic, setTopic] = useState("");
   // Ответ — прямо в строке: сообщение вверху страницы из середины таблицы не видно.
   const [rowNote, setRowNote] = useState<Record<string, string>>({});
   const toStack = async (c: RobotStory, title?: string) => {
+    keep(c.story_key);
     setRowNote((r) => ({ ...r, [c.story_key]: "ставим…" }));
     try {
       await api.robotQueue({
@@ -278,8 +283,10 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       setRowNote((r) => ({ ...r, [c.story_key]: (e as Error).message }));
     }
   };
-  const judge = (story: string, verdict: "yes" | "no", runId?: string) =>
-    act(() => api.robotInbox({ action: "judge", run_id: runId ?? run.id, story_key: story, verdict }));
+  const judge = (story: string, verdict: "yes" | "no", runId?: string) => {
+    keep(story);
+    return act(() => api.robotInbox({ action: "judge", run_id: runId ?? run.id, story_key: story, verdict }));
+  };
   const written = new Set([...run.news.map((n) => n.candidate.story_key),
     ...allRows.filter((c) => c.written).map((c) => c.story_key)]);
   const counts = rows.reduce<Record<string, number>>((m, c) => ({ ...m, [c.topic ?? ""]: (m[c.topic ?? ""] ?? 0) + 1 }), {});
