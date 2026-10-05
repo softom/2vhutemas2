@@ -479,15 +479,37 @@ const COVER_MODELS: [string, string][] = [
   ["openai/gpt-image-1.5", "GPT Image 1.5"],
 ];
 
-/** Картинка варианта обложки — маршрут только для su, грузим с токеном. */
-function CoverImage({ file }: { file: string }) {
+/**
+ * Картинка варианта обложки — маршрут только для su, грузим с токеном.
+ * Щелчок — во весь экран (закрыть: щелчок или Esc), 2026-10-05.
+ */
+function CoverImage({ file, caption }: { file: string; caption?: string }) {
   const [src, setSrc] = useState<string | null>(null);
+  const [full, setFull] = useState(false);
   useEffect(() => {
     let url: string | null = null;
     api.robotCoverImage(file).then((u) => { url = u; setSrc(u); }).catch(() => setSrc(null));
     return () => { if (url) URL.revokeObjectURL(url); };
   }, [file]);
-  return src ? <img src={src} alt="" style={{ width: "100%", display: "block" }} /> : <p className="hint">загружаем…</p>;
+  useEffect(() => {
+    if (!full) return;
+    const close = (e: KeyboardEvent) => { if (e.key === "Escape") setFull(false); };
+    globalThis.addEventListener("keydown", close);
+    return () => globalThis.removeEventListener("keydown", close);
+  }, [full]);
+  if (!src) return <p className="hint">загружаем…</p>;
+  return (
+    <>
+      <img src={src} alt="" title="Открыть во весь экран" style={{ width: "100%", display: "block", cursor: "zoom-in" }}
+        onClick={() => setFull(true)} />
+      {full && (
+        <div className="robot-lightbox" role="dialog" aria-label="Обложка во весь экран" onClick={() => setFull(false)}>
+          <img src={src} alt="" />
+          {caption && <p>{caption}</p>}
+        </div>
+      )}
+    </>
+  );
 }
 
 /**
@@ -596,7 +618,7 @@ function CoverBlock({ storyKey, rec, onSent }: { storyKey: string; rec: RobotPre
         <div className="robot-covers">
           {(cover.variants ?? []).slice().reverse().map((v) => (
             <figure key={v.file} className={cover.chosen === v.file ? "chosen" : undefined}>
-              <CoverImage file={v.file} />
+              <CoverImage file={v.file} caption={`${v.model.split("/").pop()} · ${v.prompt.slice(0, 220)}…`} />
               <figcaption className="hint">
                 {v.model.split("/").pop()} · {new Date(v.at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
                 {cover.chosen === v.file
@@ -651,6 +673,12 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
         {rec.ready_at && ` · подготовлено ${new Date(rec.ready_at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}`}
       </p>
       <h2>{n.title}</h2>
+      {rec.cover?.chosen && (
+        <figure>
+          <div style={{ maxWidth: 720 }}><CoverImage file={rec.cover.chosen} caption="Обложка новости" /></div>
+          <figcaption className="hint">Обложка: иллюстрация создана ИИ ({(rec.cover.variants ?? []).find((v) => v.file === rec.cover?.chosen)?.model.split("/").pop()}) для Вх²</figcaption>
+        </figure>
+      )}
       {n.images?.[0] && (
         <figure><img src={n.images[0].url} alt="" style={{ maxWidth: "100%" }} /><figcaption className="hint">{n.images[0].caption}</figcaption></figure>
       )}

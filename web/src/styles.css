@@ -714,3 +714,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .robot-covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
 .robot-covers figure { margin: 0; border: 1px solid #CDBB98; padding: 6px; }
 .robot-covers figure.chosen { border: 2px solid var(--accent); }
+
+/* Обложка во весь экран (2026-10-05). */
+.robot-lightbox { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; background: rgba(20, 18, 16, .92); cursor: zoom-out; }
+.robot-lightbox img { max-width: 100%; max-height: calc(100vh - 90px); object-fit: contain; box-shadow: 0 0 0 1px #CDBB98; }
+.robot-lightbox p { margin: 0; max-width: 900px; color: #EDE6D8; font-size: 12px; text-align: center; }
