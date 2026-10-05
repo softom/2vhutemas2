@@ -574,3 +574,34 @@ async function pendingOrders(): Promise<Row[]> {
   }
   return list;
 }
+
+/**
+ * Истории из всех прогонов за последние дни, одна строка на историю (Р-105).
+ * Пользователь 2026-10-05: «в списке были новые новости, а старые исчезли… просмотренные стоит скрывать».
+ * Повтор истории в нескольких прогонах — одна строка из самого свежего прогона.
+ */
+newsRobot.get("/stories", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  const days = Math.min(60, Math.max(1, Number(c.req.query("days") ?? 14) || 14));
+  const since = Date.now() - days * 86400000;
+  const seen = new Set<string>();
+  const items: Row[] = [];
+  for (const id of await runIds()) {
+    const started = await runStart(id);
+    if (new Date(started).getTime() < since) break;
+    const dir = `${ROOT}/out/${id}`;
+    const summary = await readJson<{ candidates?: Row[]; news?: Row[] }>(`${dir}/summary.json`);
+    const cands = summary?.candidates ?? (await readJson<Row[]>(`${dir}/candidates.json`)) ?? [];
+    const written = new Set(
+      (summary?.news ?? (await readJson<Row[]>(`${dir}/news.json`)) ?? [])
+        .filter((n) => n.news).map((n) => String((n.candidate as Row)?.story_key)),
+    );
+    for (const cand of cands) {
+      const key = String(cand.story_key);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({ ...cand, run_id: id, run_started: started, written: written.has(key) });
+    }
+  }
+  return c.json({ items, days });
+});

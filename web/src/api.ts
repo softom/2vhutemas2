@@ -531,6 +531,10 @@ export const api = {
   robotSources: () => request<{ items: RobotSourceRow[]; connected: boolean }>("/news-robot/sources"),
   robotOverview: () => request<RobotOverview>("/news-robot/overview"),
   robotHealth: () => request<RobotHealth>("/news-robot/health"),
+  robotStories: (days = 14) =>
+    request<{ items: (RobotStory & { run_id: string; run_started: string; written: boolean })[]; days: number }>(
+      `/news-robot/stories?days=${days}`,
+    ),
   robotOrder: (body: { topic: string; section: string; input: string; note?: string }) =>
     request<{ queued: { story_key: string } }>("/news-robot/order", { method: "POST", body: JSON.stringify(body) }),
   robotPrepared: (key: string) => request<RobotPreparedFull>(`/news-robot/prepared/${encodeURIComponent(key)}`),

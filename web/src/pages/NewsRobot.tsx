@@ -244,11 +244,22 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const inStack = new Set(ov.queue.items.map((i) => i.story_key));
   const pendingVerdict = Object.fromEntries(ov.pending.filter((p) => p.action === "judge" && p.story_key)
     .map((p) => [p.story_key!, p.verdict]));
-  const rows: (RobotStory & { partial?: boolean })[] = run.candidates.length ? run.candidates : run.partial.map((p) => ({
+  // Истории из всех прогонов за две недели (Р-105); пока список не пришёл — текущий прогон.
+  type Row = RobotStory & { partial?: boolean; run_id?: string; run_started?: string; written?: boolean };
+  const [stories, setStories] = useState<Row[] | null>(null);
+  useEffect(() => {
+    api.robotStories(14).then((r) => setStories(r.items)).catch(() => setStories(null));
+  }, [run.id, run.candidates.length, ov.queue.items.length]);
+  const runRows: Row[] = run.candidates.length ? run.candidates : run.partial.map((p) => ({
     story_key: p.story_key ?? p.id ?? "", final: p.interest ?? 0, interest: p.interest ?? 0, title_ru: p.title_ru ?? p.title ?? "",
     topic: p.topic, kind: p.kind, reason: p.reason, competition: p.competition,
     sources: [{ source: p.source ?? "", url: p.url ?? "" }], partial: true,
   }));
+  const allRows: Row[] = (stories ?? runRows).slice().sort((a, b) => b.final - a.final);
+  // Просмотрена — есть ваше «Да / Нет» или история в стеке.
+  const reviewed = (c: Row) => Boolean(ov.judged[c.story_key] ?? pendingVerdict[c.story_key]) || inStack.has(c.story_key);
+  const [view, setView] = useState<"new" | "seen" | "all">("new");
+  const rows = allRows.filter((c) => view === "all" || (view === "new" ? !reviewed(c) : reviewed(c)));
   const [topic, setTopic] = useState("");
   // Ответ — прямо в строке: сообщение вверху страницы из середины таблицы не видно.
   const [rowNote, setRowNote] = useState<Record<string, string>>({});
@@ -256,7 +267,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
     setRowNote((r) => ({ ...r, [c.story_key]: "ставим…" }));
     try {
       await api.robotQueue({
-        action: "add", story_key: c.story_key, run_id: run.id, title: title ?? c.title_ru, topic: c.topic, final: c.final,
+        action: "add", story_key: c.story_key, run_id: (c as Row).run_id ?? run.id, title: title ?? c.title_ru, topic: c.topic, final: c.final,
         url: c.sources[0]?.url,
       });
       setRowNote((r) => ({ ...r, [c.story_key]: "" }));
@@ -265,9 +276,10 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       setRowNote((r) => ({ ...r, [c.story_key]: (e as Error).message }));
     }
   };
-  const judge = (story: string, verdict: "yes" | "no") =>
-    act(() => api.robotInbox({ action: "judge", run_id: run.id, story_key: story, verdict }));
-  const written = new Set(run.news.map((n) => n.candidate.story_key));
+  const judge = (story: string, verdict: "yes" | "no", runId?: string) =>
+    act(() => api.robotInbox({ action: "judge", run_id: runId ?? run.id, story_key: story, verdict }));
+  const written = new Set([...run.news.map((n) => n.candidate.story_key),
+    ...allRows.filter((c) => c.written).map((c) => c.story_key)]);
   const counts = rows.reduce<Record<string, number>>((m, c) => ({ ...m, [c.topic ?? ""]: (m[c.topic ?? ""] ?? 0) + 1 }), {});
   const shownRows = topic ? rows.filter((c) => c.topic === topic) : rows;
   return (
@@ -295,6 +307,18 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
         );
       })}
       <h2>Отбор и ранжирование</h2>
+      <p className="hint">
+        Истории всех прогонов за две недели, одна строка на историю. Просмотренные — с вашим «Да / Нет» или в стеке —
+        скрыты; их видно во вкладке «Просмотренные».
+      </p>
+      <div className="robot-tabs filters">
+        {([["new", "Непросмотренные"], ["seen", "Просмотренные"], ["all", "Все"]] as const).map(([code, title]) => (
+          <a key={code} href="#" className={view === code ? "active" : undefined}
+            onClick={(e) => { e.preventDefault(); setView(code); }}>
+            {title} ({allRows.filter((c) => code === "all" || (code === "new" ? !reviewed(c) : reviewed(c))).length})
+          </a>
+        ))}
+      </div>
       <div className="robot-tabs filters">
         {[["", "Все"], ["architecture", "Архитектура"], ["neurogeneration", "Нейрогенерация"], ["software", "ПО"]].map(([code, title]) => (
           <a key={code} href="#" className={topic === code ? "active" : undefined}
@@ -323,8 +347,8 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                   </td>
                   <td className="hint">{c.reason}</td>
                   <td>{!c.partial && <>
-                    <button type="button" className={v === "yes" ? undefined : "ghost"} onClick={() => judge(c.story_key, "yes")}>Да</button>{" "}
-                    <button type="button" className={v === "no" ? undefined : "ghost"} onClick={() => judge(c.story_key, "no")}>Нет</button>
+                    <button type="button" className={v === "yes" ? undefined : "ghost"} onClick={() => judge(c.story_key, "yes", (c as Row).run_id)}>Да</button>{" "}
+                    <button type="button" className={v === "no" ? undefined : "ghost"} onClick={() => judge(c.story_key, "no", (c as Row).run_id)}>Нет</button>
                   </>}</td>
                   <td>{!c.partial && (inStack.has(c.story_key) ? <span className="hint">в стеке</span>
                     : <button type="button" className="ghost" onClick={() => toStack(c)}>В стек</button>)}
