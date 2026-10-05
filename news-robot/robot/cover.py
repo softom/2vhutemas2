@@ -44,17 +44,46 @@ def _write(path: Path, data) -> None:
     tmp.replace(path)
 
 
-def _style(root: Path) -> str:
-    return (root / "prompts" / "cover_style.md").read_text(encoding="utf-8")
+def styles(root: Path) -> dict:
+    """Круг художников (prompts/cover_styles.yaml, Р-108)."""
+    import yaml
+    return yaml.safe_load((root / "prompts" / "cover_styles.yaml").read_text(encoding="utf-8"))
 
 
-def draft(root: Path, llm: LLM, rec: dict) -> dict:
+def write_styles_snapshot(root: Path) -> None:
+    """Снимок круга художников для сайта: API видит только .state, а не код робота."""
+    data = styles(root)
+    snap = {"groups": [{"key": g["key"], "title": g["title"], "task": g.get("task"),
+                        "artists": [{k: a.get(k) for k in ("key", "name", "years", "take")} for a in g["artists"]]}
+                       for g in data["groups"]]}
+    path = root / ".state" / "cover_styles.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write(path, snap)
+
+
+def _style_text(root: Path, style_key: str | None) -> tuple[str, list[dict]]:
+    """Текст стиля для промпта и список художников на выбор LLM (если выбрана только группа)."""
+    data = styles(root)
+    artists = {a["key"]: a for g in data["groups"] for a in g["artists"]}
+    if style_key and style_key.startswith("group:"):
+        group = next((g for g in data["groups"] if g["key"] == style_key[6:]), data["groups"][0])
+        options = "\n".join(f"- {a['key']}: {a['name']} — {a['take']}. Manner: {a['style']}" for a in group["artists"])
+        return (f"Выбери ОДНОГО художника из группы «{group['title']}» ({group.get('task')}) — того, чьи приёмы лучше "
+                f"всего передают суть новости, и верни его key в style_key:\n{options}\n\nОбщее:\n{data['common']}"
+                ), group["artists"]
+    a = artists.get(style_key or "annenkov") or artists["annenkov"]
+    return f"Художник: {a['name']} ({a['years']}). Manner: {a['style']}\n\nОбщее:\n{data['common']}", [a]
+
+
+def draft(root: Path, llm: LLM, rec: dict, style_key: str | None = None) -> dict:
     news = (rec.get("story") or {}).get("news") or {}
     brief = {k: news.get(k) for k in ("title", "lead", "paragraphs")}
-    out = llm.chat_json("cover", prompt("cover", style=_style(root), news=json.dumps(brief, ensure_ascii=False)),
+    style, options = _style_text(root, style_key)
+    out = llm.chat_json("cover", prompt("cover", style=style, news=json.dumps(brief, ensure_ascii=False)),
                         "Подготовь задание для обложки.", max_tokens=3000)
+    chosen = next((a for a in options if a["key"] == out.get("style_key")), options[0])
     return {"idea_ru": out.get("idea_ru"), "prompt": out.get("prompt"), "alt_ru": out.get("alt_ru"),
-            "model": DEFAULT_MODEL}
+            "model": DEFAULT_MODEL, "style_key": chosen["key"], "style_name": chosen["name"]}
 
 
 def generate(root: Path, key: str, prompt_text: str, model: str, n: int) -> dict:
@@ -111,6 +140,10 @@ def apply(root: Path, rec: dict, variant: dict, api, log) -> None:
 
 
 def run(root: Path, llm: LLM, log, api) -> int:
+    try:
+        write_styles_snapshot(root)
+    except Exception as e:  # noqa: BLE001
+        log("warn", "cover", "снимок круга художников не записан", error=str(e)[:150])
     cdir = root / "inbox" / "covers"
     done = 0
     for req_path in sorted(cdir.glob("*.json")) if cdir.exists() else []:
@@ -126,7 +159,7 @@ def run(root: Path, llm: LLM, log, api) -> int:
             if req.get("action") == "draft":
                 cover.update(status="промпт готовится", started_at=req.get("at") or now())
                 _write(path, rec)
-                cover.update(draft(root, llm, rec), status="промпт готов")
+                cover.update(draft(root, llm, rec, req.get("style")), status="промпт готов")
                 log("info", "cover", "промпт обложки готов", story=key)
             elif req.get("action") == "generate":
                 cover.update(status="генерируется", started_at=req.get("at") or now(),

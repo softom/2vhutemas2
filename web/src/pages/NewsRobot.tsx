@@ -501,6 +501,28 @@ function CoverBlock({ storyKey, rec, onSent }: { storyKey: string; rec: RobotPre
   const [model, setModel] = useState(cover.model ?? COVER_MODELS[0][0]);
   const [msg, setMsg] = useState<string | null>(null);
   useEffect(() => { if (cover.prompt) setPromptText(cover.prompt); }, [cover.prompt]);
+  // Круг художников (Р-108): выбор при заказе — художник или вся группа («выберет LLM»).
+  const [groups, setGroups] = useState<Awaited<ReturnType<typeof api.robotCoverStyles>>["groups"]>([]);
+  const [style, setStyle] = useState("group:montage");
+  useEffect(() => { api.robotCoverStyles().then((r) => setGroups(r.groups)).catch(() => {}); }, []);
+  const styleInfo = groups.flatMap((g) => g.artists.map((a) => ({ ...a, group: g.title }))).find((a) => a.key === style);
+  const styleGroup = groups.find((g) => `group:${g.key}` === style);
+  const stylePicker = (
+    <div className="row">
+      <label className="hint">Стиль</label>
+      <select value={style} onChange={(e) => setStyle(e.target.value)}>
+        {groups.map((g) => (
+          <optgroup key={g.key} label={`${g.title} — ${g.task ?? ""}`}>
+            <option value={`group:${g.key}`}>{g.title}: выберет LLM по новости</option>
+            {g.artists.map((a) => <option key={a.key} value={a.key}>{a.name}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      <span className="hint">
+        {styleInfo ? `${styleInfo.years ?? ""} · ${styleInfo.take ?? ""}` : styleGroup ? `${styleGroup.artists.map((a) => a.name).join(", ")}` : ""}
+      </span>
+    </div>
+  );
   // Работа идёт, пока запрос в очереди у робота или робот над ним работает; состояние — с сервера,
   // поэтому переживает обновление страницы (2026-10-05).
   const working = cover.status === "промпт готовится" || cover.status === "генерируется";
@@ -532,8 +554,9 @@ function CoverBlock({ storyKey, rec, onSent }: { storyKey: string; rec: RobotPre
     <div className="block">
       <h3>Обложка</h3>
       <p className="hint">
-        Для новостей без своих снимков — конференция, вебинар, сервис, событие. Стиль — графика Юрия Анненкова
-        к «Двенадцати» Блока (1918): чёрная тушь, сломанные плоскости, штриховка. Подпись: «Иллюстрация создана ИИ для Вх²».
+        Для новостей без своих снимков — конференция, вебинар, сервис, событие. Иллюстрации продолжают вёрстку 1920-х:
+        выберите художника или группу (тогда художника подберёт LLM). Наш красный — во всех стилях.
+        Подпись: «Иллюстрация создана ИИ для Вх²».
       </p>
       {busy && (
         <p className="notice">
@@ -543,12 +566,16 @@ function CoverBlock({ storyKey, rec, onSent }: { storyKey: string; rec: RobotPre
       {!busy && cover.status && <p className={cover.status === "ошибка" ? "error" : "hint"}>
         Состояние: {cover.status}{cover.error ? ` — ${cover.error}` : ""}</p>}
       {!cover.prompt && !busy && (
-        <button type="button" onClick={() => send({ story_key: storyKey, action: "draft" },
-          "LLM готовит промпт — он появится здесь в течение минуты.")}>Создать обложку</button>
+        <>
+          {stylePicker}
+          <button type="button" onClick={() => send({ story_key: storyKey, action: "draft", style },
+            "LLM готовит промпт — он появится здесь в течение минуты.")}>Создать обложку</button>
+        </>
       )}
       {cover.prompt && (
         <>
           {cover.idea_ru && <p><b>Идея:</b> {cover.idea_ru}</p>}
+          {cover.style_name && <p className="hint">Стиль: {cover.style_name}</p>}
           <label className="hint">Промпт для модели (можно править)</label>
           <textarea rows={6} style={{ width: "100%" }} value={promptText} onChange={(e) => setPromptText(e.target.value)} />
           <div className="row">
@@ -559,9 +586,10 @@ function CoverBlock({ storyKey, rec, onSent }: { storyKey: string; rec: RobotPre
               "Отправлено в генерацию — вариант появится здесь через минуту-две.")}>
               {(cover.variants ?? []).length ? "Ещё вариант" : "Сгенерировать"}
             </button>
-            <button type="button" className="ghost" disabled={busy} onClick={() => send({ story_key: storyKey, action: "draft" },
-              "LLM готовит новый промпт.")}>Новый промпт</button>
           </div>
+          {stylePicker}
+          <button type="button" className="ghost" disabled={busy} onClick={() => send({ story_key: storyKey, action: "draft", style },
+            "LLM готовит новый промпт.")}>Новый промпт в этом стиле</button>
         </>
       )}
       {(cover.variants ?? []).length > 0 && (

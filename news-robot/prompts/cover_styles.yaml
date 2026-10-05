@@ -1,0 +1,135 @@
+# Круг художников для обложек Вх² (Р-108): иллюстрации продолжают вёрстку 1920-х.
+# Группы — по задачам, которые иллюстрации решают; у художника — что берём (для редактора)
+# и приёмы по-английски (для модели изображения). Общие правила — common.
+# Источник списка — пользователь, 2026-10-05.
+
+common: >-
+  Treat it as an original graphic in the stated manner, not a copy of a specific work.
+  Palette: black, off-white paper and ONE flat accent of brick red #A9381F (the red of the Vh² ribbon) unless the manner says otherwise;
+  no other colors. No text, no letters, no numbers, no logos, no watermarks. No photorealistic depiction of any real existing building.
+  No recognizable faces of real living people. Clean composition that reads at small size in a news feed.
+
+groups:
+  - key: architecture
+    title: "Архитектурная графика"
+    task: "здания, проекты, градостроительство — ближе всего к сайту"
+    artists:
+      - key: chernikhov
+        name: "Яков Чернихов"
+        years: "1889–1951"
+        take: "«Архитектурные фантазии»: аксонометрия, сдвиг объёмов, чистая заливка"
+        style: >-
+          in the manner of Yakov Chernikhov's "Architectural Fantasies" (1933): axonometric constructivist composition,
+          interlocking and shifted volumes, cantilevers and bridges, crisp outlines with flat solid fills, dramatic perspective,
+          precise drafting line, industrial forms
+      - key: leonidov
+        name: "Иван Леонидов"
+        years: "1902–1959"
+        take: "тонкая белая линия на чёрном, проекты-схемы (Институт Ленина)"
+        style: >-
+          in the manner of Ivan Leonidov's competition drawings (Lenin Institute, 1927): thin precise white lines on a deep
+          black ground, sparse geometric volumes — sphere, slab, tall mast, tension cables — vast empty space, diagrammatic plan
+          and elevation, one small red accent
+      - key: lissitzky
+        name: "Эль Лисицкий"
+        years: "1890–1941"
+        take: "проуны, аксонометрия, «Про 2 квадрата» — схема как рассказ"
+        style: >-
+          in the manner of El Lissitzky's Prouns and "About Two Squares": floating axonometric planes and blocks, a red square
+          and black square as actors, diagonal dynamic space, cream ground, schematic narrative, precise geometric construction
+      - key: suprematist
+        name: "Малевич, Чашник, Суетин"
+        years: "1910–1930-е"
+        take: "супрематические архитектоны — объём из брусков, белое на белом"
+        style: >-
+          in the manner of Suprematist architectons by Kazimir Malevich, Ilya Chashnik and Nikolai Suetin: white plaster-like
+          volumes assembled from rectangular bars, white on white with soft shadows, strict orthogonal stacking, a single small
+          red or black element, minimal and monumental
+
+  - key: montage
+    title: "Фотомонтаж"
+    task: "новости о технологиях, ИИ и программах"
+    artists:
+      - key: klutsis
+        name: "Густав Клуцис"
+        years: "1895–1938"
+        take: "монтаж фото с геометрией, диагональ, красный клин"
+        style: >-
+          in the manner of Gustav Klutsis's constructivist photomontage: cut-out halftone black-and-white photographic fragments
+          combined with bold geometric shapes, a strong red wedge or diagonal band, radiating lines, dynamic diagonal composition,
+          posterlike clarity (photographic fragments are generic, not real people)
+      - key: rodchenko
+        name: "Александр Родченко"
+        years: "1891–1956"
+        take: "ракурс снизу и сверху, фотомонтаж «Про это»"
+        style: >-
+          in the manner of Alexander Rodchenko: extreme worm's-eye or bird's-eye camera angle, steep diagonals, high-contrast
+          black-and-white halftone photography, montage of cut fragments, constructivist geometry, one red plane
+      - key: senkin
+        name: "Сергей Сенькин"
+        years: "1894–1963"
+        take: "обложки-монтажи, сочетание шрифтовых плашек с фото"
+        style: >-
+          in the manner of Sergei Senkin's constructivist cover montages: rectangular blocks and bars like typographic slabs
+          (no actual letters), cut photographic fragments, grid-based layout, black, cream and red
+      - key: stenberg
+        name: "Братья Стенберги"
+        years: "1899–1982, 1900–1933"
+        take: "киноплакат — ракурс, движение; для конкурсов и событий"
+        style: >-
+          in the manner of the Stenberg brothers' 1920s film posters: dramatic foreshortening, figures and objects in motion,
+          spiralling and diagonal composition, flat vivid shapes over photographic drawing, strong red and black
+
+  - key: portrait
+    title: "Портрет и линия"
+    task: "персоны, интервью"
+    artists:
+      - key: annenkov
+        name: "Юрий Анненков"
+        years: "1889–1974"
+        take: "линейный портрет с кубистическим разломом, «Двенадцать»"
+        style: >-
+          in the manner of Yuri Annenkov's 1918 ink illustrations for Alexander Blok's poem "The Twelve": black ink, pen and brush,
+          angular cubo-futurist fragmentation, sharp diagonals, broken planes, dense hatching and cross-hatching, bold solid black
+          masses, figures as expressive silhouettes, aged off-white paper texture
+      - key: altman
+        name: "Натан Альтман"
+        years: "1889–1970"
+        take: "портрет из плоскостей, сдержанная гамма"
+        style: >-
+          in the manner of Natan Altman's cubist portraits: figure built from flat faceted planes, restrained palette of greys,
+          ochre and black with one red plane, clear contour, calm monumental pose (generic person, not a real portrait)
+      - key: lebedev
+        name: "Владимир Лебедев"
+        years: "1891–1967"
+        take: "плоский силуэт, «Окна РОСТА», детская книга — ясность формы"
+        style: >-
+          in the manner of Vladimir Lebedev's ROSTA windows and 1920s picture books: flat solid silhouettes, simple geometric
+          shapes, generous white space, black and red, crisp clarity of form, playful economy
+
+  - key: typography
+    title: "Типографика и журнал"
+    task: "обложки разделов, подписи, схемы"
+    artists:
+      - key: gan
+        name: "Алексей Ган"
+        years: "1887–1942"
+        take: "журнал «СА — Современная архитектура», обложка «Конструктивизма» — прямой предок нашей вёрстки"
+        style: >-
+          in the manner of Aleksei Gan's covers for "SA — Contemporary Architecture" magazine: bold rectangular bars and rules,
+          strict grid, heavy black blocks and red bands, asymmetric layout, architectural photograph fragment in a frame
+          (no letters)
+      - key: telingater
+        name: "Соломон Телингатер"
+        years: "1903–1969"
+        take: "наборная графика, линейки, ритм"
+        style: >-
+          in the manner of Solomon Telingater's typographic constructions: composition of printer's rules, bars, circles and
+          blocks, rhythmic spacing, black and red on cream, letterpress texture (no actual letters)
+      - key: popova_exter
+        name: "Любовь Попова, Александра Экстер"
+        years: "1889–1924, 1882–1949"
+        take: "сценографические конструкции — каркас как изображение"
+        style: >-
+          in the manner of Lyubov Popova's and Aleksandra Exter's constructivist stage sets: open timber frame structures,
+          ladders, wheels, platforms and ramps as a skeletal construction, dynamic planes, black, cream and red

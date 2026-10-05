@@ -641,6 +641,9 @@ newsRobot.post("/cover", async (c) => {
   if (!["draft", "generate", "apply"].includes(action)) throw new ApiError("validation_failed", "action: draft, generate или apply");
   if (!(await readJson<Row>(`${ROOT}/state/prepared/${key}.json`))) throw new ApiError("not_found", "Новость не подготовлена");
   const req: Row = { story_key: key, action, by: principal.displayName, at: new Date().toISOString() };
+  if (action === "draft" && typeof body?.style === "string" && /^(group:)?[a-z_]{2,40}$/.test(body.style)) {
+    req.style = body.style;
+  }
   if (action === "generate") {
     const prompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, 4000) : "";
     if (!prompt) throw new ApiError("validation_failed", "Нужен промпт");
@@ -670,4 +673,10 @@ newsRobot.get("/covers/:file", async (c) => {
   } catch {
     throw new ApiError("not_found", "Нет такого варианта");
   }
+});
+
+/** Круг художников для обложек (Р-108): группы и художники; снимок пишет робот. */
+newsRobot.get("/cover-styles", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  return c.json((await readJson<Row>(`${ROOT}/state/cover_styles.json`)) ?? { groups: [] });
 });

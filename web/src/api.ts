@@ -424,7 +424,7 @@ export interface RobotPrepared { status: string; ready_at?: string; started_at?:
 export interface RobotCover {
   status?: string; idea_ru?: string; prompt?: string; alt_ru?: string; model?: string; error?: string;
   chosen?: string; applied_at?: string; variants?: { file: string; model: string; prompt: string; at: string }[];
-  started_at?: string; pending?: { action: string; at: string };
+  started_at?: string; pending?: { action: string; at: string }; style_key?: string; style_name?: string;
 }
 export interface RobotPreparedFull extends RobotPrepared {
   story_key: string;
@@ -555,7 +555,9 @@ export const api = {
   robotOrder: (body: { topic: string; section: string; input: string; note?: string }) =>
     request<{ queued: { story_key: string } }>("/news-robot/order", { method: "POST", body: JSON.stringify(body) }),
   robotPrepared: (key: string) => request<RobotPreparedFull>(`/news-robot/prepared/${encodeURIComponent(key)}`),
-  robotCover: (body: { story_key: string; action: "draft" | "generate" | "apply"; prompt?: string; model?: string; file?: string }) =>
+  robotCoverStyles: () => request<{ groups: { key: string; title: string; task?: string;
+    artists: { key: string; name: string; years?: string; take?: string }[] }[] }>("/news-robot/cover-styles"),
+  robotCover: (body: { story_key: string; action: "draft" | "generate" | "apply"; prompt?: string; model?: string; file?: string; style?: string }) =>
     request<{ queued: unknown }>("/news-robot/cover", { method: "POST", body: JSON.stringify(body) }),
   /** Картинка варианта обложки: маршрут только для su, поэтому — с токеном, как объект URL. */
   robotCoverImage: (file: string) => requestBlob(`/news-robot/covers/${encodeURIComponent(file)}`),
