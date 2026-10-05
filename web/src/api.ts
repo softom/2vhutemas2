@@ -419,10 +419,12 @@ export interface RobotHealth {
 }
 /** Подготовка новости из стека (Р-97). */
 export interface RobotPrepared { status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string; issues?: string[];
-  order?: { topic?: string; section?: string; by?: string; at?: string }; cover?: { status?: string } }
+  order?: { topic?: string; section?: string; by?: string; at?: string };
+  cover?: { status?: string; started_at?: string; pending?: { action: string; at: string } } }
 export interface RobotCover {
   status?: string; idea_ru?: string; prompt?: string; alt_ru?: string; model?: string; error?: string;
   chosen?: string; applied_at?: string; variants?: { file: string; model: string; prompt: string; at: string }[];
+  started_at?: string; pending?: { action: string; at: string };
 }
 export interface RobotPreparedFull extends RobotPrepared {
   story_key: string;

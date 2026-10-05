@@ -124,12 +124,13 @@ def run(root: Path, llm: LLM, log, api) -> int:
         cover = rec.setdefault("cover", {"variants": []})
         try:
             if req.get("action") == "draft":
-                cover.update(status="промпт готовится")
+                cover.update(status="промпт готовится", started_at=req.get("at") or now())
                 _write(path, rec)
                 cover.update(draft(root, llm, rec), status="промпт готов")
                 log("info", "cover", "промпт обложки готов", story=key)
             elif req.get("action") == "generate":
-                cover.update(status="генерируется", prompt=req.get("prompt") or cover.get("prompt"),
+                cover.update(status="генерируется", started_at=req.get("at") or now(),
+                             prompt=req.get("prompt") or cover.get("prompt"),
                              model=req.get("model") or cover.get("model") or DEFAULT_MODEL)
                 _write(path, rec)
                 v = generate(root, key, cover["prompt"], cover["model"], len(cover["variants"]) + 1)

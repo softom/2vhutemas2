@@ -65,7 +65,8 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       setOv(o);
       setHealth(h);
       preparing.current = o.queue.items.some((i) => !["готово", "ошибка"].includes(o.prepared[i.story_key]?.status ?? ""))
-        || Object.values(o.prepared).some((p) => ["промпт готовится", "генерируется"].includes(p.cover?.status ?? ""));
+        || Object.values(o.prepared).some((p) => Boolean(p.cover?.pending)
+          || ["промпт готовится", "генерируется"].includes(p.cover?.status ?? ""));
       const id = runId ?? o.runs[0]?.id ?? null;
       if (id && id !== runId) setRunId(id);
       if (id) {
@@ -494,17 +495,35 @@ function CoverImage({ file }: { file: string }) {
  * редактор правит, генерация через Polza.AI, «Поставить обложкой» — первой иллюстрацией новости.
  * Для новостей о зданиях обложки не генерируются — там свои снимки.
  */
-function CoverBlock({ storyKey, rec }: { storyKey: string; rec: RobotPreparedFull }) {
+function CoverBlock({ storyKey, rec, onSent }: { storyKey: string; rec: RobotPreparedFull; onSent: () => void }) {
   const cover = rec.cover ?? {};
   const [promptText, setPromptText] = useState(cover.prompt ?? "");
   const [model, setModel] = useState(cover.model ?? COVER_MODELS[0][0]);
   const [msg, setMsg] = useState<string | null>(null);
   useEffect(() => { if (cover.prompt) setPromptText(cover.prompt); }, [cover.prompt]);
-  const busy = cover.status === "промпт готовится" || cover.status === "генерируется";
-  const send = async (body: Parameters<typeof api.robotCover>[0], note: string) => {
+  // Работа идёт, пока запрос в очереди у робота или робот над ним работает; состояние — с сервера,
+  // поэтому переживает обновление страницы (2026-10-05).
+  const working = cover.status === "промпт готовится" || cover.status === "генерируется";
+  const busy = Boolean(cover.pending) || working;
+  const since = cover.pending?.at ?? (working ? cover.started_at : undefined);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
+  const elapsed = since ? Math.max(0, Math.round((Date.now() - new Date(since).getTime()) / 1000)) : 0;
+  void tick;
+  const phase = cover.pending
+    ? (cover.pending.action === "generate" ? "в очереди у робота — затем модель рисует" : cover.pending.action === "apply"
+      ? "в очереди у робота — ставим обложкой" : "в очереди у робота — затем LLM пишет промпт")
+    : cover.status === "генерируется" ? "модель рисует" : "LLM пишет промпт";
+  const expected = cover.pending?.action === "generate" || cover.status === "генерируется" ? "обычно 1–3 минуты" : "обычно 1–2 минуты";
+  const send = async (body: Parameters<typeof api.robotCover>[0], _note: string) => {
     try {
       await api.robotCover(body);
-      setMsg(note);
+      setMsg(null);
+      onSent();
     } catch (e) {
       setMsg((e as Error).message);
     }
@@ -516,8 +535,13 @@ function CoverBlock({ storyKey, rec }: { storyKey: string; rec: RobotPreparedFul
         Для новостей без своих снимков — конференция, вебинар, сервис, событие. Стиль — графика Юрия Анненкова
         к «Двенадцати» Блока (1918): чёрная тушь, сломанные плоскости, штриховка. Подпись: «Иллюстрация создана ИИ для Вх²».
       </p>
-      {cover.status && <p className={cover.status === "ошибка" ? "error" : "hint"}>
-        Состояние: {cover.status}{cover.error ? ` — ${cover.error}` : ""}{busy ? " (около минуты)" : ""}</p>}
+      {busy && (
+        <p className="notice">
+          {phase} · идёт {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} ({expected}) — страница обновится сама
+        </p>
+      )}
+      {!busy && cover.status && <p className={cover.status === "ошибка" ? "error" : "hint"}>
+        Состояние: {cover.status}{cover.error ? ` — ${cover.error}` : ""}</p>}
       {!cover.prompt && !busy && (
         <button type="button" onClick={() => send({ story_key: storyKey, action: "draft" },
           "LLM готовит промпт — он появится здесь в течение минуты.")}>Создать обложку</button>
@@ -572,7 +596,8 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
   // Перезагружаем превью, когда робот закончил переделку (статус меняется в сводке раздела).
   useEffect(() => {
     api.robotPrepared(storyKey).then(setRec).catch((e) => setErr((e as Error).message));
-  }, [storyKey, ov.prepared[storyKey]?.ready_at, ov.prepared[storyKey]?.cover?.status]);
+  }, [storyKey, ov.prepared[storyKey]?.ready_at, ov.prepared[storyKey]?.cover?.status,
+    ov.prepared[storyKey]?.cover?.pending?.at]);
   const regenerate = async () => {
     setSent("отправляем…");
     try {
@@ -622,7 +647,7 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
           {issues.map((x, i) => <p className="error" key={i}>{x}</p>)}
         </div>
       )}
-      <CoverBlock storyKey={storyKey} rec={rec} />
+      <CoverBlock storyKey={storyKey} rec={rec} onSent={() => api.robotPrepared(storyKey).then(setRec).catch(() => {})} />
       <div className="block">
         <h3>Переделать</h3>
         {status === "переделывается" || status === "переводится" ? (

@@ -302,8 +302,24 @@ newsRobot.get("/overview", async (c) => {
  * Подготовка к публикации (Р-97): «В стек» → робот переводит и готовит новость →
  * в колонке «Публикация» слот и ссылка на превью. Файлы — .state/prepared/<история>.json.
  */
+/** Запросы обложек, ещё не взятые роботом: история → {action, at} (Р-107, таймер на странице). */
+async function pendingCovers(): Promise<Record<string, Row>> {
+  const map: Record<string, Row> = {};
+  try {
+    for await (const entry of Deno.readDir(`${ROOT}/inbox/covers`)) {
+      if (!entry.isFile || !entry.name.endsWith(".json")) continue;
+      const r = await readJson<Row>(`${ROOT}/inbox/covers/${entry.name}`);
+      if (r) map[String(r.story_key)] = { action: r.action, at: r.at };
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  return map;
+}
+
 async function preparedIndex(): Promise<Record<string, Row>> {
   const index: Record<string, Row> = {};
+  const covers = await pendingCovers();
   try {
     for await (const entry of Deno.readDir(`${ROOT}/state/prepared`)) {
       if (!entry.isFile || !entry.name.endsWith(".json")) continue;
@@ -314,7 +330,10 @@ async function preparedIndex(): Promise<Record<string, Row>> {
       index[String(rec.story_key)] = {
         status: rec.status, ready_at: rec.ready_at, started_at: rec.started_at, error: rec.error,
         origin: rec.origin, title: rec.story?.news?.title,
-        cover: rec.cover ? { status: (rec.cover as Row).status } : undefined,
+        cover: rec.cover || covers[String(rec.story_key)] ? {
+          status: (rec.cover as Row | undefined)?.status, started_at: (rec.cover as Row | undefined)?.started_at,
+          pending: covers[String(rec.story_key)],
+        } : undefined,
         order: rec.order ? { topic: (rec.order as Row).topic, section: (rec.order as Row).section,
           by: (rec.order as Row).by, at: (rec.order as Row).at } : undefined,
         // Замечания и предупреждения, кроме «фото без автора» и «перепечатка» — они видны в превью.
@@ -334,6 +353,8 @@ newsRobot.get("/prepared/:key", async (c) => {
   if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная история");
   const rec = await readJson<Row>(`${ROOT}/state/prepared/${key}.json`);
   if (!rec) throw new ApiError("not_found", "Новость ещё не подготовлена");
+  const pending = (await pendingCovers())[key];
+  if (pending) rec.cover = { ...((rec.cover as Row) ?? {}), pending };
   return c.json(rec);
 });
 
