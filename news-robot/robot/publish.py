@@ -132,15 +132,151 @@ def indicators(rec: dict, q: dict) -> list[dict]:
         x is not None for k, x in v.items() if k not in ("parameter", "note"))]}]
 
 
-def create_draft(api: Api, rec: dict, q: dict, log) -> None:
+# ── Проекты и авторы из новости (Р-106) ─────────────────────────────────────
+
+def _norm(s: str | None) -> str:
+    return re.sub(r"[^a-zа-яё0-9]+", " ", (s or "").lower()).strip()
+
+
+def find_entity(api: Api, names: list[str], branch: str) -> dict | None:
+    """Запись с таким названием в ветви (what/who): по названию по-русски или в оригинале."""
+    wanted = {_norm(n) for n in names if n and len(_norm(n)) >= 3}
+    for name in [n for n in names if n]:
+        try:
+            res = api.call("GET", "/entities", params={"q": name[:80], "type": branch, "limit": 20})
+        except ApiFailure:
+            continue
+        for it in res.get("items", []):
+            titles = {_norm(it.get(k)) for k in ("title_ru", "title_original", "title_en")} - {""}
+            if titles & wanted:
+                return it
+    return None
+
+
+def _paragraph_text(text: str, source_url: str | None, source_title: str | None) -> list[dict]:
+    blocks = [_paragraph(_text(text))]
+    if source_url:
+        blocks.append(_paragraph(_text("Источник: ") + [{"type": "link", "href": source_url,
+                                                            "content": _text(source_title or source_url)}]))
+    return blocks
+
+
+def link_entities(api: Api, llm, rec: dict, log) -> list[dict]:
+    """Главный проект и его авторы: найти в базе или завести черновики; связь «архитектор».
+
+    Возвращает упоминания для текста новости: [{"text", "entity_id", "title"}].
+    Заведённое роботом публикуется вместе с новостью (publish), иначе ссылка вела бы в пустоту.
+    """
+    from .llm import LLMError, prompt
+    story = rec["story"]
+    cand = story.get("candidate") or {}
+    src = (cand.get("sources") or [{}])[0]
+    try:
+        found = llm.chat_json("entities", prompt("entities", facts=json.dumps(story.get("facts") or {}, ensure_ascii=False),
+                                                 news=json.dumps(story.get("news") or {}, ensure_ascii=False)),
+                              "Найди проект и авторов.", max_tokens=4000)
+    except LLMError as e:
+        log("warn", "entities", "проекты и авторы не определены", story=rec["story_key"], error=str(e)[:150])
+        return []
+    made = rec.setdefault("entities", {"created": [], "links": [], "used": []})
+    refs: dict[str, dict] = {}
+    project = found.get("project") or None
+    if project and project.get("title_ru"):
+        hit = find_entity(api, [project.get("title_ru"), project.get("title_original")], "what")
+        if hit:
+            refs["project"] = {"id": hit["id"], "title": hit.get("title_ru")}
+        else:
+            kind = project.get("kind") if project.get("kind") in ("architecture_object", "environment_object",
+                                                                    "competition_entry") else "architecture_object"
+            created = api.call("POST", "/entities", json={
+                "type": kind, "slug": slugify(project["title_ru"], "proekt"), "title_ru": project["title_ru"],
+                "title_original": project.get("title_original") or None,
+                "body_json": _paragraph_text(project.get("description") or "", src.get("url"), src.get("source")),
+            })
+            refs["project"] = {"id": created["id"], "title": project["title_ru"]}
+            made["created"].append({"id": created["id"], "kind": kind, "title": project["title_ru"]})
+            log("info", "entities", "проект заведён", story=rec["story_key"], entity=created["id"], title=project["title_ru"])
+    for i, a in enumerate(found.get("authors") or []):
+        if not a.get("name_ru"):
+            continue
+        hit = find_entity(api, [a.get("name_ru"), a.get("name_original")], "who")
+        if hit:
+            ref = {"id": hit["id"], "title": hit.get("title_ru")}
+        else:
+            kind = "person" if a.get("kind") == "person" else "company"
+            created = api.call("POST", "/entities", json={
+                "type": kind, "slug": slugify(a["name_ru"], "avtor"), "title_ru": a["name_ru"],
+                "title_original": a.get("name_original") or None,
+                "body_json": _paragraph_text(
+                    f"{'Архитектурное бюро' if kind == 'company' else 'Архитектор'}"
+                    + (f", автор проекта «{project['title_ru']}»." if project and project.get("title_ru") else "."),
+                    src.get("url"), src.get("source")),
+            })
+            ref = {"id": created["id"], "title": a["name_ru"]}
+            made["created"].append({"id": created["id"], "kind": kind, "title": a["name_ru"]})
+            log("info", "entities", "автор заведён", story=rec["story_key"], entity=created["id"], title=a["name_ru"])
+        refs[f"author:{i}"] = ref
+        # Связь «архитектор»: от автора к проекту, как в базе; основание — первоисточник.
+        # Если и проект, и автор уже были в базе, связь между ними, скорее всего, есть — не дублируем.
+        new_project = refs.get("project") and any(c["id"] == refs["project"]["id"] for c in made["created"])
+        if refs.get("project") and (not hit or new_project):
+            try:
+                link = api.call("POST", "/links", json={
+                    "from_entity_id": ref["id"], "to_entity_id": refs["project"]["id"], "role": "architect",
+                    "justification": {"text": f"По данным: {src.get('source') or 'первоисточник'} — {src.get('url') or ''}"},
+                })
+                made["links"].append(link["id"])
+            except ApiFailure as e:
+                log("warn", "entities", "связь не создана", story=rec["story_key"], error=str(e)[:150])
+    made["used"] = [{"ref": k, **v} for k, v in refs.items()]
+    mentions = []
+    for m in found.get("mentions") or []:
+        ref = refs.get(m.get("ref", ""))
+        if ref and m.get("text"):
+            mentions.append({"text": m["text"], "entity_id": ref["id"], "title": ref["title"]})
+    return mentions
+
+
+def apply_mentions(blocks: list[dict], mentions: list[dict]) -> list[dict]:
+    """Первое вхождение каждого фрагмента в тексте — упоминание записи (entityMention, Р-23)."""
+    for m in mentions:
+        for block in blocks:
+            content = block.get("content") or []
+            for i, item in enumerate(content):
+                if item.get("type") != "text" or m["text"] not in item.get("text", ""):
+                    continue
+                before, _, after = item["text"].partition(m["text"])
+                styles = item.get("styles", {})
+                parts = []
+                if before:
+                    parts.append({"type": "text", "text": before, "styles": styles})
+                parts.append({"type": "entityMention", "props": {"entityId": str(m["entity_id"]),
+                              "occurrenceId": str(uuid.uuid4()), "title": m["text"]}})
+                if after:
+                    parts.append({"type": "text", "text": after, "styles": styles})
+                block["content"] = content[:i] + parts + content[i + 1:]
+                break
+            else:
+                continue
+            break
+    return blocks
+
+
+def create_draft(api: Api, rec: dict, q: dict, log, llm=None) -> None:
     story = rec["story"]
     news = story.get("news") or {}
     cand = story.get("candidate") or {}
     sources = [*(news.get("sources") or []), *(cand.get("sources") or [])]
     title = (news.get("title") or cand.get("title_ru") or rec["story_key"]).strip()
+    blocks = body_blocks(news, sources)
+    if llm is not None and getattr(llm, "live", False):
+        try:
+            blocks = apply_mentions(blocks, link_entities(api, llm, rec, log))
+        except ApiFailure as e:
+            log("warn", "entities", "проекты и авторы не связаны", story=rec["story_key"], error=str(e)[:150])
     created = api.call("POST", "/entities", json={
         "type": "news", "slug": slugify(title, rec["story_key"]), "title_ru": title,
-        "body_json": body_blocks(news, sources), "indicators": indicators(rec, q),
+        "body_json": blocks, "indicators": indicators(rec, q),
     })
     rec["entity_id"] = created["id"]
     rec["revision_id"] = created.get("revision_id")
@@ -182,6 +318,17 @@ def update_release(api: Api, rec: dict, q: dict, log) -> None:
 
 
 def publish(api: Api, rec: dict, log) -> None:
+    # Сначала заведённые роботом проект и авторы со связями: ссылки новости не должны вести в пустоту (Р-106).
+    made = rec.get("entities") or {}
+    for e in made.get("created", []):
+        if not e.get("published"):
+            api.call("POST", f"/entities/{e['id']}/publish", json={"note": "Робот новостей: вместе с новостью"})
+            e["published"] = True
+    for link_id in made.get("links", []):
+        try:
+            api.call("POST", f"/links/{link_id}/publish", json={"note": "Робот новостей: вместе с новостью"})
+        except ApiFailure as e:
+            log("warn", "publish", "связь не опубликована", story=rec["story_key"], error=str(e)[:150])
     res = api.call("POST", f"/entities/{rec['entity_id']}/publish", json={"note": "Робот новостей: выход в слот"})
     rec["published_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     rec["publication"] = "вышла"
@@ -189,7 +336,7 @@ def publish(api: Api, rec: dict, log) -> None:
     log("info", "publish", "новость опубликована", story=rec["story_key"], entity=rec["entity_id"])
 
 
-def run(root: Path, log, now_all: bool = False, only: set[str] | None = None) -> int:
+def run(root: Path, log, now_all: bool = False, only: set[str] | None = None, llm=None) -> int:
     """Черновики, слоты, публикация. now_all — опубликовать готовое сейчас, не дожидаясь слота."""
     api = Api()
     if not api.live:
@@ -209,7 +356,7 @@ def run(root: Path, log, now_all: bool = False, only: set[str] | None = None) ->
             continue
         try:
             if not rec.get("entity_id"):
-                create_draft(api, rec, q, log)
+                create_draft(api, rec, q, log, llm)
                 rec["publication"] = "черновик"
                 _write(path, rec)
             elif rec.get("release_slot") != f"{q['date']} {q['time']}":

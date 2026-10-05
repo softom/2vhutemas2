@@ -130,7 +130,7 @@ def prepare_command(args) -> int:
     from robot import publish
     beat("публикатор: черновики и слоты")
     only = set(args.publish_now) if args.publish_now and args.publish_now != ["all"] else None
-    publish.run(ROOT, log, now_all=args.publish_now is not None, only=only)
+    publish.run(ROOT, log, now_all=args.publish_now is not None, only=only, llm=llm)
     beat("ждёт следующей минуты")
     return 0
 
