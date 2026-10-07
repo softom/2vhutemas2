@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Угадай стиль — Вх²</title>
+<meta name="description" content="Здания появляются по хронологии — угадайте стиль и узнайте, что двигало автором.">
+    <link rel="icon" href="/favicon.ico?v=fe1521f7" type="image/x-icon" sizes="16x16 32x32 48x48 64x64" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Yandex.Metrika counter -->
+    <script type="text/javascript">
+        (function(m,e,t,r,i,k,a){
+            m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+            m[i].l=1*new Date();
+            for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+            k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+        })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=108525511', 'ym');
+
+        ym(108525511, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
+    </script>
+    <!-- /Yandex.Metrika counter -->
+<style>
+:root{--t:#1f1e1d;--t2:#5f5e5a;--ok:#3b6d11;--bad:#a32d2d;--ac:#a9381f;--bd:rgba(0,0,0,.18);--bg:#faf9f5;--card:#fff}
+@media (prefers-color-scheme:dark){:root{--t:#f1efe8;--t2:#b4b2a9;--ok:#97c459;--bad:#f09595;--ac:#e0735a;--bd:rgba(255,255,255,.2);--bg:#1f1e1d;--card:#2c2c2a}}
+*{box-sizing:border-box}
+body{margin:0 auto;padding:16px;max-width:760px;background:var(--bg);color:var(--t);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--ac)}
+h1{font-size:26px;font-weight:500;margin:0 0 6px}
+.lead{color:var(--t2);margin:0 0 16px}
+.bar{display:flex;justify-content:space-between;gap:12px;font-size:14px;color:var(--t2);margin:0 0 8px}
+.track{height:4px;background:var(--bd);border-radius:2px;margin:0 0 16px}
+.track i{display:block;height:100%;background:var(--ac);border-radius:2px}
+.card{background:var(--card);border:.5px solid var(--bd);border-radius:12px;overflow:hidden;margin:0 0 16px}
+.card img{display:block;width:100%;max-height:420px;object-fit:cover;background:var(--bd)}
+.card .nophoto{height:120px;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:14px}
+.card .info{padding:12px 14px}
+.card .year{font-size:28px;font-weight:500;line-height:1.1}
+.card .name{color:var(--t2)}
+.credit{font-size:12px;color:var(--t2);padding:0 14px 10px}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+button{font:inherit;font-size:14px;text-align:left;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd);background:var(--card);color:inherit;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--ac)}
+button small{display:block;color:var(--t2);font-size:12px}
+button.ok{border-color:var(--ok);background:rgba(59,109,17,.15)}
+button.bad{border-color:var(--bad);background:rgba(163,45,45,.15)}
+button:disabled{cursor:default;color:inherit}
+.res{margin:16px 0;padding:12px 14px;border-left:3px solid var(--bd)}
+.res.ok{border-color:var(--ok)}.res.bad{border-color:var(--bad)}
+.res dl{margin:8px 0 0;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:14px}
+.res dt{color:var(--t2)}.res dd{margin:0}
+.next{background:var(--ac);color:#fff;border-color:var(--ac);padding:8px 16px}
+.note{font-size:13px;color:var(--t2);margin:24px 0 0}
+</style>
+</head>
+<body>
+<nav style="font-size:14px;margin:0 0 10px"><a href="/">Вх²</a></nav>
+<h1>Угадай стиль</h1>
+<p class="lead">Здания появляются по хронологии: от Пантеона до Сферы. Выберите стиль — и узнайте, что двигало автором: метод, повестка, заказчик.</p>
+<div id="app" aria-live="polite"></div>
+<p class="note">Описания стилей — рабочие, сверка по источникам идёт. Фотографии принадлежат авторам, указанным под снимком.</p>
+<script>
+const D={"styles": [{"name": "Римская архитектура", "period": "I–IV вв.", "method": "Бетон на вулканическом песке и кирпич; купол без каркаса", "agenda": "Власть и общественное пространство империи", "customer": "Император и казна; рабочая сила армии и рабов", "ids": [188]}, {"name": "Готика", "period": "XII–XVI вв.", "method": "Нервюрный свод, аркбутан, контрфорс", "agenda": "Свет и вера", "customer": "Церковь и город; стройка тянется десятилетиями на пожертвования и налоги", "ids": [189, 278]}, {"name": "Ренессанс и барокко", "period": "XV–XVII вв.", "method": "Купол по геометрии, ордер", "agenda": "Возвращение античной меры; престиж", "customer": "Папа и гильдии (цех шерстяников — Флоренция)", "ids": [190]}, {"name": "Инженерия XIX века", "period": "XIX в.", "method": "Чугун, сталь, стекло, сборка на заводе", "agenda": "Скорость, вокзалы, всемирные выставки", "customer": "Выставочные комитеты, железные дороги, промышленники; серийность — дешевле и быстрее", "ids": [191, 192]}, {"name": "Чикагская школа", "period": "1880–90-е", "method": "Стальной каркас, лифт", "agenda": "Плотный деловой центр", "customer": "Частные инвесторы; цена земли требует высоты", "ids": [193]}, {"name": "Модерн", "period": "1890–1910", "method": "Кривая линия, керамика, кованый металл", "agenda": "Природа против фабрики", "customer": "Состоятельный заказчик-покровитель (Гуэль)", "ids": [194]}, {"name": "Бозар и ар-деко", "period": "1890–1930-е", "method": "Каменная облицовка на каркасе", "agenda": "Порядок, престиж, «лицо» города", "customer": "Государство; корпорации, для которых здание — реклама и вложение", "ids": [201, 197]}, {"name": "Ранний модернизм и оболочки", "period": "1920-е", "method": "Тонкий железобетон, расчёт", "agenda": "Меньше материала на тот же пролёт", "customer": "Государство и фирма-изготовитель; дефицит стали", "ids": [195, 196]}, {"name": "Форма из расчёта (рационализм)", "period": "1930–60-е", "method": "Железобетонная оболочка, сборные элементы, рёбра по линиям усилий", "agenda": "Экономия материала и рабочих рук; скорость", "customer": "Город, выставки, комитет, фабрика; фирма Нерви выигрывала конкурсы ценой", "ids": [198, 200, 199, 202, 205, 203, 207, 208, 206]}, {"name": "Структурный экспрессионизм", "period": "1950–70-е", "method": "Преднапряжённые сети, арки, мачты", "agenda": "Конструкция как образ эпохи", "customer": "Штат и государство; ярмарки и выставки", "ids": [204, 212]}, {"name": "Лёгкая архитектура (тросы и ткань)", "period": "1955–72", "method": "Тросовая сеть, ткань, найденная моделью форма", "agenda": "Лёгкость и открытое общество (Отто)", "customer": "Садовые выставки, Экспо, Олимпиада; временные постройки", "ids": [213]}, {"name": "Технологический футуризм", "period": "1960-е", "method": "Геодезическая решётка из стержней", "agenda": "Больше с меньшим (Фуллер)", "customer": "Государство США, Экспо-67", "ids": [211]}, {"name": "Брутализм", "period": "1950–70-е", "method": "Монолитный бетон в опалубке", "agenda": "Честность материала; массовое строительство", "customer": "Государство, Олимпиада-80, ведомства; бетон и местный труд дешевле стали", "ids": [214, 215, 216, 217, 210]}, {"name": "Метаболизм", "period": "1960-е", "method": "Железобетон и сталь, подвесная кровля", "agenda": "Послевоенное обновление Японии", "customer": "Государство, Олимпиада-64", "ids": [209]}, {"name": "Конструктивизм и советская классика", "period": "1920–40-е", "method": "Железобетон, стальные фермы, купол", "agenda": "Новый общественный заказ", "customer": "Государство, пятилетний план", "ids": [38]}, {"name": "Постмодерн", "period": "1970–90-е", "method": "Любые; метод служит образу", "agenda": "Смысл, ирония, знак", "customer": "Частная корпорация; здание как реклама и сборы", "ids": [48]}, {"name": "Параметризм", "period": "2000-е", "method": "Алгоритм, Rhino, Grasshopper", "agenda": "Общей повестки нет", "customer": "Город или частная фирма; репутация и бренд", "ids": [49]}], "buildings": [{"id": 188, "year": 128, "start": false, "style": "Римская архитектура", "also": []}, {"id": 189, "year": 1248, "start": true, "style": "Готика", "also": []}, {"id": 278, "year": 1296, "start": true, "style": "Готика", "also": ["Ренессанс и барокко"]}, {"id": 190, "year": 1590, "start": false, "style": "Ренессанс и барокко", "also": []}, {"id": 191, "year": 1851, "start": false, "style": "Инженерия XIX века", "also": []}, {"id": 192, "year": 1889, "start": false, "style": "Инженерия XIX века", "also": []}, {"id": 193, "year": 1891, "start": true, "style": "Чикагская школа", "also": []}, {"id": 194, "year": 1898, "start": true, "style": "Модерн", "also": []}, {"id": 201, "year": 1918, "start": false, "style": "Бозар и ар-деко", "also": []}, {"id": 195, "year": 1923, "start": false, "style": "Ранний модернизм и оболочки", "also": []}, {"id": 196, "year": 1923, "start": false, "style": "Ранний модернизм и оболочки", "also": []}, {"id": 198, "year": 1930, "start": true, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 38, "year": 1931, "start": true, "style": "Конструктивизм и советская классика", "also": []}, {"id": 197, "year": 1931, "start": false, "style": "Бозар и ар-деко", "also": []}, {"id": 199, "year": 1933, "start": true, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 200, "year": 1935, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 202, "year": 1949, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 204, "year": 1952, "start": false, "style": "Структурный экспрессионизм", "also": []}, {"id": 203, "year": 1953, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 205, "year": 1957, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 206, "year": 1958, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 207, "year": 1958, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 208, "year": 1961, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 209, "year": 1964, "start": false, "style": "Метаболизм", "also": []}, {"id": 210, "year": 1967, "start": false, "style": "Брутализм", "also": []}, {"id": 211, "year": 1967, "start": false, "style": "Технологический футуризм", "also": []}, {"id": 212, "year": 1970, "start": false, "style": "Структурный экспрессионизм", "also": []}, {"id": 213, "year": 1972, "start": false, "style": "Лёгкая архитектура (тросы и ткань)", "also": []}, {"id": 214, "year": 1972, "start": true, "style": "Брутализм", "also": []}, {"id": 215, "year": 1979, "start": false, "style": "Брутализм", "also": []}, {"id": 216, "year": 1980, "start": false, "style": "Брутализм", "also": []}, {"id": 217, "year": 1980, "start": false, "style": "Брутализм", "also": []}, {"id": 49, "year": 2016, "start": false, "style": "Параметризм", "also": []}, {"id": 48, "year": 2023, "start": false, "style": "Постмодерн", "also": []}]};
+const S=D.styles,B=D.buildings,app=document.getElementById('app');
+const byName=Object.fromEntries(S.map(s=>[s.name,s]));
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let i=0,score=0,miss=[],info={};
+async function load(id){
+  try{const r=await fetch('/api/v1/entities/'+id);if(!r.ok)throw 0;const d=await r.json();
+    const c=(d.media||[]).find(m=>m.role==='cover');
+    info[id]={title:d.title_ru,slug:d.slug,img:c?'/api/v1/media/'+c.asset_id+'/file?variant=screen':null,author:c&&c.author,src:c&&c.source_url};
+  }catch(e){info[id]={title:'Здание №'+id,slug:null,img:null}}
+}
+const yr=b=>(b.year<1000?b.year+' г. н. э.':b.year)+(b.start?' (начало стройки)':'');
+function round(){
+  if(i>=B.length)return end();
+  const b=B[i],f=info[b.id];
+  app.innerHTML='<div class="bar"><span>Здание '+(i+1)+' из '+B.length+'</span><span>Верно: '+score+'</span></div>'+
+  '<div class="track"><i style="width:'+(i/B.length*100)+'%"></i></div>'+
+  '<div class="card">'+(f.img?'<img src="'+f.img+'" alt="'+esc(f.title)+'">':'<div class="nophoto">Фотографии нет</div>')+
+  '<div class="info"><div class="year">'+yr(b)+'</div><div class="name">'+esc(f.title)+'</div></div>'+
+  (f.img&&f.author?'<div class="credit">Фото: '+esc(f.author)+(f.src?' · <a href="'+esc(f.src)+'" rel="noopener">источник</a>':'')+'</div>':'')+'</div>'+
+  '<div class="opts">'+S.map(s=>'<button data-s="'+esc(s.name)+'">'+esc(s.name)+'<small>'+esc(s.period)+'</small></button>').join('')+'</div><div id="res"></div>';
+  app.querySelectorAll('.opts button').forEach(x=>x.onclick=()=>answer(x.dataset.s));
+}
+function answer(name){
+  const b=B[i],f=info[b.id],right=name===b.style||b.also.includes(name),s=byName[b.style];
+  if(right)score++;else miss.push({b:b,name:name});
+  app.querySelectorAll('.opts button').forEach(x=>{x.disabled=true;
+    if(x.dataset.s===b.style||b.also.includes(x.dataset.s))x.classList.add('ok');
+    else if(x.dataset.s===name)x.classList.add('bad')});
+  document.getElementById('res').innerHTML='<div class="res '+(right?'ok':'bad')+'"><strong>'+(right?'Верно':'Не совсем')+': '+esc(s.name)+'</strong>'+
+  (!right?'<div>Вы выбрали: '+esc(name)+'.</div>':'')+(b.also.length?'<div>Допустимо и: '+esc(b.also.join(', '))+' — собор и купол строили в разное время.</div>':'')+
+  '<dl><dt>Метод</dt><dd>'+esc(s.method)+'</dd><dt>Повестка</dt><dd>'+esc(s.agenda)+'</dd><dt>Заказчик</dt><dd>'+esc(s.customer)+'</dd></dl>'+
+  (f.slug?'<p><a href="/entities/'+esc(f.slug)+'">Страница здания</a></p>':'')+
+  '<button class="next" id="nx">'+(i+1<B.length?'Дальше':'Итог')+'</button></div>';
+  const n=document.getElementById('nx');n.onclick=()=>{i++;round()};n.focus();
+}
+function again(){i=0;score=0;miss=[];round()}
+function end(){
+  app.innerHTML='<h2>Итог: '+score+' из '+B.length+'</h2>'+
+  '<p>'+(score>B.length*.7?'Стили вы узнаёте уверенно.':score>B.length*.4?'Хорошее начало: ошибки показывают, где стили граничат.':'Стили трудно отличать — это нормально: они возникают на стыке метода, повестки и заказчика.')+'</p>'+
+  (miss.length?'<h3>Где ошиблись</h3><ul>'+miss.map(m=>'<li>'+yr(m.b)+' — '+esc(info[m.b.id].title)+': ваш ответ «'+esc(m.name)+'», верно «'+esc(m.b.style)+'»</li>').join('')+'</ul>':'')+
+  '<p>Последний вопрос игры без ответа: какой стиль будет у вас? Что движет вами — метод, повестка, заказчик?</p>'+
+  '<button class="next" id="ag">Сыграть ещё</button>';
+  document.getElementById('ag').onclick=again;
+}
+app.textContent='Загрузка…';
+Promise.all(B.map(b=>load(b.id))).then(round);
+</script>
+</body>
+</html>

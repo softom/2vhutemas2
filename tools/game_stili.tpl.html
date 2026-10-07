@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Угадай стиль — Вх²</title>
+<meta name="description" content="Здания появляются по хронологии — угадайте стиль и узнайте, что двигало автором.">
+<!--FAV-->
+<!--METRIKA-->
+<style>
+:root{--t:#1f1e1d;--t2:#5f5e5a;--ok:#3b6d11;--bad:#a32d2d;--ac:#a9381f;--bd:rgba(0,0,0,.18);--bg:#faf9f5;--card:#fff}
+@media (prefers-color-scheme:dark){:root{--t:#f1efe8;--t2:#b4b2a9;--ok:#97c459;--bad:#f09595;--ac:#e0735a;--bd:rgba(255,255,255,.2);--bg:#1f1e1d;--card:#2c2c2a}}
+*{box-sizing:border-box}
+body{margin:0 auto;padding:16px;max-width:760px;background:var(--bg);color:var(--t);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--ac)}
+h1{font-size:26px;font-weight:500;margin:0 0 6px}
+.lead{color:var(--t2);margin:0 0 16px}
+.bar{display:flex;justify-content:space-between;gap:12px;font-size:14px;color:var(--t2);margin:0 0 8px}
+.track{height:4px;background:var(--bd);border-radius:2px;margin:0 0 16px}
+.track i{display:block;height:100%;background:var(--ac);border-radius:2px}
+.card{background:var(--card);border:.5px solid var(--bd);border-radius:12px;overflow:hidden;margin:0 0 16px}
+.card img{display:block;width:100%;max-height:420px;object-fit:cover;background:var(--bd)}
+.card .nophoto{height:120px;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:14px}
+.card .info{padding:12px 14px}
+.card .year{font-size:28px;font-weight:500;line-height:1.1}
+.card .name{color:var(--t2)}
+.credit{font-size:12px;color:var(--t2);padding:0 14px 10px}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+button{font:inherit;font-size:14px;text-align:left;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd);background:var(--card);color:inherit;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--ac)}
+button small{display:block;color:var(--t2);font-size:12px}
+button.ok{border-color:var(--ok);background:rgba(59,109,17,.15)}
+button.bad{border-color:var(--bad);background:rgba(163,45,45,.15)}
+button:disabled{cursor:default;color:inherit}
+.res{margin:16px 0;padding:12px 14px;border-left:3px solid var(--bd)}
+.res.ok{border-color:var(--ok)}.res.bad{border-color:var(--bad)}
+.res dl{margin:8px 0 0;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:14px}
+.res dt{color:var(--t2)}.res dd{margin:0}
+.next{background:var(--ac);color:#fff;border-color:var(--ac);padding:8px 16px}
+.note{font-size:13px;color:var(--t2);margin:24px 0 0}
+</style>
+</head>
+<body>
+<nav style="font-size:14px;margin:0 0 10px"><a href="/">Вх²</a></nav>
+<h1>Угадай стиль</h1>
+<p class="lead">Здания появляются по хронологии: от Пантеона до Сферы. Выберите стиль — и узнайте, что двигало автором: метод, повестка, заказчик.</p>
+<div id="app" aria-live="polite"></div>
+<p class="note">Описания стилей — рабочие, сверка по источникам идёт. Фотографии принадлежат авторам, указанным под снимком.</p>
+<script>
+const D=/*DATA*/;
+const S=D.styles,B=D.buildings,app=document.getElementById('app');
+const byName=Object.fromEntries(S.map(s=>[s.name,s]));
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let i=0,score=0,miss=[],info={};
+async function load(id){
+  try{const r=await fetch('/api/v1/entities/'+id);if(!r.ok)throw 0;const d=await r.json();
+    const c=(d.media||[]).find(m=>m.role==='cover');
+    info[id]={title:d.title_ru,slug:d.slug,img:c?'/api/v1/media/'+c.asset_id+'/file?variant=screen':null,author:c&&c.author,src:c&&c.source_url};
+  }catch(e){info[id]={title:'Здание №'+id,slug:null,img:null}}
+}
+const yr=b=>(b.year<1000?b.year+' г. н. э.':b.year)+(b.start?' (начало стройки)':'');
+function round(){
+  if(i>=B.length)return end();
+  const b=B[i],f=info[b.id];
+  app.innerHTML='<div class="bar"><span>Здание '+(i+1)+' из '+B.length+'</span><span>Верно: '+score+'</span></div>'+
+  '<div class="track"><i style="width:'+(i/B.length*100)+'%"></i></div>'+
+  '<div class="card">'+(f.img?'<img src="'+f.img+'" alt="'+esc(f.title)+'">':'<div class="nophoto">Фотографии нет</div>')+
+  '<div class="info"><div class="year">'+yr(b)+'</div><div class="name">'+esc(f.title)+'</div></div>'+
+  (f.img&&f.author?'<div class="credit">Фото: '+esc(f.author)+(f.src?' · <a href="'+esc(f.src)+'" rel="noopener">источник</a>':'')+'</div>':'')+'</div>'+
+  '<div class="opts">'+S.map(s=>'<button data-s="'+esc(s.name)+'">'+esc(s.name)+'<small>'+esc(s.period)+'</small></button>').join('')+'</div><div id="res"></div>';
+  app.querySelectorAll('.opts button').forEach(x=>x.onclick=()=>answer(x.dataset.s));
+}
+function answer(name){
+  const b=B[i],f=info[b.id],right=name===b.style||b.also.includes(name),s=byName[b.style];
+  if(right)score++;else miss.push({b:b,name:name});
+  app.querySelectorAll('.opts button').forEach(x=>{x.disabled=true;
+    if(x.dataset.s===b.style||b.also.includes(x.dataset.s))x.classList.add('ok');
+    else if(x.dataset.s===name)x.classList.add('bad')});
+  document.getElementById('res').innerHTML='<div class="res '+(right?'ok':'bad')+'"><strong>'+(right?'Верно':'Не совсем')+': '+esc(s.name)+'</strong>'+
+  (!right?'<div>Вы выбрали: '+esc(name)+'.</div>':'')+(b.also.length?'<div>Допустимо и: '+esc(b.also.join(', '))+' — собор и купол строили в разное время.</div>':'')+
+  '<dl><dt>Метод</dt><dd>'+esc(s.method)+'</dd><dt>Повестка</dt><dd>'+esc(s.agenda)+'</dd><dt>Заказчик</dt><dd>'+esc(s.customer)+'</dd></dl>'+
+  (f.slug?'<p><a href="/entities/'+esc(f.slug)+'">Страница здания</a></p>':'')+
+  '<button class="next" id="nx">'+(i+1<B.length?'Дальше':'Итог')+'</button></div>';
+  const n=document.getElementById('nx');n.onclick=()=>{i++;round()};n.focus();
+}
+function again(){i=0;score=0;miss=[];round()}
+function end(){
+  app.innerHTML='<h2>Итог: '+score+' из '+B.length+'</h2>'+
+  '<p>'+(score>B.length*.7?'Стили вы узнаёте уверенно.':score>B.length*.4?'Хорошее начало: ошибки показывают, где стили граничат.':'Стили трудно отличать — это нормально: они возникают на стыке метода, повестки и заказчика.')+'</p>'+
+  (miss.length?'<h3>Где ошиблись</h3><ul>'+miss.map(m=>'<li>'+yr(m.b)+' — '+esc(info[m.b.id].title)+': ваш ответ «'+esc(m.name)+'», верно «'+esc(m.b.style)+'»</li>').join('')+'</ul>':'')+
+  '<p>Последний вопрос игры без ответа: какой стиль будет у вас? Что движет вами — метод, повестка, заказчик?</p>'+
+  '<button class="next" id="ag">Сыграть ещё</button>';
+  document.getElementById('ag').onclick=again;
+}
+app.textContent='Загрузка…';
+Promise.all(B.map(b=>load(b.id))).then(round);
+</script>
+</body>
+</html>
