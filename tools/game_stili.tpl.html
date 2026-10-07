@@ -77,7 +77,7 @@ function answer(name){
     if(x.dataset.s===b.style||b.also.includes(x.dataset.s))x.classList.add('ok');
     else if(x.dataset.s===name)x.classList.add('bad')});
   document.getElementById('res').innerHTML='<div class="res '+(right?'ok':'bad')+'"><strong>'+(right?'Верно':'Не совсем')+': '+esc(s.name)+'</strong>'+
-  (!right?'<div>Вы выбрали: '+esc(name)+'.</div>':'')+(b.also.length?'<div>Допустимо и: '+esc(b.also.join(', '))+' — собор и купол строили в разное время.</div>':'')+
+  (!right?'<div>Вы выбрали: '+esc(name)+'.</div>':'')+
   '<dl><dt>Метод</dt><dd>'+esc(s.method)+'</dd><dt>Повестка</dt><dd>'+esc(s.agenda)+'</dd><dt>Заказчик</dt><dd>'+esc(s.customer)+'</dd></dl>'+
   (f.slug?'<p><a href="/entities/'+esc(f.slug)+'">Страница здания</a></p>':'')+
   '<button class="next" id="nx">'+(i+1<B.length?'Дальше':'Итог')+'</button></div>';
