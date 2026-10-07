@@ -728,3 +728,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .robot-lightbox { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; background: rgba(20, 18, 16, .92); cursor: zoom-out; }
 .robot-lightbox img { max-width: 100%; max-height: calc(100vh - 90px); object-fit: contain; box-shadow: 0 0 0 1px #CDBB98; }
 .robot-lightbox p { margin: 0; max-width: 900px; color: #EDE6D8; font-size: 12px; text-align: center; }
+
+/* Черновик по прямому адресу: вошедшему — «Загружаем запись…», гостю — «не опубликована». */
+.draft-pending { display: none; }
+.signed-in .draft-pending { display: block; }
+.signed-in .draft-closed { display: none; }

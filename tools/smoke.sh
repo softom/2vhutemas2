@@ -96,6 +96,11 @@ check "единый HTML черновика доступен SU" 200 "$(code -H 
 contains "черновик использует общий рендер" 'public-card' "$(body)"
 contains "общий рендер содержит действие правки" 'data-reader-edit' "$(body)"
 check "прямая страница черновика сохраняет 404" 404 "$(code http://127.0.0.1:7073/entities/$EID)"
+# Вошедший видит «Загружаем запись…», гость — «не опубликована»; название
+# и слаг черновика в странице не появляются.
+DRAFT_PAGE=$(curl -s http://127.0.0.1:7073/entities/$EID)
+contains "страница черновика ждёт вошедшего" 'class="draft-pending"' "$DRAFT_PAGE"
+missing "страница черновика не выдаёт слаг" 'smoke-proverka' "$DRAFT_PAGE"
 contains "страница черновика не запускает React повторно" 'data-public-page' "$(body)"
 missing "гость не получает название черновика" 'smoke: проверка' "$(body)"
 

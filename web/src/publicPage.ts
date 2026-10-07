@@ -56,6 +56,9 @@ export async function enhancePublicPage() {
   });
   bindSearchKeys();
   await authenticatedCard();
+  // Черновик: карточку подставить не удалось (нет прав, нет сессии) —
+  // показываем «Запись ещё не опубликована» вместо «Загружаем…».
+  if (document.querySelector(".draft-pending")) document.documentElement.classList.remove("signed-in");
   const links = [...document.querySelectorAll<HTMLAnchorElement>("[data-gallery]")];
   let current = 0;
   let opener: HTMLAnchorElement | undefined;

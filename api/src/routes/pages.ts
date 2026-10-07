@@ -77,6 +77,8 @@ interface Page {
   body: string;
   /** Страница только для работы: в поиск её не пускаем. */
   noindex?: boolean;
+  /** Черновик: вошедшему — «загружаем», гостю — «не опубликована». */
+  draft?: boolean;
   /** Чтение без запуска React и BlockNote. */
   publicReader?: boolean;
   /** Каталог: страница во всю ширину приложения, как его собственный каталог. */
@@ -112,6 +114,16 @@ function head(page: Page): string {
     lines.push(
       `<meta property="og:image" content="${escapeHtml(page.image)}" />`,
       `<meta name="twitter:card" content="summary_large_image" />`,
+    );
+  }
+  if (page.draft) {
+    // До отрисовки: есть ли в браузере вход. Вошедший видит «Загружаем
+    // запись…», пока скрипт страницы не подставит карточку; гость сразу —
+    // «Запись ещё не опубликована». Без этого вошедший секунду видел
+    // «Страница не найдена» на каждом черновике.
+    lines.push(
+      `<script>try{if(Object.keys(localStorage).some(function(k){return /^sb-.+-auth-token$/.test(k)}))` +
+        `document.documentElement.classList.add("signed-in")}catch(e){}</script>`,
     );
   }
   for (const data of page.jsonLd ?? []) {
@@ -840,7 +852,8 @@ pages.get("/entities/:key", async (c) => {
   if (key === "new") return await appOnly(c, "Новая запись");
   const found = await resolveEntity(key);
   // Черновик для гостя не существует: 404, и прежний номер не выдаёт его слаг.
-  if (!found || !found.isPublished) return await notFound(c, key);
+  if (!found) return await (await draftExists(key) ? draftPage(c, key) : notFound(c, key));
+  if (!found.isPublished) return await draftPage(c, key);
   if (found.moved || found.slug !== key) {
     return c.redirect(entityPath(found.slug), 301);
   }
@@ -975,6 +988,43 @@ const APP_ONLY_TITLES: Record<string, string> = {
 for (const path of ["/login", "/media", "/media/*", "/parameters", "/robot", "/robot/*"]) {
   const title = APP_ONLY_TITLES[path.replace("/*", "")] ?? "Медиатека";
   pages.get(path, (c) => appOnly(c, title));
+}
+
+/** Есть ли неархивная запись с таким номером, слагом или прежним слагом. */
+async function draftExists(key: string): Promise<boolean> {
+  const id = /^\d+$/.test(key) ? Number(key) : null;
+  const rows = await sql<{ found: boolean }>`
+    select exists (
+      select 1 from app.entities e
+       where e.status <> 'archived'
+         and (e.id = ${id} or e.slug = ${key}
+              or e.id in (select h.entity_id from app.slug_history h where h.slug = ${key}))
+    ) as found
+  `;
+  return rows[0]?.found ?? false;
+}
+
+/**
+ * Черновик по прямому адресу. Для поисковика и гостя — 404 без слага и
+ * содержания; вошедший редактор получает карточку от скрипта страницы, а до
+ * того видит «Загружаем запись…», а не «Страница не найдена».
+ */
+async function draftPage(c: Context<AppEnv>, entityKey: string) {
+  return await render(c, {
+    status: 404,
+    title: `Запись не опубликована — ${site.name}`,
+    publicReader: true,
+    entityKey,
+    draft: true,
+    description: "Запись ещё не опубликована.",
+    canonical: null,
+    body: layout(
+      `<div class="draft-pending"><p class="notice">Загружаем запись…</p></div>` +
+        `<div class="draft-closed"><h1>Запись ещё не опубликована</h1>` +
+        `<p>Её видят только редакторы. Если вы редактор — войдите.</p>` +
+        `<p><a href="/">На главную</a> · <a href="/login">Войти</a></p></div>`,
+    ),
+  });
 }
 
 async function notFound(c: Context<AppEnv>, entityKey?: string) {
