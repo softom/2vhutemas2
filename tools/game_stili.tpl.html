@@ -56,7 +56,7 @@ button:disabled{cursor:default;color:inherit}
 <script>
 const D=/*DATA*/;
 const S=D.styles,B=D.buildings,app=document.getElementById('app');
-const SA=S.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+const shuffle=a=>{a=a.slice();for(let k=a.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[a[k],a[j]]=[a[j],a[k]]}return a};
 const byName=Object.fromEntries(S.map(s=>[s.name,s]));
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let i=0,score=0,miss=[],info={};
@@ -92,7 +92,7 @@ function round(){
   (f.slides.length>1?'<div class="dots" id="dots" aria-hidden="true">'+f.slides.map(()=>'<i></i>').join('')+'</div>':''):'<div class="nophoto">Фотографии нет</div>')+
   '<div class="info"><div class="year">'+yr(b)+'</div><div class="name">'+esc(f.title)+'</div></div>'+
   '<div class="credit" id="cr"></div></div>'+
-  '<div class="opts">'+SA.map(s=>'<button data-s="'+esc(s.name)+'">'+esc(s.name)+'</button>').join('')+'</div><div id="res"></div>';
+  '<div class="opts">'+shuffle(S).map(s=>'<button data-s="'+esc(s.name)+'">'+esc(s.name)+'</button>').join('')+'</div><div id="res"></div>';
   app.querySelectorAll('.opts button').forEach(x=>x.onclick=()=>answer(x.dataset.s));
   slideshow(f);
 }
