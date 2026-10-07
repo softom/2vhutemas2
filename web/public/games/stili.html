@@ -36,6 +36,13 @@ h1{font-size:26px;font-weight:500;margin:0 0 6px}
 .card .info{padding:12px 14px}
 .card .year{font-size:28px;font-weight:500;line-height:1.1}
 .card .name{color:var(--t2)}
+.card .slides{position:relative;aspect-ratio:16/10;overflow:hidden;background:var(--bd)}
+.card .slides img{height:100%;max-height:none}
+.slides button.nav{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:36px;padding:0;border-radius:50%;text-align:center;font-size:20px;line-height:1;background:rgba(0,0,0,.45);border:0;color:#fff}
+.slides button.nav:hover:not(:disabled){background:rgba(0,0,0,.7)}
+.slides .prev{left:8px}.slides .next-s{right:8px}
+.dots{display:flex;gap:6px;justify-content:center;padding:8px 0 0}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--bd)}.dots i.on{background:var(--ac)}
 .credit{font-size:12px;color:var(--t2);padding:0 14px 10px}
 .opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
 button{font:inherit;font-size:14px;text-align:left;padding:8px 10px;border-radius:8px;border:.5px solid var(--bd);background:var(--card);color:inherit;cursor:pointer}
@@ -61,26 +68,45 @@ button:disabled{cursor:default;color:inherit}
 <script>
 const D={"styles": [{"name": "Римская архитектура", "period": "I–IV вв.", "method": "Бетон на вулканическом песке и кирпич; купол без каркаса", "agenda": "Власть и общественное пространство империи", "customer": "Император и казна; рабочая сила армии и рабов", "ids": [188]}, {"name": "Готика", "period": "XII–XVI вв.", "method": "Нервюрный свод, аркбутан, контрфорс", "agenda": "Свет и вера", "customer": "Церковь и город; стройка тянется десятилетиями на пожертвования и налоги", "ids": [189]}, {"name": "Ренессанс и барокко", "period": "XV–XVII вв.", "method": "Купол по геометрии, ордер", "agenda": "Возвращение античной меры; престиж", "customer": "Папа и гильдии (цех шерстяников — Флоренция)", "ids": [278, 190]}, {"name": "Инженерия XIX века", "period": "XIX в.", "method": "Чугун, сталь, стекло, сборка на заводе", "agenda": "Скорость, вокзалы, всемирные выставки", "customer": "Выставочные комитеты, железные дороги, промышленники; серийность — дешевле и быстрее", "ids": [191, 192]}, {"name": "Чикагская школа", "period": "1880–90-е", "method": "Стальной каркас, лифт", "agenda": "Плотный деловой центр", "customer": "Частные инвесторы; цена земли требует высоты", "ids": [193]}, {"name": "Модерн", "period": "1890–1910", "method": "Кривая линия, керамика, кованый металл", "agenda": "Природа против фабрики", "customer": "Состоятельный заказчик-покровитель (Гуэль)", "ids": [194]}, {"name": "Бозар и ар-деко", "period": "1890–1930-е", "method": "Каменная облицовка на каркасе", "agenda": "Порядок, престиж, «лицо» города", "customer": "Государство; корпорации, для которых здание — реклама и вложение", "ids": [201, 197]}, {"name": "Ранний модернизм и оболочки", "period": "1920-е", "method": "Тонкий железобетон, расчёт", "agenda": "Меньше материала на тот же пролёт", "customer": "Государство и фирма-изготовитель; дефицит стали", "ids": [195, 196]}, {"name": "Форма из расчёта (рационализм)", "period": "1930–60-е", "method": "Железобетонная оболочка, сборные элементы, рёбра по линиям усилий", "agenda": "Экономия материала и рабочих рук; скорость", "customer": "Город, выставки, комитет, фабрика; фирма Нерви выигрывала конкурсы ценой", "ids": [198, 200, 199, 202, 205, 203, 207, 208, 206]}, {"name": "Структурный экспрессионизм", "period": "1950–70-е", "method": "Преднапряжённые сети, арки, мачты", "agenda": "Конструкция как образ эпохи", "customer": "Штат и государство; ярмарки и выставки", "ids": [204, 212]}, {"name": "Лёгкая архитектура (тросы и ткань)", "period": "1955–72", "method": "Тросовая сеть, ткань, найденная моделью форма", "agenda": "Лёгкость и открытое общество (Отто)", "customer": "Садовые выставки, Экспо, Олимпиада; временные постройки", "ids": [213]}, {"name": "Технологический футуризм", "period": "1960-е", "method": "Геодезическая решётка из стержней", "agenda": "Больше с меньшим (Фуллер)", "customer": "Государство США, Экспо-67", "ids": [211]}, {"name": "Брутализм", "period": "1950–70-е", "method": "Монолитный бетон в опалубке", "agenda": "Честность материала; массовое строительство", "customer": "Государство, Олимпиада-80, ведомства; бетон и местный труд дешевле стали", "ids": [214, 215, 216, 217, 210]}, {"name": "Метаболизм", "period": "1960-е", "method": "Железобетон и сталь, подвесная кровля", "agenda": "Послевоенное обновление Японии", "customer": "Государство, Олимпиада-64", "ids": [209]}, {"name": "Конструктивизм и советская классика", "period": "1920–40-е", "method": "Железобетон, стальные фермы, купол", "agenda": "Новый общественный заказ", "customer": "Государство, пятилетний план", "ids": [38]}, {"name": "Постмодерн", "period": "1970–90-е", "method": "Любые; метод служит образу", "agenda": "Смысл, ирония, знак", "customer": "Частная корпорация; здание как реклама и сборы", "ids": [48]}, {"name": "Параметризм", "period": "2000-е", "method": "Алгоритм, Rhino, Grasshopper", "agenda": "Общей повестки нет", "customer": "Город или частная фирма; репутация и бренд", "ids": [49]}], "buildings": [{"id": 188, "year": 128, "start": false, "style": "Римская архитектура", "also": []}, {"id": 189, "year": 1248, "start": true, "style": "Готика", "also": []}, {"id": 278, "year": 1436, "start": false, "style": "Ренессанс и барокко", "also": []}, {"id": 190, "year": 1590, "start": false, "style": "Ренессанс и барокко", "also": []}, {"id": 191, "year": 1851, "start": false, "style": "Инженерия XIX века", "also": []}, {"id": 192, "year": 1889, "start": false, "style": "Инженерия XIX века", "also": []}, {"id": 193, "year": 1891, "start": true, "style": "Чикагская школа", "also": []}, {"id": 194, "year": 1898, "start": true, "style": "Модерн", "also": []}, {"id": 201, "year": 1918, "start": false, "style": "Бозар и ар-деко", "also": []}, {"id": 195, "year": 1923, "start": false, "style": "Ранний модернизм и оболочки", "also": []}, {"id": 196, "year": 1923, "start": false, "style": "Ранний модернизм и оболочки", "also": []}, {"id": 198, "year": 1930, "start": true, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 38, "year": 1931, "start": true, "style": "Конструктивизм и советская классика", "also": []}, {"id": 197, "year": 1931, "start": false, "style": "Бозар и ар-деко", "also": []}, {"id": 199, "year": 1933, "start": true, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 200, "year": 1935, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 202, "year": 1949, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 204, "year": 1952, "start": false, "style": "Структурный экспрессионизм", "also": []}, {"id": 203, "year": 1953, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 205, "year": 1957, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 206, "year": 1958, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 207, "year": 1958, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 208, "year": 1961, "start": false, "style": "Форма из расчёта (рационализм)", "also": []}, {"id": 209, "year": 1964, "start": false, "style": "Метаболизм", "also": []}, {"id": 210, "year": 1967, "start": false, "style": "Брутализм", "also": []}, {"id": 211, "year": 1967, "start": false, "style": "Технологический футуризм", "also": []}, {"id": 212, "year": 1970, "start": false, "style": "Структурный экспрессионизм", "also": []}, {"id": 213, "year": 1972, "start": false, "style": "Лёгкая архитектура (тросы и ткань)", "also": []}, {"id": 214, "year": 1972, "start": true, "style": "Брутализм", "also": []}, {"id": 215, "year": 1979, "start": false, "style": "Брутализм", "also": []}, {"id": 216, "year": 1980, "start": false, "style": "Брутализм", "also": []}, {"id": 217, "year": 1980, "start": false, "style": "Брутализм", "also": []}, {"id": 49, "year": 2016, "start": false, "style": "Параметризм", "also": []}, {"id": 48, "year": 2023, "start": false, "style": "Постмодерн", "also": []}]};
 const S=D.styles,B=D.buildings,app=document.getElementById('app');
+const SA=S.slice().sort((a,b)=>a.name.localeCompare(b.name,'ru'));
 const byName=Object.fromEntries(S.map(s=>[s.name,s]));
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let i=0,score=0,miss=[],info={};
 async function load(id){
   try{const r=await fetch('/api/v1/entities/'+id);if(!r.ok)throw 0;const d=await r.json();
-    const c=(d.media||[]).find(m=>m.role==='cover');
-    info[id]={title:d.title_ru,slug:d.slug,img:c?'/api/v1/media/'+c.asset_id+'/file?variant=screen':null,author:c&&c.author,src:c&&c.source_url};
-  }catch(e){info[id]={title:'Здание №'+id,slug:null,img:null}}
+    const ms=(d.media||[]).filter(m=>m.asset_id).sort((a,b)=>(b.role==='cover')-(a.role==='cover')).slice(0,8);
+    info[id]={title:d.title_ru,slug:d.slug,slides:ms.map(m=>({img:'/api/v1/media/'+m.asset_id+'/file?variant=screen',author:m.author,src:m.source_url}))};
+  }catch(e){info[id]={title:'Здание №'+id,slug:null,slides:[]}}
 }
 const yr=b=>(b.year<1000?b.year+' г. н. э.':b.year)+(b.start?' (начало стройки)':'');
+let timer=null;
+function slideshow(f){
+  clearInterval(timer);
+  const n=f.slides.length,img=document.getElementById('sl');if(!n)return;
+  let k=0,hold=false;
+  const show=j=>{k=(j+n)%n;const m=f.slides[k];img.src=m.img;
+    document.getElementById('cr').innerHTML=m.author?'Фото: '+esc(m.author)+(m.src?' · <a href="'+esc(m.src)+'" rel="noopener">источник</a>':''):'';
+    document.querySelectorAll('#dots i').forEach((d,x)=>d.classList.toggle('on',x===k));
+    f.slides[(k+1)%n]&&(new Image().src=f.slides[(k+1)%n].img)};
+  show(0);if(n<2)return;
+  const box=img.parentNode;
+  document.getElementById('sp').onclick=()=>show(k-1);document.getElementById('sn').onclick=()=>show(k+1);
+  box.onmouseenter=()=>hold=true;box.onmouseleave=()=>hold=false;box.onfocusin=()=>hold=true;box.onfocusout=()=>hold=false;
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches)timer=setInterval(()=>{if(!hold&&document.getElementById('sl')===img)show(k+1)},3500);
+}
 function round(){
   if(i>=B.length)return end();
   const b=B[i],f=info[b.id];
   app.innerHTML='<div class="bar"><span>Здание '+(i+1)+' из '+B.length+'</span><span>Верно: '+score+'</span></div>'+
   '<div class="track"><i style="width:'+(i/B.length*100)+'%"></i></div>'+
-  '<div class="card">'+(f.img?'<img src="'+f.img+'" alt="'+esc(f.title)+'">':'<div class="nophoto">Фотографии нет</div>')+
+  '<div class="card">'+(f.slides.length?'<div class="slides"><img id="sl" src="'+f.slides[0].img+'" alt="'+esc(f.title)+'">'+
+  (f.slides.length>1?'<button class="nav prev" id="sp" aria-label="Предыдущее фото">‹</button><button class="nav next-s" id="sn" aria-label="Следующее фото">›</button>':'')+'</div>'+
+  (f.slides.length>1?'<div class="dots" id="dots" aria-hidden="true">'+f.slides.map(()=>'<i></i>').join('')+'</div>':''):'<div class="nophoto">Фотографии нет</div>')+
   '<div class="info"><div class="year">'+yr(b)+'</div><div class="name">'+esc(f.title)+'</div></div>'+
-  (f.img&&f.author?'<div class="credit">Фото: '+esc(f.author)+(f.src?' · <a href="'+esc(f.src)+'" rel="noopener">источник</a>':'')+'</div>':'')+'</div>'+
-  '<div class="opts">'+S.map(s=>'<button data-s="'+esc(s.name)+'">'+esc(s.name)+'<small>'+esc(s.period)+'</small></button>').join('')+'</div><div id="res"></div>';
+  '<div class="credit" id="cr"></div></div>'+
+  '<div class="opts">'+SA.map(s=>'<button data-s="'+esc(s.name)+'">'+esc(s.name)+'</button>').join('')+'</div><div id="res"></div>';
   app.querySelectorAll('.opts button').forEach(x=>x.onclick=()=>answer(x.dataset.s));
+  slideshow(f);
 }
 function answer(name){
   const b=B[i],f=info[b.id],right=name===b.style||b.also.includes(name),s=byName[b.style];
@@ -90,13 +116,14 @@ function answer(name){
     else if(x.dataset.s===name)x.classList.add('bad')});
   document.getElementById('res').innerHTML='<div class="res '+(right?'ok':'bad')+'"><strong>'+(right?'Верно':'Не совсем')+': '+esc(s.name)+'</strong>'+
   (!right?'<div>Вы выбрали: '+esc(name)+'.</div>':'')+
-  '<dl><dt>Метод</dt><dd>'+esc(s.method)+'</dd><dt>Повестка</dt><dd>'+esc(s.agenda)+'</dd><dt>Заказчик</dt><dd>'+esc(s.customer)+'</dd></dl>'+
+  '<dl><dt>Период</dt><dd>'+esc(s.period)+'</dd><dt>Метод</dt><dd>'+esc(s.method)+'</dd><dt>Повестка</dt><dd>'+esc(s.agenda)+'</dd><dt>Заказчик</dt><dd>'+esc(s.customer)+'</dd></dl>'+
   (f.slug?'<p><a href="/entities/'+esc(f.slug)+'">Страница здания</a></p>':'')+
   '<button class="next" id="nx">'+(i+1<B.length?'Дальше':'Итог')+'</button></div>';
   const n=document.getElementById('nx');n.onclick=()=>{i++;round()};n.focus();
 }
 function again(){i=0;score=0;miss=[];round()}
 function end(){
+  clearInterval(timer);
   app.innerHTML='<h2>Итог: '+score+' из '+B.length+'</h2>'+
   '<p>'+(score>B.length*.7?'Стили вы узнаёте уверенно.':score>B.length*.4?'Хорошее начало: ошибки показывают, где стили граничат.':'Стили трудно отличать — это нормально: они возникают на стыке метода, повестки и заказчика.')+'</p>'+
   (miss.length?'<h3>Где ошиблись</h3><ul>'+miss.map(m=>'<li>'+yr(m.b)+' — '+esc(info[m.b.id].title)+': ваш ответ «'+esc(m.name)+'», верно «'+esc(m.b.style)+'»</li>').join('')+'</ul>':'')+
