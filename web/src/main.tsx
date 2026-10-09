@@ -1,4 +1,5 @@
 // Готовое публичное содержание не заменяется приложением редактора.
+import "./fonts.css";
 import "./styles.css";
 import { enhancePublicPage } from "./publicPage";
 
