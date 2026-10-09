@@ -55,6 +55,30 @@ export async function enhancePublicPage() {
     if ((event.target as HTMLElement).closest('[data-action="search"]')) openSearch();
   });
   bindSearchKeys();
+  // Связи: раздел свёрнут; при раскрытии первым — граф, переключатель на список.
+  // Слушатели на документе: вошедшему карточку перерисовывает authenticatedCard.
+  document.addEventListener("toggle", async (event) => {
+    const box = event.target as HTMLElement;
+    if (!box.matches?.("details.rel-box") || !(box as HTMLDetailsElement).open) return;
+    const host = box.querySelector<HTMLElement>("[data-rel-graph]");
+    if (host && !host.hidden) (await import("./relGraph")).mountRelGraph(host);
+  }, true);
+  document.addEventListener("click", async (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-rel-view]");
+    const box = button?.closest("details.rel-box");
+    if (!button || !box) return;
+    const graph = button.dataset.relView === "graph";
+    box.querySelectorAll("[data-rel-view]").forEach((b) => b.classList.toggle("is-on", b === button));
+    const host = box.querySelector<HTMLElement>("[data-rel-graph]")!;
+    host.hidden = !graph;
+    box.querySelector<HTMLElement>(".rel-list")!.hidden = graph;
+    if (graph) (await import("./relGraph")).mountRelGraph(host);
+  });
+  document.addEventListener("change", (event) => {
+    const box = (event.target as HTMLElement).closest<HTMLInputElement>("[data-rel-extra]");
+    const host = box?.closest("details.rel-box")?.querySelector("[data-rel-graph]");
+    host?.dispatchEvent(new CustomEvent("rel-extra", { detail: box!.checked }));
+  });
   await authenticatedCard();
   // Черновик: карточку подставить не удалось (нет прав, нет сессии) —
   // показываем «Запись ещё не опубликована» вместо «Загружаем…».

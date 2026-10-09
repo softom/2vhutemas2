@@ -97,6 +97,8 @@ export interface PublicCard {
     direction: "incoming" | "outgoing";
     justification: string | null;
   }[];
+  /** Связи соседей между собой и с остальными записями — для графа (Р-112). */
+  neighbor_links: { a_slug: string; a_title: string; b_slug: string; b_title: string }[];
   mentions: { document_title: string | null; owner_slug: string | null; owner_title: string | null }[];
   /** Источники — связи «источник» с книгами, статьями, веб-страницами (Р-80). */
   sources: {
@@ -209,6 +211,23 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
 
   const links = linkRows.map(row => ({...row, justification:extractText(row.justification_blocks)}));
 
+  // Связи соседей: по паре записей одна черта; связи самой записи не повторяем.
+  const neighborIds = [...new Set(links.map(l => l.other_id))];
+  const neighbor_links = neighborIds.length === 0 ? [] : await sql<PublicCard["neighbor_links"][number]>`
+    select distinct on (least(l.from_entity_id, l.to_entity_id), greatest(l.from_entity_id, l.to_entity_id))
+           a.slug as a_slug, a.title_ru as a_title, b.slug as b_slug, b.title_ru as b_title
+      from app.read_links(${drafts}) l
+      join app.read_entities(${drafts}) a on a.id = l.from_entity_id
+      join app.read_entities(${drafts}) b on b.id = l.to_entity_id
+      left join app.link_roles lr on lr.id = l.role_id
+     where (l.from_entity_id = any(${neighborIds}::bigint[]) or l.to_entity_id = any(${neighborIds}::bigint[]))
+       and l.from_entity_id <> ${id} and l.to_entity_id <> ${id}
+       and (${drafts} or (a.is_published and b.is_published))
+       and coalesce(lr.code, '') not in ('illustration', 'source')
+     order by least(l.from_entity_id, l.to_entity_id), greatest(l.from_entity_id, l.to_entity_id)
+     limit 400
+  `;
+
   // Где запись упоминается: текст и запись, которой он принадлежит (лекция).
   const mentions = await sql<PublicCard["mentions"][number]>`
     select distinct on (pm.document_id) pm.document_title,
@@ -291,6 +310,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     media,
     document,
     links,
+    neighbor_links,
     mentions,
     sources,
     layout,

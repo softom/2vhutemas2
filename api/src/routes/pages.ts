@@ -755,14 +755,26 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     },
     // Обоснование связи — наш собственный текст, которого нет в энциклопедиях.
     // Выводим его открыто, рядом со ссылкой, а не прячем в интерфейсе.
-    links: () => card.links.length === 0 ? "" :
-      `<h2>Связи</h2><ul class="relations">${
-        card.links.map((l) =>
-          `<li><a href="${e(entityPath(l.other_slug))}">${e(l.other_title)}</a>` +
-          (l.role_title ? ` (${e(l.role_title)})` : "") +
-          (l.justification ? `<p>${e(l.justification)}</p>` : "") + `</li>`
-        ).join("")
-      }</ul>`,
+    links: () => {
+      if (card.links.length === 0) return "";
+      const graph = {
+        center: card.title_ru,
+        nodes: card.links.map((l) => ({ href: entityPath(l.other_slug), title: l.other_title, role: l.role_title ?? "", note: l.justification ?? "" })),
+        // Связи соседей — показываются галочкой «Связи соседей».
+        extra: card.neighbor_links.map((n) => ({ a: entityPath(n.a_slug), at: n.a_title, b: entityPath(n.b_slug), bt: n.b_title })),
+      };
+      const list = card.links.map((l) =>
+        `<li><a href="${e(entityPath(l.other_slug))}">${e(l.other_title)}</a>` +
+        (l.role_title ? `<span class="rel-role">${e(l.role_title)}</span>` : "") +
+        (l.justification ? `<p>${e(l.justification)}</p>` : "") + `</li>`
+      ).join("");
+      // Связей много: раздел свёрнут, внутри граф (по умолчанию) или компактный список.
+      return `<details class="rel-box"><summary>Связи <span class="rel-count">${card.links.length}</span></summary>` +
+        `<div class="rel-tabs"><button type="button" class="is-on" data-rel-view="graph">Граф</button><button type="button" data-rel-view="list">Список</button>` +
+        (graph.extra.length ? `<label class="rel-extra"><input type="checkbox" data-rel-extra> Связи соседей</label>` : "") + `</div>` +
+        `<div class="rel-graph" data-rel-graph="${e(JSON.stringify(graph))}"></div>` +
+        `<ul class="relations rel-list" hidden>${list}</ul></details>`;
+    },
     // Видео: обложка — ссылка на сам ролик. Обложка — прикреплённое
     // изображение или кадр-превью ролика с подписью «канал · площадка» (Р-68).
     video: () => {
