@@ -15,6 +15,28 @@
 import { Pool, type PoolClient, type Transaction } from "@db/postgres";
 import { config } from "./config.ts";
 
+/**
+ * TCP_NODELAY на соединениях с БД. Драйвер шлёт запрос с параметрами
+ * несколькими частями, и без этого флага каждая следующая часть ждала
+ * отложенного подтверждения TCP: ровно 40 мс на любой запрос с параметрами
+ * (а других у нас нет). Страница записи — дюжина запросов подряд — тратила
+ * на это полсекунды (замер 2026-10-09: select с аргументом 42 мс → 0,7 мс,
+ * карточка 560 → 92 мс). Драйвер флаг не ставит, поэтому оборачиваем
+ * Deno.connect до создания пула.
+ */
+const connect = Deno.connect;
+Object.defineProperty(Deno, "connect", {
+  value: async (options: Deno.ConnectOptions) => {
+    const conn = await connect(options);
+    try {
+      conn.setNoDelay(true);
+    } catch {
+      // Не TCP-соединение — флаг не нужен.
+    }
+    return conn;
+  },
+});
+
 const pool = new Pool({
   hostname: config.db.host,
   port: config.db.port,

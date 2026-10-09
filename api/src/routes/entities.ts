@@ -134,30 +134,31 @@ entities.get("/", async (c: Context<AppEnv>) => {
            -- Как запись выглядит в списке, решает её тип (таблица отображений).
            app.compact_json(e.id, ${drafts}) as compact,
            pv.num_value as parameter_value, pv.text_value as parameter_text,
-           coalesce((
-             select jsonb_object_agg(v.code, v.value)
-               from (select distinct on (p.code) p.code,
-                            coalesce(to_jsonb(iv.num_value), to_jsonb(iv.text_value),
-                                     to_jsonb(o.title_ru), to_jsonb(iv.date_start_year),
-                                     to_jsonb(iv.bool_value)) as value
-                       from app.read_values(${drafts}) iv
-                       join app.read_indicators(${drafts}) i on i.id = iv.indicator_id
-                       join app.parameters p on p.id = iv.parameter_id
-                       left join app.parameter_options o on o.id = iv.option_id
-                      where i.entity_id = e.id and i.is_current
-                        and p.code in (select jsonb_array_elements_text(${wanted}::jsonb))
-                      order by p.code, i.sort_order, iv.sort_order) v),
-             '{}'::jsonb) as values
+           -- Значения, названные в ?values=, — из снимка самой записи
+           -- (app.snapshot_value). Без запроса не считаются вовсе: прежде этот
+           -- подзапрос перебирал значения всех записей на каждую строку
+           -- каталога (замечание 2026-10-09: страницы грузились долго).
+           case when ${wanted}::jsonb = '[]'::jsonb then '{}'::jsonb else coalesce((
+             -- Пустое поле снимка — JSON null, а не SQL NULL: снимаем его,
+             -- иначе coalesce остановится на пустом num_value.
+             select jsonb_object_agg(p.code, coalesce(nullif(sv->'num_value', 'null'), nullif(sv->'text_value', 'null'),
+                                       to_jsonb((select o.title_ru from app.parameter_options o
+                                                  where o.id = (sv->>'option_id')::uuid)),
+                                       nullif(sv->'date_start_year', 'null'), nullif(sv->'bool_value', 'null')))
+               from app.parameters p
+               cross join lateral app.snapshot_value(e.id, ${drafts}, p.id) sv
+              where p.code in (select jsonb_array_elements_text(${wanted}::jsonb))
+                and sv is not null),
+             '{}'::jsonb) end as values
     from app.read_entities(${drafts}) e
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
+    -- Величина для отбора и сортировки — из снимка самой записи.
     left join lateral (
-        select iv.num_value, iv.text_value
-          from app.read_values(${drafts}) iv
-          join app.read_indicators(${drafts}) i on i.id = iv.indicator_id
-          join app.parameters p on p.id = iv.parameter_id
-         where i.entity_id = e.id and i.is_current and p.code = ${parameter}
-         order by i.sort_order limit 1) pv on ${parameter}::text is not null
+        select (sv->>'num_value')::numeric as num_value, sv->>'text_value' as text_value
+          from app.snapshot_value(e.id, ${drafts},
+                 (select id from app.parameters where code = ${parameter})) sv) pv
+      on ${parameter}::text is not null
     where (${drafts} or e.is_published)
       and (${archived} or e.status <> 'archived')
       and (${type}::text is null
