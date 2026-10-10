@@ -495,6 +495,23 @@ newsRobot.post("/regenerate", async (c) => {
 });
 
 /**
+ * «Повторить» у новости с ошибкой: заказ выполняется заново с теми же данными,
+ * новость стека снова идёт в перевод. Робот берёт запрос в течение минуты.
+ */
+newsRobot.post("/retry", async (c) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const body = await c.req.json().catch(() => null) as Row | null;
+  const key = String(body?.story_key ?? "");
+  if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная история");
+  const rec = await readJson<Row>(`${ROOT}/state/prepared/${key}.json`);
+  if (rec?.status !== "ошибка") throw new ApiError("validation_failed", "Повторять нечего: ошибки у новости нет");
+  const req = { story_key: key, by: principal.displayName, at: new Date().toISOString() };
+  await Deno.mkdir(`${ROOT}/inbox/retry`, { recursive: true });
+  await Deno.writeTextFile(`${ROOT}/inbox/retry/${key}.json`, JSON.stringify(req));
+  return c.json({ queued: req }, 202);
+});
+
+/**
  * Состояние робота (Р-103): идёт ли сбор, что делает минутное задание, как работает LLM.
  * Источники — журнал последнего прогона, .state/heartbeat.json, .state/llm_calls.jsonl.
  */

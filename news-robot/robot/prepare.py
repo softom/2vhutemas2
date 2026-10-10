@@ -23,6 +23,15 @@ from .llm import LLM, LLMError
 from .state import State
 
 MAX_ATTEMPTS = 3
+NO_MONEY = "на Polza.AI кончились деньги — пополните баланс и нажмите «Повторить»"
+
+
+def _no_money(e: Exception) -> bool:
+    return "INSUFFICIENT_BALANCE" in str(e) or "HTTP 402" in str(e)
+
+
+def _error(e: Exception) -> str:
+    return NO_MONEY if _no_money(e) else f"{type(e).__name__}: {e}"[:300]
 
 
 def now() -> str:
@@ -70,6 +79,31 @@ def _order_inputs(rec: dict):
     o = rec.get("order") or {}
     item = Item(**{k: v for k, v in (o.get("item") or {}).items() if k in Item.__dataclass_fields__})
     return o.get("candidate"), {item.id: item}, {"order": {**ORDER_SOURCE, **(o.get("source") or {})}}
+
+
+def retries(root: Path, log) -> None:
+    """«Повторить» у новости с ошибкой (inbox/retry/<история>.json).
+
+    Заказ ставится в ящик заказов заново — с теми же темой, ссылками, текстом и указанием;
+    новости стека возвращаются попытки, и её берёт обычная очередь перевода.
+    """
+    rdir = root / "inbox" / "retry"
+    for req_path in sorted(rdir.glob("*.json")) if rdir.exists() else []:
+        req = _read(req_path) or {}
+        req_path.unlink(missing_ok=True)
+        key = req.get("story_key", "")
+        path = root / ".state" / "prepared" / f"{key}.json"
+        rec = _read(path)
+        if not rec or rec.get("status") != "ошибка":
+            continue
+        if rec.get("order"):
+            o = rec["order"]
+            _write(root / "inbox" / "orders" / f"{key}.json",
+                   {"story_key": key, **{k: o.get(k) for k in ("topic", "section", "urls", "text", "note", "by", "at")}})
+        else:
+            rec.update(status="ждёт", attempts=0, error=None)
+            _write(path, rec)
+        log("info", "retry", "повтор по просьбе редактора", story=key, by=req.get("by"))
 
 
 def orders(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
@@ -125,7 +159,7 @@ def orders(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
                                          extra_urls=urls[1:], extra_text=req.get("text") or None,
                                          instructions=req.get("note") or None)
         except Exception as e:  # noqa: BLE001
-            rec.update(status="ошибка", error=f"{type(e).__name__}: {e}"[:300], attempts=MAX_ATTEMPTS)
+            rec.update(status="ошибка", error=_error(e), attempts=MAX_ATTEMPTS)
             _write(path, rec)
             log("error", "order", "заказ не выполнен", story=key, error=str(e)[:200])
             continue
@@ -177,7 +211,7 @@ def regenerate(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
             story = pipeline.write_story(holder, cand, items, sources, fetcher, llm, extra_urls=req.get("urls") or [],
                                          extra_text=req.get("text") or None, instructions=instructions or None)
         except Exception as e:  # noqa: BLE001
-            rec.update(status="готово", error=f"перегенерация не удалась: {type(e).__name__}: {e}"[:300])
+            rec.update(status="готово", error=f"перегенерация не удалась: {_error(e)}")
             _write(path, rec)
             log("error", "regenerate", "перегенерация не удалась", story=key, error=str(e)[:200])
             continue
@@ -195,6 +229,7 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
     done = 0
     fetcher: Fetcher | None = Fetcher()
     try:
+        retries(root, log)
         done += orders(root, llm, log, pipeline, fetcher)
         done += regenerate(root, llm, log, pipeline, fetcher)
         for q in queue:
@@ -242,7 +277,13 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
             try:
                 story = pipeline.write_story(holder, cand, items, sources, fetcher, llm)
             except Exception as e:  # noqa: BLE001 — сбой одной новости не держит очередь
-                rec.update(status="ошибка", error=f"{type(e).__name__}: {e}"[:300])
+                if _no_money(e):
+                    # Нет денег — не вина новости: попытку не считаем, остальные не трогаем, через минуту снова.
+                    rec.update(status="ждёт", error=NO_MONEY, attempts=rec["attempts"] - 1)
+                    _write(path, rec)
+                    log("error", "prepare", "нет денег на Polza.AI — перевод ждёт", story=key)
+                    break
+                rec.update(status="ошибка", error=_error(e))
                 _write(path, rec)
                 log("error", "prepare", "перевод не удался", story=key, error=f"{type(e).__name__}: {e}"[:200])
                 continue

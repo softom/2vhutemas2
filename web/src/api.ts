@@ -590,6 +590,8 @@ export const api = {
   robotCoverImage: (file: string) => requestBlob(`/news-robot/covers/${encodeURIComponent(file)}`),
   robotRegenerate: (body: { story_key: string; input?: string; note?: string }) =>
     request<{ queued: unknown }>("/news-robot/regenerate", { method: "POST", body: JSON.stringify(body) }),
+  robotRetry: (story_key: string) =>
+    request<{ queued: unknown }>("/news-robot/retry", { method: "POST", body: JSON.stringify({ story_key }) }),
   robotRunView: (id: string) => request<RobotRunView>(`/news-robot/runs/${encodeURIComponent(id)}/view`),
   robotQueue: (body: { action: "add" | "move" | "remove"; story_key: string; [key: string]: unknown }) =>
     request<RobotQueue>("/news-robot/queue", { method: "POST", body: JSON.stringify(body) }),

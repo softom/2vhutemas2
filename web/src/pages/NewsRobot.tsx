@@ -434,7 +434,8 @@ function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
                 <td>{p.status === "готово" ? <Link to={`/robot/preview/${key}`}><b>{p.title || p.order?.topic}</b></Link> : p.order?.topic}
                   <br /><span className="hint">{p.order?.topic}{p.order?.by ? ` · ${p.order.by}` : ""}</span></td>
                 <td>{TOPIC[p.order?.section ?? ""] ?? p.order?.section}</td>
-                <td className={p.status === "ошибка" ? "error" : "hint"}>{p.status === "ошибка" ? `ошибка: ${p.error}` : p.status}</td>
+                <td className={p.status === "ошибка" ? "error" : "hint"}>{p.status === "ошибка" ? `ошибка: ${p.error}` : p.status}
+                  {p.status === "ошибка" && <Retry storyKey={key} />}</td>
                 <td>{p.status === "готово" && (inStack.has(key) ? <span className="hint">в стеке</span>
                   : <button type="button" className="ghost" onClick={() => toStack(key, p.title, p.order?.section)}>В стек</button>)}</td>
                 <td><Publication storyKey={key} ov={ov} /></td>
@@ -444,6 +445,22 @@ function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
         </table>
       )}
     </>
+  );
+}
+
+/** «Повторить» у новости с ошибкой: робот берёт запрос в течение минуты. */
+function Retry({ storyKey }: { storyKey: string }) {
+  const [state, setState] = useState<string | null>(null);
+  if (state) return <span className="hint"> {state}</span>;
+  return (
+    <button type="button" className="ghost" onClick={async () => {
+      try {
+        await api.robotRetry(storyKey);
+        setState("передано роботу — возьмёт в течение минуты");
+      } catch (e) {
+        setState((e as Error).message);
+      }
+    }}>Повторить</button>
   );
 }
 
@@ -460,7 +477,7 @@ function Publication({ storyKey, ov, slot = true }: { storyKey: string; ov: Robo
   if (!p || p.status === "новый" || p.status === "ждёт") return <span className="hint">{place}ждёт перевода</span>;
   if (p.status === "переводится") return <span className="hint">{place}переводится…</span>;
   if (p.status === "переделывается") return <span className="hint">{place}переделывается…</span>;
-  if (p.status === "ошибка") return <span className="error">{place}ошибка: {p.error}</span>;
+  if (p.status === "ошибка") return <span className="error">{place}ошибка: {p.error} <Retry storyKey={storyKey} /></span>;
   const issues = p.issues ?? [];
   return (
     <span className="robot-pub">
