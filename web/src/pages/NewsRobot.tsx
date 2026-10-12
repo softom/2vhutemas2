@@ -23,6 +23,7 @@ import {
   type RobotRunView,
   type RobotSourceCandidate,
   type RobotSourceRow,
+  type RobotSiteHit,
   type RobotStory,
 } from "../api";
 
@@ -263,7 +264,9 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const [stay, setStay] = useState<Set<string>>(new Set());
   const keep = (key: string) => setStay((s0) => (s0.has(key) ? s0 : new Set(s0).add(key)));
   const reviewed = (c: Row) => !stay.has(c.story_key)
-    && (Boolean(ov.judged[c.story_key] ?? pendingVerdict[c.story_key]) || inStack.has(c.story_key));
+    && (Boolean(ov.judged[c.story_key] ?? pendingVerdict[c.story_key]) || inStack.has(c.story_key)
+      // Такая новость на сайте уже есть (Р-115) — смотреть её второй раз незачем.
+      || Boolean(c.site?.news));
   const [view, setView] = useState<"new" | "seen" | "all">("new");
   const rows = allRows.filter((c) => view === "all" || (view === "new" ? !reviewed(c) : reviewed(c)));
   const [topic, setTopic] = useState("");
@@ -353,6 +356,18 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                       : c.title_ru}
                     {written.has(c.story_key) && <span className="hint"> · переведено</span>}<br />
                     {c.sources.map((s) => <a className="hint" key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.source} </a>)}
+                    {(c.repeats ?? []).length > 0 && (
+                      <details className="hint">
+                        <summary>повторы: {c.repeats!.length}</summary>
+                        {c.repeats!.map((r, n) => <div key={n}>{r.title_ru}{" — "}
+                          {r.sources.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.source} </a>)}</div>)}
+                      </details>
+                    )}
+                    {c.site?.news && <div className="error">уже на сайте: <SiteHit hit={c.site.news} /></div>}
+                    {(c.site?.related ?? []).length > 0 && (
+                      <div className="hint">на сайте по теме: {c.site!.related.map((h, n) => (
+                        <span key={h.id}>{n > 0 && " · "}<SiteHit hit={h} /></span>))}</div>
+                    )}
                   </td>
                   <td className="hint">{c.reason}</td>
                   <td>{!c.partial && <>
@@ -444,6 +459,16 @@ function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
           </tbody>
         </table>
       )}
+    </>
+  );
+}
+
+/** Запись сайта, близкая к истории (Р-115): название, тип и сходство по смыслу. */
+function SiteHit({ hit }: { hit: RobotSiteHit }) {
+  return (
+    <>
+      <a href={`/entities/${hit.id}`} target="_blank" rel="noreferrer">{hit.title}</a>
+      {" "}<span className="hint">({hit.type_title}{hit.status === "draft" ? ", черновик" : ""}, {Math.round(hit.similarity * 100)}%)</span>
     </>
   );
 }

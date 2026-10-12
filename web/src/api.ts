@@ -460,6 +460,14 @@ export interface RobotPreparedFull extends RobotPrepared {
 export interface RobotStory {
   story_key: string; final: number; interest: number; title_ru: string; topic?: string; kind?: string;
   competition?: boolean; reason?: string; sources: { source: string; url: string; date?: string }[];
+  /** Сверка с сайтом (Р-115): такая новость уже есть (news) и близкие записи (related). */
+  site?: { news: RobotSiteHit | null; related: RobotSiteHit[] };
+  /** Повторы этой истории из других изданий и прогонов — в списке скрыты. */
+  repeats?: { title_ru: string; sources: { source: string; url: string }[] }[];
+}
+export interface RobotSiteHit {
+  id: string; slug?: string; title?: string; type?: string; type_title?: string; status?: string; similarity: number;
+  story_key?: string | null;
 }
 export interface RobotRunView {
   id: string; running: boolean; status: string; since?: string; llm_note: string | null;

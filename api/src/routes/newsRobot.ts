@@ -635,8 +635,14 @@ newsRobot.get("/stories", async (c) => {
   requirePermission(c.get("principal"), "su");
   const days = Math.min(60, Math.max(1, Number(c.req.query("days") ?? 14) || 14));
   const since = Date.now() - days * 86400000;
+  // Повторы и сверка с сайтом (Р-115): робот пишет .state/similar.json — какая история повторяет
+  // какую и что на сайте уже есть. Повтор в списке не показывается: его издания уходят главной истории.
+  const similar = await readJson<{ aliases?: Record<string, { to: string; title?: string }>; site?: Record<string, Row> }>(
+    `${ROOT}/state/similar.json`);
+  const aliases = similar?.aliases ?? {};
   const seen = new Set<string>();
   const items: Row[] = [];
+  const repeats = new Map<string, Row[]>();
   for (const id of await runIds()) {
     const started = await runStart(id);
     if (new Date(started).getTime() < since) break;
@@ -651,7 +657,24 @@ newsRobot.get("/stories", async (c) => {
       const key = String(cand.story_key);
       if (seen.has(key)) continue;
       seen.add(key);
-      items.push({ ...cand, run_id: id, run_started: started, written: written.has(key) });
+      const main = aliases[key]?.to;
+      if (main) {
+        repeats.set(main, [...(repeats.get(main) ?? []), { ...cand, run_id: id, run_started: started, written: written.has(key) }]);
+        continue;
+      }
+      items.push({ ...cand, run_id: id, run_started: started, written: written.has(key), site: similar?.site?.[key] ?? cand.site });
+    }
+  }
+  const shown = new Set(items.map((i) => String(i.story_key)));
+  for (const [main, list] of repeats) {
+    const item = items.find((i) => i.story_key === main);
+    if (item) {
+      item.repeats = list.map((r) => ({ title_ru: r.title_ru, sources: r.sources }));
+    } else if (!shown.has(main)) {
+      // Главная история старше окна: показываем самый свежий её повтор под его собственным ключом.
+      const [first, ...rest] = list;
+      items.push({ ...first, site: similar?.site?.[main] ?? similar?.site?.[String(first.story_key)] ?? first.site,
+        repeats: rest.map((r) => ({ title_ru: r.title_ru, sources: r.sources })) });
     }
   }
   return c.json({ items, days });

@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 import httpx
 import yaml
 
-from . import checks, discover, learn, lists
+from . import checks, discover, learn, lists, similar
 from .article import fetch_article
 from .feeds import Item, NotAFeed, item_id, parse, passes_filters
 from .fetch import FetchError, Fetcher
@@ -35,6 +35,7 @@ RANK_DEFAULTS = {
     "students_competition": 10,
     "stale_after_days": 2,
     "stale_penalty": 3,       # за каждый день сверх stale_after_days
+    "on_site_penalty": 40,    # такая новость на сайте уже есть (Р-115)
 }
 
 
@@ -468,7 +469,17 @@ def run(args) -> Run:
         learned_w = ((state.data.get("learned") or {}).get("adjustments") or {}).get("per_extra_source")
         if learned_w is not None:
             weights["per_extra_source"] = learned_w
+        slog = lambda lvl, st, msg, **kw: log(r, lvl, st, msg, **kw)  # noqa: E731
+        # Повторы: история, уже известная по прошлым прогонам или другому изданию, получает её ключ (Р-115).
+        similar.unify(scores, r.items, ROOT, cfg, llm, slog)
         r.candidates = rank(r, scores, sources, weights, state)
+        # Сверка с сайтом: вышедшая новость — вниз списка, близкие записи — редактору для сведения.
+        from .publish import Api
+        similar.site(r.candidates, ROOT, cfg, Api(), llm, slog)
+        for c in r.candidates:
+            if (c.get("site") or {}).get("news"):
+                c["final"] = max(0, c["final"] - weights["on_site_penalty"])
+        r.candidates.sort(key=lambda c: c["final"], reverse=True)
         _dump(out / "candidates.json", r.candidates)
         for it in r.items:
             if it.id in scores:
@@ -476,7 +487,8 @@ def run(args) -> Run:
         by_id = {i.id: i for i in r.items}
         # Лучшие по общему списку и по каждой теме: архитектурных изданий больше, и без этого
         # ИИ и ПО не доходили до перевода (Р-100).
-        eligible = [c for c in r.candidates if c["interest"] >= args.threshold]
+        eligible = [c for c in r.candidates if c["interest"] >= args.threshold
+                    and not (c.get("site") or {}).get("news")]
         chosen = eligible[:args.top]
         for topic in ("architecture", "neurogeneration", "software"):
             chosen += [c for c in eligible if c.get("topic") == topic and c not in chosen][:args.per_topic]

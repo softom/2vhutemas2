@@ -212,6 +212,8 @@ def main() -> int:
     g.add_argument("--note", help="пояснение к предложению или решению")
     ap.add_argument("--publish-now", nargs="*", metavar="ИСТОРИЯ",
                     help="с --prepare: опубликовать готовое сейчас, не дожидаясь слота (all — всё готовое в стеке)")
+    ap.add_argument("--dedupe", action="store_true",
+                    help="пройти по прогонам за две недели: повторы историй и сверка с сайтом (Р-115)")
     ap.add_argument("--prepare", action="store_true",
                     help="подготовить новости из стека: перевод, текст, сверка (cron каждую минуту)")
     args = ap.parse_args()
@@ -222,6 +224,16 @@ def main() -> int:
         return learn_command(args)
     if args.prepare:
         return prepare_command(args)
+    if args.dedupe:
+        from robot import publish, similar
+        cfg = pipeline.load_config()
+        llm = LLM(cfg.get("news.llm.base_url") or "https://api.polza.ai/api/v1",
+                  args.model or os.environ.get("NEWS_LLM_MODEL") or cfg.get("news.llm.model"),
+                  cfg.get("news.llm.api_key_env") or "POLZA_API_KEY", ROOT / "out" / "prepare" / "llm",
+                  token_limit=120_000, extra=pipeline.llm_extra(cfg))
+        print(similar.backfill(ROOT, cfg, publish.Api(), llm,
+                               lambda lvl, st, msg, **kw: print(lvl, st, msg, kw)))
+        return 0
 
     run = pipeline.run(args)
     path = run.dir / "report.html"

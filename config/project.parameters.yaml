@@ -171,6 +171,25 @@ parameters:
   news.rank.stale_penalty:
     value: 3
     status: proposed
+  news.rank.on_site_penalty:
+    value: 40
+    status: proposed
+  # Повторы историй и сверка с сайтом (news-robot/robot/similar.py, Р-115).
+  news.similar.same:
+    value: 0.90
+    status: proposed
+  news.similar.maybe:
+    value: 0.75
+    status: proposed
+  news.similar.site_same:
+    value: 0.78
+    status: proposed
+  news.similar.site_maybe:
+    value: 0.68
+    status: proposed
+  news.similar.site_related:
+    value: 0.58
+    status: proposed
   # Обучение ранжирования на выборе редактора (news-robot/robot/learn.py, Р-93).
   news.learn.min_new_judgments:
     value: 15
