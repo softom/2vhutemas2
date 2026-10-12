@@ -34,6 +34,21 @@
 }
 .search-kinds button[aria-pressed="true"] { background: var(--text, #231F1C); color: var(--bg, #FBF8F2); border-color: var(--text, #231F1C); }
 
+.search-kinds .search-ask { margin-left: auto; border-color: var(--accent, #A9381F); color: var(--accent, #A9381F); font-weight: 600; }
+.search-kinds .search-ask:hover:not(:disabled) { background: var(--accent, #A9381F); color: var(--bg, #FBF8F2); }
+.search-kinds .search-ask:disabled { opacity: .5; cursor: default; }
+
+/* Ответ ИИ (Р-114): на бумаге с красной чертой слева, сноски — номерами. */
+.search-answer { margin: 12px 20px 0; padding: 12px 16px; background: var(--surface, #F4EEE2); border-left: 3px solid var(--accent, #A9381F); overflow-y: auto; max-height: 40vh; flex: none; }
+.search-answer[hidden] { display: none; }
+.search-answer-text { margin: 0; font-size: 16px; line-height: 1.55; }
+.search-answer-sources { list-style: none; margin: 10px 0 0; padding: 0; font-size: 14px; display: grid; gap: 3px; }
+.search-answer-sources a { color: inherit; }
+.search-cite { display: inline-block; min-width: 1.4em; padding: 0 .3em; margin: 0 .15em; text-align: center; font-size: .78em; line-height: 1.5; vertical-align: .15em; border: 1px solid var(--accent, #A9381F); color: var(--accent, #A9381F); text-decoration: none; }
+a.search-cite:hover { background: var(--accent, #A9381F); color: var(--bg, #FBF8F2); }
+.search-answer-note { margin: 8px 0 0; font-size: 12.5px; color: var(--muted, #5A5047); }
+.search-answer-note:first-child { margin-top: 0; }
+
 .search-status { margin: 10px 20px 6px; color: var(--muted, #5A5047); font-size: 14px; }
 
 .search-list { list-style: none; margin: 0; padding: 0 0 10px; overflow-y: auto; }

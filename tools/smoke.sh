@@ -123,6 +123,8 @@ contains "журнал запросов содержит запрос прого
 check "журнал ИИ гостю закрыт" 401 "$(code $API/search/ai-requests)"
 check "журнал ИИ SU" 200 "$(code -H "$AUTH" $API/search/ai-requests)"
 contains "журнал ИИ отдаёт расход" '"totals"' "$(body)"
+# Ответ ИИ (Р-114): сам вызов модели платный, прогон проверяет только вход.
+check "ответ ИИ: короткий вопрос отклоняется" 400 "$(code -X POST -H "$JSON" -d '{"q":"а"}' $API/search/answer)"
 
 check "неизвестный тип отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"type":"net-takogo","slug":"smoke-net-tipa","title_ru":"smoke: нет типа"}' $API/entities)"
 # Записей в базе больше страницы, поэтому ищем свою по имени, а не наугад.

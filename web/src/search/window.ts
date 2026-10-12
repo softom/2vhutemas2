@@ -45,6 +45,8 @@ let dialog: HTMLDialogElement | null = null;
 let input: HTMLInputElement;
 let list: HTMLElement;
 let status: HTMLElement;
+let answerBox: HTMLElement;
+let askButton: HTMLButtonElement;
 let kind = "";
 let hits: Hit[] = [];
 let active = -1;
@@ -122,8 +124,64 @@ function render(query: string) {
   }).join("");
 }
 
+interface AnswerSource { n: number; slug: string; title_ru: string; type_title: string | null }
+
+/** Ответ ИИ: текст экранируется, сноски [n] становятся ссылками на записи. */
+function answerHtml(answer: string, sources: AnswerSource[]): string {
+  const byNumber = new Map(sources.map((source) => [String(source.n), source]));
+  const text = escapeHtml(answer).replace(/\[(\d+)\]/g, (whole, n: string) => {
+    const source = byNumber.get(n);
+    return source
+      ? `<a class="search-cite" href="/entities/${encodeURIComponent(source.slug)}" title="${escapeHtml(source.title_ru)}">${n}</a>`
+      : whole;
+  });
+  const list = sources.map((source) =>
+    `<li><span class="search-cite">${source.n}</span><a href="/entities/${encodeURIComponent(source.slug)}">` +
+    `${escapeHtml(source.title_ru)}</a>${source.type_title ? ` · ${escapeHtml(source.type_title)}` : ""}</li>`
+  ).join("");
+  return `<p class="search-answer-text">${text.replace(/\n+/g, "<br>")}</p>` +
+    (list ? `<ol class="search-answer-sources">${list}</ol>` : "");
+}
+
+/** «Спросить ИИ» (Р-114): короткий ответ только по материалам сайта, со сносками. */
+async function ask() {
+  const question = input.value.trim();
+  if (question.length < 5) {
+    answerBox.hidden = false;
+    answerBox.innerHTML = `<p class="search-answer-note">Задайте вопрос словами — хотя бы пять знаков.</p>`;
+    return;
+  }
+  askButton.disabled = true;
+  answerBox.hidden = false;
+  answerBox.innerHTML = `<p class="search-answer-note">ИИ читает материалы сайта…</p>`;
+  try {
+    const response = await fetch(`${API}/search/answer`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(await authHeader()) },
+      body: JSON.stringify({ q: question }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = payload?.error?.message ?? "Ответ ИИ сейчас недоступен.";
+      const login = response.status === 401 ? ` <a href="/login">Войти</a>` : "";
+      answerBox.innerHTML = `<p class="search-answer-note">${escapeHtml(message)}${login}</p>`;
+      return;
+    }
+    const left = typeof payload.remaining === "number" ? ` Осталось на сегодня: ${payload.remaining}.` : "";
+    answerBox.innerHTML = answerHtml(payload.answer, payload.sources ?? []) +
+      `<p class="search-answer-note">${payload.generated
+        ? "Ответ составлен ИИ по материалам Вх² — сверяйте по записям."
+        : "ИИ не вызывался: подходящих материалов не нашлось."}${left}</p>`;
+  } catch {
+    answerBox.innerHTML = `<p class="search-answer-note">Ответ ИИ сейчас недоступен — попробуйте ещё раз.</p>`;
+  } finally {
+    askButton.disabled = false;
+  }
+}
+
 async function run() {
   const query = input.value.trim();
+  if (answerBox) { answerBox.hidden = true; answerBox.replaceChildren(); }
   controller?.abort();
   active = -1;
   if (query.length < 2) {
@@ -170,10 +228,15 @@ function build(): HTMLDialogElement {
     KINDS.map(([code, label]) =>
       `<button type="button" data-kind="${code}" aria-pressed="${code === kind}">${label}</button>`
     ).join("") +
-    `</div><p class="search-status" aria-live="polite"></p><ul class="search-list"></ul>`;
+    `<button type="button" class="search-ask" title="Короткий ответ по материалам сайта со ссылками на записи">Спросить ИИ</button>` +
+    `</div><section class="search-answer" hidden aria-live="polite"></section>` +
+    `<p class="search-status" aria-live="polite"></p><ul class="search-list"></ul>`;
   input = element.querySelector("input")!;
   list = element.querySelector(".search-list")!;
   status = element.querySelector(".search-status")!;
+  answerBox = element.querySelector(".search-answer")!;
+  askButton = element.querySelector(".search-ask")!;
+  askButton.addEventListener("click", ask);
 
   input.addEventListener("input", () => {
     clearTimeout(timer);
@@ -182,6 +245,7 @@ function build(): HTMLDialogElement {
   input.addEventListener("keydown", (event) => {
     if (event.key === "ArrowDown") { event.preventDefault(); move(1); }
     if (event.key === "ArrowUp") { event.preventDefault(); move(-1); }
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); ask(); return; }
     if (event.key === "Enter") {
       const target = hits[active >= 0 ? active : 0];
       if (target) location.href = href(target);

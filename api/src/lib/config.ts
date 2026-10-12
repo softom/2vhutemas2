@@ -65,6 +65,19 @@ export const config = {
     dimensions: 1536,
     batchSize: Number(optional("SEARCH_EMBED_BATCH", "64")),
     intervalMs: Number(optional("SEARCH_INDEX_INTERVAL_MS", "15000")),
+    /**
+     * Ответ ИИ в поиске (Р-114) — настройки сайта. Аудитория сужается без
+     * правки кода: all — всем, registered — вошедшим, editors — правящим,
+     * off — выключено. Лимит — ответов на человека в сутки (гостю — по
+     * суточному псевдониму); общий потолок бережёт баланс от обхода лимита.
+     */
+    ai: {
+      audience: optional("SEARCH_AI_AUDIENCE", "all") as "all" | "registered" | "editors" | "off",
+      dailyLimit: Number(optional("SEARCH_AI_DAILY_LIMIT", "50")),
+      dailyTotal: Number(optional("SEARCH_AI_DAILY_TOTAL", "1000")),
+      model: optional("SEARCH_AI_MODEL", "deepseek/deepseek-v4-pro"),
+      passages: Number(optional("SEARCH_AI_PASSAGES", "10")),
+    },
   },
   /** Версия контракта: клиент сверяет её через GET /capabilities. */
   contractVersion: "1.0.0-draft",

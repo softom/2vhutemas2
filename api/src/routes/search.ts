@@ -7,6 +7,7 @@
  *   &limit=20
  * GET /search/status            состояние индекса (право edit)
  * POST /search/reindex          пересобрать куски всех записей (su)
+ * POST /search/answer          ответ ИИ по материалам сайта со сносками (Р-114)
  * GET /search/queries           журнал поисковых запросов (su, Р-113)
  * GET /search/ai-requests       журнал обращений к ИИ и расход (su, Р-113)
  *
@@ -23,6 +24,7 @@ import type { AppEnv } from "../lib/http.ts";
 import { config } from "../lib/config.ts";
 import { embeddingsEnabled, embedQuery, rebuildAll, stats } from "../lib/search.ts";
 import { callerOf, recordSearch } from "../lib/aiJournal.ts";
+import { answerQuestion } from "../lib/searchAnswer.ts";
 
 export const search = new Hono<AppEnv>();
 
@@ -92,6 +94,22 @@ search.post("/reindex", async (c: Context<AppEnv>) => {
   requirePermission(c.get("principal"), "su");
   rebuildAll(c.get("requestId"));
   return c.json({ note: "Индекс пересобирается фоном; ход — GET /search/status" }, 202);
+});
+
+/**
+ * Ответ ИИ на вопрос (Р-114): только по материалам сайта, со сносками на записи.
+ * Кому доступно и сколько раз в сутки — настройки сайта (SEARCH_AI_AUDIENCE,
+ * SEARCH_AI_DAILY_LIMIT). Гость получает ответ по опубликованному.
+ */
+search.post("/answer", async (c: Context<AppEnv>) => {
+  const body = await c.req.json().catch(() => ({})) as { q?: unknown };
+  const question = typeof body.q === "string" ? body.q.trim() : "";
+  if (question.length < 5) throw new ApiError("validation_failed", "Вопрос короче пяти знаков");
+  if (question.length > 500) throw new ApiError("validation_failed", "Вопрос длиннее 500 знаков");
+  const principal = c.get("principal");
+  const result = await answerQuestion(question, principal, await callerOf(c), canSeeDrafts(principal),
+    SEARCH_HIDDEN_ROOTS);
+  return c.json(result);
 });
 
 function days(raw: string | undefined): number {
