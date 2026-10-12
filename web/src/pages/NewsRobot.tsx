@@ -341,7 +341,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       </div>
       {rows.length === 0 ? <p className="hint">{run.running ? "Отбор ещё не начался." : "Отбора в этом прогоне не было."}</p> : (
         <table className="grid-table">
-          <thead><tr><th>#</th><th>Оценка</th><th>Свежесть</th><th>Тема</th><th>Новость</th><th>Почему</th><th>Выпустил бы?</th><th>Стек</th><th>Публикация</th></tr></thead>
+          <thead><tr><th>#</th><th>Оценка</th><th title="Возраст истории / сколько раз её повторили другие издания и прогоны / насколько она близка к записям сайта">Свежесть / повтор / связь</th><th>Тема</th><th>Новость</th><th>Почему</th><th>Выпустил бы?</th><th>Стек</th><th>Публикация</th></tr></thead>
           <tbody>
             {shownRows.map((c, i) => {
               const v = ov.judged[c.story_key] ?? pendingVerdict[c.story_key];
@@ -349,7 +349,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                 <tr key={c.story_key || i}>
                   <td>{i + 1}</td>
                   <td><b>{c.final}</b>{!c.partial && <><br /><span className="hint">LLM {c.interest}</span></>}</td>
-                  <td><Freshness c={c} /></td>
+                  <td><Freshness c={c} /><Similarity c={c} /></td>
                   <td>{TOPIC[c.topic ?? ""] ?? c.topic}<br /><span className="hint">{KIND[c.kind ?? ""] ?? c.kind}{c.competition ? " · конкурс" : ""}</span></td>
                   <td>
                     {ov.prepared[c.story_key]?.status === "готово" && inStack.has(c.story_key)
@@ -490,6 +490,26 @@ function Freshness({ c }: { c: RobotStory }) {
       <span className={days > 4 ? "error" : undefined}>{days === 0 ? "сегодня" : days === 1 ? "вчера" : `${days} дн.`}</span>
       <br /><span className="hint">{day}{c.republished_from ? " · перепечатка" : ""}{c.stale ? ` · −${c.stale}` : ""}</span>
     </>
+  );
+}
+
+/**
+ * Повторимость и связанность — то, что посчитано по векторам (Р-115): сколько повторов истории
+ * склеено с ней и наибольшее сходство с записью сайта. «—» у связи: с сайтом история не сверялась.
+ */
+function Similarity({ c }: { c: RobotStory }) {
+  const repeats = c.repeats?.length ?? 0;
+  const hits = [...(c.site?.news ? [c.site.news] : []), ...(c.site?.related ?? [])];
+  const best = hits.reduce<RobotSiteHit | null>((m, h) => (!m || h.similarity > m.similarity ? h : m), null);
+  return (
+    <div className="hint">
+      <span title="Повторимость: сколько раз историю повторили другие издания и прогоны">
+        / повт. {repeats ? <b>{repeats}</b> : 0}</span>
+      <br />
+      <span title={best ? `Связанность: ближе всего на сайте — ${best.title} (${best.type_title})`
+        : c.site ? "Связанность: близких записей на сайте нет" : "Связанность: с сайтом не сверялась (оценка ниже 40)"}>
+        / связь {best ? <b className={c.site?.news ? "error" : undefined}>{Math.round(best.similarity * 100)}%</b> : c.site ? "нет" : "—"}</span>
+    </div>
   );
 }
 
