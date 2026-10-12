@@ -658,7 +658,7 @@ function CoverBlock({ storyKey, rec, onSent }: { storyKey: string; rec: RobotPre
   const elapsed = since ? Math.max(0, Math.round((Date.now() - new Date(since).getTime()) / 1000)) : 0;
   void tick;
   const phase = cover.pending
-    ? (cover.pending.action === "generate" ? "в очереди у робота — затем модель рисует" : cover.pending.action === "apply"
+    ? (cover.pending.action === "upload" ? "в очереди у робота — ставим загруженный файл обложкой" : cover.pending.action === "generate" ? "в очереди у робота — затем модель рисует" : cover.pending.action === "apply"
       ? "в очереди у робота — ставим обложкой" : "в очереди у робота — затем LLM пишет промпт")
     : cover.status === "генерируется" ? "модель рисует" : "LLM пишет промпт";
   const expected = cover.pending?.action === "generate" || cover.status === "генерируется" ? "обычно 1–3 минуты" : "обычно 1–2 минуты";
@@ -666,6 +666,26 @@ function CoverBlock({ storyKey, rec, onSent }: { storyKey: string; rec: RobotPre
     try {
       await api.robotCover(body);
       setMsg(null);
+      onSent();
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  };
+  // Готовая обложка из файла (2026-10-12): файл, подпись, автор — и сразу обложкой.
+  const [upload, setUpload] = useState<{ file: File | null; caption: string; author: string; source_url: string }>(
+    { file: null, caption: "", author: "", source_url: "" });
+  const sendFile = async () => {
+    if (!upload.file) return setMsg("Выберите файл обложки — PNG или JPEG");
+    const form = new FormData();
+    form.set("story_key", storyKey);
+    form.set("file", upload.file);
+    form.set("caption", upload.caption);
+    form.set("author", upload.author);
+    form.set("source_url", upload.source_url);
+    try {
+      await api.robotCoverUpload(form);
+      setMsg(null);
+      setUpload({ file: null, caption: "", author: "", source_url: "" });
       onSent();
     } catch (e) {
       setMsg((e as Error).message);
@@ -713,13 +733,32 @@ function CoverBlock({ storyKey, rec, onSent }: { storyKey: string; rec: RobotPre
             "LLM готовит новый промпт.")}>Новый промпт в этом стиле</button>
         </>
       )}
+      <details open={!cover.prompt}>
+        <summary>Загрузить готовую обложку из файла</summary>
+        <p className="hint">PNG или JPEG до 15 МБ. Файл сразу встанет обложкой — первой иллюстрацией новости.</p>
+        <div className="row">
+          <input key={upload.file ? "has" : "none"} type="file" accept="image/png,image/jpeg"
+            onChange={(e) => setUpload({ ...upload, file: e.target.files?.[0] ?? null })} />
+          {upload.file && <span className="hint">{upload.file.name}</span>}
+        </div>
+        <input style={{ width: "100%" }} placeholder="Подпись: что на картинке" value={upload.caption}
+          onChange={(e) => setUpload({ ...upload, caption: e.target.value })} />
+        <div className="row">
+          <input style={{ flex: 1 }} placeholder="Автор или правообладатель" value={upload.author}
+            onChange={(e) => setUpload({ ...upload, author: e.target.value })} />
+          <input style={{ flex: 1 }} placeholder="Адрес источника (необязательно)" value={upload.source_url}
+            onChange={(e) => setUpload({ ...upload, source_url: e.target.value })} />
+        </div>
+        <button type="button" disabled={busy || !upload.file} onClick={sendFile}>Загрузить обложку</button>
+      </details>
       {(cover.variants ?? []).length > 0 && (
         <div className="robot-covers">
           {(cover.variants ?? []).slice().reverse().map((v) => (
             <figure key={v.file} className={cover.chosen === v.file ? "chosen" : undefined}>
-              <CoverImage file={v.file} caption={`${v.model.split("/").pop()} · ${v.prompt.slice(0, 220)}…`} />
+              <CoverImage file={v.file} caption={v.uploaded ? `файл редактора${v.caption ? ` · ${v.caption}` : ""}`
+                : `${v.model.split("/").pop()} · ${v.prompt.slice(0, 220)}…`} />
               <figcaption className="hint">
-                {v.model.split("/").pop()} · {new Date(v.at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
+                {v.uploaded ? `файл${v.author ? ` · ${v.author}` : " · без автора"}` : v.model.split("/").pop()} · {new Date(v.at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
                 {cover.chosen === v.file
                   ? <> · <b>обложка{cover.applied_at ? "" : " (встанет при создании записи)"}</b></>
                   : <> · <button type="button" className="ghost" onClick={() => send({ story_key: storyKey, action: "apply", file: v.file },

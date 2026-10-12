@@ -124,12 +124,21 @@ def apply(root: Path, rec: dict, variant: dict, api, log) -> None:
     if not rec.get("entity_id"):
         return
     path = root / ".state" / "covers" / variant["file"]
-    model = variant.get("model", "").split("/")[-1]
-    caption = f"Иллюстрация создана ИИ ({model}) для Вх²"
     mime = "image/png" if path.suffix == ".png" else "image/jpeg"
-    asset = api.call("POST", "/media", files={"file": (path.name, path.read_bytes(), mime)},
-                     data={"caption": caption, "original_caption": rec["cover"].get("alt_ru") or caption,
-                           "author": f"ИИ: {model}; Вх²", "credit": "Вх²", "visibility": "public"})
+    if variant.get("uploaded"):
+        # Файл редактора: подпись и автор — его; без автора файл ждёт автора как задача редактора (Р-68).
+        data = {"caption": variant.get("caption") or "", "original_caption": variant.get("caption") or "",
+                "visibility": "public"}
+        if variant.get("author"):
+            data.update(author=variant["author"], credit=variant["author"])
+        if variant.get("source_url"):
+            data["source_url"] = variant["source_url"]
+    else:
+        model = variant.get("model", "").split("/")[-1]
+        caption = f"Иллюстрация создана ИИ ({model}) для Вх²"
+        data = {"caption": caption, "original_caption": rec["cover"].get("alt_ru") or caption,
+                "author": f"ИИ: {model}; Вх²", "credit": "Вх²", "visibility": "public"}
+    asset = api.call("POST", "/media", files={"file": (path.name, path.read_bytes(), mime)}, data=data)
     attached = api.call("POST", "/media/attachments", json={"entity_id": rec["entity_id"], "asset_id": asset["id"]})
     entity = api.call("GET", f"/entities/{rec['entity_id']}")
     others = [m["link_id"] for m in entity.get("media") or [] if m.get("link_id") != attached.get("link_id")]
@@ -170,6 +179,22 @@ def run(root: Path, llm: LLM, log, api) -> int:
                 cover["variants"].append(v)
                 cover["status"] = "вариант готов"
                 log("info", "cover", "вариант обложки готов", story=key, file=v["file"])
+            elif req.get("action") == "upload":
+                # Готовая обложка из файла редактора: файл лежит рядом с запросом, становится вариантом и сразу обложкой.
+                src = cdir / str(req.get("upload") or "")
+                if not req.get("upload") or src.parent != cdir or not src.is_file():
+                    raise LLMError("файл обложки не найден в ящике")
+                (root / ".state" / "covers").mkdir(parents=True, exist_ok=True)
+                name = f"{key}-{len(cover['variants']) + 1}{src.suffix}"
+                (root / ".state" / "covers" / name).write_bytes(src.read_bytes())
+                src.unlink(missing_ok=True)
+                v = {"file": name, "model": "", "prompt": "", "at": now(), "uploaded": True, "by": req.get("by"),
+                     "name": req.get("name"), "author": req.get("author"), "caption": req.get("caption"),
+                     "source_url": req.get("source_url")}
+                cover["variants"].append(v)
+                apply(root, rec, v, api, log)
+                cover["status"] = "обложка поставлена" if rec.get("entity_id") else "обложка загружена"
+                log("info", "cover", "обложка загружена из файла", story=key, file=name)
             elif req.get("action") == "apply":
                 v = next((x for x in cover["variants"] if x["file"] == req.get("file")), None)
                 if v:

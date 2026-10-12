@@ -734,6 +734,37 @@ newsRobot.post("/cover", async (c) => {
   return c.json({ queued: req }, 202);
 });
 
+/**
+ * Готовая обложка из файла редактора: PNG или JPEG до 15 МБ, подпись, автор, адрес источника.
+ * Файл и запрос кладутся в ящик робота; он делает файл вариантом и ставит обложкой.
+ */
+newsRobot.post("/cover-upload", async (c) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const form = await c.req.parseBody().catch(() => null);
+  const key = String(form?.story_key ?? "");
+  if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная история");
+  if (!(await readJson<Row>(`${ROOT}/state/prepared/${key}.json`))) throw new ApiError("not_found", "Новость не подготовлена");
+  const file = form?.file;
+  if (!(file instanceof File)) throw new ApiError("validation_failed", "Нужен файл обложки");
+  if (file.size > 15 * 1024 * 1024) throw new ApiError("validation_failed", "Файл больше 15 МБ");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  // Вид файла — по его началу, а не по имени.
+  const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  const jpg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (!png && !jpg) throw new ApiError("validation_failed", "Обложка — файл PNG или JPEG");
+  const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const sourceUrl = text(form?.source_url, 500);
+  if (sourceUrl && !/^https?:\/\/\S+$/.test(sourceUrl)) throw new ApiError("validation_failed", "Адрес источника — ссылка http(s)");
+  const stamp = Date.now();
+  const upload = `upload-${key}-${stamp}.${png ? "png" : "jpg"}`;
+  const req = { story_key: key, action: "upload", upload, name: file.name.slice(0, 200), caption: text(form?.caption, 500),
+    author: text(form?.author, 200), source_url: sourceUrl, by: principal.displayName, at: new Date().toISOString() };
+  await Deno.mkdir(`${ROOT}/inbox/covers`, { recursive: true });
+  await Deno.writeFile(`${ROOT}/inbox/covers/${upload}`, bytes);
+  await Deno.writeTextFile(`${ROOT}/inbox/covers/${key}-${stamp}.json`, JSON.stringify(req));
+  return c.json({ queued: req }, 202);
+});
+
 /** Файл варианта обложки для превью (только su). */
 newsRobot.get("/covers/:file", async (c) => {
   requirePermission(c.get("principal"), "su");

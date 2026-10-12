@@ -442,7 +442,7 @@ export interface RobotPrepared { publication?: string; dismissed?: boolean; stat
   cover?: { status?: string; started_at?: string; pending?: { action: string; at: string } } }
 export interface RobotCover {
   status?: string; idea_ru?: string; prompt?: string; alt_ru?: string; model?: string; error?: string;
-  chosen?: string; applied_at?: string; variants?: { file: string; model: string; prompt: string; at: string }[];
+  chosen?: string; applied_at?: string; variants?: { file: string; model: string; prompt: string; at: string; uploaded?: boolean; caption?: string; author?: string }[];
   started_at?: string; pending?: { action: string; at: string }; style_key?: string; style_name?: string;
 }
 export interface RobotPreparedFull extends RobotPrepared {
@@ -596,6 +596,8 @@ export const api = {
     artists: { key: string; name: string; years?: string; take?: string }[] }[] }>("/news-robot/cover-styles"),
   robotCover: (body: { story_key: string; action: "draft" | "generate" | "apply"; prompt?: string; model?: string; file?: string; style?: string }) =>
     request<{ queued: unknown }>("/news-robot/cover", { method: "POST", body: JSON.stringify(body) }),
+  /** Готовая обложка из файла: PNG или JPEG, подпись, автор, адрес источника. */
+  robotCoverUpload: (form: FormData) => request<{ queued: unknown }>("/news-robot/cover-upload", { method: "POST", body: form }),
   /** Картинка варианта обложки: маршрут только для su, поэтому — с токеном, как объект URL. */
   robotCoverImage: (file: string) => requestBlob(`/news-robot/covers/${encodeURIComponent(file)}`),
   robotRegenerate: (body: { story_key: string; input?: string; note?: string }) =>
