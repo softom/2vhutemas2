@@ -330,6 +330,7 @@ async function preparedIndex(): Promise<Record<string, Row>> {
       index[String(rec.story_key)] = {
         status: rec.status, ready_at: rec.ready_at, started_at: rec.started_at, error: rec.error,
         origin: rec.origin, title: rec.story?.news?.title, publication: rec.publication,
+        dismissed: Boolean(rec.dismissed_at),
         cover: rec.cover || covers[String(rec.story_key)] ? {
           status: (rec.cover as Row | undefined)?.status, started_at: (rec.cover as Row | undefined)?.started_at,
           pending: covers[String(rec.story_key)],
@@ -607,6 +608,26 @@ newsRobot.post("/order", async (c) => {
     at: new Date().toISOString() };
   await Deno.mkdir(`${ROOT}/inbox/orders`, { recursive: true });
   await Deno.writeTextFile(`${ROOT}/inbox/orders/${key}.json`, JSON.stringify(req));
+  return c.json({ queued: req }, 202);
+});
+
+/**
+ * «Удалить» у заказа: готовая новость по заказу, которая не нужна, убирается из списка.
+ * Запись подготовки робот оставляет на диске с отметкой — текст не теряется.
+ */
+newsRobot.post("/order-dismiss", async (c) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const body = await c.req.json().catch(() => null) as Row | null;
+  const key = String(body?.story_key ?? "");
+  if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная история");
+  const rec = await readJson<Row>(`${ROOT}/state/prepared/${key}.json`);
+  if (!rec?.order) throw new ApiError("not_found", "Такого заказа нет");
+  if ((await readQueue()).items.some((i) => i.story_key === key) || rec.publication === "вышла") {
+    throw new ApiError("validation_failed", "Заказ в стеке или вышел — сначала снимите его со стека");
+  }
+  const req = { story_key: key, by: principal.displayName, at: new Date().toISOString() };
+  await Deno.mkdir(`${ROOT}/inbox/dismiss`, { recursive: true });
+  await Deno.writeTextFile(`${ROOT}/inbox/dismiss/${key}.json`, JSON.stringify(req));
   return c.json({ queued: req }, 202);
 });
 

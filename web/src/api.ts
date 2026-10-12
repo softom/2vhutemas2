@@ -437,7 +437,7 @@ export interface RobotHealth {
     day: { calls: number; errors: number; prompt_tokens: number; completion_tokens: number }; recent: RobotLlmCall[] };
 }
 /** Подготовка новости из стека (Р-97). */
-export interface RobotPrepared { publication?: string; status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string; issues?: string[];
+export interface RobotPrepared { publication?: string; dismissed?: boolean; status: string; ready_at?: string; started_at?: string; error?: string; origin?: string; title?: string; issues?: string[];
   order?: { topic?: string; section?: string; by?: string; at?: string };
   cover?: { status?: string; started_at?: string; pending?: { action: string; at: string } } }
 export interface RobotCover {
@@ -598,6 +598,8 @@ export const api = {
   robotCoverImage: (file: string) => requestBlob(`/news-robot/covers/${encodeURIComponent(file)}`),
   robotRegenerate: (body: { story_key: string; input?: string; note?: string }) =>
     request<{ queued: unknown }>("/news-robot/regenerate", { method: "POST", body: JSON.stringify(body) }),
+  robotOrderDismiss: (story_key: string) =>
+    request<{ queued: unknown }>("/news-robot/order-dismiss", { method: "POST", body: JSON.stringify({ story_key }) }),
   robotRetry: (story_key: string) =>
     request<{ queued: unknown }>("/news-robot/retry", { method: "POST", body: JSON.stringify({ story_key }) }),
   robotRunView: (id: string) => request<RobotRunView>(`/news-robot/runs/${encodeURIComponent(id)}/view`),

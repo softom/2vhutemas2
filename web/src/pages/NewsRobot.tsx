@@ -396,7 +396,19 @@ function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
   const [form, setForm] = useState({ topic: "", section: "neurogeneration", input: "", note: "" });
   const [msg, setMsg] = useState<string | null>(null);
   const inStack = new Set(ov.queue.items.map((i) => i.story_key));
-  const done = Object.entries(ov.prepared).filter(([, p]) => p.order).sort((a, b) =>
+  // Заказ в стеке или вышедший живёт в разделе «Стек»; удалённый — убран редактором (2026-10-12).
+  const [gone, setGone] = useState<Set<string>>(new Set());
+  const dismiss = async (key: string) => {
+    if (!window.confirm("Убрать заказ из списка? В стек он уже не попадёт.")) return;
+    try {
+      await api.robotOrderDismiss(key);
+      setGone((g) => new Set(g).add(key));
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  };
+  const done = Object.entries(ov.prepared).filter(([key, p]) => p.order && !p.dismissed && p.publication !== "вышла"
+    && !inStack.has(key) && !gone.has(key)).sort((a, b) =>
     String(b[1].order?.at ?? "").localeCompare(String(a[1].order?.at ?? "")));
   const send = async () => {
     if (!form.topic.trim()) return setMsg("Нужна тема: о чём новость");
@@ -438,7 +450,7 @@ function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
       </div>
       {((ov.orders_pending ?? []).length > 0 || done.length > 0) && (
         <table className="grid-table">
-          <thead><tr><th>Заказ</th><th>Раздел</th><th>Состояние</th><th>Стек</th><th>Публикация</th></tr></thead>
+          <thead><tr><th>Заказ</th><th>Раздел</th><th>Состояние</th><th>Стек</th><th /></tr></thead>
           <tbody>
             {(ov.orders_pending ?? []).map((o) => (
               <tr key={o.story_key}><td>{o.topic}</td><td>{TOPIC[o.section] ?? o.section}</td>
@@ -451,9 +463,8 @@ function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
                 <td>{TOPIC[p.order?.section ?? ""] ?? p.order?.section}</td>
                 <td className={p.status === "ошибка" ? "error" : "hint"}>{p.status === "ошибка" ? `ошибка: ${p.error}` : p.status}
                   {p.status === "ошибка" && <Retry storyKey={key} />}</td>
-                <td>{p.status === "готово" && (inStack.has(key) ? <span className="hint">в стеке</span>
-                  : <button type="button" className="ghost" onClick={() => toStack(key, p.title, p.order?.section)}>В стек</button>)}</td>
-                <td><Publication storyKey={key} ov={ov} /></td>
+                <td>{p.status === "готово" && <button type="button" className="ghost" onClick={() => toStack(key, p.title, p.order?.section)}>В стек</button>}</td>
+                <td>{["готово", "ошибка"].includes(p.status) && <button type="button" className="ghost" onClick={() => dismiss(key)}>Удалить</button>}</td>
               </tr>
             ))}
           </tbody>

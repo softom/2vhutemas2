@@ -106,6 +106,27 @@ def retries(root: Path, log) -> None:
         log("info", "retry", "повтор по просьбе редактора", story=key, by=req.get("by"))
 
 
+def dismissals(root: Path, log) -> None:
+    """«Удалить» у заказа (inbox/dismiss/<история>.json): заказ убирается из списка.
+
+    Запись подготовки остаётся на диске с отметкой dismissed_at — текст и источники не теряются.
+    Заказ в стеке или вышедший так не убирается: сначала его снимают со стека.
+    """
+    ddir = root / "inbox" / "dismiss"
+    queued = {q["story_key"] for q in (_read(root / "inbox" / "queue.json") or {}).get("items", [])}
+    for req_path in sorted(ddir.glob("*.json")) if ddir.exists() else []:
+        req = _read(req_path) or {}
+        req_path.unlink(missing_ok=True)
+        key = req.get("story_key", "")
+        path = root / ".state" / "prepared" / f"{key}.json"
+        rec = _read(path)
+        if not rec or not rec.get("order") or key in queued or rec.get("publication") == "вышла":
+            continue
+        rec.update(dismissed_at=now(), dismissed_by=req.get("by"))
+        _write(path, rec)
+        log("info", "order", "заказ убран из списка", story=key, by=req.get("by"))
+
+
 def orders(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
     """«Заказать новость» (Р-104): тема, ссылки, текст и указание редактора → новость-обзор.
 
@@ -230,6 +251,7 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
     fetcher: Fetcher | None = Fetcher()
     try:
         retries(root, log)
+        dismissals(root, log)
         done += orders(root, llm, log, pipeline, fetcher)
         done += regenerate(root, llm, log, pipeline, fetcher)
         for q in queue:
