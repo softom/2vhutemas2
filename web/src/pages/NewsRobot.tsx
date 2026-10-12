@@ -341,7 +341,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       </div>
       {rows.length === 0 ? <p className="hint">{run.running ? "Отбор ещё не начался." : "Отбора в этом прогоне не было."}</p> : (
         <table className="grid-table">
-          <thead><tr><th>#</th><th>Оценка</th><th>Тема</th><th>Новость</th><th>Почему</th><th>Выпустил бы?</th><th>Стек</th><th>Публикация</th></tr></thead>
+          <thead><tr><th>#</th><th>Оценка</th><th>Свежесть</th><th>Тема</th><th>Новость</th><th>Почему</th><th>Выпустил бы?</th><th>Стек</th><th>Публикация</th></tr></thead>
           <tbody>
             {shownRows.map((c, i) => {
               const v = ov.judged[c.story_key] ?? pendingVerdict[c.story_key];
@@ -349,6 +349,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                 <tr key={c.story_key || i}>
                   <td>{i + 1}</td>
                   <td><b>{c.final}</b>{!c.partial && <><br /><span className="hint">LLM {c.interest}</span></>}</td>
+                  <td><Freshness c={c} /></td>
                   <td>{TOPIC[c.topic ?? ""] ?? c.topic}<br /><span className="hint">{KIND[c.kind ?? ""] ?? c.kind}{c.competition ? " · конкурс" : ""}</span></td>
                   <td>
                     {ov.prepared[c.story_key]?.status === "готово" && inStack.has(c.story_key)
@@ -470,6 +471,24 @@ function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
           </tbody>
         </table>
       )}
+    </>
+  );
+}
+
+/**
+ * Свежесть истории: когда впервые опубликована, сколько ей дней сегодня и сколько баллов
+ * робот снял за давность в день прогона. У прежних прогонов дата — самая ранняя из изданий.
+ */
+function Freshness({ c }: { c: RobotStory }) {
+  const dates = c.sources.map((s) => s.date).filter((d): d is string => Boolean(d)).sort();
+  const first = c.republished_from ?? c.first_date ?? dates[0];
+  if (!first) return <span className="hint">—</span>;
+  const days = Math.max(0, Math.floor((Date.now() - new Date(`${first}T00:00:00Z`).getTime()) / 86400000));
+  const day = new Date(`${first}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  return (
+    <>
+      <span className={days > 4 ? "error" : undefined}>{days === 0 ? "сегодня" : days === 1 ? "вчера" : `${days} дн.`}</span>
+      <br /><span className="hint">{day}{c.republished_from ? " · перепечатка" : ""}{c.stale ? ` · −${c.stale}` : ""}</span>
     </>
   );
 }

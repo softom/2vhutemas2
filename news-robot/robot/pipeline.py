@@ -290,7 +290,8 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
         final += min(len({i.source_id for i in items}) - 1, 3) * weights["per_extra_source"]
         if s.get("competition") and s.get("students_eligible"):
             final += weights["students_competition"]
-        final -= max(0, age - weights["stale_after_days"]) * weights["stale_penalty"]
+        stale = max(0, age - weights["stale_after_days"]) * weights["stale_penalty"]
+        final -= stale
         # Главный материал истории — из самого надёжного издания.
         lead = max(items, key=lambda i: (sources[i.source_id].get("trust", 5), len(i.summary)))
         result.append({
@@ -299,6 +300,8 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
             "competition": bool(s.get("competition")), "students_eligible": s.get("students_eligible"),
             "reason": s.get("reason"), "lead_item": lead.id,
             "republished_from": next((i.republished_from for i in items if i.republished_from), None),
+            # Свежесть: дата первой публикации, возраст на день прогона и снятые за давность баллы.
+            "first_date": min(dated).date().isoformat() if dated else None, "age_days": age, "stale": stale,
             "sources": [{"source": sources[i.source_id]["title"], "url": i.url, "title": i.title,
                          "date": (i.published or "")[:10]} for i in items],
         })
