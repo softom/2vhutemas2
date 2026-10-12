@@ -116,6 +116,13 @@ check "состояние индекса гостю закрыто" 401 "$(code 
 check "состояние индекса под входом" 200 "$(code -H "$AUTH" $API/search/status)"
 contains "состояние индекса считает куски" '"chunks"' "$(body)"
 check "пересборка индекса гостю закрыта" 401 "$(code -X POST $API/search/reindex)"
+contains "поиск отдаёт номер записи журнала" '"query_id"' "$(curl -s "$API/search?q=smoke%20%D0%B6%D1%83%D1%80%D0%BD%D0%B0%D0%BB")"
+check "журнал запросов гостю закрыт" 401 "$(code $API/search/queries)"
+check "журнал запросов SU" 200 "$(code -H "$AUTH" $API/search/queries)"
+contains "журнал запросов содержит запрос прогона" 'smoke журнал' "$(body)"
+check "журнал ИИ гостю закрыт" 401 "$(code $API/search/ai-requests)"
+check "журнал ИИ SU" 200 "$(code -H "$AUTH" $API/search/ai-requests)"
+contains "журнал ИИ отдаёт расход" '"totals"' "$(body)"
 
 check "неизвестный тип отклоняется" 400 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{"type":"net-takogo","slug":"smoke-net-tipa","title_ru":"smoke: нет типа"}' $API/entities)"
 # Записей в базе больше страницы, поэтому ищем свою по имени, а не наугад.
@@ -552,6 +559,8 @@ delete from app.entities where id in (select id from smoke_e);
 delete from app.tags where lower(title) like 'smoke-%';
 delete from app.parameter_sets where code like 'smoke%';
 delete from app.parameters where code like 'smoke%';
+-- Журнал поиска (Р-113): запросы самого прогона — не запросы читателей.
+delete from app.search_queries where lower(query) like 'smoke%' or lower(query) = 'a';
 " >/dev/null
 LEFT=$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -At -c "
 select (select count(*) from app.entities where slug like 'smoke-%' or title_ru like 'smoke%')

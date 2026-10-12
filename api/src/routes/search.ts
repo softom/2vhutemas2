@@ -7,6 +7,8 @@
  *   &limit=20
  * GET /search/status            состояние индекса (право edit)
  * POST /search/reindex          пересобрать куски всех записей (su)
+ * GET /search/queries           журнал поисковых запросов (su, Р-113)
+ * GET /search/ai-requests       журнал обращений к ИИ и расход (su, Р-113)
  *
  * Гость ищет по опубликованным версиям, редактор — по рабочим. Совпавшие
  * слова во фрагменте — между знаками U+E000 и U+E001: клиент сам решает,
@@ -20,6 +22,7 @@ import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import type { AppEnv } from "../lib/http.ts";
 import { config } from "../lib/config.ts";
 import { embeddingsEnabled, embedQuery, rebuildAll, stats } from "../lib/search.ts";
+import { callerOf, recordSearch } from "../lib/aiJournal.ts";
 
 export const search = new Hono<AppEnv>();
 
@@ -45,7 +48,9 @@ search.get("/", async (c: Context<AppEnv>) => {
   const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 20) || 20, 1), 50);
   const drafts = canSeeDrafts(c.get("principal"));
 
-  const vector = await embedQuery(query, c.get("requestId"));
+  const started = performance.now();
+  const caller = await callerOf(c);
+  const vector = await embedQuery(query, caller);
   const rows = await sql`
     select s.entity_id as id, e.slug, e.title_ru, ty.code as type, ty.title_ru as type_title,
            app.entity_type_path(e.type_id) as type_path, e.status,
@@ -57,7 +62,13 @@ search.get("/", async (c: Context<AppEnv>) => {
       join app.entity_types ty on ty.id = e.type_id
      order by s.score desc, s.entity_id`;
 
-  return c.json({ items: rows, mode: vector ? "hybrid" : "fulltext" });
+  const mode = vector ? "hybrid" : "fulltext";
+  // Каждый запрос — в журнал (Р-113): кто искал, что нашлось. Сбой журнала поиск не роняет.
+  const queryId = await recordSearch({
+    caller, query, kinds, type, mode, durationMs: performance.now() - started,
+    items: rows as { id: unknown; found_in: unknown; score: unknown; matched: unknown }[],
+  });
+  return c.json({ items: rows, mode, query_id: queryId });
 });
 
 search.get("/status", async (c: Context<AppEnv>) => {
@@ -81,4 +92,62 @@ search.post("/reindex", async (c: Context<AppEnv>) => {
   requirePermission(c.get("principal"), "su");
   rebuildAll(c.get("requestId"));
   return c.json({ note: "Индекс пересобирается фоном; ход — GET /search/status" }, 202);
+});
+
+function days(raw: string | undefined): number {
+  return Math.min(Math.max(Number(raw ?? 30) || 30, 1), 365);
+}
+
+/**
+ * Журнал поисковых запросов (Р-113): последние запросы с автором и сводка —
+ * сколько искали и что не нашлось по словам (чего на сайте не хватает).
+ */
+search.get("/queries", async (c: Context<AppEnv>) => {
+  requirePermission(c.get("principal"), "su");
+  const period = days(c.req.query("days"));
+  const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 100) || 100, 1), 500);
+  const onlyMissed = c.req.query("missed") === "1";
+  const items = await sql`
+    select q.id, q.created_at, q.query, q.kinds, q.type_code, q.mode, q.results_count, q.exact, q.top,
+           q.duration_ms, q.contributor_id, co.display_name as contributor, q.visitor_key
+      from app.search_queries q
+      left join app.contributors co on co.id = q.contributor_id
+     where q.created_at > now() - make_interval(days => ${period}::int)
+       and (not ${onlyMissed} or not q.exact)
+     order by q.created_at desc
+     limit ${limit}`;
+  const [summary] = await sql`
+    select count(*)::int as queries,
+           count(*) filter (where not exact)::int as without_exact,
+           count(*) filter (where results_count = 0)::int as empty,
+           count(distinct contributor_id)::int as contributors,
+           count(distinct visitor_key)::int as visitors
+      from app.search_queries
+     where created_at > now() - make_interval(days => ${period}::int)`;
+  return c.json({ days: period, summary, items });
+});
+
+/** Журнал обращений к ИИ (Р-113): расход по назначению и модели и последние вызовы. */
+search.get("/ai-requests", async (c: Context<AppEnv>) => {
+  requirePermission(c.get("principal"), "su");
+  const period = days(c.req.query("days"));
+  const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 100) || 100, 1), 500);
+  const totals = await sql`
+    select purpose, model, count(*)::int as calls,
+           count(*) filter (where status = 'error')::int as errors,
+           coalesce(sum(total_tokens), 0)::bigint as tokens,
+           sum(cost_rub) as cost_rub
+      from app.ai_requests
+     where created_at > now() - make_interval(days => ${period}::int)
+     group by 1, 2 order by 1, 2`;
+  const items = await sql`
+    select a.id, a.created_at, a.purpose, a.model, a.items, a.input_tokens, a.output_tokens,
+           a.total_tokens, a.cost_rub, a.status, a.error, a.duration_ms, a.search_query_id,
+           a.contributor_id, co.display_name as contributor, a.visitor_key
+      from app.ai_requests a
+      left join app.contributors co on co.id = a.contributor_id
+     where a.created_at > now() - make_interval(days => ${period}::int)
+     order by a.created_at desc
+     limit ${limit}`;
+  return c.json({ days: period, totals, items });
 });

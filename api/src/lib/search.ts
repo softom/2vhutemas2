@@ -15,6 +15,7 @@ import { config } from "./config.ts";
 import { sql } from "./db.ts";
 import { log } from "./http.ts";
 import { extractText } from "../routes/documents.ts";
+import { type Caller, recordAiRequest, SERVICE } from "./aiJournal.ts";
 
 export type ChunkKind = "title" | "params" | "text";
 
@@ -139,55 +140,71 @@ export function embeddingsEnabled(): boolean {
   return config.search.apiKey !== null;
 }
 
-/** Векторы для списка текстов; порядок ответа — по index. */
-async function embed(inputs: string[]): Promise<number[][]> {
-  const response = await fetch(`${config.search.baseUrl}/embeddings`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.search.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.search.model,
-      input: inputs,
-      dimensions: config.search.dimensions,
-    }),
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 300);
-    throw new Error(`Модель эмбеддингов ответила ${response.status}: ${detail}`);
-  }
-  const data = await response.json() as {
-    data: { index: number; embedding: number[] }[];
-    usage?: { total_tokens?: number };
-  };
-  stats.tokens += data.usage?.total_tokens ?? 0;
-  const vectors = [...data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
-  for (const v of vectors) {
-    if (v.length !== config.search.dimensions) {
-      throw new Error(`Модель вернула вектор длины ${v.length}, ждали ${config.search.dimensions}`);
+/** Векторы для списка текстов; порядок ответа — по index. Каждый вызов — в журнал ИИ (Р-113). */
+async function embed(
+  inputs: string[],
+  caller: Caller,
+  purpose: "query_embedding" | "index_embedding",
+): Promise<number[][]> {
+  const started = performance.now();
+  const journal = (status: "ok" | "error", usage: Record<string, number> | null, error: string | null) =>
+    recordAiRequest({
+      caller, purpose, model: config.search.model, items: inputs.length, usage, status, error,
+      durationMs: performance.now() - started,
+    });
+  try {
+    const response = await fetch(`${config.search.baseUrl}/embeddings`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${config.search.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.search.model,
+        input: inputs,
+        dimensions: config.search.dimensions,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!response.ok) {
+      const detail = (await response.text()).slice(0, 300);
+      throw new Error(`Модель эмбеддингов ответила ${response.status}: ${detail}`);
     }
+    const data = await response.json() as {
+      data: { index: number; embedding: number[] }[];
+      usage?: Record<string, number>;
+    };
+    stats.tokens += data.usage?.total_tokens ?? 0;
+    const vectors = [...data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
+    for (const v of vectors) {
+      if (v.length !== config.search.dimensions) {
+        throw new Error(`Модель вернула вектор длины ${v.length}, ждали ${config.search.dimensions}`);
+      }
+    }
+    journal("ok", data.usage ?? null, null);
+    return vectors;
+  } catch (error) {
+    journal("error", null, String(error));
+    throw error;
   }
-  return vectors;
 }
 
 /** Последние запросы читателей повторяются: вектор запроса держим в памяти. */
 const queryCache = new Map<string, number[]>();
 
 /** Вектор запроса; null — модель недоступна, поиск идёт только по словам. */
-export async function embedQuery(query: string, requestId: string): Promise<number[] | null> {
+export async function embedQuery(query: string, caller: Caller): Promise<number[] | null> {
   if (!embeddingsEnabled()) return null;
   const key = query.trim().toLowerCase();
   const cached = queryCache.get(key);
   if (cached) return cached;
   try {
-    const [vector] = await embed([query.trim()]);
+    const [vector] = await embed([query.trim()], caller, "query_embedding");
     queryCache.set(key, vector);
     if (queryCache.size > 500) queryCache.delete(queryCache.keys().next().value!);
     return vector;
   } catch (error) {
-    log("warn", requestId, "Вектор запроса не получен — поиск только по словам", {
+    log("warn", caller.requestId, "Вектор запроса не получен — поиск только по словам", {
       error: String(error),
     });
     return null;
@@ -265,7 +282,7 @@ export async function indexOnce(budget = { entities: 50, batches: 10 }): Promise
         const inputs = pending.map((p) =>
           embedInputFor(p.kind, p.content, p.name.split("\n")[0] ?? "").slice(0, 8000)
         );
-        const vectors = await embed(inputs);
+        const vectors = await embed(inputs, SERVICE(requestId), "index_embedding");
         const items = pending.map((p, i) => ({
           hash: p.content_sha256,
           embedding: `[${vectors[i].join(",")}]`,
