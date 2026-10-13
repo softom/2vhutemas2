@@ -29,6 +29,8 @@ def main():
     save()
     jobs = [
         ("postgres.dump", "docker exec supa_db pg_dump -U postgres -d postgres -Fc"),
+        # Статистика посещений (Umami) — отдельная база того же PostgreSQL.
+        ("umami.dump", "docker exec supa_db pg_dump -U postgres -d umami -Fc"),
         ("globals.sql", "docker exec supa_db pg_dumpall -U postgres --globals-only"),
         ("server-files.tar.gz", "tar -czf - -C / " + " ".join(SOURCES)),
     ]
