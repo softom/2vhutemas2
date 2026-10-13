@@ -46,7 +46,7 @@ export const config = {
     maxPixels: Number(optional("MEDIA_MAX_PIXELS", "400000000")),
     allowedMimeTypes: optional(
       "MEDIA_ALLOWED_MIME",
-      "image/jpeg,image/png,image/webp,image/avif,image/tiff,image/heic,application/pdf,video/mp4",
+      "image/jpeg,image/png,image/gif,image/webp,image/avif,image/tiff,image/heic,application/pdf,video/mp4",
     ).split(",").map((t) => t.trim()),
     screenMaxEdge: Number(optional("MEDIA_SCREEN_MAX_EDGE", "2560")),
     thumbnailMaxEdge: Number(optional("MEDIA_THUMBNAIL_MAX_EDGE", "400")),

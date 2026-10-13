@@ -32,7 +32,7 @@ parameters:
     value: 400000000
     status: proposed
   media.upload.allowed_mime_types:
-    value: [image/jpeg, image/png, image/webp, image/avif, image/tiff, image/heic, application/pdf, video/mp4]
+    value: [image/jpeg, image/png, image/gif, image/webp, image/avif, image/tiff, image/heic, application/pdf, video/mp4]
     status: proposed
   media.processing.timeout_seconds:
     value: 300

@@ -27,12 +27,13 @@ export interface StoredFile {
   height: number | null;
 }
 
-const DERIVABLE = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/tiff", "image/heic", "application/pdf"]);
+const DERIVABLE = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif", "image/tiff", "image/heic", "application/pdf"]);
 
 function extensionFor(mime: string): string {
   const map: Record<string, string> = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
+    "image/gif": ".gif",
     "image/webp": ".webp",
     "image/avif": ".avif",
     "image/tiff": ".tif",
@@ -159,14 +160,26 @@ export async function makeDerivative(
   const target = `${config.media.root}/${storageKey}`;
   await Deno.mkdir(target.slice(0, target.lastIndexOf("/")), { recursive: true });
 
-  const result = await run(MAGICK, [
-    `${source}[0]`,
-    "-auto-orient",
-    "-colorspace", "sRGB",
-    "-resize", `${maxEdge}x${maxEdge}>`,
-    "-quality", String(config.media.quality),
-    target,
-  ]);
+  // Анимированный GIF: экранная версия сохраняет движение (анимированный
+  // WebP, все кадры), превью — первый кадр. У прочих форматов — первый кадр
+  // или первая страница.
+  const animated = originalKey.endsWith(".gif") && variant === "screen";
+  const result = await run(MAGICK, animated
+    ? [
+      source,
+      "-coalesce",
+      "-resize", `${maxEdge}x${maxEdge}>`,
+      "-quality", String(config.media.quality),
+      target,
+    ]
+    : [
+      `${source}[0]`,
+      "-auto-orient",
+      "-colorspace", "sRGB",
+      "-resize", `${maxEdge}x${maxEdge}>`,
+      "-quality", String(config.media.quality),
+      target,
+    ]);
   if (!result.ok) {
     throw new ApiError("internal_error", "Не удалось создать производное изображение", {
       variant,
