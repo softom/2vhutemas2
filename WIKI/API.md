@@ -161,7 +161,7 @@ PUT /entities-indicators/43
 | `program_seats` | целое | Людей: зрительские места, рабочие места, места в гримёрных… |
 | `program_area` | число, м² | Площадь одного помещения |
 | `program_area_total` | число, м² | Площадь всего, если известна только она |
-| `program_area_basis` | вариант | `document`, `dimensions`, `estimate`, `unknown` |
+| `program_area_basis` | вариант | «Откуда цифра» (0047): `document` данные, `dimensions` расчёт, `estimate` оценка, `unknown` нет данных. На странице под итогом программы — площадь по каждому варианту |
 | `program_dimensions` | текст | Габариты: «19,02 × 13,23» |
 | `program_in_total` | вариант | `yes` / `no` — «нет» только при двойном счёте |
 | `program_source` | текст | Документ и страница |

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Профили площадей</title>
+<style>
+:root{--text-primary:#1f1e1d;--text-secondary:#5f5e5a;--text-success:#3b6d11;--text-danger:#a32d2d;--text-warning:#854f0b;--text-accent:#185fa5;--border:rgba(0,0,0,.15);--bg:#faf9f5;--card:#fff}
+@media (prefers-color-scheme:dark){:root{--text-primary:#f1efe8;--text-secondary:#b4b2a9;--text-success:#97c459;--text-danger:#f09595;--text-warning:#fac775;--text-accent:#85b7eb;--border:rgba(255,255,255,.18);--bg:#1f1e1d;--card:#2c2c2a}}
+body{margin:0 auto;padding:16px;max-width:680px;background:var(--bg);color:var(--text-primary);font:16px/1.5 system-ui,sans-serif}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+button,select,input{font:inherit;font-size:14px;padding:4px 10px;border-radius:8px;border:.5px solid var(--border);background:transparent;color:inherit}
+button{cursor:pointer}
+</style></head><body>
+<h2 class="sr-only">Игра «Профили площадей»: лепестковая диаграмма показывает, как зрелищное здание делит площадь между семью частями; профили театра, концертного зала, стадиона, крытой арены и экрана по документам заказчиков; можно угадывать тип по диаграмме и сравнить свой проект.</h2>
+<style>
+.zn-tabs,.zn-types{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.zn-tabs button[aria-pressed=true],.zn-types button[aria-pressed=true]{background:#A9381F;border-color:#A9381F;color:#fff}
+.zn-wrap{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:600px){.zn-wrap{grid-template-columns:minmax(0,1fr)}}
+.zn-svg{width:100%;height:auto;display:block}
+.zn-svg text{font:11px system-ui,sans-serif;fill:var(--text-secondary)}
+.zn-side{font-size:14px}
+.zn-side table{border-collapse:collapse;width:100%;font-size:13px}
+.zn-side td,.zn-side th{padding:3px 4px;border-bottom:.5px solid var(--border);text-align:right;font-weight:400}
+.zn-side td:first-child,.zn-side th:first-child{text-align:left}
+.zn-side th{color:var(--text-secondary)}
+.zn-msg{margin:8px 0;font-size:14px}
+.zn-good{color:var(--text-success)}.zn-bad{color:var(--text-danger)}
+.zn-key{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--text-secondary);margin:6px 0 0}
+.zn-key i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:4px}
+.zn-in{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:4px 8px;align-items:center;font-size:13px}
+.zn-in input{width:92px;text-align:right}
+.zn-hint{font-size:12px;color:var(--text-secondary);margin:6px 0 0}
+</style>
+<div class="zn-tabs" role="group" aria-label="Режим">
+  <button data-mode="types" aria-pressed="true">Профили типов</button>
+  <button data-mode="guess" aria-pressed="false">Угадай тип</button>
+  <button data-mode="own" aria-pressed="false">Свой проект</button>
+</div>
+<div class="zn-types" id="zn-types" role="group" aria-label="Тип"></div>
+<div class="zn-wrap">
+  <svg class="zn-svg" id="zn-svg" viewBox="-50 -8 440 356" role="img" aria-label="Лепестковая диаграмма долей площади"></svg>
+  <div class="zn-side" id="zn-side"></div>
+</div>
+<div class="zn-key" id="zn-key"></div>
+<script>
+(function () {
+  // Доли площади по семи зонам классификатора помещений — от площади помещений
+  // без путей движения и инженерии (их документы считают по-разному); поле
+  // стадионов и открытые площадки (разгрузка, телевизионные машины) в профили не входят.
+  // м² — из программ записей сайта 2vhutemas.ru (Торунь и Вильнюс — по помещениям, 2026-10-14).
+  var AX = ['Место действия', 'Места зрителей', 'Зритель вне зала', 'Исполнители', 'Производство и склады', 'Управление и службы', 'Другие функции'];
+  var AXS = ['Действие', 'Зрители', 'Вне зала', 'Исполнители', 'Производство', 'Управление', 'Другое'];
+  var DOCS = [
+    { name: 'Комише-опер, Берлин', type: 'theatre', doc: 'конкурсное задание 2020', m2: [5196, 1584, 840, 6132, 981, 5204, 0], note: 'зал и фойе в задании одной строкой' },
+    { name: 'Концертный зал «Таутос намай», Вильнюс', type: 'concert', doc: 'конкурсное задание', m2: [560, 1290, 2575, 1550, 1545, 905, 1000], note: 'по нижней границе диапазонов; сцена — эстрада, ниша органа, хоровой балкон и сцена Малого зала' },
+    { name: 'Стадион «Яншпортпарк», Берлин', type: 'stadium', doc: 'конкурсное задание 2022', m2: [0, 9000, 1940, 590, 2167, 1409, 40], note: 'поле не входит в программу' },
+    { name: 'Национальный стадион, Рейкьявик', type: 'stadium', doc: 'предтендерная концепция 2017', m2: [0, 8810, 3118, 638, 1390, 2202, 1000], note: 'поле не входит; места на трибунах — расчёт по размеру места' },
+    { name: 'Pegula Ice Arena, Пенсильвания', type: 'arena', doc: 'программа требований 2010', m2: [3211, 4019, 1841, 2317, 1485, 714, 186], note: 'два ледовых поля — место действия' },
+    { name: 'Киноцентр «Камеримидж», Торунь', type: 'screen', doc: 'конкурсное задание 2021', m2: [896, 3416, 7708, 107, 2610, 1375, 4006], note: 'музей, выставки и образование — «другие функции»; киностудия — производство' }
+  ];
+  var TYPES = [
+    { id: 'theatre', name: 'Театр' }, { id: 'concert', name: 'Концертный зал' }, { id: 'stadium', name: 'Стадион' },
+    { id: 'arena', name: 'Крытая арена' }, { id: 'screen', name: 'Экран' }
+  ];
+  var RED = '#A9381F', BLUE = '#2F5D9E', OCHRE = '#8A6414';
+  DOCS.forEach(function (d) { var s = d.m2.reduce(function (a, b) { return a + b; }, 0); d.total = s; d.sh = d.m2.map(function (v) { return v / s * 100; }); });
+  TYPES.forEach(function (t) {
+    var ds = DOCS.filter(function (d) { return d.type === t.id; });
+    t.docs = ds;
+    t.sh = AX.map(function (_, i) { return ds.reduce(function (a, d) { return a + d.sh[i]; }, 0) / ds.length; });
+  });
+  var MAX = 60, C = 170, R = 112;
+  function pt(i, v) { var a = -Math.PI / 2 + i * 2 * Math.PI / AX.length, r = Math.min(v, MAX) / MAX * R; return [C + r * Math.cos(a), C + r * Math.sin(a)]; }
+  function poly(sh) { return sh.map(function (v, i) { return pt(i, v).map(function (n) { return n.toFixed(1); }).join(','); }).join(' '); }
+  function f(v) { return (Math.round(v * 10) / 10).toString().replace('.', ','); }
+  function sgn(v) { return (v > 0 ? '+' : v < 0 ? '−' : '±') + f(Math.abs(v)); }
+  var svg = document.getElementById('zn-svg'), side = document.getElementById('zn-side'), key = document.getElementById('zn-key'), typesBox = document.getElementById('zn-types');
+  function draw(layers) {
+    var g = '';
+    [10, 20, 30, 40, 50, 60].forEach(function (v) { g += '<polygon points="' + poly(AX.map(function () { return v; })) + '" fill="none" stroke="currentColor" stroke-opacity="' + (v === 60 ? .35 : .15) + '" stroke-width=".5"/>'; });
+    AX.forEach(function (_, i) { var p = pt(i, MAX); g += '<line x1="' + C + '" y1="' + C + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '" stroke="currentColor" stroke-opacity=".2" stroke-width=".5"/>'; });
+    [20, 40].forEach(function (v) { var p = pt(0, v); g += '<text x="' + (p[0] + 4) + '" y="' + (p[1] + 11) + '">' + v + ' %</text>'; });
+    AX.forEach(function (_, i) { var p = pt(i, MAX + 9), anc = Math.abs(p[0] - C) < 8 ? 'middle' : p[0] > C ? 'start' : 'end'; g += '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + 4).toFixed(1) + '" text-anchor="' + anc + '">' + AXS[i] + '</text>'; });
+    layers.forEach(function (l) {
+      g += '<polygon points="' + poly(l.sh) + '" fill="' + (l.fill ? l.color : 'none') + '" fill-opacity="' + (l.fill ? .18 : 0) + '" stroke="' + l.color + '" stroke-width="' + (l.w || 2) + '"' + (l.dash ? ' stroke-dasharray="5 4"' : '') + ' stroke-linejoin="round"/>';
+    });
+    svg.style.color = 'var(--text-primary)';
+    svg.innerHTML = g;
+    key.innerHTML = layers.map(function (l) { return '<span><i style="background:' + l.color + '"></i>' + l.label + '</span>'; }).join('');
+  }
+  function devTable(rows) {
+    var h = '<table><tr><th>Часть</th>' + rows.map(function (r) { return '<th>' + r.head + '</th>'; }).join('') + '</tr>';
+    AX.forEach(function (a, i) { h += '<tr><td>' + a + '</td>' + rows.map(function (r) { return '<td>' + r.cell(i) + '</td>'; }).join('') + '</tr>'; });
+    return h + '</table>';
+  }
+  var mode = 'types', cur = 'theatre';
+  function typeButtons(onPick, pressed) {
+    typesBox.innerHTML = TYPES.map(function (t) { return '<button data-t="' + t.id + '" aria-pressed="' + (t.id === pressed) + '">' + t.name + '</button>'; }).join('');
+    Array.prototype.forEach.call(typesBox.querySelectorAll('button'), function (b) { b.onclick = function () { onPick(b.getAttribute('data-t')); }; });
+  }
+  function showType(id) {
+    cur = id; var t = TYPES.filter(function (x) { return x.id === id; })[0];
+    typeButtons(showType, id);
+    var colors = [BLUE, OCHRE];
+    draw([{ sh: t.sh, color: RED, fill: true, label: 'профиль типа: ' + t.name.toLowerCase() }].concat(t.docs.length > 1 ? t.docs.map(function (d, k) { return { sh: d.sh, color: colors[k], dash: true, w: 1.5, label: d.name }; }) : []));
+    var rows = [{ head: 'профиль, %', cell: function (i) { return f(t.sh[i]); } }];
+    if (t.docs.length > 1) t.docs.forEach(function (d) { rows.push({ head: d.name.split(',')[0] + ', п. п.', cell: function (i) { return sgn(d.sh[i] - t.sh[i]); } }); });
+    side.innerHTML = devTable(rows) + '<p class="zn-hint">' + (t.docs.length > 1 ? 'Профиль — среднее двух документов; в колонках справа — отклонение каждого от среднего, в процентных пунктах.' : 'Профиль по одному документу: ' + t.docs[0].name + ' (' + t.docs[0].doc + '). Это ориентир, а не статистика типа.') + ' ' + t.docs.map(function (d) { return d.name + ': ' + d.note + '.'; }).join(' ') + '</p>';
+  }
+  var order = [], step = 0, score = 0;
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = a[i]; a[i] = a[j]; a[j] = x; } return a; }
+  function guessStart() { order = shuffle(DOCS.slice()); step = 0; score = 0; guessShow(); }
+  function guessShow() {
+    if (step >= order.length) {
+      typesBox.innerHTML = '';
+      draw([]);
+      side.innerHTML = '<p class="zn-msg">Угадано ' + score + ' из ' + order.length + '.</p><button id="zn-again">Ещё раз</button>';
+      document.getElementById('zn-again').onclick = guessStart; return;
+    }
+    var d = order[step];
+    typeButtons(function (id) { guessAnswer(id); }, null);
+    draw([{ sh: d.sh, color: BLUE, fill: true, label: 'здание ' + (step + 1) + ' из ' + order.length }]);
+    side.innerHTML = '<p class="zn-msg">Здание ' + (step + 1) + ' из ' + order.length + '. Какой это тип?</p><p class="zn-hint">Диаграмма — доли площади по частям здания, без путей движения и инженерии.</p>';
+  }
+  function guessAnswer(id) {
+    var d = order[step], t = TYPES.filter(function (x) { return x.id === d.type; })[0], ok = id === d.type;
+    if (ok) score++;
+    Array.prototype.forEach.call(typesBox.querySelectorAll('button'), function (b) { b.disabled = true; if (b.getAttribute('data-t') === d.type) b.setAttribute('aria-pressed', 'true'); });
+    draw([{ sh: t.sh, color: RED, fill: true, label: 'профиль: ' + t.name.toLowerCase() }, { sh: d.sh, color: BLUE, dash: true, label: d.name }]);
+    var diff = AX.map(function (a, i) { return { a: a, v: d.sh[i] - t.sh[i] }; }).sort(function (x, y) { return Math.abs(y.v) - Math.abs(x.v); }).slice(0, 2);
+    side.innerHTML = '<p class="zn-msg ' + (ok ? 'zn-good' : 'zn-bad') + '">' + (ok ? 'Верно' : 'Нет') + ': ' + d.name + ' — ' + t.name.toLowerCase() + ', ' + d.doc + '.</p>' +
+      (t.docs.length > 1 ? '<p class="zn-hint">Сильнее всего здание отличается от профиля типа: ' + diff.map(function (x) { return x.a.toLowerCase() + ' ' + sgn(x.v) + ' п. п.'; }).join(', ') + '.</p>' : '<p class="zn-hint">Профиль этого типа построен по одному документу — по нему же.</p>') +
+      '<p class="zn-hint">' + d.note + '.</p><button id="zn-next">' + (step + 1 < order.length ? 'Дальше' : 'Итог') + '</button>';
+    document.getElementById('zn-next').onclick = function () { step++; guessShow(); };
+  }
+  var own = [0, 0, 0, 0, 0, 0, 0];
+  function ownShow(id) {
+    cur = id || cur; var t = TYPES.filter(function (x) { return x.id === cur; })[0];
+    typeButtons(ownShow, cur);
+    if (!document.getElementById('zn-own')) {
+      side.innerHTML = '<div class="zn-in" id="zn-own">' + AX.map(function (a, i) { return '<label for="zn-o' + i + '">' + a + ', м²</label><input id="zn-o' + i + '" type="number" min="0" step="10" value="' + (own[i] || '') + '">'; }).join('') + '</div><div id="zn-ownres"></div>';
+      AX.forEach(function (_, i) { document.getElementById('zn-o' + i).oninput = function () { own[i] = Math.max(0, parseFloat(this.value.replace(',', '.')) || 0); ownCalc(); }; });
+    }
+    ownCalc();
+  }
+  function ownCalc() {
+    var t = TYPES.filter(function (x) { return x.id === cur; })[0], s = own.reduce(function (a, b) { return a + b; }, 0), res = document.getElementById('zn-ownres');
+    if (!s) { draw([{ sh: t.sh, color: RED, fill: true, label: 'профиль: ' + t.name.toLowerCase() }]); res.innerHTML = '<p class="zn-hint">Площади проекта по частям, м², без путей движения и инженерии — диаграмма сравнит их с профилем выбранного типа.</p>'; return; }
+    var sh = own.map(function (v) { return v / s * 100; });
+    var near = TYPES.map(function (x) { return { t: x, d: x.sh.reduce(function (a, v, i) { return a + Math.abs(v - sh[i]); }, 0) }; }).sort(function (a, b) { return a.d - b.d; })[0];
+    draw([{ sh: t.sh, color: RED, fill: true, label: 'профиль: ' + t.name.toLowerCase() }, { sh: sh, color: BLUE, dash: true, label: 'проект' }]);
+    res.innerHTML = '<p class="zn-hint">Всего ' + f(s) + ' м². Ближе всего по профилю — ' + near.t.name.toLowerCase() + '.</p>' +
+      devTable([{ head: 'проект, %', cell: function (i) { return f(sh[i]); } }, { head: 'к профилю, п. п.', cell: function (i) { return sgn(sh[i] - t.sh[i]); } }]);
+  }
+  function setMode(m) {
+    mode = m;
+    Array.prototype.forEach.call(document.querySelectorAll('.zn-tabs button'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === m)); });
+    side.innerHTML = '';
+    if (m === 'types') showType(cur); else if (m === 'guess') guessStart(); else ownShow(cur);
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.zn-tabs button'), function (b) { b.onclick = function () { setMode(b.getAttribute('data-mode')); }; });
+  setMode('types');
+})();
+</script>
+</body></html>

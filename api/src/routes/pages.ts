@@ -604,6 +604,20 @@ function programHtml(card: PublicCard): string {
     ] as [string, CardValue | undefined][])
       .filter(([, v]) => v).map(([t, v]) => `${t}: ${e(valueText(v!))}`).join(" · ");
     const withArea = rows.filter((r) => programRowArea(r) !== null).length;
+    // Откуда цифра (0047): сколько площади из данных, сколько посчитано
+    // редакцией, сколько оценено. Порядок — порядок вариантов.
+    const bases = new Map<string, { title: string; area: number }>();
+    for (const r of rows.filter(counted)) {
+      const area = programRowArea(r);
+      const basis = r.program_area_basis as ProgramOption | undefined;
+      if (area === null || !basis?.code) continue;
+      const item = bases.get(basis.code) ?? { title: basis.title ?? basis.code, area: 0 };
+      item.area += area;
+      bases.set(basis.code, item);
+    }
+    const order = ["document", "dimensions", "estimate"];
+    const origin = [...bases.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+      .map(([, v]) => `${e(v.title)} — ${num(v.area)} м²`).join(", ");
     const heading = programs.length > 1 || value.indicator_title !== "Сведения"
       ? `<h3>${e(value.indicator_title)}${value.measured_year ? ` · ${value.measured_year}` : ""}</h3>` : "";
     const zones = groupBy(rows, 0).map((zone) => {
@@ -619,6 +633,7 @@ function programHtml(card: PublicCard): string {
     return `<div class="program">${heading}` +
       (meta ? `<p class="program-meta">${meta}</p>` : "") +
       `<p class="program-total"><b>Итого: ${num(total)} м²</b> · ${rows.length} ${rowsWord(rows.length)}, площадь известна у ${withArea}</p>` +
+      (origin ? `<p class="program-meta">Откуда цифра: ${origin}</p>` : "") +
       zones + excluded + `</div>`;
   }).join("");
   return `<section class="program-section"><h2>Площадная программа</h2>${blocks}</section>`;
