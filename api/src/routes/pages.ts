@@ -483,67 +483,145 @@ function cellText(cell: unknown): string {
   return String(cell);
 }
 
-/**
- * Значение-таблица на странице. Площадная программа — по разделам: строки
- * раздела, итог раздела с долей и общий итог; «Площадь всего» — указанная
- * или площадь × количество. Прочие таблицы — как есть.
- */
+/** Значение-таблица на странице — как есть. Площадная программа — свой раздел. */
 function tableValueHtml(value: CardValue): string {
   const e = escapeHtml;
   const rows = value.rows ?? [];
   const columns = (value.columns ?? []).filter((c) => rows.some((r) => r[c.code] !== undefined && r[c.code] !== null));
   if (rows.length === 0) return "";
-  const head = (cols: typeof columns) =>
-    `<thead><tr>${cols.map((c) => `<th${c.value_type === "number" || c.value_type === "integer" ? ' class="num"' : ""}>${e(c.title)}${c.unit ? `, ${e(c.unit)}` : ""}</th>`).join("")}</tr></thead>`;
-  const cell = (c: (typeof columns)[number], r: Record<string, unknown>) =>
-    `<td${c.value_type === "number" || c.value_type === "integer" ? ' class="num"' : ""}>${e(cellText(r[c.code]))}</td>`;
+  const isNum = (c: { value_type: string }) => c.value_type === "number" || c.value_type === "integer";
+  return `<h3>${e(value.title)}</h3><div class="table-scroll"><table class="value-table"><thead><tr>${
+    columns.map((c) => `<th${isNum(c) ? ' class="num"' : ""}>${e(c.title)}${c.unit ? `, ${e(c.unit)}` : ""}</th>`).join("")}</tr></thead><tbody>${
+    rows.map((r) => `<tr>${columns.map((c) => `<td${isNum(c) ? ' class="num"' : ""}>${e(cellText(r[c.code]))}</td>`).join("")}</tr>`).join("")
+  }</tbody></table></div>`;
+}
 
-  if (value.parameter !== "area_program") {
-    return `<h3>${e(value.title)}</h3><div class="table-scroll"><table class="value-table">${head(columns)}<tbody>${
-      rows.map((r) => `<tr>${columns.map((c) => cell(c, r)).join("")}</tr>`).join("")}</tbody></table></div>`;
-  }
+/** Параметры площадной программы: таблица и свойства всего документа. */
+const PROGRAM_PARAMS = new Set([
+  "area_program", "program_stage", "program_area_base", "program_circulation_method", "program_circulation_factor",
+]);
 
-  const area = (r: Record<string, unknown>): number | null => {
-    if (typeof r.program_area_total === "number") return r.program_area_total;
-    if (typeof r.program_area === "number") return r.program_area * (typeof r.program_count === "number" ? r.program_count : 1);
-    return null;
+type ProgramRow = Record<string, unknown>;
+type ProgramOption = { code?: string; title?: string; path?: { code: string; title: string; sort?: number }[] };
+
+/** Площадь строки: «Площадь всего», иначе площадь × количество. */
+function programRowArea(r: ProgramRow): number | null {
+  if (typeof r.program_area_total === "number") return r.program_area_total;
+  if (typeof r.program_area === "number") return r.program_area * (typeof r.program_count === "number" ? r.program_count : 1);
+  return null;
+}
+
+/** «1 строка, 2 строки, 5 строк». */
+function rowsWord(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 14) return "строк";
+  if (n % 10 === 1) return "строка";
+  if (n % 10 >= 2 && n % 10 <= 4) return "строки";
+  return "строк";
+}
+
+/**
+ * Площадная программа на странице записи — по уровням классификатора
+ * (WIKI «Классификатор помещений»): зона → назначение → строки. Каждый
+ * уровень — раскрывающийся блок с площадью и долей; раскрывается без
+ * скриптов. «В итог: нет» показывается, но не складывается. Программ может
+ * быть несколько — по одной на группу сведений (состояние проекта).
+ */
+function programHtml(card: PublicCard): string {
+  const e = escapeHtml;
+  const programs = card.values.filter((v) => v.parameter === "area_program" && (v.rows ?? []).length > 0);
+  if (programs.length === 0) return "";
+  const counted = (r: ProgramRow) => (r.program_in_total as ProgramOption | undefined)?.code !== "no";
+  const sum = (list: ProgramRow[]) => list.filter(counted).reduce((acc, r) => acc + (programRowArea(r) ?? 0), 0);
+  const pathOf = (r: ProgramRow) => (r.program_purpose as ProgramOption | undefined)?.path ?? [];
+  const isNum = (c: { value_type: string }) => c.value_type === "number" || c.value_type === "integer";
+
+  // Колонки строк — только заполненные; назначение и зона уже в заголовках
+  // уровней, «Площадь всего» считается всегда.
+  // Колонки — по строкам своего раздела: пустые у гримёрных «Габариты» и у
+  // залов «№» не занимают места.
+  const columnsOf = (value: CardValue, rows: ProgramRow[]) => {
+    const skip = new Set(["program_purpose", "program_area_total", "program_in_total"]);
+    return (value.columns ?? []).filter((c) => !skip.has(c.code) &&
+      rows.some((r) => r[c.code] !== undefined && r[c.code] !== null && r[c.code] !== ""));
   };
-  type Opt = { code?: string; title?: string; path?: { code: string; title: string }[] };
-  // «В итог: нет» — показывается, но не складывается (двойной счёт).
-  const counted = (r: Record<string, unknown>) => (r.program_in_total as Opt | undefined)?.code !== "no";
-  // Зона — корень дерева назначений: по ней группы строк и итоги; в колонке
-  // «Назначение» — путь ниже зоны («ОВ — Венткамера»).
-  const zoneOf = (r: Record<string, unknown>) => (r.program_purpose as Opt | undefined)?.path?.[0];
-  const purposeText = (r: Record<string, unknown>) => {
-    const path = (r.program_purpose as Opt | undefined)?.path ?? [];
-    return path.slice(1).map((p) => p.title).join(" — ");
+
+  const rowsTable = (value: CardValue, rows: ProgramRow[], deep: boolean) => {
+    const columns = columnsOf(value, rows);
+    const head = (deep ? ["<th>Назначение</th>"] : []).concat(
+      columns.map((c) => `<th${isNum(c) ? ' class="num"' : ""}>${e(c.title)}${c.unit ? `, ${e(c.unit)}` : ""}</th>`),
+      ['<th class="num">Площадь всего, м²</th>'],
+    );
+    const body = rows.map((r) => {
+      const deeper = pathOf(r).slice(2).map((p) => p.title).join(" — ");
+      const area = programRowArea(r);
+      return `<tr${counted(r) ? "" : ' class="not-counted" title="Не входит в итог"'}>` +
+        (deep ? `<td>${e(deeper)}</td>` : "") +
+        columns.map((c) => `<td${isNum(c) ? ' class="num"' : ""}>${e(cellText(r[c.code]))}</td>`).join("") +
+        `<td class="num">${area === null ? "—" : num(area)}${counted(r) ? "" : " *"}</td></tr>`;
+    }).join("");
+    return `<div class="table-scroll"><table class="value-table"><thead><tr>${head.join("")}</tr></thead><tbody>${body}</tbody></table></div>`;
   };
-  const skip = new Set(["program_purpose", "program_area_total", "program_in_total"]);
-  const shown = columns.filter((c) => !skip.has(c.code));
-  const purposeColumn = { code: "program_purpose", title: "Назначение", unit: null, value_type: "text" };
-  const totalColumn = { code: "program_area_total", title: "Площадь всего", unit: "м²", value_type: "number" };
-  const zones = new Map<string, { title: string; rows: Record<string, unknown>[] }>();
-  for (const r of rows) {
-    const zone = zoneOf(r);
-    const key = zone?.code ?? "";
-    if (!zones.has(key)) zones.set(key, { title: zone?.title ?? "Без назначения", rows: [] });
-    zones.get(key)!.rows.push(r);
-  }
-  const sum = (list: Record<string, unknown>[]) => list.filter(counted).reduce((acc, r) => acc + (area(r) ?? 0), 0);
-  const total = sum(rows);
-  const span = shown.length + 1;
-  const body = [...zones.values()].map((z) => {
-    const subtotal = sum(z.rows);
-    const share = total > 0 ? ` · ${num(Math.round(subtotal / total * 1000) / 10)} %` : "";
-    return `<tr class="program-section"><th colspan="${span}">${e(z.title)}</th><td class="num">${num(subtotal)}${share}</td></tr>` +
-      z.rows.map((r) => `<tr${counted(r) ? "" : ' class="not-counted" title="Не входит в итог"'}><td>${e(purposeText(r))}</td>${shown.map((c) => cell(c, r)).join("")}` +
-        `<td class="num">${area(r) === null ? "" : num(area(r)!)}${counted(r) ? "" : " *"}</td></tr>`).join("");
+
+  // Узлы одного уровня дерева: ключ — код узла на этом уровне пути.
+  // Порядок — классификатора (sort узла), а не строк источника.
+  const groupBy = (rows: ProgramRow[], level: number) => {
+    const map = new Map<string, { title: string; sort: number; rows: ProgramRow[] }>();
+    for (const r of rows) {
+      const node = pathOf(r)[level];
+      const key = node?.code ?? "";
+      if (!map.has(key)) {
+        map.set(key, {
+          title: node?.title ?? (level === 0 ? "Без назначения" : "Без уточнения"),
+          sort: node?.sort ?? (level === 0 ? 10_000 : -1),
+          rows: [],
+        });
+      }
+      map.get(key)!.rows.push(r);
+    }
+    return [...map.values()].sort((a, b) => a.sort - b.sort);
+  };
+
+  const summary = (title: string, rows: ProgramRow[], total: number) => {
+    const area = sum(rows);
+    const share = total > 0 ? area / total * 100 : 0;
+    return `<summary><span class="program-title">${e(title)}</span>` +
+      `<span class="program-count">${rows.length} ${rowsWord(rows.length)}</span>` +
+      `<span class="program-area">${area > 0 ? `${num(area)} м²` : "—"}</span>` +
+      `<span class="program-share">${total > 0 && area > 0 ? `${num(Math.round(share * 10) / 10)} %` : ""}</span>` +
+      `<span class="program-bar"><i style="width:${Math.min(100, Math.round(share * 10) / 10)}%"></i></span></summary>`;
+  };
+
+  const blocks = programs.map((value) => {
+    const rows = value.rows ?? [];
+    const total = sum(rows);
+    const group = card.values.filter((v) => v.indicator_id === value.indicator_id);
+    const prop = (code: string) => group.find((v) => v.parameter === code);
+    const meta = ([
+      ["Стадия", prop("program_stage")], ["База площади", prop("program_area_base")],
+      ["Пути движения и техника", prop("program_circulation_method")],
+      ["Коэффициент", prop("program_circulation_factor")],
+    ] as [string, CardValue | undefined][])
+      .filter(([, v]) => v).map(([t, v]) => `${t}: ${e(valueText(v!))}`).join(" · ");
+    const withArea = rows.filter((r) => programRowArea(r) !== null).length;
+    const heading = programs.length > 1 || value.indicator_title !== "Сведения"
+      ? `<h3>${e(value.indicator_title)}${value.measured_year ? ` · ${value.measured_year}` : ""}</h3>` : "";
+    const zones = groupBy(rows, 0).map((zone) => {
+      const purposes = groupBy(zone.rows, 1).map((purpose) => {
+        const deep = purpose.rows.some((r) => pathOf(r).length > 2);
+        return `<details class="program-purpose">${summary(purpose.title, purpose.rows, total)}` +
+          rowsTable(value, purpose.rows, deep) + `</details>`;
+      }).join("");
+      return `<details class="program-zone">${summary(zone.title, zone.rows, total)}${purposes}</details>`;
+    }).join("");
+    const excluded = rows.some((r) => !counted(r))
+      ? `<p class="hint">* Не входит в итог: площадь уже учтена в другой строке.</p>` : "";
+    return `<div class="program">${heading}` +
+      (meta ? `<p class="program-meta">${meta}</p>` : "") +
+      `<p class="program-total"><b>Итого: ${num(total)} м²</b> · ${rows.length} ${rowsWord(rows.length)}, площадь известна у ${withArea}</p>` +
+      zones + excluded + `</div>`;
   }).join("");
-  const excluded = rows.some((r) => !counted(r))
-    ? `<p class="hint">* Не входит в итог: даст двойной счёт (колосники, галереи над сценой, открытые террасы).</p>` : "";
-  return `<h3>${e(value.title)}</h3><div class="table-scroll"><table class="value-table program-table">` +
-    head([purposeColumn, ...shown, totalColumn]) + `<tbody>${body}</tbody>` +
-    `<tfoot><tr><th colspan="${span}">Итого</th><td class="num">${num(total)}</td></tr></tfoot></table></div>${excluded}`;
+  return `<section class="program-section"><h2>Площадная программа</h2>${blocks}</section>`;
 }
 
 function valueText(value: CardValue): string {
@@ -810,7 +888,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       }
       const out: string[] = [];
       const groups = new Map<number, CardValue[]>();
-      for (const value of card.values) {
+      // Площадная программа и её свойства — в своём разделе (program).
+      for (const value of card.values.filter((v) => !PROGRAM_PARAMS.has(v.parameter))) {
         if (!groups.has(value.indicator_id)) groups.set(value.indicator_id, []);
         groups.get(value.indicator_id)!.push(value);
       }
@@ -872,6 +951,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         (duration ? ` <span class="hint">${e(duration)}</span>` : "") + `</p>`;
     },
     // У новости текст идёт сразу за заголовком, без «Описания».
+    // Площадная программа — под связями, по уровням классификатора.
+    program: () => programHtml(card),
     text: () => descriptionHtml ? `${news ? "" : "<h2>Описание</h2>"}<div class="public-document">${descriptionHtml}</div>` : "",
     // Изображение — цитата (Р-68): под каждым автор и источник.
     gallery: () => card.media.length === 0 ? "" :
@@ -909,7 +990,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
   const layout = card.layout.length > 0
     ? card.layout
-    : ["indicators", "links", "text", "gallery", "sources", "mentions", "citation"];
+    : ["indicators", "links", "program", "text", "gallery", "sources", "mentions", "citation"];
   for (const component of layout) {
     const render = sections[component];
     // Раздел — свой блок: облик решает, где ему стоять (Р-91), порядок — тип.

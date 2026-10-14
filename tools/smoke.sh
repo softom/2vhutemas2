@@ -297,7 +297,7 @@ check "раздел не из списка отклоняется" 400 "$(code -
 contains "итог программы посчитан" '"total_area": 1200' "$(curl -s -H "$AUTH" $API/entities/$DID | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("area_program")))')"
 contains "итог по зонам классификатора" '"Исполнители / персонал основной деятельности"' "$(curl -s -H "$AUTH" $API/entities/$DID | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("area_program"), ensure_ascii=False))')"
 check "вариант, выбранный в таблице, не удаляется" 1 "$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -q -At -c "do \$\$ begin delete from app.parameter_options where code='performers.dressing'; exception when check_violation then raise notice 'ok'; end \$\$; select count(*) from app.parameter_options where code='performers.dressing'")"
-contains "программа на странице записи" 'program-table' "$(curl -s -H "$AUTH" $API/entities/$DID/card)"
+contains "программа на странице записи — по зонам" 'program-zone' "$(curl -s -H "$AUTH" $API/entities/$DID/card)"
 contains "сохранение величин не стирает текст рядом с таблицей" 'smoke правка текста SU' "$(textval $DID)"
 
 # Незаполненные свойства блока приходят пустыми строками; пустая строка
