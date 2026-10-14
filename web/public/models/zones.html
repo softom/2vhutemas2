@@ -64,7 +64,10 @@ html.embed nav.crumbs,html.embed h1,html.embed p.lead,html.embed .howto,html.emb
 .zn-tabs,.zn-types{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 .zn-tabs button[aria-pressed=true],.zn-types button[aria-pressed=true]{background:#A9381F;border-color:#A9381F;color:#fff}
 .zn-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
-.zn-svg{width:100%;max-width:560px;height:auto;display:block;margin:0 auto}
+.zn-svg{width:100%;height:auto;display:block;margin:0 auto}
+.zn-plot{width:100%;height:auto;display:block}
+.zn-plot text{font:12px system-ui,sans-serif;fill:var(--text-secondary)}
+.zn-plot .lb{fill:var(--text-primary)}
 .zn-svg text{font:12px system-ui,sans-serif;fill:var(--text-secondary)}
 .zn-side{font-size:16px}
 .zn-side table{border-collapse:collapse;width:100%;font-size:16px}
@@ -72,7 +75,7 @@ html.embed nav.crumbs,html.embed h1,html.embed p.lead,html.embed .howto,html.emb
 .zn-side td:first-child,.zn-side th:first-child{text-align:left}
 .zn-side th{color:var(--text-secondary)}
 .zn-msg{margin:8px 0;font-size:16px}
-.zn-key{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--text-secondary);margin:6px 0 0}
+.zn-key{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;color:var(--text-secondary);margin:0}
 .zn-key i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:4px}
 .zn-in{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:6px 10px;align-items:center;font-size:16px}
 .zn-in input{width:92px;text-align:right}
@@ -81,14 +84,16 @@ html.embed nav.crumbs,html.embed h1,html.embed p.lead,html.embed .howto,html.emb
 <div class="zn-tabs" role="group" aria-label="Режим">
   <button data-mode="types" aria-pressed="true">Профили типов</button>
   <button data-mode="pair" aria-pressed="false">Стандарт и пример</button>
+  <button data-mode="plot" aria-pressed="false">Площадь и зрители</button>
   <button data-mode="own" aria-pressed="false">Программа по числу мест</button>
 </div>
 <div class="zn-types" id="zn-types" role="group" aria-label="Тип"></div>
 <div class="zn-wrap">
-  <svg class="zn-svg" id="zn-svg" viewBox="-50 -8 440 356" role="img" aria-label="Лепестковая диаграмма долей площади"></svg>
+  <svg class="zn-plot" id="zn-plot" viewBox="0 0 560 460" role="img" aria-label="График: общая площадь комплекса и число зрителей" hidden></svg>
+  <svg class="zn-svg" id="zn-svg" viewBox="-62 4 464 334" role="img" aria-label="Лепестковая диаграмма долей площади"></svg>
+  <div class="zn-key" id="zn-key"></div>
   <div class="zn-side" id="zn-side"></div>
 </div>
-<div class="zn-key" id="zn-key"></div>
 <script>
 (function () {
   // Доли площади по семи зонам классификатора помещений — от площади помещений
@@ -100,12 +105,22 @@ html.embed nav.crumbs,html.embed h1,html.embed p.lead,html.embed .howto,html.emb
   // DOCS:begin
   var DOCS = [
     {"id": 2083, "name": "Комише-опер, Берлин", "type": "theatre", "doc": "конкурсное задание 2020", "inType": true, "seats": 1190, "m2": [5196, 1584, 840, 6132, 981, 5204, 0], "total": 25119, "note": "зал и фойе в задании одной строкой; мест — 1 190 (по Википедии, в задании числа нет)"},
-    {"id": 2071, "name": "Опера в Осло", "type": "theatre", "doc": "брошюра заказчика 2003", "inType": false, "seats": 1969, "m2": [8200, 11200, 0, 0, 19100, 0, 0], "total": 38500, "note": "только три части: публика (зал вместе с фойе), сцена и всё остальное — оно показано как «производство»; в профиль типа не входит"},
+    {"id": 2071, "name": "Опера в Осло", "type": "theatre", "doc": "брошюра заказчика 2003", "inType": false, "seats": 1969, "m2": [8200, 1750, 9450, 0, 19100, 0, 0], "total": 38500, "note": "в брошюре три части: публичные зоны, сцена и всё остальное — оно показано как «производство»; залы в публичных зонах — оценка по СП 309, фойе — остаток; в профиль типа не входит"},
     {"id": 2087, "name": "Концертный зал «Таутос намай», Вильнюс", "type": "concert", "doc": "конкурсное задание 2019", "inType": true, "seats": 2000, "m2": [560, 1290, 2575, 1550, 1545, 905, 1000], "total": 9575, "note": "по нижней границе диапазонов; место действия — эстрада, ниша органа, хоровой балкон и сцена Малого зала"},
     {"id": 2084, "name": "Стадион «Яншпортпарк», Берлин", "type": "stadium", "doc": "конкурсное задание 2022", "inType": true, "seats": 20000, "m2": [14530, 9000, 1940, 590, 2167, 1409, 40], "total": 50505, "note": "поле с беговой дорожкой — расчёт по габаритам, в программе задания его нет"},
     {"id": 2082, "name": "Национальный стадион, Рейкьявик", "type": "stadium", "doc": "предтендерная концепция 2017", "inType": true, "seats": 20000, "m2": [10625, 8810, 3118, 638, 1390, 2202, 1000], "total": 31293, "note": "поле с полосой вокруг — по ведомости; места на трибунах — расчёт по размеру места"},
     {"id": 2194, "name": "Pegula Ice Arena, Пенсильвания", "type": "arena", "doc": "программа требований 2010", "inType": true, "seats": 6000, "m2": [3211, 4019, 1841, 2317, 1485, 714, 186], "total": 17597, "note": "два ледовых поля — место действия"},
     {"id": 2086, "name": "Киноцентр «Камеримидж», Торунь", "type": "screen", "doc": "конкурсное задание 2021", "inType": true, "seats": 2050, "m2": [896, 3416, 7708, 107, 2610, 1375, 4006], "total": 53397, "note": "музей, выставки и образование — «другие функции»; киностудия — производство"}
+  ];
+  var POINTS = [
+    {"id": 2083, "name": "Комише-опер", "type": "theatre", "area": 25119, "seats": 1190, "note": "полезная и техническая площадь по заданию, без путей движения; мест — 1 190"},
+    {"id": 2071, "name": "Опера в Осло", "type": "theatre", "area": 38500, "seats": 1750, "note": "общая площадь по брошюре заказчика 2003; мест по проекту — 1 350 + 400"},
+    {"id": 2087, "name": "«Таутос намай», Вильнюс", "type": "concert", "area": 15320, "seats": 2000, "note": "общая площадь по заданию — полезная × 1,6, нижняя граница; мест — 1 500 + 500"},
+    {"id": 2084, "name": "«Яншпортпарк», Берлин", "type": "stadium", "area": 50505, "seats": 20000, "note": "программа задания с путями движения и полем (поле — расчёт)"},
+    {"id": 2082, "name": "Национальный стадион, Рейкьявик", "type": "stadium", "area": 31293, "seats": 20000, "note": "ведомость концепции с полем"},
+    {"id": 2194, "name": "Pegula Ice Arena", "type": "arena", "area": 17597, "seats": 6000, "note": "программа требований с путями движения, два ледовых поля"},
+    {"id": 2086, "name": "«Камеримидж», Торунь", "type": "screen", "area": 25216, "seats": 2050, "note": "программа задания без подземной стоянки; мест — 1 350 + 350 + 200 + 150"},
+    {"id": 48, "name": "Сфера, Лас-Вегас", "type": "screen", "area": 81300, "seats": 17600, "note": "площадь здания по Википедии (81 300 м²); сидячих мест — 17 600"}
   ];
   // DOCS:end
   var TYPES = [
@@ -120,7 +135,7 @@ html.embed nav.crumbs,html.embed h1,html.embed p.lead,html.embed .howto,html.emb
     t.docs = ds;
     t.sh = AX.map(function (_, i) { return ds.reduce(function (a, d) { return a + d.sh[i]; }, 0) / ds.length; });
   });
-  var MAX = 60, C = 170, R = 112;
+  var MAX = 60, C = 170, R = 150;
   function pt(i, v) { var a = -Math.PI / 2 + i * 2 * Math.PI / AX.length, r = Math.min(v, MAX) / MAX * R; return [C + r * Math.cos(a), C + r * Math.sin(a)]; }
   function poly(sh) { return sh.map(function (v, i) { return pt(i, v).map(function (n) { return n.toFixed(1); }).join(','); }).join(' '); }
   function f(v) { return (Math.round(v * 10) / 10).toString().replace('.', ','); }
@@ -222,11 +237,56 @@ html.embed nav.crumbs,html.embed h1,html.embed p.lead,html.embed .howto,html.emb
       '. Пути движения, инженерия и стоянки — сверх этих площадей. ' + (t.docs.length < 2 && !NORM[t.id] ? 'Тип представлен одним документом, поэтому диапазона нет. ' : '') +
       'Это порядок величин по опубликованным заданиям, а не норматив.</p>';
   }
+  // «Площадь и зрители»: по горизонтали — площадь комплекса без стоянок, по вертикали — места.
+  // Линия типа: площадь = поле + м² на место × места; поле — только у стадиона и арены.
+  var TCOL = { theatre: RED, concert: BLUE, stadium: OCHRE, arena: '#3B6D11', screen: '#6B4C9A' };
+  var plot = document.getElementById('zn-plot'), hl = null;
+  function lines(t) {
+    var ps = POINTS.filter(function (p) { return p.type === t.id; }), field = 0;
+    if (FIXED[t.id]) { var fs = t.docs.map(function (d) { return d.m2[0]; }); field = fs.reduce(function (a, b) { return a + b; }, 0) / fs.length; }
+    var ks = ps.map(function (p) { return (p.area - field) / p.seats; });
+    return { field: field, lo: Math.min.apply(null, ks), hi: Math.max.apply(null, ks), pts: ps };
+  }
+  function plotShow(id) {
+    hl = id === hl ? null : id;
+    typeButtons(plotShow, hl);
+    var W = 560, H = 460, L = 62, B = 44, T = 12, Rr = 16, XM = 90000, YM = 22000;
+    var X = function (a) { return L + a / XM * (W - L - Rr); }, Y = function (n) { return H - B - n / YM * (H - B - T); };
+    var g = '';
+    for (var a = 0; a <= XM; a += 10000) g += '<line x1="' + X(a) + '" y1="' + Y(0) + '" x2="' + X(a) + '" y2="' + Y(YM) + '" stroke="currentColor" stroke-opacity=".12"/><text x="' + X(a) + '" y="' + (H - B + 16) + '" text-anchor="middle">' + (a / 1000) + '</text>';
+    for (var n = 0; n <= YM; n += 5000) g += '<line x1="' + X(0) + '" y1="' + Y(n) + '" x2="' + X(XM) + '" y2="' + Y(n) + '" stroke="currentColor" stroke-opacity=".12"/><text x="' + (L - 6) + '" y="' + (Y(n) + 4) + '" text-anchor="end">' + n0(n) + '</text>';
+    g += '<text x="' + ((L + W - Rr) / 2) + '" y="' + (H - 6) + '" text-anchor="middle">площадь комплекса без стоянок, тыс. м²</text>';
+    g += '<text transform="translate(14 ' + ((T + H - B) / 2) + ') rotate(-90)" text-anchor="middle">число мест</text>';
+    var rows = [], leg = [];
+    TYPES.forEach(function (t) {
+      var l = lines(t), c = TCOL[t.id], op = hl && hl !== t.id ? .15 : 1;
+      var end = function (k) { var n = Math.min(YM, (XM - l.field) / k); return [X(l.field + k * n), Y(n)]; };
+      var e1 = end(l.lo), e2 = end(l.hi);
+      g += '<g opacity="' + op + '">';
+      if (l.hi - l.lo > .05) g += '<polygon points="' + X(l.field) + ',' + Y(0) + ' ' + e1.join(',') + ' ' + e2.join(',') + '" fill="' + c + '" fill-opacity=".14"/>';
+      var km = (l.lo + l.hi) / 2, em = end(km);
+      g += '<line x1="' + X(l.field) + '" y1="' + Y(0) + '" x2="' + em[0] + '" y2="' + em[1] + '" stroke="' + c + '" stroke-width="2"/>';
+      leg.push('<span style="opacity:' + op + '"><i style="background:' + c + '"></i>' + t.name + ' — ' + (l.hi - l.lo > .05 ? f(l.lo) + '–' + f(l.hi) : f(km)) + ' м² на место' + (l.field ? ' + поле около ' + n0r(l.field) + ' м²' : '') + '</span>');
+      l.pts.forEach(function (p) {
+        g += '<circle cx="' + X(p.area) + '" cy="' + Y(p.seats) + '" r="5" fill="' + c + '" stroke="var(--bg)" stroke-width="1.5"><title>' + p.name + ': ' + n0(p.area) + ' м², ' + n0(p.seats) + ' мест</title></circle>';
+        rows.push({ p: p, t: t, c: c, k: p.area / p.seats });
+      });
+      g += '</g>';
+    });
+    plot.innerHTML = g; plot.style.color = 'var(--text-primary)';
+    rows.sort(function (a, b) { return b.k - a.k; });
+    side.innerHTML = '<table><tr><th>Объект</th><th>м²</th><th>мест</th><th>м² на место</th></tr>' + rows.filter(function (r) { return !hl || r.t.id === hl; }).map(function (r) {
+      return '<tr><td><span style="color:' + r.c + '">●</span> ' + r.p.name + '</td><td>' + n0(r.p.area) + '</td><td>' + n0(r.p.seats) + '</td><td>' + f(r.k) + '</td></tr>'; }).join('') + '</table>' +
+      '<p class="zn-hint">Линия типа — площадь, растущая с числом мест: м² на место по объектам типа (полоса — от меньшего к большему); у стадиона и арены линия начинается с площади поля, которая от числа мест не зависит. ' +
+      'Площадь объектов посчитана по-разному: ' + rows.map(function (r) { return r.p.name + ' — ' + r.p.note; }).join('; ') + '. Это ориентир по опубликованным документам, а не норматив.</p>';
+    key.innerHTML = leg.join('');
+  }
   function setMode(m) {
     mode = m;
     Array.prototype.forEach.call(document.querySelectorAll('.zn-tabs button'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === m)); });
     side.innerHTML = '';
-    if (m === 'types') showType(cur); else if (m === 'pair') pairShow(cur); else ownShow(cur);
+    plot.hidden = m !== 'plot'; svg.style.display = m === 'plot' ? 'none' : '';
+    if (m === 'types') showType(cur); else if (m === 'pair') pairShow(cur); else if (m === 'plot') { hl = 'x'; plotShow(null); } else ownShow(cur);
   }
   Array.prototype.forEach.call(document.querySelectorAll('.zn-tabs button'), function (b) { b.onclick = function () { setMode(b.getAttribute('data-mode')); }; });
   setMode('types');
@@ -237,10 +297,11 @@ html.embed nav.crumbs,html.embed h1,html.embed p.lead,html.embed .howto,html.emb
     <ul>
       <li>«Профили типов» — профиль каждого типа (заливка) и документы, по которым он построен (пунктир); в таблице — отклонение каждого документа от профиля в процентных пунктах.</li>
       <li>«Стандарт и пример» — профиль типа сопоставлен с отдельным зданием лекции: доли по частям, разница в процентных пунктах, площади примера и доля места действия в итоге его программы.</li>
+      <li>«Площадь и зрители» — общая площадь комплекса по горизонтали и число мест по вертикали: точки — здания лекции, линии — типы; наклон линии — площадь на одно место. Кнопка типа выделяет его линию и объекты.</li>
       <li>«Программа по числу мест» — для выбранного типа и числа мест даны площади частей здания «от — до»: площадь на одно место по документам типа, для зала и зрительской части — с нормами СП 309.1325800.2017.</li>
     </ul>
     </section>
-    <p class="note">Доли посчитаны от площади помещений и места действия, без путей движения, инженерии и стоянок: документы задают их по-разному — строками, процентом или коэффициентом. Поле стадиона в Рейкьявике взято из ведомости, поле «Яншпортпарка» посчитано по габаритам беговой дорожки 400 м, так как в программе задания его нет. Профили театра, концертного зала, арены и экрана построены по одному документу, стадиона — по двум; это ориентир, а не статистика типа. Опера в Осло дана только как пример: брошюра заказчика делит здание на три части. Числа берутся из площадных программ записей сайта (tools/zones_docs.py); источники и строки — на страницах записей.</p>
+    <p class="note">Доли посчитаны от площади помещений и места действия, без путей движения, инженерии и стоянок: документы задают их по-разному — строками, процентом или коэффициентом. Поле стадиона в Рейкьявике взято из ведомости, поле «Яншпортпарка» посчитано по габаритам беговой дорожки 400 м, так как в программе задания его нет. Профили театра, концертного зала, арены и экрана построены по одному документу, стадиона — по двум; это ориентир, а не статистика типа. Опера в Осло дана только как пример: брошюра заказчика делит здание на три части, площадь залов в её публичных зонах — оценка по СП 309. Числа берутся из площадных программ записей сайта (tools/zones_docs.py); источники и строки — на страницах записей.</p>
     <footer>2ВХУТЕМАС · учебный проект курса «Квантовая архитектура» · <a href="/">каталог</a> · <a href="/models/index.html">все модели</a></footer>
   </body>
 </html>
