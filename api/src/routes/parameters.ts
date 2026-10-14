@@ -41,7 +41,8 @@ interface ParameterInput {
   value_type?: string;
   definition?: string | null;
   sort_order?: number;
-  options?: { code: string; title_ru: string }[];
+  /** parent — код родительского варианта: список вариантов может быть деревом. */
+  options?: { code: string; title_ru: string; parent?: string | null }[];
 }
 
 function validate(input: ParameterInput, isCreate: boolean): void {
@@ -73,7 +74,9 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
            p.code as parameter, p.title_ru as title, p.unit, app.api_value_type(p.id) as value_type, p.definition,
            p.is_repeatable,
            ps.code as set, ps.title_ru as set_title, i.hint, i.sort_order,
-           coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru)
+           -- Варианты могут быть деревом (классификатор помещений): у узла — код родителя.
+           coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru,
+                                                         'parent', (select po.code from app.parameter_options po where po.id = o.parent_id))
                         order by o.sort_order)
                      from app.parameter_options o where o.parameter_id = p.id), '[]'::jsonb)
              as options
@@ -101,7 +104,9 @@ parameters.get("/", async (c: Context<AppEnv>) => {
   const rows = await sql`
     select p.id, p.code, p.title_ru, p.unit, app.api_value_type(p.id) as value_type, p.definition, p.sort_order,
            p.is_repeatable,
-           coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru)
+           -- Варианты могут быть деревом (классификатор помещений): у узла — код родителя.
+           coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru,
+                                                         'parent', (select po.code from app.parameter_options po where po.id = o.parent_id))
                         order by o.sort_order)
                      from app.parameter_options o where o.parameter_id = p.id), '[]'::jsonb)
              as options,
@@ -180,6 +185,16 @@ parameters.patch("/:id", async (c: Context<AppEnv>) => {
           values (${id}, ${option.code}, ${option.title_ru}, ${index})
           on conflict (parameter_id, code)
           do update set title_ru = excluded.title_ru, sort_order = excluded.sort_order
+        `;
+      }
+      // Родители — после того, как все варианты на месте: порядок в списке
+      // не обязан идти от корня. Цикл и чужого родителя отклоняет база.
+      for (const option of input.options) {
+        if (option.parent === undefined) continue;
+        await tx`
+          update app.parameter_options set parent_id =
+                 (select p.id from app.parameter_options p where p.parameter_id = ${id} and p.code = ${option.parent ?? null})
+           where parameter_id = ${id} and code = ${option.code}
         `;
       }
       // Массивы драйверу передаём через jsonb: так же, как в остальных местах.

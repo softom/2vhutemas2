@@ -508,28 +508,42 @@ function tableValueHtml(value: CardValue): string {
     if (typeof r.program_area === "number") return r.program_area * (typeof r.program_count === "number" ? r.program_count : 1);
     return null;
   };
-  // Раздел уходит в заголовок группы строк; «Площадь всего» считается всегда.
-  const shown = columns.filter((c) => c.code !== "program_section" && c.code !== "program_area_total");
+  type Opt = { code?: string; title?: string; path?: { code: string; title: string }[] };
+  // «В итог: нет» — показывается, но не складывается (двойной счёт).
+  const counted = (r: Record<string, unknown>) => (r.program_in_total as Opt | undefined)?.code !== "no";
+  // Зона — корень дерева назначений: по ней группы строк и итоги; в колонке
+  // «Назначение» — путь ниже зоны («ОВ — Венткамера»).
+  const zoneOf = (r: Record<string, unknown>) => (r.program_purpose as Opt | undefined)?.path?.[0];
+  const purposeText = (r: Record<string, unknown>) => {
+    const path = (r.program_purpose as Opt | undefined)?.path ?? [];
+    return path.slice(1).map((p) => p.title).join(" — ");
+  };
+  const skip = new Set(["program_purpose", "program_area_total", "program_in_total"]);
+  const shown = columns.filter((c) => !skip.has(c.code));
+  const purposeColumn = { code: "program_purpose", title: "Назначение", unit: null, value_type: "text" };
   const totalColumn = { code: "program_area_total", title: "Площадь всего", unit: "м²", value_type: "number" };
-  const sections = new Map<string, { title: string; rows: Record<string, unknown>[] }>();
+  const zones = new Map<string, { title: string; rows: Record<string, unknown>[] }>();
   for (const r of rows) {
-    const section = r.program_section as { code?: string; title?: string } | undefined;
-    const key = section?.code ?? "";
-    if (!sections.has(key)) sections.set(key, { title: section?.title ?? "Без раздела", rows: [] });
-    sections.get(key)!.rows.push(r);
+    const zone = zoneOf(r);
+    const key = zone?.code ?? "";
+    if (!zones.has(key)) zones.set(key, { title: zone?.title ?? "Без назначения", rows: [] });
+    zones.get(key)!.rows.push(r);
   }
-  const sum = (list: Record<string, unknown>[]) => list.reduce((acc, r) => acc + (area(r) ?? 0), 0);
+  const sum = (list: Record<string, unknown>[]) => list.filter(counted).reduce((acc, r) => acc + (area(r) ?? 0), 0);
   const total = sum(rows);
-  const span = shown.length;
-  const body = [...sections.values()].map((s) => {
-    const subtotal = sum(s.rows);
+  const span = shown.length + 1;
+  const body = [...zones.values()].map((z) => {
+    const subtotal = sum(z.rows);
     const share = total > 0 ? ` · ${num(Math.round(subtotal / total * 1000) / 10)} %` : "";
-    return `<tr class="program-section"><th colspan="${span}">${e(s.title)}</th><td class="num">${num(subtotal)}${share}</td></tr>` +
-      s.rows.map((r) => `<tr>${shown.map((c) => cell(c, r)).join("")}<td class="num">${area(r) === null ? "" : num(area(r)!)}</td></tr>`).join("");
+    return `<tr class="program-section"><th colspan="${span}">${e(z.title)}</th><td class="num">${num(subtotal)}${share}</td></tr>` +
+      z.rows.map((r) => `<tr${counted(r) ? "" : ' class="not-counted" title="Не входит в итог"'}><td>${e(purposeText(r))}</td>${shown.map((c) => cell(c, r)).join("")}` +
+        `<td class="num">${area(r) === null ? "" : num(area(r)!)}${counted(r) ? "" : " *"}</td></tr>`).join("");
   }).join("");
+  const excluded = rows.some((r) => !counted(r))
+    ? `<p class="hint">* Не входит в итог: даст двойной счёт (колосники, галереи над сценой, открытые террасы).</p>` : "";
   return `<h3>${e(value.title)}</h3><div class="table-scroll"><table class="value-table program-table">` +
-    head([...shown, totalColumn]) + `<tbody>${body}</tbody>` +
-    `<tfoot><tr><th colspan="${span}">Итого</th><td class="num">${num(total)}</td></tr></tfoot></table></div>`;
+    head([purposeColumn, ...shown, totalColumn]) + `<tbody>${body}</tbody>` +
+    `<tfoot><tr><th colspan="${span}">Итого</th><td class="num">${num(total)}</td></tr></tfoot></table></div>${excluded}`;
 }
 
 function valueText(value: CardValue): string {
