@@ -232,13 +232,17 @@ function EditorBody(props: any) {
   const [problems, setProblems] = props.problemsState;
   // Блок вставки и прикрепления раскрывается там, где его вызвали: над
   // текстом или в разделе изображений (вместо узкой колонки справа).
-  const [picker, setPicker] = useState<{ tab: PickerTab; at: "text" | "gallery" } | null>(null);
+  const [picker, setPicker] = useState<{ tab: PickerTab; at: "text" | "gallery"; seq: number } | null>(null);
+  // Каждое нажатие — новый номер: открытый блок прокручивается в поле зрения.
+  const openPicker = (tab: PickerTab, at: "text" | "gallery") =>
+    setPicker((current) => ({ tab, at, seq: (current?.seq ?? 0) + 1 }));
   const pickerBlock = (at: "text" | "gallery") => picker?.at === at && (
     <InsertPicker
       key={`${at}-${picker.tab}`}
       entityId={entityId}
       types={types}
       initialTab={picker.tab}
+      focus={picker.seq}
       attached={media}
       onInsertCard={(entity) => insertEntityCard(editor, entity)}
       onInsertMention={(entity) => insertEntityMention(editor, entity)}
@@ -495,7 +499,7 @@ function EditorBody(props: any) {
                   onInsert={(item) =>
                     insertMediaImage(editor, { id: item.asset_id, caption_ru: item.caption })}
                   onChanged={reloadAttachments}
-                  onPick={() => setPicker({ tab: "media", at: "gallery" })}
+                  onPick={() => openPicker("media", "gallery")}
                 />
                 {pickerBlock("gallery")}
               </div>
@@ -505,10 +509,10 @@ function EditorBody(props: any) {
               <div key="text">
                 <h2>Описание</h2>
                 <div className="row picker-open">
-                  <button type="button" className="ghost" onClick={() => setPicker({ tab: "entities", at: "text" })}>
+                  <button type="button" className="ghost" onClick={() => openPicker("entities", "text")}>
                     Вставить запись…
                   </button>
-                  <button type="button" className="ghost" onClick={() => setPicker({ tab: "media", at: "text" })}>
+                  <button type="button" className="ghost" onClick={() => openPicker("media", "text")}>
                     Вставить или прикрепить изображение…
                   </button>
                 </div>

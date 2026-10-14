@@ -16,7 +16,7 @@
  *
  * Блок не закрывается после действия: в лекцию вставляют подряд.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   api,
   type EntityListItem,
@@ -43,6 +43,12 @@ interface Props {
   /** Прикрепления изменились — карточке пора перечитать список. */
   onChanged: () => void;
   onClose: () => void;
+  /**
+   * Номер вызова: растёт с каждым нажатием «Прикрепить…» / «Вставить…».
+   * Блок уже может быть открыт ниже края экрана — тогда повторное нажатие
+   * не меняло ничего и выглядело сломанным. Теперь к блоку прокручивает.
+   */
+  focus?: number;
 }
 
 interface LinkedItem {
@@ -55,9 +61,15 @@ export function InsertPicker(props: Props) {
   // что вставка состоялась, — текст под окном не виден.
   const [done, setDone] = useState<Record<string, string>>({});
   const mark = (key: string, text: string) => setDone((current) => ({ ...current, [key]: text }));
+  const block = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    block.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    block.current?.querySelector<HTMLInputElement>("input[placeholder]")?.focus({ preventScroll: true });
+  }, [props.focus]);
 
   return (
-    <section className="picker-block" aria-label="Вставить или прикрепить">
+    <section ref={block} className="picker-block" aria-label="Вставить или прикрепить">
       <header className="picker-head">
         <div className="panel-tabs picker-tabs">
         <button type="button" className={tab === "entities" ? "active" : "ghost"} onClick={() => setTab("entities")}>
