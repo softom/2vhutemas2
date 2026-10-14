@@ -296,6 +296,14 @@ DREV4=$(curl -s -H "$AUTH" $API/entities/$DID | field latest_revision_id)
 check "раздел не из списка отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"base_revision_id\":\"$DREV4\",\"indicators\":[{\"title\":\"Сведения\",\"values\":[{\"parameter\":\"area_program\",\"rows\":[{\"program_purpose\":\"net-takogo\",\"program_area\":1}]}]}]}" $API/entities-indicators/$DID)"
 contains "итог программы посчитан" '"total_area": 1200' "$(curl -s -H "$AUTH" $API/entities/$DID | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("area_program")))')"
 contains "итог по зонам классификатора" '"Исполнители / персонал основной деятельности"' "$(curl -s -H "$AUTH" $API/entities/$DID | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("area_program"), ensure_ascii=False))')"
+# Редактор отправляет строки обратно в том виде, в каком получил (вариант —
+# {code, title, path}): сохранение без правок должно проходить.
+ROUNDTRIP=$(curl -s -H "$AUTH" $API/entities/$DID | python3 -c '
+import json,sys
+d=json.load(sys.stdin)
+groups=[{"title":g["title"],"is_current":g["is_current"],"values":[{k:v[k] for k in ("parameter","rows","option","text_value","num_value") if v.get(k) is not None} for v in g["values"]]} for g in d["indicators"]]
+print(json.dumps({"base_revision_id":d["latest_revision_id"],"indicators":groups},ensure_ascii=False))')
+check "программа сохраняется в виде чтения" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "$ROUNDTRIP" $API/entities-indicators/$DID)"
 check "вариант, выбранный в таблице, не удаляется" 1 "$(docker exec -i -e PGPASSWORD="$SPW" supa_db psql -U supabase_admin -d "$DB" -q -At -c "do \$\$ begin delete from app.parameter_options where code='performers.dressing'; exception when check_violation then raise notice 'ok'; end \$\$; select count(*) from app.parameter_options where code='performers.dressing'")"
 contains "программа на странице записи — по зонам" 'program-zone' "$(curl -s -H "$AUTH" $API/entities/$DID/card)"
 contains "сохранение величин не стирает текст рядом с таблицей" 'smoke правка текста SU' "$(textval $DID)"
