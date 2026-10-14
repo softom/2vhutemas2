@@ -88,11 +88,15 @@ def _paragraph(content: list[dict]) -> dict:
 
 
 def body_blocks(news: dict, sources: list[dict]) -> list[dict]:
-    """Текст новости блоками BlockNote: лид, абзацы, строка «где подробности», первоисточники ссылками."""
+    """Текст новости блоками BlockNote: лид, абзацы, мнение редакции (Р-116), строка «где подробности»,
+    первоисточники ссылками."""
     blocks = []
     if news.get("lead"):
         blocks.append(_paragraph([{"type": "text", "text": news["lead"], "styles": {"bold": True}}]))
     blocks += [_paragraph(_text(p)) for p in news.get("paragraphs", []) if p.strip()]
+    if (news.get("opinion") or "").strip():
+        blocks.append(_paragraph([{"type": "text", "text": "Мнение редакции. ", "styles": {"bold": True}},
+                                  *_text(news["opinion"].strip())]))
     if news.get("more"):
         blocks.append(_paragraph(_text(news["more"])))
     links = []

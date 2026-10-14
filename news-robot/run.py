@@ -129,6 +129,13 @@ def prepare_command(args) -> int:
     beat("обложки")
     cover.run(ROOT, llm, logged, _publish.Api())
     prepare.run(ROOT, llm, logged, pipeline)
+    # Линия «Резонанс» (Р-118): круг изданий по маркерам историй, оттенки.
+    from robot import resonance
+    beat("резонанс: круг изданий")
+    try:
+        resonance.run(ROOT, cfg, llm, logged)
+    except Exception as e:  # noqa: BLE001 — сбой линии не останавливает стек и публикатор
+        log("error", "resonance", "линия не отработала", error=f"{type(e).__name__}: {e}"[:200])
     # Публикатор (Р-102): черновики «Новость», слоты, выход в слот.
     from robot import publish
     beat("публикатор: черновики и слоты")

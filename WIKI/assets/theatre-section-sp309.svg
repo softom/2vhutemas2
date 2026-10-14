@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="1090" viewBox="0 0 680 545" role="img">
+<title>Продольный разрез театра с глубинной колосниковой сценой</title>
+<desc>Схема Вх² по терминам СП 309.1325800.2017: зрительный зал (партер, амфитеатр, балкон, ярус, ложи), портал и противопожарный занавес, сценическая коробка (планшет, трюм, верхняя сцена, колосники, рабочие галереи, арьерсцена), авансцена и оркестровая яма.</desc>
+<style>
+.t{font-family:"Golos Text",Arial,sans-serif;font-size:12px;fill:#444441}
+.th{font-family:"Golos Text",Arial,sans-serif;font-size:14px;font-weight:500;fill:#2C2C2A}
+.zal{fill:#EEEDFE;stroke:#534AB7;stroke-width:.5}
+.scn{fill:#FAEEDA;stroke:#854F0B;stroke-width:.5}
+.str{fill:#F1EFE8;stroke:#5F5E5A;stroke-width:.5}
+.ln{stroke:#5F5E5A;fill:none}
+.ld{stroke:#888780;stroke-width:.5;stroke-dasharray:3 2;fill:none}
+</style>
+<rect width="680" height="545" fill="#FFFFFF"/>
+<rect class="zal" x="40" y="170" width="326" height="220"/>
+<rect class="scn" x="374" y="135" width="146" height="240"/>
+<rect class="scn" x="526" y="300" width="74" height="75"/>
+<rect class="scn" x="340" y="375" width="30" height="10"/>
+<rect class="scn" x="300" y="390" width="40" height="30"/>
+<rect class="str" x="374" y="380" width="146" height="60"/>
+<rect class="str" x="366" y="110" width="8" height="150"/>
+<rect class="str" x="520" y="110" width="6" height="190"/>
+<rect class="str" x="366" y="104" width="160" height="6"/>
+<line class="ln" x1="40" y1="440" x2="600" y2="440" stroke-width="1"/>
+<line class="ln" x1="600" y1="300" x2="600" y2="440" stroke-width="1"/>
+<line class="ln" x1="374" y1="375" x2="520" y2="375" stroke-width="1.5"/>
+<line class="ln" x1="374" y1="135" x2="520" y2="135" stroke-width="1.5" stroke-dasharray="3 3"/>
+<line x1="378" y1="262" x2="378" y2="373" stroke="#A32D2D" stroke-width="1.5" stroke-dasharray="5 3"/>
+<polyline class="ln" points="300,390 180,384 160,376 140,368 120,360 100,352 80,344 60,336" stroke-width="1"/>
+<rect class="str" x="40" y="280" width="130" height="8"/>
+<polyline class="ln" points="170,280 150,274 130,268 110,262 90,256 60,250" stroke-width="1"/>
+<rect class="str" x="40" y="220" width="90" height="7"/>
+<rect x="190" y="230" width="30" height="26" rx="2" class="ln" stroke-width=".5" stroke-dasharray="3 2"/>
+<rect x="228" y="230" width="30" height="26" rx="2" class="ln" stroke-width=".5" stroke-dasharray="3 2"/>
+<rect x="266" y="230" width="30" height="26" rx="2" class="ln" stroke-width=".5" stroke-dasharray="3 2"/>
+<line class="ln" x1="420" y1="135" x2="420" y2="150" stroke-width=".5"/>
+<line class="ln" x1="470" y1="135" x2="470" y2="150" stroke-width=".5"/>
+<rect class="ln" x="400" y="150" width="90" height="95" stroke-width=".8" stroke-dasharray="2 2"/>
+<line class="ln" x1="395" y1="150" x2="495" y2="150" stroke-width="2"/>
+<rect class="str" x="500" y="190" width="20" height="4"/>
+<rect class="str" x="500" y="230" width="20" height="4"/>
+<rect class="str" x="374" y="190" width="20" height="4"/>
+<text class="th" x="235" y="322" text-anchor="middle">Зрительный зал</text>
+<text class="t" x="445" y="364" text-anchor="middle">Планшет сцены</text>
+<text class="t" x="445" y="214" text-anchor="middle">Задник</text>
+<text class="t" x="445" y="414" text-anchor="middle">Трюм</text>
+<text class="t" x="563" y="342" text-anchor="middle">Арьерсцена</text>
+<text class="t" x="446" y="94" text-anchor="middle">Сценическая коробка</text>
+<line class="ld" x1="62" y1="36" x2="80" y2="218"/><text class="t" x="44" y="30">Ярус</text>
+<line class="ld" x1="236" y1="36" x2="240" y2="228"/><text class="t" x="170" y="30">Ложи у боковых стен</text>
+<line class="ld" x1="140" y1="58" x2="140" y2="278"/><text class="t" x="118" y="52">Балкон</text>
+<line class="ld" x1="352" y1="82" x2="368" y2="258"/><text class="t" x="232" y="72">Портал, противопожарный занавес</text>
+<line class="ld" x1="536" y1="124" x2="522" y2="135"/><text class="t" x="540" y="124">Колосники</text>
+<line class="ld" x1="536" y1="165" x2="494" y2="170"/><text class="t" x="540" y="169">Верхняя сцена</text>
+<line class="ld" x1="536" y1="212" x2="522" y2="232"/><text class="t" x="540" y="216">Рабочие галереи</text>
+<line class="ld" x1="70" y1="462" x2="110" y2="358"/><text class="t" x="44" y="472">Амфитеатр</text>
+<line class="ld" x1="222" y1="482" x2="222" y2="388"/><text class="t" x="196" y="496">Партер</text>
+<line class="ld" x1="300" y1="462" x2="318" y2="410"/><text class="t" x="244" y="472">Оркестровая яма</text>
+<line class="ld" x1="356" y1="482" x2="356" y2="387"/><text class="t" x="330" y="496">Авансцена</text>
+<rect class="zal" x="44" y="516" width="14" height="10" rx="2"/><text class="t" x="64" y="525">Зона 2 — места зрителей</text>
+<rect class="scn" x="240" y="516" width="14" height="10" rx="2"/><text class="t" x="260" y="525">Зона 1 — сцена с техникой</text>
+<line x1="440" y1="521" x2="458" y2="521" stroke="#A32D2D" stroke-width="1.5" stroke-dasharray="5 3"/><text class="t" x="464" y="525">Красная линия сцены</text>
+<text class="t" x="640" y="540" text-anchor="end" style="font-size:11px;fill:#888780">Схема Вх² по СП 309.1325800.2017</text>
+</svg>

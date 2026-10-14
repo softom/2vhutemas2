@@ -23,12 +23,14 @@ import {
   type RobotRunView,
   type RobotSourceCandidate,
   type RobotSourceRow,
+  type RobotResonance,
+  type RobotResonanceCard,
   type RobotSiteHit,
   type RobotStory,
 } from "../api";
 
 const SECTIONS: [string, string][] = [
-  ["", "Обзор"], ["news", "Новости"], ["stack", "Стек"], ["sites", "Сайты"], ["recs", "Рекомендации"], ["log", "Журнал"],
+  ["", "Обзор"], ["news", "Новости"], ["resonance", "Резонанс"], ["stack", "Стек"], ["sites", "Сайты"], ["recs", "Рекомендации"], ["log", "Журнал"],
 ];
 const TOPIC: Record<string, string> = { architecture: "Архитектура", neurogeneration: "Нейрогенерация", software: "ПО" };
 const KIND: Record<string, string> = {
@@ -128,6 +130,7 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       {ov && run && <Progress ov={ov} run={run} />}
       {ov && run && section === "" && <Overview ov={ov} run={run} />}
       {ov && run && section === "news" && <News ov={ov} run={run} act={act} />}
+      {section === "resonance" && <Resonance />}
       {ov && section === "stack" && <Stack ov={ov} act={act} />}
       {ov && section === "sites" && <Sites ov={ov} run={run} />}
       {ov && section === "recs" && <Recs ov={ov} act={act} />}
@@ -394,7 +397,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
  * по ссылкам редактора; дальше обычный путь: превью, перегенерация, «В стек», слот, публикация.
  */
 function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
-  const [form, setForm] = useState({ topic: "", section: "neurogeneration", input: "", note: "" });
+  const [form, setForm] = useState({ topic: "", section: "neurogeneration", input: "", note: "", position: "" });
   const [msg, setMsg] = useState<string | null>(null);
   const inStack = new Set(ov.queue.items.map((i) => i.story_key));
   // Заказ в стеке или вышедший живёт в разделе «Стек»; удалённый — убран редактором (2026-10-12).
@@ -417,7 +420,7 @@ function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
     try {
       await api.robotOrder(form);
       setMsg("Заказ передан роботу: он возьмёт его в течение минуты, перевод занимает около минуты.");
-      setForm({ ...form, topic: "", input: "", note: "" });
+      setForm({ ...form, topic: "", input: "", note: "", position: "" });
       await act(async () => {});
     } catch (e) {
       setMsg((e as Error).message);
@@ -447,6 +450,8 @@ function Orders({ ov, act }: { ov: RobotOverview; act: Act }) {
           placeholder={"https://formas.ai — ссылки, каждая с новой строки\nили текст: факты, цены, что важно"} />
         <input style={{ width: "100%" }} placeholder="Что важно в новости (необязательно)" value={form.note}
           onChange={(e) => setForm({ ...form, note: e.target.value })} />
+        <textarea rows={3} style={{ width: "100%" }} value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })}
+          placeholder={"Позиция редакции (необязательно): ваше мнение о событии.\nВыйдет отдельным абзацем «Мнение редакции» после текста; робот только вычитает его, смысл не меняет"} />
         <p><button type="button" onClick={send}>Заказать</button> {msg && <span className="hint">{msg}</span>}</p>
       </div>
       {((ov.orders_pending ?? []).length > 0 || done.length > 0) && (
@@ -822,6 +827,7 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
       )}
       <p><b>{n.lead}</b></p>
       {n.paragraphs?.map((p, i) => <p key={i}>{p}</p>)}
+      {n.opinion && <p><b>Мнение редакции.</b> {n.opinion}</p>}
       {n.images?.slice(1).map((im) => (
         <figure key={im.url}><img src={im.url} alt="" style={{ maxWidth: "100%" }} loading="lazy" /><figcaption className="hint">{im.caption}</figcaption></figure>
       ))}
@@ -1032,6 +1038,155 @@ function SiteRow({ s, f, running }: { s: RobotSourceRow; f?: RobotRunView["feeds
           : s.last_checked ? `прочитан ${when(s.last_checked)}` : "ещё не обходили"}
       </td>
     </tr>
+  );
+}
+
+/**
+ * Линия «Резонанс» (Р-118, Р-119): по маркерам истории робот ищет, кто о ней написал, сам открывает
+ * каждую страницу и сводит оттенки — сырьё для разбора и мнения редакции, а не готовая новость.
+ */
+function Resonance() {
+  const [data, setData] = useState<RobotResonance | null>(null);
+  const [form, setForm] = useState({ title: "", markers: "", story_key: "" });
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = () => api.robotResonance().then(setData).catch((e) => setMsg((e as Error).message));
+  const busy = !!data && (data.pending.length > 0 || data.cards.some((c) => c.status === "идёт"
+    && (!c.searched_at || (c.reach?.unchecked ?? 0) > 0)));
+  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!busy) return;
+    const t = window.setInterval(load, 5000);
+    return () => window.clearInterval(t);
+  }, [busy]);
+  const send = async (body: Parameters<typeof api.robotResonanceSend>[0], done: string) => {
+    try {
+      await api.robotResonanceSend(body);
+      setMsg(done);
+      await load();
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  };
+  const open = () => send({ action: "open", ...form }, "Карточка передана роботу: поиск начнётся в течение минуты.")
+    .then(() => setForm({ title: "", markers: "", story_key: "" }));
+  return (
+    <>
+      <p className="hint">
+        Кто ещё написал об истории и что к ней добавил. Робот спрашивает поисковые модели по маркерам, сам открывает
+        каждую найденную страницу (адрес и дата из поиска — заявка, а не факт) и сводит оттенки. Карточка обновляется
+        раз в сутки в течение недели. Это сырьё для разбора и мнения редакции.
+      </p>
+      <div className="block">
+        <h3>Открыть карточку истории</h3>
+        <input style={{ width: "100%" }} placeholder="История: открытые аналоги программ Adobe, написанные ИИ" value={form.title}
+          onChange={(e) => setForm({ ...form, title: e.target.value })} />
+        <input style={{ width: "100%" }} placeholder="Маркеры через запятую — названия и имена: ArtCraft, PhotoCraft, Brandon Thomas" value={form.markers}
+          onChange={(e) => setForm({ ...form, markers: e.target.value })} />
+        <input style={{ width: "100%" }} placeholder="Ключ нашей новости об этом (необязательно) — оттенки посчитаются от неё" value={form.story_key}
+          onChange={(e) => setForm({ ...form, story_key: e.target.value.trim() })} />
+        <p><button type="button" onClick={open}>Искать круг</button> {msg && <span className="hint">{msg}</span>}</p>
+      </div>
+      {data?.pending.map((p) => <p className="notice" key={p.key + p.action}>Ждёт робота: {p.title ?? p.key} ({p.action})</p>)}
+      {data && data.cards.length === 0 && data.pending.length === 0 && <p className="notice">Карточек пока нет.</p>}
+      {data?.cards.map((c) => <ResonanceCard key={c.key} c={c} send={send} />)}
+      {data && data.outlets.length > 0 && (
+        <div className="block">
+          <h3>Издания круга</h3>
+          <p className="hint">Издание, встретившееся в двух историях и не входящее в обход, робот сам предлагает в «Рекомендации».</p>
+          <table className="table">
+            <thead><tr><th>Издание</th><th>Историй</th><th>В обходе</th></tr></thead>
+            <tbody>
+              {data.outlets.map((o) => (
+                <tr key={o.domain}><td>{o.outlet} <span className="hint">{o.domain}</span></td><td>{o.stories.length}</td>
+                  <td>{o.in_sources ? "да" : data.proposed.includes(o.domain) ? "предложено" : "нет"}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ResonanceCard({ c, send }: {
+  c: RobotResonanceCard;
+  send: (body: Parameters<typeof api.robotResonanceSend>[0], done: string) => Promise<void>;
+}) {
+  const ok = c.publications.filter((p) => p.check === "открыта")
+    .sort((a, b) => String(a.date ?? a.claimed_date ?? "9").localeCompare(String(b.date ?? b.claimed_date ?? "9")));
+  const rest = c.publications.filter((p) => p.check !== "открыта");
+  const cost = c.searches.reduce((sum, s) => sum + Number(s.cost_rub ?? 0), 0);
+  const days = Object.entries(c.reach?.by_day ?? {});
+  const top = Math.max(1, ...days.map(([, n]) => n));
+  return (
+    <div className="block">
+      <h3>{c.title}</h3>
+      <p className="hint">
+        {c.markers.join(" · ")} · {c.status} · открыта {when(c.opened_at)}
+        {c.searched_at ? " · поиск " + when(c.searched_at) : " · поиск ещё не шёл"}
+        {cost > 0 ? " · потрачено " + cost.toFixed(2) + " ₽" : ""}
+      </p>
+      {c.reach && (
+        <p>
+          <b>{c.reach.outlets}</b> изданий{c.reach.langs.length ? " · языки: " + c.reach.langs.join(", ") : ""}
+          {c.reach.unchecked ? " · проверяется ещё " + c.reach.unchecked : ""}
+        </p>
+      )}
+      {days.length > 0 && (
+        <table className="table"><tbody>
+          {days.map(([day, n]) => (
+            <tr key={day}><td style={{ width: 110 }}>{day}</td>
+              <td><span style={{ display: "inline-block", height: 10, width: (n / top) * 60 + "%", background: "currentColor", opacity: 0.5 }} /> {n}</td></tr>
+          ))}
+        </tbody></table>
+      )}
+      {c.shades && (
+        <>
+          {c.shades.summary && <p>{c.shades.summary}</p>}
+          <h4>Оттенки</h4>
+          <ul>
+            {c.shades.shades.map((s, i) => (
+              <li key={i}><b>{s.theme}</b>{s.new ? " (у нас этого нет)" : ""}. {s.what} <span className="hint">— {s.outlets.join(", ")}</span></li>
+            ))}
+          </ul>
+          {c.shades.questions.length > 0 && (
+            <>
+              <h4>Вопросы для мнения редакции</h4>
+              <ul>{c.shades.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
+            </>
+          )}
+        </>
+      )}
+      <details>
+        <summary>Публикации: открыто {ok.length}, не подтверждено {rest.length}</summary>
+        <table className="table">
+          <thead><tr><th>Дата</th><th>Издание</th><th>Что добавило</th></tr></thead>
+          <tbody>
+            {ok.map((p) => (
+              <tr key={p.url}>
+                <td>{p.date ?? (p.claimed_date ? p.claimed_date + "?" : "—")}</td>
+                <td><a href={p.url} target="_blank" rel="noreferrer">{p.outlet}</a>{p.lang ? <span className="hint"> {p.lang}</span> : null}</td>
+                <td>{p.angle}<br /><span className="hint">{p.title}</span></td>
+              </tr>
+            ))}
+            {rest.map((p) => (
+              <tr key={p.url}>
+                <td className="hint">{p.claimed_date ?? "—"}</td>
+                <td><a href={p.url} target="_blank" rel="noreferrer">{p.outlet}</a></td>
+                <td className="hint">{p.check}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="hint">Дата с вопросом — из ответа поиска, на странице её не нашлось.</p>
+      </details>
+      <p>
+        {c.status === "идёт"
+          ? <><button type="button" className="ghost" onClick={() => send({ action: "refresh", key: c.key }, "Повторный поиск запрошен.")}>Искать ещё</button>{" "}
+            <button type="button" className="ghost" onClick={() => send({ action: "close", key: c.key }, "Карточка закрыта.")}>Закрыть</button></>
+          : <button type="button" className="ghost" onClick={() => send({ action: "refresh", key: c.key }, "Карточка открыта снова, поиск запрошен.")}>Открыть снова</button>}
+      </p>
+    </div>
   );
 }
 

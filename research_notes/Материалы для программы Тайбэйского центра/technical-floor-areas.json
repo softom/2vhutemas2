@@ -1,0 +1,126 @@
+{
+  "uid": "0d172102-c18c-41ad-b383-9e18aedcc2de",
+  "title": "TPAC: площади по этажам из эксплуатационной лицензии",
+  "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+  "source_url": "https://www-ws.gov.taipei/001/Upload/845/relfile/-1/845/62206e85-c090-4add-aeaf-9272234a4b8d.pdf",
+  "source_page_1_based": 23,
+  "source_permit": "110使字第0118號",
+  "issue_date": "2021-09-30",
+  "method": "Manual visual transcription from enlarged public PDF; uses translated broadly worded permit-use categories, not room-level programme",
+  "total_area_m2": 58657.79,
+  "sum_transcribed_rows_m2": 58657.79,
+  "rows": [
+    {
+      "uid": "3959bbac-90f4-4370-9594-7b44880d160e",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "B1",
+      "area_m2": 12309.67,
+      "use_ru": "Подземный: укрытие/парковка, распределительные и машинные помещения"
+    },
+    {
+      "uid": "c7303a8c-2f59-4749-8075-53f62c0cc43d",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "1F",
+      "area_m2": 9256.43,
+      "use_ru": "Театр и общие офисы по назначению лицензии"
+    },
+    {
+      "uid": "119b01b3-d10a-4197-aeba-b34d370999d4",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "2F",
+      "area_m2": 4140.58,
+      "use_ru": "Главный холл театра"
+    },
+    {
+      "uid": "be93b794-7520-458b-8bae-7246d6810a2e",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "3F",
+      "area_m2": 4205.46,
+      "use_ru": "Театр и общие офисы"
+    },
+    {
+      "uid": "a6f38364-53f2-4ee9-a52c-0df3eaeeb9f5",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "4F",
+      "area_m2": 5698.77,
+      "use_ru": "Театр"
+    },
+    {
+      "uid": "f68306b8-4b24-4e78-9878-8ef448b7886f",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "5F",
+      "area_m2": 3023.49,
+      "use_ru": "Театр и общие офисы"
+    },
+    {
+      "uid": "8569269d-1254-44c4-a9a6-df30c40fc0f4",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "5F mezzanine",
+      "area_m2": 99.6,
+      "use_ru": "Туалеты театра"
+    },
+    {
+      "uid": "563bc493-6451-418e-a028-4fd860e95735",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "6F",
+      "area_m2": 3935.25,
+      "use_ru": "Театр"
+    },
+    {
+      "uid": "2442f267-b9d1-412b-b68e-4a782aa5e394",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "7F",
+      "area_m2": 4310.69,
+      "use_ru": "Театр и ресторан B3"
+    },
+    {
+      "uid": "f5e5a2ff-5a20-4890-b6fa-bcfc4f5e30a3",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "8F",
+      "area_m2": 2696.21,
+      "use_ru": "Театр"
+    },
+    {
+      "uid": "ab32859c-0788-42ed-925a-e3c22986a3ac",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "9F",
+      "area_m2": 539.49,
+      "use_ru": "Театр"
+    },
+    {
+      "uid": "754102cb-05c0-4348-a4dd-6c0f53c8f623",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "10F",
+      "area_m2": 3223.18,
+      "use_ru": "Театр и офис G2"
+    },
+    {
+      "uid": "c68418e8-fa6f-4439-a986-dc32260db4f3",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "11F",
+      "area_m2": 3089.51,
+      "use_ru": "Театр: репетиционные"
+    },
+    {
+      "uid": "3eeac048-e9e5-4cf0-8402-650a51cfe275",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "12F",
+      "area_m2": 1626.21,
+      "use_ru": "Помещения оборудования и лестничные помещения"
+    },
+    {
+      "uid": "2bc0dd67-5355-440b-b267-2330fa700604",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "Roof 1",
+      "area_m2": 430.97,
+      "use_ru": "Культурный объект A1; точная функция требует сверки"
+    },
+    {
+      "uid": "e9eaf6a2-5885-4847-9c31-7aece14a27a6",
+      "source_uid": "9a86d990-4a02-475c-a22b-adcd790432d5",
+      "floor": "Roof 2",
+      "area_m2": 72.28,
+      "use_ru": "Культурный объект A1; точная функция требует сверки"
+    }
+  ]
+}

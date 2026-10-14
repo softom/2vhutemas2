@@ -1,0 +1,69 @@
+[
+  {
+    "uid": "d19bd589-79b1-4099-a774-28af8e73e480",
+    "filename": "npac-floor-guide.html",
+    "url": "https://www.npac-ntt.org/en/blog/c-zLZ2eQl09ki",
+    "source_page": "https://www.npac-ntt.org/en/blog/c-zLZ2eQl09ki",
+    "credit": "NPAC NTT",
+    "status": "downloaded",
+    "bytes": 93935,
+    "sha256": "0f239bf540ea0ae229fa3c9a4ff7d4465399a2cdceb60d4d8f8ff1d2232923fe",
+    "path": "research_notes\\Материалы для программы театра Тайчжуна\\files\\architecture\\npac-floor-guide.html",
+    "retrieved": "2026-10-14"
+  },
+  {
+    "uid": "c7202976-4fb8-461a-b49f-db952a3c8134",
+    "filename": "npac-guide-zh.html",
+    "url": "https://www.npac-ntt.org/blog/c-BjAqlma9i1n",
+    "source_page": "https://www.npac-ntt.org/blog/c-BjAqlma9i1n",
+    "credit": "NPAC NTT",
+    "status": "downloaded",
+    "bytes": 89386,
+    "sha256": "a4c951e0d7e63f175942362561446486b8795e95c13efcddf63ffde005e3b67f",
+    "path": "research_notes\\Материалы для программы театра Тайчжуна\\files\\architecture\\npac-guide-zh.html",
+    "retrieved": "2026-10-14"
+  },
+  {
+    "uid": "bdbf4f8f-40a2-43d6-b63f-27b358ec10f9",
+    "filename": "arup.html",
+    "url": "https://www.arup.com/projects/the-national-taichung-theater/",
+    "source_page": "https://www.arup.com/projects/the-national-taichung-theater/",
+    "credit": "Arup",
+    "status": "downloaded",
+    "bytes": 142884,
+    "sha256": "b7286a9af7129f9dec07533f86aca6f13fa5167f0a109a990870a9a749af2d3e",
+    "path": "research_notes\\Материалы для программы театра Тайчжуна\\files\\architecture\\arup.html",
+    "retrieved": "2026-10-14"
+  },
+  {
+    "uid": "07b43de4-b4e5-46fb-80a5-585cb81744e3",
+    "filename": "jara-plans.pdf",
+    "url": "https://www.jara-net.com/jara30th/sample/sample11-taichung.pdf",
+    "source_page": "https://www.jara-net.com/jara30th/sample/sample11-taichung.pdf",
+    "credit": "Toyo Ito & Associates / JARA",
+    "status": "downloaded_pdf_verified",
+    "bytes": 664080,
+    "sha256": "b8d44034c2a192f00b38c2cbe2dab209f46be9399bfc7c7d9e4662b223000b9a",
+    "path": "research_notes\\Материалы для программы театра Тайчжуна\\files\\architecture\\jara-plans.pdf",
+    "retrieved": "2026-10-14",
+    "pages": 5
+  },
+  {
+    "uid": "5bd2ad7b-88ca-41a5-a642-7b979d4aafd7",
+    "filename": "moma-Japanese-Constellation-preview.pdf",
+    "url": "https://www.moma.org/momaorg/shared/pdfs/docs/publication_pdf/3234/MoMA_JapaneseConstellation_PREVIEW.pdf",
+    "source_page": "https://www.moma.org/momaorg/shared/pdfs/docs/publication_pdf/3234/MoMA_JapaneseConstellation_PREVIEW.pdf",
+    "credit": "MoMA",
+    "status": "failed",
+    "error": "403 Client Error: Forbidden for url: https://www.moma.org/momaorg/shared/pdfs/docs/publication_pdf/3234/MoMA_JapaneseConstellation_PREVIEW.pdf"
+  },
+  {
+    "uid": "61bbe7e9-0870-49cf-9ed1-b0eafdf82046",
+    "filename": "geotech-153.pdf",
+    "url": "https://www.geotech.org.tw/upload/e_book_file/20191205170041240.pdf",
+    "source_page": "https://www.geotech.org.tw/upload/e_book_file/20191205170041240.pdf",
+    "credit": "Geotechnical Engineering Journal",
+    "status": "failed",
+    "error": "406 Client Error: Not Acceptable for url: https://www.geotech.org.tw/upload/e_book_file/20191205170041240.pdf"
+  }
+]

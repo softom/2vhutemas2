@@ -450,7 +450,7 @@ export interface RobotPreparedFull extends RobotPrepared {
   cover?: RobotCover;
   entity_id?: number;
   story?: {
-    news?: { title?: string; lead?: string; paragraphs?: string[]; more?: string; images?: { url: string; caption?: string; credit?: string }[];
+    news?: { title?: string; lead?: string; paragraphs?: string[]; opinion?: string; more?: string; images?: { url: string; caption?: string; credit?: string }[];
       mentions?: { name: string }[]; sources?: { url: string; title?: string }[] };
     candidate?: { sources?: { source: string; url: string; date?: string }[] };
     source?: Record<string, unknown>;
@@ -471,6 +471,24 @@ export interface RobotSiteHit {
   id: string; slug?: string; title?: string; type?: string; type_title?: string; status?: string; similarity: number;
   story_key?: string | null;
 }
+/** Линия «Резонанс» (Р-118): карточка истории — круг изданий, охват, оттенки. */
+export interface RobotResonanceCard {
+  key: string; title: string; markers: string[]; story_key?: string | null; status: string;
+  opened_at: string; opened_by?: string; searched_at?: string | null;
+  publications: { url: string; domain: string; outlet: string; date?: string | null; claimed_date?: string | null;
+    lang?: string | null; title?: string; angle?: string; check: string; found_by?: string; words?: number }[];
+  searches: { at: string; model: string; named?: number; new?: number; cost_rub?: number | string | null; error?: string }[];
+  reach?: { outlets: number; by_day: Record<string, number>; langs: string[]; unchecked: number };
+  shades?: { at: string; by: number; summary?: string; questions: string[];
+    shades: { theme: string; what: string; outlets: string[]; new?: boolean }[] };
+}
+export interface RobotResonance {
+  cards: RobotResonanceCard[];
+  pending: { action: string; key: string; title?: string }[];
+  outlets: { domain: string; outlet: string; stories: string[]; in_sources: boolean }[];
+  proposed: string[];
+}
+
 export interface RobotRunView {
   id: string; running: boolean; status: string; since?: string; llm_note: string | null;
   last: { ts?: string; stage?: string; msg?: string };
@@ -589,7 +607,7 @@ export const api = {
     request<{ items: (RobotStory & { run_id: string; run_started: string; written: boolean })[]; days: number }>(
       `/news-robot/stories?days=${days}`,
     ),
-  robotOrder: (body: { topic: string; section: string; input: string; note?: string }) =>
+  robotOrder: (body: { topic: string; section: string; input: string; note?: string; position?: string }) =>
     request<{ queued: { story_key: string } }>("/news-robot/order", { method: "POST", body: JSON.stringify(body) }),
   robotPrepared: (key: string) => request<RobotPreparedFull>(`/news-robot/prepared/${encodeURIComponent(key)}`),
   robotCoverStyles: () => request<{ groups: { key: string; title: string; task?: string;
@@ -604,6 +622,9 @@ export const api = {
     request<{ queued: unknown }>("/news-robot/regenerate", { method: "POST", body: JSON.stringify(body) }),
   robotOrderDismiss: (story_key: string) =>
     request<{ queued: unknown }>("/news-robot/order-dismiss", { method: "POST", body: JSON.stringify({ story_key }) }),
+  robotResonance: () => request<RobotResonance>("/news-robot/resonance"),
+  robotResonanceSend: (body: { action: "open" | "refresh" | "close"; key?: string; title?: string; markers?: string; story_key?: string }) =>
+    request<{ queued: { key: string } }>("/news-robot/resonance", { method: "POST", body: JSON.stringify(body) }),
   robotRetry: (story_key: string) =>
     request<{ queued: unknown }>("/news-robot/retry", { method: "POST", body: JSON.stringify({ story_key }) }),
   robotRunView: (id: string) => request<RobotRunView>(`/news-robot/runs/${encodeURIComponent(id)}/view`),

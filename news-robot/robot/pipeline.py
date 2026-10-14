@@ -322,9 +322,10 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
 
 def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str, dict],
                 fetcher: Fetcher, llm: LLM, extra_urls: list[str] | None = None, extra_text: str | None = None,
-                instructions: str | None = None) -> dict:
+                instructions: str | None = None, position: str | None = None) -> dict:
     """Новость по истории. extra_urls, extra_text, instructions — материалы и указания редактора
-    при перегенерации (Р-101): дополнительные источники текста и фото, его текст, замечания к прошлой версии."""
+    при перегенерации (Р-101): дополнительные источники текста и фото, его текст, замечания к прошлой версии.
+    position — позиция редакции (Р-116): отдельный абзац после текста, мимо фактов и сверки."""
     it = items[cand["lead_item"]]
     src = sources[it.source_id]
     art = fetch_article(fetcher, it, bool(src.get("full_text")))
@@ -362,6 +363,9 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
     genre_rules = (ROOT / "prompts" / f"genre_{genre}.md").read_text(encoding="utf-8")
     if cand.get("order_topic"):
         genre_rules += f"\n\nТема заказа: {cand['order_topic']}"
+    if position:
+        genre_rules += ("\n\nПосле текста отдельным абзацем пойдёт мнение редакции — его пишет редактор. "
+                        "Не пересказывай и не предвосхищай его: новость — только факты.")
     write_sys = prompt("write", source_title=src["title"], source_url=it.url, source_date=meta["дата"],
                        facts=json.dumps(facts, ensure_ascii=False, indent=1), genre_rules=genre_rules)
     ask = "Напиши новость."
@@ -386,6 +390,17 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
         news = llm.chat_json("rewrite", write_sys, fix, max_tokens=12000)
         story["news"] = news
         story["issues"] = checks.check(news, facts, art["text"], genre)
+    if position:
+        # Позиция редакции (Р-116): LLM только вычитывает текст редактора; в факты и сверку он не идёт.
+        try:
+            edited = llm.chat_json("opinion", prompt("opinion", position=position, news=json.dumps(
+                {k: news.get(k) for k in ("title", "lead", "paragraphs")}, ensure_ascii=False)),
+                "Вычитай мнение редакции.", max_tokens=4000)
+            news["opinion"] = (edited.get("text") or "").strip() or position.strip()
+            story["warnings"] += [f"мнение редакции: {w}" for w in edited.get("warnings") or []]
+        except Exception as e:  # noqa: BLE001 — вычитка не удалась: мнение редактора не теряем
+            news["opinion"] = position.strip()
+            story["warnings"].append(f"мнение редакции не вычитано ({str(e)[:120]}) — стоит текст редактора как есть")
     return story
 
 

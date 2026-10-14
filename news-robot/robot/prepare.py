@@ -99,7 +99,7 @@ def retries(root: Path, log) -> None:
         if rec.get("order"):
             o = rec["order"]
             _write(root / "inbox" / "orders" / f"{key}.json",
-                   {"story_key": key, **{k: o.get(k) for k in ("topic", "section", "urls", "text", "note", "by", "at")}})
+                   {"story_key": key, **{k: o.get(k) for k in ("topic", "section", "urls", "text", "note", "position", "by", "at")}})
         else:
             rec.update(status="ждёт", attempts=0, error=None)
             _write(path, rec)
@@ -127,6 +127,34 @@ def dismissals(root: Path, log) -> None:
         log("info", "order", "заказ убран из списка", story=key, by=req.get("by"))
 
 
+def _site_check(root: Path, key: str, story: dict, llm: LLM, log, pipeline) -> None:
+    """Сверка заказа с сайтом (Р-115, Р-117): заказ идёт мимо прогона, а в нём и стоит сверка.
+
+    Сравнивается готовый заголовок вместе с лидом: по одной теме заказа сходство с уже вышедшей
+    новостью слишком слабое. Заказ не блокируется — редактор видит замечание в превью и решает сам.
+    """
+    news = story.get("news") or {}
+    try:
+        from . import similar
+        from .publish import Api
+        probe = {"story_key": key, "final": 100, "title_ru": f"{news.get('title') or ''}. {news.get('lead') or ''}"}
+        found = similar.site([probe], root, pipeline.load_config(), Api(), llm,
+                             lambda level, stage, msg, **kw: log(level, stage, msg, **kw)).get(key) or {}
+    except Exception as e:  # noqa: BLE001 — без сверки заказ готов как раньше
+        log("warn", "order", "сверка с сайтом не удалась", story=key, error=str(e)[:150])
+        return
+    story["site"] = found
+    hit = found.get("news")
+    if hit:
+        story.setdefault("issues", []).insert(
+            0, f"уже на сайте: «{hit.get('title')}» (сходство {round(hit['similarity'] * 100)}%, /entities/{hit.get('slug')}) "
+               "— новая новость повторит её; решите, что делать со старой")
+    elif found.get("related"):
+        near = "; ".join(f"«{h.get('title')}» ({h.get('type_title') or h.get('type')}, {round(h['similarity'] * 100)}%)"
+                         for h in found["related"][:3])
+        story.setdefault("warnings", []).append(f"на сайте по теме: {near}")
+
+
 def orders(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
     """«Заказать новость» (Р-104): тема, ссылки, текст и указание редактора → новость-обзор.
 
@@ -146,7 +174,8 @@ def orders(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
             continue
         rec = {"story_key": key, "status": "переводится", "started_at": now(), "origin": "заказ редактора",
                "attempts": 1, "order": {"topic": req.get("topic"), "section": req.get("section"), "urls": urls,
-                                        "text": req.get("text"), "note": req.get("note"), "by": req.get("by"),
+                                        "text": req.get("text"), "note": req.get("note"),
+                                        "position": req.get("position"), "by": req.get("by"),
                                         "at": req.get("at")}}
         _write(path, rec)
         log("info", "order", "перевод начат", story=key, urls=len(urls))
@@ -178,12 +207,14 @@ def orders(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
                 raise LLMError("нет ссылки — нужен хотя бы один источник")
             story = pipeline.write_story(holder, cand, {item.id: item}, {"order": {**ORDER_SOURCE, **source}}, fetcher, llm,
                                          extra_urls=urls[1:], extra_text=req.get("text") or None,
-                                         instructions=req.get("note") or None)
+                                         instructions=req.get("note") or None,
+                                         position=req.get("position") or None)
         except Exception as e:  # noqa: BLE001
             rec.update(status="ошибка", error=_error(e), attempts=MAX_ATTEMPTS)
             _write(path, rec)
             log("error", "order", "заказ не выполнен", story=key, error=str(e)[:200])
             continue
+        _site_check(root, key, story, llm, log, pipeline)
         rec.update(status="готово", ready_at=now(), story=story)
         _write(path, rec)
         log("info", "order", "новость по заказу готова", story=key, issues=len(story.get("issues", [])))
@@ -230,7 +261,8 @@ def regenerate(root: Path, llm: LLM, log, pipeline, fetcher: Fetcher) -> int:
             req["text"] = "\n".join(x for x in (rec["order"].get("text"), req.get("text")) if x)
         try:
             story = pipeline.write_story(holder, cand, items, sources, fetcher, llm, extra_urls=req.get("urls") or [],
-                                         extra_text=req.get("text") or None, instructions=instructions or None)
+                                         extra_text=req.get("text") or None, instructions=instructions or None,
+                                         position=(rec.get("order") or {}).get("position") or None)
         except Exception as e:  # noqa: BLE001
             rec.update(status="готово", error=f"перегенерация не удалась: {_error(e)}")
             _write(path, rec)

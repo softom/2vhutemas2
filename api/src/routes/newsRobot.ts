@@ -578,7 +578,7 @@ newsRobot.get("/health", async (c) => {
 });
 
 /**
- * «Заказать новость» (Р-104): тема, раздел, ссылки и текст редактора, указание.
+ * «Заказать новость» (Р-104): тема, раздел, ссылки и текст редактора, указание, позиция редакции (Р-116).
  * Робот возьмёт заказ в течение минуты; новость появится в разделе «Новости» строкой заказа.
  */
 newsRobot.post("/order", async (c) => {
@@ -604,7 +604,8 @@ newsRobot.post("/order", async (c) => {
     .replace(/^-+|-+$/g, "").slice(0, 60) || "zakaz";
   const key = `zakaz-${base}-${crypto.randomUUID().slice(0, 4)}`;
   const note = typeof body?.note === "string" ? body.note.slice(0, 2000) : "";
-  const req = { story_key: key, topic, section, urls, text: text.join("\n"), note, by: principal.displayName,
+  const position = typeof body?.position === "string" ? body.position.trim().slice(0, 3000) : "";
+  const req = { story_key: key, topic, section, urls, text: text.join("\n"), note, position, by: principal.displayName,
     at: new Date().toISOString() };
   await Deno.mkdir(`${ROOT}/inbox/orders`, { recursive: true });
   await Deno.writeTextFile(`${ROOT}/inbox/orders/${key}.json`, JSON.stringify(req));
@@ -628,6 +629,60 @@ newsRobot.post("/order-dismiss", async (c) => {
   const req = { story_key: key, by: principal.displayName, at: new Date().toISOString() };
   await Deno.mkdir(`${ROOT}/inbox/dismiss`, { recursive: true });
   await Deno.writeTextFile(`${ROOT}/inbox/dismiss/${key}.json`, JSON.stringify(req));
+  return c.json({ queued: req }, 202);
+});
+
+/**
+ * Линия «Резонанс» (Р-118): карточки историй — круг изданий, охват по дням, оттенки —
+ * и издания круга по всем карточкам. Читает то, что пишет робот; запросы — в ящик.
+ */
+newsRobot.get("/resonance", async (c) => {
+  requirePermission(c.get("principal"), "su");
+  const cards: Row[] = [];
+  try {
+    for await (const entry of Deno.readDir(`${ROOT}/state/resonance`)) {
+      if (!entry.isFile || !entry.name.endsWith(".json") || entry.name === "index.json") continue;
+      const card = await readJson<Row>(`${ROOT}/state/resonance/${entry.name}`);
+      if (card) cards.push(card);
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  cards.sort((a, b) => String(b.opened_at ?? "").localeCompare(String(a.opened_at ?? "")));
+  const pending: Row[] = [];
+  try {
+    for await (const entry of Deno.readDir(`${ROOT}/inbox/resonance`)) {
+      const req = entry.isFile ? await readJson<Row>(`${ROOT}/inbox/resonance/${entry.name}`) : null;
+      if (req) pending.push(req);
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+  const index = await readJson<Row>(`${ROOT}/state/resonance/index.json`);
+  return c.json({ cards, pending, outlets: index?.outlets ?? [], proposed: index?.proposed ?? [] });
+});
+
+newsRobot.post("/resonance", async (c) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const body = await c.req.json().catch(() => null) as Row | null;
+  const action = String(body?.action ?? "");
+  if (!["open", "refresh", "close"].includes(action)) throw new ApiError("validation_failed", "action: open, refresh или close");
+  let key = String(body?.key ?? "");
+  const req: Row = { action, by: principal.displayName, at: new Date().toISOString() };
+  if (action === "open") {
+    const title = typeof body?.title === "string" ? body.title.trim().slice(0, 200) : "";
+    const markers = String(body?.markers ?? "").split(/[,\n]/).map((m) => m.trim().slice(0, 60)).filter(Boolean).slice(0, 8);
+    if (!title) throw new ApiError("validation_failed", "Нужна история: о чём она");
+    if (markers.length < 2) throw new ApiError("validation_failed", "Нужно хотя бы два маркера — названия и имена, по которым историю узнают");
+    const story = String(body?.story_key ?? "");
+    if (story && !STORY.test(story)) throw new ApiError("validation_failed", "Неверная история");
+    key = story || `rez-${markers[0].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "istoriya"}-${crypto.randomUUID().slice(0, 4)}`;
+    Object.assign(req, { title, markers, story_key: story || null });
+  }
+  if (!STORY.test(key)) throw new ApiError("validation_failed", "Неверная карточка");
+  req.key = key;
+  await Deno.mkdir(`${ROOT}/inbox/resonance`, { recursive: true });
+  await Deno.writeTextFile(`${ROOT}/inbox/resonance/${key}-${action}.json`, JSON.stringify(req));
   return c.json({ queued: req }, 202);
 });
 
