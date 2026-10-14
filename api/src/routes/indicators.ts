@@ -41,6 +41,11 @@ interface ValueInput {
   is_approximate?: boolean;
   is_ongoing?: boolean;
   note?: string | null;
+  /**
+   * Таблица (вид «table», например площадная программа): строки — объекты
+   * {код колонки: значение}; вариант — кодом варианта.
+   */
+  rows?: Record<string, unknown>[] | null;
 }
 
 export interface IndicatorInput {
@@ -71,6 +76,7 @@ function filled(value: ValueInput): boolean {
     !!value.text_value?.trim() ||
     value.bool_value !== null && value.bool_value !== undefined ||
     !!value.option || entityAnswer(value) !== null ||
+    Array.isArray(value.rows) && value.rows.length > 0 ||
     value.date_start_year !== null && value.date_start_year !== undefined;
 }
 
@@ -98,6 +104,8 @@ export async function readAll(tx: Tx, entityId: number) {
                         'date_start_day', iv.date_start_day, 'date_end_year', iv.date_end_year,
                         'date_end_month', iv.date_end_month, 'date_end_day', iv.date_end_day,
                         'is_approximate', iv.is_approximate, 'is_ongoing', iv.is_ongoing,
+                        'rows', case when iv.table_value is not null
+                                     then app.table_rows_json(p.id, iv.table_value) end,
                         'note', iv.note)
                         order by p.sort_order, p.title_ru, iv.sort_order)
                      from app.indicator_values iv
@@ -150,6 +158,20 @@ export async function writeIndicators(tx: Tx, entityId: number, items: Indicator
       const parameter = parameters[0];
       // Текст пишется полем body_json карточки, а не списком величин.
       if (parameter.value_type === "blocks") continue;
+      // Таблица: строки с кодами колонок переводит в вид хранения база —
+      // она же проверяет каждую ячейку (app.check_table_rows).
+      if (parameter.value_type === "table") {
+        if (!Array.isArray(value.rows)) {
+          throw new ApiError("validation_failed", `Параметру «${value.parameter}» нужны строки rows`);
+        }
+        await tx`
+          insert into app.indicator_values (indicator_id, parameter_id, table_value, note, sort_order)
+          values (${indicatorId}, ${parameter.id},
+                  app.table_rows_from_codes(${parameter.id}, ${JSON.stringify(value.rows)}::jsonb),
+                  ${value.note ?? null}, ${position})
+        `;
+        continue;
+      }
       const numeric = value.num_value === null || value.num_value === undefined ||
           value.num_value === ""
         ? null

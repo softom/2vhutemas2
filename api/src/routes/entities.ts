@@ -236,7 +236,10 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                                'entity_value_id', iv.entity_value_id, 'date_start_month', iv.date_start_month, 'date_start_day', iv.date_start_day, 'date_end_month', iv.date_end_month, 'date_end_day', iv.date_end_day, 'date_start_year', iv.date_start_year,
                                'date_end_year', iv.date_end_year,
                                'is_approximate', iv.is_approximate,
-                               'is_ongoing', iv.is_ongoing, 'note', iv.note)
+                               'is_ongoing', iv.is_ongoing, 'note', iv.note,
+                               -- Таблица (площадная программа): строки по кодам колонок.
+                               'rows', case when iv.table_value is not null
+                                            then app.table_rows_json(p.id, iv.table_value) end)
                                order by p.sort_order, p.title_ru, iv.sort_order)
                             from app.read_values(${drafts}) iv
                             join app.parameters p on p.id = iv.parameter_id
@@ -247,6 +250,9 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
                       and exists (select 1 from app.read_values(${drafts}) x
                                    join app.parameters xp on xp.id = x.parameter_id
                                   where x.indicator_id = i.id and xp.value_type <> 'blocks')), '[]'::jsonb) as indicators,
+           -- Итоги площадных программ по группам сведений: общая площадь и
+           -- разделы с долями — основа сравнения проектов.
+           app.area_program_totals(e.id, ${drafts}) as area_program,
            -- Что подсказывает ветвь дерева и собственные наборы записи (Р-38).
            coalesce((select jsonb_agg(jsonb_build_object(
                         'parameter', ep.code, 'title', ep.title_ru, 'unit', ep.unit,

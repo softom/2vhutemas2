@@ -67,6 +67,9 @@ export interface CardValue {
   date_end_year: number | null;
   is_approximate: boolean | null;
   is_ongoing: boolean | null;
+  /** Таблица: строки по кодам колонок; у варианта — {code, title}. */
+  rows?: Record<string, unknown>[] | null;
+  columns?: { code: string; title: string; unit: string | null; value_type: string }[] | null;
 }
 
 export interface PublicCard {
@@ -166,7 +169,10 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
            -- редакции, которую видит спрашивающий.
            case when iv.entity_value_id is not null
                 then app.place_json(iv.entity_value_id, ${drafts}) end as place,
-           iv.date_start_year, iv.date_start_month, iv.date_start_day, iv.date_end_year, iv.is_approximate, iv.is_ongoing
+           iv.date_start_year, iv.date_start_month, iv.date_start_day, iv.date_end_year, iv.is_approximate, iv.is_ongoing,
+           -- Таблица (площадная программа): строки по кодам колонок и сами колонки.
+           case when iv.table_value is not null then app.table_rows_json(p.id, iv.table_value) end as rows,
+           case when iv.table_value is not null then app.table_columns(p.id) end as columns
       from app.read_indicators(${drafts}) i
       join app.read_values(${drafts}) iv on iv.indicator_id = i.id
       join app.parameters p on p.id = iv.parameter_id

@@ -761,3 +761,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .rel-role { margin-left: 8px; font-size: 12px; color: var(--muted); }
 .rel-extra { margin-left: auto; align-self: center; font-size: 13px; color: var(--muted); cursor: pointer; }
 .rel-edge.is-deep { stroke-opacity: .25; stroke-dasharray: 3 3; }
+
+/* Значение-таблица: площадная программа по разделам с итогами. */
+.table-scroll { overflow-x: auto; margin: 8px 0 18px; }
+.value-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.value-table th, .value-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.value-table thead th { font: 11px/1.3 "PT Mono", ui-monospace, monospace; color: var(--muted); }
+.value-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.program-table .program-section th, .program-table .program-section td { padding-top: 14px; font-weight: 600; border-bottom: 1.5px solid var(--text); }
+.program-table tfoot th, .program-table tfoot td { font-weight: 700; border-top: 2px solid var(--text); border-bottom: 0; }

@@ -116,8 +116,9 @@ export function fromDatabaseError(error: unknown): ApiError {
   }
   // Проверки значений параметров сообщают причину сами: в них уже сказано,
   // какого ответа ждёт параметр (Р-38).
-  if (pgError.code === "23514" && pgError.message?.startsWith("Параметр")) {
-    return new ApiError("validation_failed", pgError.message);
+  // Таблица (площадная программа) говорит, какая строка и колонка не так.
+  if (pgError.code === "23514" && /^(Параметр|Строка|Таблиц|Колонка)/.test(pgError.message ?? "")) {
+    return new ApiError("validation_failed", pgError.message ?? "Недопустимое значение");
   }
   if (pgError.message?.includes("не имеет обоснования")) {
     return new ApiError(

@@ -470,6 +470,68 @@ pages.get("/about/:section", async (c) => {
 // ── Запись ───────────────────────────────────────────────────────────────────
 
 /** Величина в человеческом виде — так же, как её пишет карточка клиента. */
+/** Число по-русски: пробел между разрядами, запятая в дробной части. */
+function num(value: number): string {
+  return value.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+}
+
+/** Ячейка таблицы: вариант — названием, число — с разрядами. */
+function cellText(cell: unknown): string {
+  if (cell === null || cell === undefined) return "";
+  if (typeof cell === "object") return String((cell as { title?: string }).title ?? "");
+  if (typeof cell === "number") return num(cell);
+  return String(cell);
+}
+
+/**
+ * Значение-таблица на странице. Площадная программа — по разделам: строки
+ * раздела, итог раздела с долей и общий итог; «Площадь всего» — указанная
+ * или площадь × количество. Прочие таблицы — как есть.
+ */
+function tableValueHtml(value: CardValue): string {
+  const e = escapeHtml;
+  const rows = value.rows ?? [];
+  const columns = (value.columns ?? []).filter((c) => rows.some((r) => r[c.code] !== undefined && r[c.code] !== null));
+  if (rows.length === 0) return "";
+  const head = (cols: typeof columns) =>
+    `<thead><tr>${cols.map((c) => `<th${c.value_type === "number" || c.value_type === "integer" ? ' class="num"' : ""}>${e(c.title)}${c.unit ? `, ${e(c.unit)}` : ""}</th>`).join("")}</tr></thead>`;
+  const cell = (c: (typeof columns)[number], r: Record<string, unknown>) =>
+    `<td${c.value_type === "number" || c.value_type === "integer" ? ' class="num"' : ""}>${e(cellText(r[c.code]))}</td>`;
+
+  if (value.parameter !== "area_program") {
+    return `<h3>${e(value.title)}</h3><div class="table-scroll"><table class="value-table">${head(columns)}<tbody>${
+      rows.map((r) => `<tr>${columns.map((c) => cell(c, r)).join("")}</tr>`).join("")}</tbody></table></div>`;
+  }
+
+  const area = (r: Record<string, unknown>): number | null => {
+    if (typeof r.program_area_total === "number") return r.program_area_total;
+    if (typeof r.program_area === "number") return r.program_area * (typeof r.program_count === "number" ? r.program_count : 1);
+    return null;
+  };
+  // Раздел уходит в заголовок группы строк; «Площадь всего» считается всегда.
+  const shown = columns.filter((c) => c.code !== "program_section" && c.code !== "program_area_total");
+  const totalColumn = { code: "program_area_total", title: "Площадь всего", unit: "м²", value_type: "number" };
+  const sections = new Map<string, { title: string; rows: Record<string, unknown>[] }>();
+  for (const r of rows) {
+    const section = r.program_section as { code?: string; title?: string } | undefined;
+    const key = section?.code ?? "";
+    if (!sections.has(key)) sections.set(key, { title: section?.title ?? "Без раздела", rows: [] });
+    sections.get(key)!.rows.push(r);
+  }
+  const sum = (list: Record<string, unknown>[]) => list.reduce((acc, r) => acc + (area(r) ?? 0), 0);
+  const total = sum(rows);
+  const span = shown.length;
+  const body = [...sections.values()].map((s) => {
+    const subtotal = sum(s.rows);
+    const share = total > 0 ? ` · ${num(Math.round(subtotal / total * 1000) / 10)} %` : "";
+    return `<tr class="program-section"><th colspan="${span}">${e(s.title)}</th><td class="num">${num(subtotal)}${share}</td></tr>` +
+      s.rows.map((r) => `<tr>${shown.map((c) => cell(c, r)).join("")}<td class="num">${area(r) === null ? "" : num(area(r)!)}</td></tr>`).join("");
+  }).join("");
+  return `<h3>${e(value.title)}</h3><div class="table-scroll"><table class="value-table program-table">` +
+    head([...shown, totalColumn]) + `<tbody>${body}</tbody>` +
+    `<tfoot><tr><th colspan="${span}">Итого</th><td class="num">${num(total)}</td></tr></tfoot></table></div>`;
+}
+
 function valueText(value: CardValue): string {
   if (value.num_value !== null && value.num_value !== undefined && value.num_value !== "") {
     return `${value.num_value}${value.unit ? " " + value.unit : ""}`;
@@ -742,7 +804,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         const group = values[0];
         if (groups.size > 1 || !group.is_current) out.push(`<h2>${e(group.indicator_title)}${group.measured_year ? ` · ${group.measured_year}` : ""}${group.is_current ? "" : " · не действующие"}</h2>`);
         for (const [title, rows] of [
-          ["Показатели", values.filter(v => v.value_type !== "place" && v.value_type !== "date")],
+          ["Показатели", values.filter(v => v.value_type !== "place" && v.value_type !== "date" && v.value_type !== "table")],
           ["Места", values.filter(v => v.value_type === "place")],
           ["Датировки", values.filter(v => v.value_type === "date")],
         ] as [string, CardValue[]][]) {
@@ -750,6 +812,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
             out.push(`<h2>${title}</h2><dl>${rows.map(v => `<dt>${e(v.title)}</dt><dd>${placeLink(v) ?? e(valueText(v))}</dd>`).join("")}</dl>`);
           }
         }
+        // Таблицы (площадная программа) — после величин своей группы.
+        for (const v of values.filter((x) => x.value_type === "table")) out.push(tableValueHtml(v));
       }
       return out.join("");
     },

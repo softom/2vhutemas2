@@ -287,6 +287,17 @@ check "сохранение величин" 200 "$(code -X PUT -H "$AUTH" -H "$J
 contains "сохранение величин не стирает текст" 'smoke правка текста SU' "$(textval $DID)"
 contains "текст отдаётся карточкой" 'smoke правка текста SU' "$(curl -s -H "$AUTH" $API/entities/$DID)"
 
+# Площадная программа — значение-таблица (0040): строки по кодам колонок,
+# проверка ячеек в базе, итоги по разделам, таблица на странице.
+DREV3=$(curl -s -H "$AUTH" $API/entities/$DID | field latest_revision_id)
+PROGRAM='[{"program_section":"hall","program_room":"smoke зал","program_area":1000,"program_seats":800},{"program_section":"artists","program_room":"smoke гримёрная","program_area":20,"program_count":10}]'
+check "площадная программа принята" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"base_revision_id\":\"$DREV3\",\"indicators\":[{\"title\":\"Сведения\",\"values\":[{\"parameter\":\"area_program\",\"rows\":$PROGRAM}]}]}" $API/entities-indicators/$DID)"
+DREV4=$(curl -s -H "$AUTH" $API/entities/$DID | field latest_revision_id)
+check "раздел не из списка отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d "{\"base_revision_id\":\"$DREV4\",\"indicators\":[{\"title\":\"Сведения\",\"values\":[{\"parameter\":\"area_program\",\"rows\":[{\"program_section\":\"net-takogo\",\"program_area\":1}]}]}]}" $API/entities-indicators/$DID)"
+contains "итог программы посчитан" '"total_area": 1200' "$(curl -s -H "$AUTH" $API/entities/$DID | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("area_program")))')"
+contains "программа на странице записи" 'program-table' "$(curl -s -H "$AUTH" $API/entities/$DID/card)"
+contains "сохранение величин не стирает текст рядом с таблицей" 'smoke правка текста SU' "$(textval $DID)"
+
 # Незаполненные свойства блока приходят пустыми строками; пустая строка
 # в колонке с UUID роняла сохранение внутренней ошибкой.
 CURRENT2=$(curl -s -H "$AUTH" $API/entities/$EID2 | field latest_revision_id)
