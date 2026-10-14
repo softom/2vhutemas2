@@ -70,6 +70,8 @@ button{cursor:pointer}
     {"id": 2082, "name": "Национальный стадион, Рейкьявик", "type": "stadium", "area": 31293, "seats": 20000, "note": "ведомость концепции с полем"},
     {"id": 2194, "name": "Pegula Ice Arena", "type": "arena", "area": 17597, "seats": 6000, "note": "программа требований с путями движения, два ледовых поля"},
     {"id": 2086, "name": "«Камеримидж», Торунь", "type": "screen", "area": 25216, "seats": 2050, "note": "программа задания без подземной стоянки; мест — 1 350 + 350 + 200 + 150"},
+    {"id": 43, "name": "Тайбэйский центр", "type": "theatre", "area": 58658, "seats": 3100, "note": "общая площадь 58 658 м² по городскому плану; мест — 1 500 + 800 + 800, три зала"},
+    {"id": 49, "name": "Театр Тайчжуна", "type": "theatre", "area": 51125, "seats": 3014, "note": "общая площадь 51 125 м² по публикации городских властей 2014; мест — 2 014 + 800 + 200"},
     {"id": 48, "name": "Сфера, Лас-Вегас", "type": "screen", "area": 81300, "seats": 17600, "note": "площадь здания по Википедии (81 300 м²); сидячих мест — 17 600"}
   ];
   // DOCS:end
@@ -207,7 +209,7 @@ button{cursor:pointer}
     for (var n = 0; n <= YM; n += 5000) g += '<line x1="' + X(0) + '" y1="' + Y(n) + '" x2="' + X(XM) + '" y2="' + Y(n) + '" stroke="currentColor" stroke-opacity=".12"/><text x="' + (L - 6) + '" y="' + (Y(n) + 4) + '" text-anchor="end">' + n0(n) + '</text>';
     g += '<text x="' + ((L + W - Rr) / 2) + '" y="' + (H - 6) + '" text-anchor="middle">площадь комплекса без стоянок, тыс. м²</text>';
     g += '<text transform="translate(14 ' + ((T + H - B) / 2) + ') rotate(-90)" text-anchor="middle">число мест</text>';
-    var rows = [], leg = [];
+    var rows = [], leg = [], labs = [], tlabs = [];
     TYPES.forEach(function (t) {
       var l = lines(t), c = TCOL[t.id], op = hl && hl !== t.id ? .15 : 1;
       var end = function (k) { var n = Math.min(YM, (XM - l.field) / k); return [X(l.field + k * n), Y(n)]; };
@@ -220,9 +222,32 @@ button{cursor:pointer}
       l.pts.forEach(function (p) {
         g += '<circle cx="' + X(p.area) + '" cy="' + Y(p.seats) + '" r="5" fill="' + c + '" stroke="var(--bg)" stroke-width="1.5"><title>' + p.name + ': ' + n0(p.area) + ' м², ' + n0(p.seats) + ' мест</title></circle>';
         rows.push({ p: p, t: t, c: c, k: p.area / p.seats });
+        labs.push({ x: X(p.area), y: Y(p.seats), text: p.name, c: c, op: op });
       });
+      // подпись типа — у конца средней линии, на краю поля графика
+      tlabs.push({ x: em[0], y: em[1], text: t.name, c: c, op: op, top: em[1] <= Y(YM) + 1 });
       g += '</g>';
     });
+    // подписи точек: справа от точки (у правого края — слева), раздвигаются по вертикали
+    // подписи точек: из позиций справа, слева, сверху, снизу — первая, что не задевает подписи и точки
+    labs.sort(function (a, b) { return a.x - b.x; });
+    var boxes = labs.map(function (q) { return { x0: q.x - 6, x1: q.x + 6, y0: q.y - 6, y1: q.y + 6 }; });
+    var clash = function (r) { return r.x0 < L || r.x1 > W - Rr || r.y0 < T || r.y1 > H - B || boxes.some(function (q) { return r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0; }); };
+    labs.forEach(function (lb) {
+      var w = lb.text.length * 6.1, h = 12, cand = [[lb.x + 8, lb.y + 4], [lb.x - 8 - w, lb.y + 4], [lb.x - w / 2, lb.y - 9], [lb.x - w / 2, lb.y + 17],
+        [lb.x + 8, lb.y - 9], [lb.x + 8, lb.y + 17], [lb.x - 8 - w, lb.y - 9], [lb.x - 8 - w, lb.y + 17]], pick = cand[0];
+      for (var k = 0; k < cand.length; k++) { var r = { x0: cand[k][0], x1: cand[k][0] + w, y0: cand[k][1] - h + 2, y1: cand[k][1] + 2 }; if (!clash(r)) { pick = cand[k]; break; } }
+      boxes.push({ x0: pick[0], x1: pick[0] + w, y0: pick[1] - h + 2, y1: pick[1] + 2 });
+      g += '<text x="' + pick[0].toFixed(1) + '" y="' + pick[1].toFixed(1) + '" opacity="' + lb.op + '" style="fill:var(--text-primary);font-size:11px">' + lb.text + '</text>';
+    });
+    // подписи типов — цветом сектора, у верхнего или правого края; без наложений
+    var tops = tlabs.filter(function (q) { return q.top; }).sort(function (a, b) { return b.x - a.x; }), rights = tlabs.filter(function (q) { return !q.top; }).sort(function (a, b) { return a.y - b.y; });
+    var lastX = W - Rr + 999;
+    tops.forEach(function (q) { var w = q.text.length * 7.4, x = Math.min(q.x + 4, lastX - w - 8); lastX = x;
+      g += '<text x="' + x.toFixed(1) + '" y="' + (T + 13) + '" opacity="' + q.op + '" style="fill:' + q.c + ';font-weight:600;font-size:13px">' + q.text + '</text>'; });
+    var lastY = -999;
+    rights.forEach(function (q) { var y = Math.max(q.y - 6, lastY + 16); lastY = y;
+      g += '<text x="' + (W - Rr - 2) + '" y="' + y.toFixed(1) + '" text-anchor="end" opacity="' + q.op + '" style="fill:' + q.c + ';font-weight:600;font-size:13px">' + q.text + '</text>'; });
     plot.innerHTML = g; plot.style.color = 'var(--text-primary)';
     rows.sort(function (a, b) { return b.k - a.k; });
     side.innerHTML = '<table><tr><th>Объект</th><th>м²</th><th>мест</th><th>м² на место</th></tr>' + rows.filter(function (r) { return !hl || r.t.id === hl; }).map(function (r) {
