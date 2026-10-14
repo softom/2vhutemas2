@@ -210,6 +210,65 @@ POST /parameter-sets/large_span_roof/entities
 
 Прежнее `profile.typology` при создании и правке записи по-прежнему принимается и ложится значением параметра `typology`.
 
+### Площадная программа (значение-таблица, 0040–0045)
+
+Площадная программа записи — значение-таблица параметра `area_program` в группе сведений; одна программа на группу (состояние проекта: «по проекту», «после реконструкции»). Классификатор помещений и смысл колонок — [Классификатор помещений](Классификатор%20помещений.md). Пишется тем же `PUT /entities-indicators/{id}`: значение таблицы передаётся полем `rows` — массив строк `{код колонки: значение}`; вариант — кодом варианта. Набор параметров `area_program` к записи подключается `POST /parameter-sets/area_program/entities` `{entity_id}` — чтобы редактор его подсказывал; писать можно и без этого.
+
+**Внимание:** `PUT /entities-indicators/{id}` заменяет весь список групп и значений записи (кроме текста). Чтобы добавить программу, прочитайте текущие `indicators` из `GET /entities/{id}`, добавьте значения и отправьте список целиком — иначе прежние величины будут стёрты.
+
+```json
+PUT /entities-indicators/43
+{ "base_revision_id": "…",
+  "indicators": [ { "title": "Сведения", "is_current": true, "values": [
+      …прежние значения группы…,
+      { "parameter": "program_stage", "option": "built" },
+      { "parameter": "program_area_base", "option": "rooms" },
+      { "parameter": "program_circulation_method", "option": "absent" },
+      { "parameter": "area_program", "note": "Источники программы",
+        "rows": [
+          { "program_purpose": "performers.dressing", "program_room": "Гримёрная групповая",
+            "program_part": "Большой театр (GT)", "program_level": "3F", "program_number": "303",
+            "program_count": 1, "program_seats": 5, "program_space_type": "room",
+            "program_area_basis": "unknown", "program_in_total": "yes",
+            "program_source": "GT, стр.41–42" },
+          { "program_purpose": "performers.rehearsal", "program_room": "Studio 1",
+            "program_level": "11F", "program_area": 251.63, "program_dimensions": "19,02 × 13,23",
+            "program_area_basis": "dimensions", "program_in_total": "yes" } ] } ] } ] }
+```
+
+**Свойства программы** — обычные значения той же группы:
+
+| Код | Варианты |
+|---|---|
+| `program_stage` | `brief` задание, `design` проект, `built` построено |
+| `program_area_base` | `usable` полезная (НУФ, DIN 277), `gross` общая, `rooms` помещения программы |
+| `program_circulation_method` | `rows` строками, `factor` коэффициентом, `separate` отдельно сверх полезной, `absent` не учтены |
+| `program_circulation_factor` | число, например `1.6` |
+
+**Колонки строки** (`rows`):
+
+| Код | Вид | Что |
+|---|---|---|
+| `program_purpose` | вариант-дерево | Назначение — код узла классификатора: зона (`core`), назначение (`performers.dressing`) или помещение инженерии (`engineering.hvac.vent`). Полный список — `GET /parameters`, параметр `program_purpose`, поле `options` с `parent` |
+| `program_room` | текст | Помещение по источнику |
+| `program_space_type` | вариант | `room` помещение, `open` открытая, `covered` под навесом |
+| `program_part` | текст | Часть здания: зал, корпус, «общее» |
+| `program_level` | текст | Уровень: «B1», «3F», «+1» |
+| `program_number` | текст | № помещения |
+| `program_count` | целое | Количество |
+| `program_seats` | целое | Людей: зрительские места, рабочие места, места в гримёрных… |
+| `program_area` | число, м² | Площадь одного помещения |
+| `program_area_total` | число, м² | Площадь всего, если известна только она |
+| `program_area_basis` | вариант | `document`, `dimensions`, `estimate`, `unknown` |
+| `program_dimensions` | текст | Габариты: «19,02 × 13,23» |
+| `program_in_total` | вариант | `yes` / `no` — «нет» только при двойном счёте |
+| `program_source` | текст | Документ и страница |
+| `program_note` | текст | Оговорки, оснащение |
+
+Пустые ячейки можно не передавать или передавать `""`/`null` — они отбрасываются. Число можно прислать строкой с запятой («18,5»). Каждую ячейку проверяет база: незнакомая колонка, текст вместо числа, дробное «Количество», вариант не из списка → `400 validation_failed` с номером строки и названием колонки («Строка 3: «Назначение» — нет варианта «hall»»). Вариант, выбранный хоть в одной таблице, из списка не удаляется.
+
+**Чтение.** `GET /entities/{id}`: в `indicators[].values[]` у таблицы `value_type: "table"` и `rows` — строки с кодами колонок, у варианта `{code, title, path}` (путь от зоны). Поле `area_program` карточки — итоги по группам: `total_area`, `zones[]` (`code`, `title`, `area`, `people`, `share`, `purposes[]`); строки с `program_in_total: no` в итоги не входят; площадь строки — «Площадь всего», иначе площадь × количество. На странице записи программа — раздел под «Связями», раскрывается по уровням: зона → назначение → строки.
+
 ### Датировки
 
 ```json
