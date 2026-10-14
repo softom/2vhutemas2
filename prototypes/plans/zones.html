@@ -9,31 +9,29 @@ body{margin:0 auto;padding:16px;max-width:680px;background:var(--bg);color:var(-
 button,select,input{font:inherit;font-size:14px;padding:4px 10px;border-radius:8px;border:.5px solid var(--border);background:transparent;color:inherit}
 button{cursor:pointer}
 </style></head><body>
-<h2 class="sr-only">Игра «Профили площадей»: лепестковая диаграмма показывает, как зрелищное здание делит площадь между семью частями; профили театра, концертного зала, стадиона, крытой арены и экрана по документам заказчиков; можно угадывать тип по диаграмме и сравнить свой проект.</h2>
+<h2 class="sr-only">Игра «Профили площадей»: лепестковая диаграмма показывает, как зрелищное здание делит площадь между семью частями; профили театра, концертного зала, стадиона, крытой арены и экрана по документам заказчиков; пример сопоставляется со стандартом типа, программа — с профилями типов.</h2>
 <style>
 .zn-tabs,.zn-types{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 .zn-tabs button[aria-pressed=true],.zn-types button[aria-pressed=true]{background:#A9381F;border-color:#A9381F;color:#fff}
-.zn-wrap{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:14px;align-items:start}
-@media (max-width:600px){.zn-wrap{grid-template-columns:minmax(0,1fr)}}
-.zn-svg{width:100%;height:auto;display:block}
-.zn-svg text{font:11px system-ui,sans-serif;fill:var(--text-secondary)}
-.zn-side{font-size:14px}
-.zn-side table{border-collapse:collapse;width:100%;font-size:13px}
-.zn-side td,.zn-side th{padding:3px 4px;border-bottom:.5px solid var(--border);text-align:right;font-weight:400}
+.zn-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.zn-svg{width:100%;max-width:560px;height:auto;display:block;margin:0 auto}
+.zn-svg text{font:12px system-ui,sans-serif;fill:var(--text-secondary)}
+.zn-side{font-size:16px}
+.zn-side table{border-collapse:collapse;width:100%;font-size:16px}
+.zn-side td,.zn-side th{padding:6px 6px;border-bottom:.5px solid var(--border);text-align:right;font-weight:400}
 .zn-side td:first-child,.zn-side th:first-child{text-align:left}
 .zn-side th{color:var(--text-secondary)}
-.zn-msg{margin:8px 0;font-size:14px}
-.zn-good{color:var(--text-success)}.zn-bad{color:var(--text-danger)}
+.zn-msg{margin:8px 0;font-size:16px}
 .zn-key{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--text-secondary);margin:6px 0 0}
 .zn-key i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:4px}
-.zn-in{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:4px 8px;align-items:center;font-size:13px}
+.zn-in{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:6px 10px;align-items:center;font-size:16px}
 .zn-in input{width:92px;text-align:right}
-.zn-hint{font-size:12px;color:var(--text-secondary);margin:6px 0 0}
+.zn-hint{font-size:14px;color:var(--text-secondary);margin:6px 0 0}
 </style>
 <div class="zn-tabs" role="group" aria-label="Режим">
   <button data-mode="types" aria-pressed="true">Профили типов</button>
-  <button data-mode="guess" aria-pressed="false">Угадай тип</button>
-  <button data-mode="own" aria-pressed="false">Свой проект</button>
+  <button data-mode="pair" aria-pressed="false">Стандарт и пример</button>
+  <button data-mode="own" aria-pressed="false">Программа по числу мест</button>
 </div>
 <div class="zn-types" id="zn-types" role="group" aria-label="Тип"></div>
 <div class="zn-wrap">
@@ -44,27 +42,31 @@ button{cursor:pointer}
 <script>
 (function () {
   // Доли площади по семи зонам классификатора помещений — от площади помещений
-  // без путей движения и инженерии (их документы считают по-разному); поле
-  // стадионов и открытые площадки (разгрузка, телевизионные машины) в профили не входят.
-  // м² — из программ записей сайта 2vhutemas.ru (Торунь и Вильнюс — по помещениям, 2026-10-14).
+  // и поля, без путей движения и инженерии (их документы считают по-разному) и без
+  // открытых площадок (разгрузка, телевизионные машины). м² — из программ записей
+  // сайта 2vhutemas.ru (2026-10-14); поле «Яншпортпарка» — расчёт по габаритам дорожки 400 м.
   var AX = ['Место действия', 'Места зрителей', 'Зритель вне зала', 'Исполнители', 'Производство и склады', 'Управление и службы', 'Другие функции'];
   var AXS = ['Действие', 'Зрители', 'Вне зала', 'Исполнители', 'Производство', 'Управление', 'Другое'];
+  // DOCS:begin
   var DOCS = [
-    { name: 'Комише-опер, Берлин', type: 'theatre', doc: 'конкурсное задание 2020', m2: [5196, 1584, 840, 6132, 981, 5204, 0], note: 'зал и фойе в задании одной строкой' },
-    { name: 'Концертный зал «Таутос намай», Вильнюс', type: 'concert', doc: 'конкурсное задание', m2: [560, 1290, 2575, 1550, 1545, 905, 1000], note: 'по нижней границе диапазонов; сцена — эстрада, ниша органа, хоровой балкон и сцена Малого зала' },
-    { name: 'Стадион «Яншпортпарк», Берлин', type: 'stadium', doc: 'конкурсное задание 2022', m2: [0, 9000, 1940, 590, 2167, 1409, 40], note: 'поле не входит в программу' },
-    { name: 'Национальный стадион, Рейкьявик', type: 'stadium', doc: 'предтендерная концепция 2017', m2: [0, 8810, 3118, 638, 1390, 2202, 1000], note: 'поле не входит; места на трибунах — расчёт по размеру места' },
-    { name: 'Pegula Ice Arena, Пенсильвания', type: 'arena', doc: 'программа требований 2010', m2: [3211, 4019, 1841, 2317, 1485, 714, 186], note: 'два ледовых поля — место действия' },
-    { name: 'Киноцентр «Камеримидж», Торунь', type: 'screen', doc: 'конкурсное задание 2021', m2: [896, 3416, 7708, 107, 2610, 1375, 4006], note: 'музей, выставки и образование — «другие функции»; киностудия — производство' }
+    {"id": 2083, "name": "Комише-опер, Берлин", "type": "theatre", "doc": "конкурсное задание 2020", "inType": true, "seats": 1190, "m2": [5196, 1584, 840, 6132, 981, 5204, 0], "total": 25119, "note": "зал и фойе в задании одной строкой; мест — 1 190 (по Википедии, в задании числа нет)"},
+    {"id": 2071, "name": "Опера в Осло", "type": "theatre", "doc": "брошюра заказчика 2003", "inType": false, "seats": 1969, "m2": [8200, 11200, 0, 0, 19100, 0, 0], "total": 38500, "note": "только три части: публика (зал вместе с фойе), сцена и всё остальное — оно показано как «производство»; в профиль типа не входит"},
+    {"id": 2087, "name": "Концертный зал «Таутос намай», Вильнюс", "type": "concert", "doc": "конкурсное задание 2019", "inType": true, "seats": 2000, "m2": [560, 1290, 2575, 1550, 1545, 905, 1000], "total": 9575, "note": "по нижней границе диапазонов; место действия — эстрада, ниша органа, хоровой балкон и сцена Малого зала"},
+    {"id": 2084, "name": "Стадион «Яншпортпарк», Берлин", "type": "stadium", "doc": "конкурсное задание 2022", "inType": true, "seats": 20000, "m2": [14530, 9000, 1940, 590, 2167, 1409, 40], "total": 50505, "note": "поле с беговой дорожкой — расчёт по габаритам, в программе задания его нет"},
+    {"id": 2082, "name": "Национальный стадион, Рейкьявик", "type": "stadium", "doc": "предтендерная концепция 2017", "inType": true, "seats": 20000, "m2": [10625, 8810, 3118, 638, 1390, 2202, 1000], "total": 31293, "note": "поле с полосой вокруг — по ведомости; места на трибунах — расчёт по размеру места"},
+    {"id": 2194, "name": "Pegula Ice Arena, Пенсильвания", "type": "arena", "doc": "программа требований 2010", "inType": true, "seats": 6000, "m2": [3211, 4019, 1841, 2317, 1485, 714, 186], "total": 17597, "note": "два ледовых поля — место действия"},
+    {"id": 2086, "name": "Киноцентр «Камеримидж», Торунь", "type": "screen", "doc": "конкурсное задание 2021", "inType": true, "seats": 2050, "m2": [896, 3416, 7708, 107, 2610, 1375, 4006], "total": 53397, "note": "музей, выставки и образование — «другие функции»; киностудия — производство"}
   ];
+  // DOCS:end
   var TYPES = [
     { id: 'theatre', name: 'Театр' }, { id: 'concert', name: 'Концертный зал' }, { id: 'stadium', name: 'Стадион' },
     { id: 'arena', name: 'Крытая арена' }, { id: 'screen', name: 'Экран' }
   ];
   var RED = '#A9381F', BLUE = '#2F5D9E', OCHRE = '#8A6414';
-  DOCS.forEach(function (d) { var s = d.m2.reduce(function (a, b) { return a + b; }, 0); d.total = s; d.sh = d.m2.map(function (v) { return v / s * 100; }); });
+  DOCS.forEach(function (d) { var s = d.m2.reduce(function (a, b) { return a + b; }, 0); d.sum = s; d.sh = d.m2.map(function (v) { return v / s * 100; }); });
   TYPES.forEach(function (t) {
-    var ds = DOCS.filter(function (d) { return d.type === t.id; });
+    var ds = DOCS.filter(function (d) { return d.type === t.id && d.inType; });
+    t.examples = DOCS.filter(function (d) { return d.type === t.id; });
     t.docs = ds;
     t.sh = AX.map(function (_, i) { return ds.reduce(function (a, d) { return a + d.sh[i]; }, 0) / ds.length; });
   });
@@ -104,58 +106,77 @@ button{cursor:pointer}
     draw([{ sh: t.sh, color: RED, fill: true, label: 'профиль типа: ' + t.name.toLowerCase() }].concat(t.docs.length > 1 ? t.docs.map(function (d, k) { return { sh: d.sh, color: colors[k], dash: true, w: 1.5, label: d.name }; }) : []));
     var rows = [{ head: 'профиль, %', cell: function (i) { return f(t.sh[i]); } }];
     if (t.docs.length > 1) t.docs.forEach(function (d) { rows.push({ head: d.name.split(',')[0] + ', п. п.', cell: function (i) { return sgn(d.sh[i] - t.sh[i]); } }); });
-    side.innerHTML = devTable(rows) + '<p class="zn-hint">' + (t.docs.length > 1 ? 'Профиль — среднее двух документов; в колонках справа — отклонение каждого от среднего, в процентных пунктах.' : 'Профиль по одному документу: ' + t.docs[0].name + ' (' + t.docs[0].doc + '). Это ориентир, а не статистика типа.') + ' ' + t.docs.map(function (d) { return d.name + ': ' + d.note + '.'; }).join(' ') + '</p>';
+    side.innerHTML = devTable(rows) + '<p class="zn-hint">' + (t.docs.length > 1 ? 'Профиль — среднее ' + t.docs.length + ' документов; в колонках справа — отклонение каждого от среднего, в процентных пунктах.' : 'Профиль по одному документу: ' + t.docs[0].name + ' (' + t.docs[0].doc + '). Это ориентир, а не статистика типа.') + ' ' + t.docs.map(function (d) { return d.name + ': ' + d.note + '.'; }).join(' ') + '</p>';
   }
-  var order = [], step = 0, score = 0;
-  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = a[i]; a[i] = a[j]; a[j] = x; } return a; }
-  function guessStart() { order = shuffle(DOCS.slice()); step = 0; score = 0; guessShow(); }
-  function guessShow() {
-    if (step >= order.length) {
-      typesBox.innerHTML = '';
-      draw([]);
-      side.innerHTML = '<p class="zn-msg">Угадано ' + score + ' из ' + order.length + '.</p><button id="zn-again">Ещё раз</button>';
-      document.getElementById('zn-again').onclick = guessStart; return;
-    }
-    var d = order[step];
-    typeButtons(function (id) { guessAnswer(id); }, null);
-    draw([{ sh: d.sh, color: BLUE, fill: true, label: 'здание ' + (step + 1) + ' из ' + order.length }]);
-    side.innerHTML = '<p class="zn-msg">Здание ' + (step + 1) + ' из ' + order.length + '. Какой это тип?</p><p class="zn-hint">Диаграмма — доли площади по частям здания, без путей движения и инженерии.</p>';
+  var pick = null;
+  function n0(v) { return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  function pairShow(id) {
+    cur = id || cur; var t = TYPES.filter(function (x) { return x.id === cur; })[0];
+    typeButtons(pairShow, cur);
+    if (!pick || pick.type !== cur) pick = t.examples[0];
+    var sel = '<div class="zn-types" role="group" aria-label="Пример">' + t.examples.map(function (d, k) { return '<button data-k="' + k + '" aria-pressed="' + (d === pick) + '">' + d.name + '</button>'; }).join('') + '</div>';
+    var d = pick;
+    draw([{ sh: t.sh, color: RED, fill: true, label: 'стандарт: профиль типа «' + t.name.toLowerCase() + '»' }, { sh: d.sh, color: BLUE, dash: true, label: 'пример: ' + d.name }]);
+    var base = t.docs.length > 1 ? 'Стандарт — среднее ' + t.docs.length + ' документов типа: ' + t.docs.map(function (x) { return x.name; }).join('; ') + '.' :
+      'Стандарт построен по одному документу (' + t.docs[0].name + ')' + (d === t.docs[0] ? ', поэтому пример с ним совпадает.' : '.');
+    side.innerHTML = sel + devTable([{ head: 'стандарт, %', cell: function (i) { return f(t.sh[i]); } }, { head: 'пример, %', cell: function (i) { return f(d.sh[i]); } },
+      { head: 'разница, п. п.', cell: function (i) { return sgn(d.sh[i] - t.sh[i]); } }, { head: 'пример, м²', cell: function (i) { return d.m2[i] ? n0(d.m2[i]) : '—'; } }]) +
+      '<p class="zn-hint">' + d.name + ', ' + d.doc + ': итог программы — ' + n0(d.total) + ' м², в профиле — ' + n0(d.sum) + ' м² (без путей движения, инженерии и стоянок)' +
+      (d.m2[0] ? '; место действия — ' + f(d.m2[0] / d.total * 100) + ' % итога программы' : '') + '. ' + d.note.charAt(0).toUpperCase() + d.note.slice(1) + '. ' + base + '</p>';
+    Array.prototype.forEach.call(side.querySelectorAll('[data-k]'), function (b) { b.onclick = function () { pick = t.examples[+b.getAttribute('data-k')]; pairShow(cur); }; });
   }
-  function guessAnswer(id) {
-    var d = order[step], t = TYPES.filter(function (x) { return x.id === d.type; })[0], ok = id === d.type;
-    if (ok) score++;
-    Array.prototype.forEach.call(typesBox.querySelectorAll('button'), function (b) { b.disabled = true; if (b.getAttribute('data-t') === d.type) b.setAttribute('aria-pressed', 'true'); });
-    draw([{ sh: t.sh, color: RED, fill: true, label: 'профиль: ' + t.name.toLowerCase() }, { sh: d.sh, color: BLUE, dash: true, label: d.name }]);
-    var diff = AX.map(function (a, i) { return { a: a, v: d.sh[i] - t.sh[i] }; }).sort(function (x, y) { return Math.abs(y.v) - Math.abs(x.v); }).slice(0, 2);
-    side.innerHTML = '<p class="zn-msg ' + (ok ? 'zn-good' : 'zn-bad') + '">' + (ok ? 'Верно' : 'Нет') + ': ' + d.name + ' — ' + t.name.toLowerCase() + ', ' + d.doc + '.</p>' +
-      (t.docs.length > 1 ? '<p class="zn-hint">Сильнее всего здание отличается от профиля типа: ' + diff.map(function (x) { return x.a.toLowerCase() + ' ' + sgn(x.v) + ' п. п.'; }).join(', ') + '.</p>' : '<p class="zn-hint">Профиль этого типа построен по одному документу — по нему же.</p>') +
-      '<p class="zn-hint">' + d.note + '.</p><button id="zn-next">' + (step + 1 < order.length ? 'Дальше' : 'Итог') + '</button>';
-    document.getElementById('zn-next').onclick = function () { step++; guessShow(); };
+  // Нормы СП 309.1325800.2017 на одно место в зале, м², уровни комфорта 3…1:
+  // зал — табл. 3; зритель вне зала — табл. 1 (входная группа, гардероб, санузлы)
+  // и табл. 2 (фойе, курительные, кладовая при фойе, буфет): 0,64 + 1,19 … 0,97 + 2,13.
+  var NORM = { theatre: { 1: [0.8, 1.0], 2: [1.83, 3.10] }, concert: { 1: [0.6, 1.2], 2: [1.83, 3.10] }, screen: { 1: [0.6, 0.7], 2: [1.83, 3.10] } };
+  var FIXED = { stadium: true, arena: true };
+  var seats = 0;
+  function n0r(v) { var k = v >= 10000 ? 100 : v >= 1000 ? 50 : 10; return n0(Math.round(v / k) * k); }
+  function f2(v) { return (Math.round(v * 100) / 100).toString().replace('.', ','); }
+  function perSeat(t) {
+    return AX.map(function (_, i) {
+      var vals = t.docs.map(function (d) { return d.m2[i] / d.seats; }), nr = NORM[t.id] && NORM[t.id][i];
+      if (nr) vals = vals.concat(nr);
+      // Поле стадиона и арены задано правилами спорта, а не числом мест: площадь постоянная.
+      if (i === 0 && FIXED[t.id]) { var a = t.docs.map(function (d) { return d.m2[0]; }); return { fixed: true, lo: Math.min.apply(null, a), hi: Math.max.apply(null, a) }; }
+      return { lo: Math.min.apply(null, vals), hi: Math.max.apply(null, vals), norm: !!nr };
+    });
   }
-  var own = [0, 0, 0, 0, 0, 0, 0];
   function ownShow(id) {
     cur = id || cur; var t = TYPES.filter(function (x) { return x.id === cur; })[0];
     typeButtons(ownShow, cur);
-    if (!document.getElementById('zn-own')) {
-      side.innerHTML = '<div class="zn-in" id="zn-own">' + AX.map(function (a, i) { return '<label for="zn-o' + i + '">' + a + ', м²</label><input id="zn-o' + i + '" type="number" min="0" step="10" value="' + (own[i] || '') + '">'; }).join('') + '</div><div id="zn-ownres"></div>';
-      AX.forEach(function (_, i) { document.getElementById('zn-o' + i).oninput = function () { own[i] = Math.max(0, parseFloat(this.value.replace(',', '.')) || 0); ownCalc(); }; });
+    if (!document.getElementById('zn-seats')) {
+      side.innerHTML = '<div class="zn-in"><label for="zn-seats">Число мест</label><input id="zn-seats" type="number" min="0" step="50" value="' + (seats || '') + '"></div><div id="zn-ownres"></div>';
+      document.getElementById('zn-seats').oninput = function () { seats = Math.max(0, parseFloat(this.value.replace(',', '.')) || 0); ownCalc(); };
     }
     ownCalc();
   }
   function ownCalc() {
-    var t = TYPES.filter(function (x) { return x.id === cur; })[0], s = own.reduce(function (a, b) { return a + b; }, 0), res = document.getElementById('zn-ownres');
-    if (!s) { draw([{ sh: t.sh, color: RED, fill: true, label: 'профиль: ' + t.name.toLowerCase() }]); res.innerHTML = '<p class="zn-hint">Площади проекта по частям, м², без путей движения и инженерии — диаграмма сравнит их с профилем выбранного типа.</p>'; return; }
-    var sh = own.map(function (v) { return v / s * 100; });
-    var near = TYPES.map(function (x) { return { t: x, d: x.sh.reduce(function (a, v, i) { return a + Math.abs(v - sh[i]); }, 0) }; }).sort(function (a, b) { return a.d - b.d; })[0];
-    draw([{ sh: t.sh, color: RED, fill: true, label: 'профиль: ' + t.name.toLowerCase() }, { sh: sh, color: BLUE, dash: true, label: 'проект' }]);
-    res.innerHTML = '<p class="zn-hint">Всего ' + f(s) + ' м². Ближе всего по профилю — ' + near.t.name.toLowerCase() + '.</p>' +
-      devTable([{ head: 'проект, %', cell: function (i) { return f(sh[i]); } }, { head: 'к профилю, п. п.', cell: function (i) { return sgn(sh[i] - t.sh[i]); } }]);
+    var t = TYPES.filter(function (x) { return x.id === cur; })[0], res = document.getElementById('zn-ownres'), ps = perSeat(t);
+    var lo = ps.map(function (p) { return p.fixed ? p.lo : p.lo * seats; }), hi = ps.map(function (p) { return p.fixed ? p.hi : p.hi * seats; });
+    var sum = function (a) { return a.reduce(function (x, y) { return x + y; }, 0); };
+    var mid = AX.map(function (_, i) { return (lo[i] + hi[i]) / 2; }), ms = sum(mid);
+    draw([{ sh: t.sh, color: RED, fill: true, label: 'профиль типа «' + t.name.toLowerCase() + '»' }].concat(seats ? [{ sh: mid.map(function (v) { return v / ms * 100; }), color: BLUE, dash: true, label: 'середина диапазонов' }] : []));
+    var src = t.docs.map(function (d) { return d.name + ' — ' + n0(d.seats) + ' мест'; }).join('; ');
+    var h = '<table><tr><th>Часть</th><th>м² на место</th><th>' + (seats ? 'м², от — до' : 'м²') + '</th></tr>';
+    AX.forEach(function (a, i) {
+      var p = ps[i], one = Math.abs(p.hi - p.lo) < 0.005;
+      var pr = p.fixed ? 'постоянная' : one ? f2(p.lo) : f2(p.lo) + ' — ' + f2(p.hi);
+      var ar = p.fixed ? (one ? n0(p.lo) : n0(p.lo) + ' — ' + n0(p.hi)) : seats ? (one ? n0r(lo[i]) : n0r(lo[i]) + ' — ' + n0r(hi[i])) : '—';
+      h += '<tr><td>' + a + (p.norm ? ' *' : '') + '</td><td>' + pr + '</td><td>' + ar + '</td></tr>';
+    });
+    h += '<tr><td><b>Всего</b></td><td></td><td>' + (seats ? '<b>' + n0r(sum(lo)) + ' — ' + n0r(sum(hi)) + '</b>' : '—') + '</td></tr></table>';
+    res.innerHTML = h + '<p class="zn-hint">Площадь на одно место — по документам типа (' + src + ')' +
+      (NORM[t.id] ? '; * — диапазон расширен нормами СП 309.1325800.2017 для уровней комфорта 1–3: зал — табл. 3, зритель вне зала — табл. 1 и 2' : '') +
+      (FIXED[t.id] ? '; место действия не зависит от числа мест: его площадь задают правила спорта, здесь — диапазон по документам' : '') +
+      '. Пути движения, инженерия и стоянки — сверх этих площадей. ' + (t.docs.length < 2 && !NORM[t.id] ? 'Тип представлен одним документом, поэтому диапазона нет. ' : '') +
+      'Это порядок величин по опубликованным заданиям, а не норматив.</p>';
   }
   function setMode(m) {
     mode = m;
     Array.prototype.forEach.call(document.querySelectorAll('.zn-tabs button'), function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === m)); });
     side.innerHTML = '';
-    if (m === 'types') showType(cur); else if (m === 'guess') guessStart(); else ownShow(cur);
+    if (m === 'types') showType(cur); else if (m === 'pair') pairShow(cur); else ownShow(cur);
   }
   Array.prototype.forEach.call(document.querySelectorAll('.zn-tabs button'), function (b) { b.onclick = function () { setMode(b.getAttribute('data-mode')); }; });
   setMode('types');
