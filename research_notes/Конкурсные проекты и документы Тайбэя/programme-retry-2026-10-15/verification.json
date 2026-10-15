@@ -1,0 +1,39 @@
+{
+  "checked_at": "2026-10-15T18:29:20.128129",
+  "status": "no-new-programme-pages",
+  "unique_archived_urls": 1071,
+  "programme_urls": [
+    "http://www.tpac.com.tw:80/download/06-Program(Chinese&English)_P001-P008.pdf",
+    "http://www.tpac.com.tw:80/download/06-Program(Chinese&English)_P037-P048.pdf",
+    "http://www.tpac.com.tw:80/download/06-Program(Chinese&English)_P075-P088.pdf",
+    "http://www.tpac.com.tw:80/download/06-Program(Chinese&English)_P101-P114.pdf"
+  ],
+  "available_pages": 48,
+  "total_printed_pages": 225,
+  "evidence": [
+    {
+      "file": "availability-115-port.json",
+      "sha256": "d40c76ae6f21ab30f58f9a64a893fac0f80cbd9633994ee08a257a9090d3eaa0"
+    },
+    {
+      "file": "cdx-all-programme.json",
+      "sha256": "0486578460bc6c9472ca69de06ee56f123802cef9e245cf187c4d837419b4b26"
+    },
+    {
+      "file": "cdx-all-urls.json",
+      "sha256": "7600ecc88392ed5dc01cb9906d445a1d107a586b6c951dca732657cce20c61e3"
+    },
+    {
+      "file": "cdx-response.txt",
+      "sha256": "ac2e06efc972ebf8e0a96f579fe728ad31cf358c2eba3dbb6352e67c8ecbf471"
+    },
+    {
+      "file": "README.md",
+      "sha256": "8a4936ac4759fa2f27c2dee396005f662d732029ed43ced21c977c64df6a3cfa"
+    },
+    {
+      "file": "request.json",
+      "sha256": "2634995119985071a58d8649c64afb1af969915c85b54919068eeab76aadce94"
+    }
+  ]
+}
