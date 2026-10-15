@@ -64,12 +64,25 @@ refresh = token.get("refresh_token")
 if not refresh:
     sys.exit("Dropbox не выдал refresh_token")
 
+# Права ключа фиксируются в момент разрешения: без нужных — ничего не пишем.
+granted = set((token.get("scope") or "").split())
+missing = {"files.metadata.read", "files.metadata.write"} - granted
+if missing:
+    sys.exit(f"У ключа нет прав: {', '.join(sorted(missing))}. В App Console этого приложения "
+             "(App key — тот, что вы копировали) на вкладке Permissions отметьте их, нажмите Submit "
+             "и запустите скрипт снова. На сервер ничего не записано.")
+
 # Где корень: /2VHUTEMAS виден только при доступе ко всему Dropbox.
 try:
     post("https://api.dropboxapi.com/2/files/get_metadata", token=token["access_token"], body={"path": "/2VHUTEMAS"})
     root, where = "/2VHUTEMAS", r"E:\Dropbox\2VHUTEMAS"
-except urllib.error.HTTPError:
-    root, where = "", r"E:\Dropbox\Приложения\2VHUTEMAS (папка приложения)"
+except urllib.error.HTTPError as e:
+    if "not_found" not in e.read().decode(errors="replace"):
+        sys.exit("Dropbox не ответил на проверку папки — на сервер ничего не записано.")
+    root, where = "", r"E:\Dropbox\Приложения\<имя приложения> (доступ App folder)"
+    print("Папки /2VHUTEMAS приложение не видит: у него доступ App folder, а не Full Dropbox.")
+    if input("Всё равно записать на сервер? [y/N] ").strip().lower() != "y":
+        sys.exit("На сервер ничего не записано.")
 
 lines = (f"DROPBOX_APP_KEY={key}\nDROPBOX_APP_SECRET={secret}\n"
          f"DROPBOX_REFRESH_TOKEN={refresh}\nDROPBOX_ROOT={root}\n")
