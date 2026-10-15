@@ -63,9 +63,12 @@ export async function mountDrawing(host: HTMLElement) {
     antialias: true,
   });
 
-  const storeKey = `drawing-scale:${url}`;
-  let unitMm = 1;
-  try { unitMm = Number(localStorage.getItem(storeKey)) || 1; } catch { /* без хранилища — 1 */ }
+  // Масштаб — из сведений чертежа (data-unit-mm): по нему считают все.
+  // Своя калибровка посетителя помнится в его браузере и сильнее сведений.
+  const storeKey = `drawing-scale-v2:${url}`;
+  const recordUnit = Number(host.dataset.unitMm) || 1;
+  let unitMm = recordUnit;
+  try { unitMm = Number(localStorage.getItem(storeKey)) || recordUnit; } catch { /* без хранилища — сведения */ }
 
   let mode: "line" | "area" | "calibrate" | null = null;
   let draft: Point[] = [];

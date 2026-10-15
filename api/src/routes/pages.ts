@@ -982,7 +982,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       `<h2>Чертежи</h2>${card.drawings.map((d) => {
         const url = mediaUrl(d.asset_id, "original");
         const credit = creditHtml({ author: [d.author, d.credit].filter(Boolean).join(" / ") || null, source: d.source, source_url: d.source_url });
-        return `<figure class="drawing"><div class="drawing-view" data-drawing="${e(url)}" data-title="${e(d.title ?? "")}">` +
+        return `<figure class="drawing"><div class="drawing-view" data-drawing="${e(url)}" data-title="${e(d.title ?? "")}"` +
+          `${d.unit_mm ? ` data-unit-mm="${e(d.unit_mm)}"` : ""}>` +
           `<a class="drawing-fallback" href="${e(url)}" download="${e(d.original_name ?? "drawing.dxf")}">Скачать чертёж (DXF)</a></div>` +
           `<figcaption><b>${e(d.title ?? "Чертёж")}</b>${credit ? `<br>${credit}` : ""}${d.license ? ` · ${e(d.license)}` : ""}</figcaption></figure>`;
       }).join("")}`,

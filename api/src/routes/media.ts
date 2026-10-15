@@ -80,6 +80,8 @@ const FIELDS: [field: string, param: string, kind: "text" | "num" | "option"][] 
   ["license", "license", "text"],
   ["alt", "alt_text", "text"],
   ["description", "image_description", "text"],
+  // Чертёж: сколько миллиметров в единице чертежа — масштаб замеров.
+  ["unit_mm", "drawing_unit_mm", "num"],
 ];
 
 /** Ответы из присланных полей; непереданное поле не трогается. */

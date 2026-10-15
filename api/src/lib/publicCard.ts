@@ -59,6 +59,8 @@ export interface PublicDrawing {
   license: string | null;
   original_name: string | null;
   size_bytes: number | null;
+  /** Миллиметров в единице чертежа; пусто — 1 (как в файле). */
+  unit_mm: number | null;
 }
 
 export interface CardValue {
