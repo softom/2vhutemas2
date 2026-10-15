@@ -8,7 +8,8 @@
 
 Перед запуском: https://www.dropbox.com/developers/apps → Create app →
 Scoped access → доступ, имя 2VHUTEMAS. Вкладка Permissions: отметить
-files.metadata.read и files.metadata.write → Submit. Вкладка Settings:
+files.metadata.read, files.metadata.write и files.content.write
+(создание папки Dropbox считает записью) → Submit. Вкладка Settings:
 App key и App secret.
 
 Корень папок определяется сам: если в Dropbox есть /2VHUTEMAS (доступ
@@ -66,7 +67,7 @@ if not refresh:
 
 # Права ключа фиксируются в момент разрешения: без нужных — ничего не пишем.
 granted = set((token.get("scope") or "").split())
-missing = {"files.metadata.read", "files.metadata.write"} - granted
+missing = {"files.metadata.read", "files.metadata.write", "files.content.write"} - granted
 if missing:
     sys.exit(f"У ключа нет прав: {', '.join(sorted(missing))}. В App Console этого приложения "
              "(App key — тот, что вы копировали) на вкладке Permissions отметьте их, нажмите Submit "
