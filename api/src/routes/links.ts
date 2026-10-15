@@ -125,7 +125,7 @@ links.get("/", async (c: Context<AppEnv>) => {
       and (${drafts} or other.is_published)
       -- Иллюстрации — тоже связи (Р-84), но у них своё место: галерея
       -- карточки. В окружении записи они только заслоняли бы отношения.
-      and coalesce((select code from app.link_roles lr where lr.id = l.role_id), '') <> 'illustration'
+      and coalesce((select code from app.link_roles lr where lr.id = l.role_id), '') not in ('illustration', 'drawing')
     order by l.is_primary desc, l.sort_order, l.id
   `;
   return c.json({ items: rows.map(row => ({...row, justification:extractText(row.justification_blocks)})) });

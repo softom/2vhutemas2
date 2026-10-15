@@ -236,7 +236,10 @@ media.post("/", async (c: Context<AppEnv>) => {
     throw new ApiError("validation_failed", "Не передан файл в поле file");
   }
 
-  const mimeType = file.type || "application/octet-stream";
+  // Браузеры не знают тип DXF и шлют пустой или application/octet-stream:
+  // чертёж узнаём по расширению. Свой тип файла — свой тип записи «Чертёж».
+  const isDrawing = /\.dxf$/i.test(file.name);
+  const mimeType = isDrawing ? "image/vnd.dxf" : file.type || "application/octet-stream";
   checkUpload(mimeType, file.size);
 
   const stored = await storeOriginal(file.stream(), mimeType, file.name);
@@ -244,7 +247,8 @@ media.post("/", async (c: Context<AppEnv>) => {
   const created = await transaction(principal.contributorId, async (tx) => {
     const caption = text(form, "caption") ?? file.name;
     const record = await createRecord(tx, {
-      type: "image", title: caption, slugBase: `izobrazhenie ${caption}`,
+      type: isDrawing ? "drawing" : "image", title: caption,
+      slugBase: `${isDrawing ? "chertezh" : "izobrazhenie"} ${caption}`,
       contributorId: principal.contributorId,
     });
     const assets = await tx<{ id: string }>`
@@ -384,16 +388,18 @@ media.post("/attachments", async (c: Context<AppEnv>) => {
   const result = await transaction(principal.contributorId, async (tx) => {
     const owner = await tx<{ id: number }>`select id from app.entities where id = ${input.entity_id}`;
     if (owner.length === 0) throw new ApiError("not_found", "Сущность не найдена");
-    const images = await tx<{ entity_id: number; title: string }>`
-      select a.entity_id, e.title_ru as title from app.media_assets a
+    const images = await tx<{ entity_id: number; title: string; asset_class: string }>`
+      select a.entity_id, e.title_ru as title, a.asset_class from app.media_assets a
         join app.entities e on e.id = a.entity_id where a.id = ${input.asset_id}
     `;
     if (images.length === 0) throw new ApiError("not_found", "Файл не найден");
     const imageId = Number(images[0].entity_id);
+    // Чертёж прикрепляется своей связью — у него свой раздел страницы.
+    const role = images[0].asset_class === "drawing" ? "drawing" : "illustration";
 
     const same = await tx`
       select l.id from app.links l join app.link_roles r on r.id = l.role_id
-       where r.code = 'illustration' and l.status <> 'archived'
+       where r.code = ${role} and l.status <> 'archived'
          and l.from_entity_id = ${input.entity_id} and l.to_entity_id = ${imageId}
     `;
     if (same.length > 0) throw new ApiError("duplicate", "Этот файл уже прикреплён");
@@ -401,12 +407,13 @@ media.post("/attachments", async (c: Context<AppEnv>) => {
     const next = await tx<{ n: number }>`
       select coalesce(max(l.sort_order), -1) + 1 as n
         from app.links l join app.link_roles r on r.id = l.role_id
-       where r.code = 'illustration' and l.status <> 'archived' and l.from_entity_id = ${input.entity_id}
+       where r.code = ${role} and l.status <> 'archived' and l.from_entity_id = ${input.entity_id}
     `;
     const linkId = await createLink(tx, {
-      from: input.entity_id, to: imageId, role: "illustration",
-      justification: images[0].title || "Иллюстрация", contributorId: principal.contributorId,
-      sortOrder: Number(next[0].n), isPrimary: input.role === "cover", publish: true,
+      from: input.entity_id, to: imageId, role,
+      justification: images[0].title || (role === "drawing" ? "Чертёж" : "Иллюстрация"),
+      contributorId: principal.contributorId,
+      sortOrder: Number(next[0].n), isPrimary: role === "illustration" && input.role === "cover", publish: true,
     });
     return { attachment_id: linkId, link_id: linkId };
   });

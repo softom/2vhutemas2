@@ -41,7 +41,9 @@ ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services/app-web &&
 echo "  ok"
 
 echo "── Сборка клиента"
-ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services/app-web && npm run build'
+# Новые пакеты клиента (например, просмотр чертежей dxf-viewer) ставятся до
+# сборки; без изменений в package.json команда ничего не делает.
+ssh -o BatchMode=yes "$HOST" 'cd /opt/2vhutemas-services/app-web && npm install --no-audit --no-fund --loglevel=error >/dev/null && npm run build'
 
 echo "── Клиент поднимается"
 # Проверяем не факт сборки, а что в ней есть настройки: без них страница

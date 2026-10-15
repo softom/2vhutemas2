@@ -181,6 +181,17 @@ IMGID=$(curl -s -H "$AUTH" $API/media/$AID | field entity_id)
 contains "файл — запись типа «Изображение»" '"type":"image"' "$(curl -s -H "$AUTH" $API/entities/$IMGID)"
 check "привязка файла к объекту" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"asset_id\":\"$AID\",\"role\":\"gallery\"}" $API/media/attachments)"
 check "повторная привязка" 409 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"asset_id\":\"$AID\",\"role\":\"gallery\"}" $API/media/attachments)"
+# Чертёж DXF (0048): своя запись «Чертёж», прикрепляется связью «Чертёж»,
+# на странице — раздел «Чертежи» с просмотром.
+printf '0\nSECTION\n2\nENTITIES\n0\nLINE\n8\n0\n10\n0\n20\n0\n11\n1000\n21\n0\n0\nENDSEC\n0\nEOF\n' > /tmp/smoke.dxf
+DXF=$(curl -s -X POST -H "$AUTH" -F "file=@/tmp/smoke.dxf;filename=smoke.dxf" -F "caption=smoke: чертёж" $API/media)
+DXFID=$(echo "$DXF" | field id)
+DXFENT=$(echo "$DXF" | field entity_id)
+contains "DXF — запись типа «Чертёж»" '"type":"drawing"' "$(curl -s -H "$AUTH" $API/entities/$DXFENT)"
+check "чертёж прикрепляется к объекту" 201 "$(code -X POST -H "$AUTH" -H "$JSON" -d "{\"entity_id\":$EID,\"asset_id\":\"$DXFID\"}" $API/media/attachments)"
+contains "чертёж на странице записи" 'data-drawing' "$(curl -s -H "$AUTH" $API/entities/$EID/card)"
+check "файл чертежа отдаётся" 200 "$(code -H "$AUTH" "$API/media/$DXFID/file?variant=original")"
+rm -f /tmp/smoke.dxf
 ATT=$(curl -s -H "$AUTH" $API/entities/$EID | python3 -c "
 import json,sys
 print(json.load(sys.stdin)['media'][0]['attachment_id'])")
@@ -574,7 +585,8 @@ delete from app.materials where entity_id in (select id from smoke_e) or link_id
 delete from app.links where id in (select id from smoke_l);
 delete from app.entity_tags where entity_id in (select id from smoke_e);
 delete from app.indicators where entity_id in (select id from smoke_e);
-delete from app.media_files where asset_id = '$AID';
+delete from app.media_files where asset_id = '$AID'
+   or asset_id in (select id from app.media_assets where entity_id in (select id from smoke_e));
 delete from app.media_assets where id = '$AID' or entity_id in (select id from smoke_e);
 delete from app.slug_history where entity_id in (select id from smoke_e);
 delete from app.entity_parameter_sets where entity_id in (select id from smoke_e);

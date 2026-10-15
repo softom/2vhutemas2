@@ -40,11 +40,14 @@ function extensionFor(mime: string): string {
     "image/heic": ".heic",
     "application/pdf": ".pdf",
     "video/mp4": ".mp4",
+    "image/vnd.dxf": ".dxf",
   };
   return map[mime] ?? ".bin";
 }
 
 export function assetClassFor(mime: string): string {
+  // Чертёж DXF — не растровое изображение: своя запись и свой просмотр.
+  if (mime === "image/vnd.dxf") return "drawing";
   if (mime.startsWith("image/")) return "image";
   if (mime === "application/pdf") return "pdf";
   if (mime.startsWith("video/")) return "video";

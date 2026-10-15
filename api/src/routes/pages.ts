@@ -44,6 +44,7 @@ import {
   compactLine,
   compactParts,
   compactPicture,
+  creditHtml,
   figureHtml,
   SOURCE_MARK,
   firstParagraph,
@@ -974,6 +975,17 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       `<h2>Изображения</h2><div class="public-gallery">${
         card.media.map((m) => figureHtml(mediaUrl(m.asset_id, "screen"), m.caption ?? card.title_ru, m)).join("")
       }</div>`,
+    // Чертежи — просмотр DXF с замерами (скрипт страницы подключает его, когда
+    // раздел попадает на экран). Подпись — как у цитаты (Р-68): автор,
+    // правообладатель, источник; без скриптов — ссылка на файл.
+    drawings: () => card.drawings.length === 0 ? "" :
+      `<h2>Чертежи</h2>${card.drawings.map((d) => {
+        const url = mediaUrl(d.asset_id, "original");
+        const credit = creditHtml({ author: [d.author, d.credit].filter(Boolean).join(" / ") || null, source: d.source, source_url: d.source_url });
+        return `<figure class="drawing"><div class="drawing-view" data-drawing="${e(url)}" data-title="${e(d.title ?? "")}">` +
+          `<a class="drawing-fallback" href="${e(url)}" download="${e(d.original_name ?? "drawing.dxf")}">Скачать чертёж (DXF)</a></div>` +
+          `<figcaption><b>${e(d.title ?? "Чертёж")}</b>${credit ? `<br>${credit}` : ""}${d.license ? ` · ${e(d.license)}` : ""}</figcaption></figure>`;
+      }).join("")}`,
     // Источник — запись (Р-80): название ведёт на её страницу, адрес — наружу,
     // обстоятельства цитаты — из обоснования связи.
     sources: () => card.sources.length === 0 ? "" :
@@ -1005,7 +1017,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
   const layout = card.layout.length > 0
     ? card.layout
-    : ["indicators", "links", "program", "text", "gallery", "sources", "mentions", "citation"];
+    : ["indicators", "links", "program", "text", "gallery", "drawings", "sources", "mentions", "citation"];
   for (const component of layout) {
     const render = sections[component];
     // Раздел — свой блок: облик решает, где ему стоять (Р-91), порядок — тип.

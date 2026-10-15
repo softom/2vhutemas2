@@ -80,6 +80,11 @@ export async function enhancePublicPage() {
     host?.dispatchEvent(new CustomEvent("rel-extra", { detail: box!.checked }));
   });
   await authenticatedCard();
+  // Чертежи DXF: просмотр с замерами грузится отдельно и только там, где
+  // раздел «Чертежи» есть, — остальные страницы его не тянут.
+  if (document.querySelector("[data-drawing]")) {
+    import("./drawing/viewer").then(({ mountDrawings }) => mountDrawings()).catch(() => {});
+  }
   // Черновик: карточку подставить не удалось (нет прав, нет сессии) —
   // показываем «Запись ещё не опубликована» вместо «Загружаем…».
   if (document.querySelector(".draft-pending")) document.documentElement.classList.remove("signed-in");

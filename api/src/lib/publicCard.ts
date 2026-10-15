@@ -45,6 +45,22 @@ export async function resolveEntity(key: string, drafts = false): Promise<Resolv
   return { id: Number(row.id), slug: row.slug, isPublished: row.is_published, moved: true };
 }
 
+export interface PublicDrawing {
+  link_id: number;
+  asset_id: string;
+  entity_id: number;
+  slug: string;
+  title: string | null;
+  kind: string | null;
+  author: string | null;
+  credit: string | null;
+  source: string | null;
+  source_url: string | null;
+  license: string | null;
+  original_name: string | null;
+  size_bytes: number | null;
+}
+
 export interface CardValue {
   indicator_id: number;
   indicator_title: string;
@@ -89,6 +105,8 @@ export interface PublicCard {
   values: CardValue[];
   tags: string[];
   media: PublicImage[];
+  /** Чертежи DXF: просмотр с замерами; подпись — как у цитаты (Р-68). */
+  drawings: PublicDrawing[];
   document: { body_json: unknown } | null;
   links: {
     other_id: number;
@@ -190,6 +208,8 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   // него в разметке вела бы в 404.
   const mediaRows = await sql<{ items: PublicImage[] }>`select app.illustrations_json(${id}, ${drafts}) as items`;
   const media = mediaRows[0]?.items ?? [];
+  const drawingRows = await sql<{ items: PublicDrawing[] }>`select app.drawings_json(${id}, ${drafts}) as items`;
+  const drawings = drawingRows[0]?.items ?? [];
 
   const documents = await sql<{body_json:unknown}>`
     select r.snapshot->'body_json' as body_json from app.entities e
@@ -211,7 +231,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
       left join app.link_roles lr on lr.id = l.role_id
      where (l.from_entity_id = ${id} or l.to_entity_id = ${id}) and (${drafts} or other.is_published)
        -- Иллюстрации и источники — тоже связи, но у каждых свой раздел.
-       and coalesce(lr.code, '') not in ('illustration', 'source')
+       and coalesce(lr.code, '') not in ('illustration', 'drawing', 'source')
      order by l.is_primary desc, l.sort_order, l.id
   `;
 
@@ -229,7 +249,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
      where (l.from_entity_id = any(${neighborIds}::bigint[]) or l.to_entity_id = any(${neighborIds}::bigint[]))
        and l.from_entity_id <> ${id} and l.to_entity_id <> ${id}
        and (${drafts} or (a.is_published and b.is_published))
-       and coalesce(lr.code, '') not in ('illustration', 'source')
+       and coalesce(lr.code, '') not in ('illustration', 'drawing', 'source')
      order by least(l.from_entity_id, l.to_entity_id), greatest(l.from_entity_id, l.to_entity_id)
      limit 400
   `;
@@ -314,6 +334,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     values,
     tags: tags.map((t) => t.title),
     media,
+    drawings,
     document,
     links,
     neighbor_links,
