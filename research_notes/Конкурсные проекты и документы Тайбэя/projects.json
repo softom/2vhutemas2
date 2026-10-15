@@ -1,0 +1,1941 @@
+[
+  {
+    "uid": "9602f824-851b-5abc-9d7f-7a30f7b0a3ac",
+    "architect": "B+U",
+    "status": "Предложение; дата подачи и официальный результат не установлены",
+    "source_url": "https://www.evolo.us/taipei-performing-arts-center-bu/",
+    "note": "Проект, найденный пользователем. Публикация 29.11.2010; сама дата публикации не доказывает дату конкурсной подачи.",
+    "files": [
+      {
+        "uid": "65c80403-3a1e-5731-97c3-896d8e98d26a",
+        "url": "https://www.evolo.us/taipei-performing-arts-center-bu/",
+        "title": "B+U — публикация",
+        "local_path": "files/proposals/bu/source.html",
+        "status": "saved",
+        "bytes": 40507,
+        "sha256": "440db07270b897134c5d08fdfea32fbb7ed867e57a1edd151ae70023f14a247f"
+      },
+      {
+        "uid": "187391a9-09ca-5785-b311-b6e49df65de7",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/taipei-1.jpg",
+        "title": "taipei-1.jpg",
+        "local_path": "files/proposals/bu/02.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          386
+        ],
+        "bytes": 233301,
+        "sha256": "55d6d8a369b05f44769ebdf4c67eb18110d0b4d1eb3416593b223a5d8119edda",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "c9a802c8-33f7-5618-824e-6652e9dc6ce5",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_2.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_2.jpg",
+        "local_path": "files/proposals/bu/03.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          386
+        ],
+        "bytes": 160271,
+        "sha256": "d7b8df9259919a21cc510d33e8a6ec71013ce25300f757519f27012b50690ac1",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "ffddb19e-967a-5218-b625-6a1fa1696332",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_3.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_3.jpg",
+        "local_path": "files/proposals/bu/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          300
+        ],
+        "bytes": 143683,
+        "sha256": "8fe9401c5d5f8ddaacdcd7fc0b0b5fab4b8f3386a24e4ce41da7a76c5f1e667f",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "d8156890-c98a-5bf0-b2d8-9be086e370d8",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_4.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_4.jpg",
+        "local_path": "files/proposals/bu/05.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          386
+        ],
+        "bytes": 191228,
+        "sha256": "4860a54a70c7747e1ec005470b71983da9670da440274933a05952868308171e",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "c9076081-668c-5c64-9319-80504301c7a1",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_5.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_5.jpg",
+        "local_path": "files/proposals/bu/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          386
+        ],
+        "bytes": 189627,
+        "sha256": "53048d15ebd846178ef5f6c8f61b0fd0f902a869b91301fed3712a36215f1bd6",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "f6d59ae0-f00d-578d-9f8a-8b252f5af30b",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_6.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_6.jpg",
+        "local_path": "files/proposals/bu/07.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          401
+        ],
+        "bytes": 216324,
+        "sha256": "9ae3b9dfa7f34fa526e517b7a352c36271730fe045d199cf1a8233a32f71181f",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "ca457590-0743-5263-8c73-d90a6d1ab510",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_7.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_7.jpg",
+        "local_path": "files/proposals/bu/08.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          415
+        ],
+        "bytes": 105336,
+        "sha256": "519fdff0e517ad09f6e9557923a150391a8e13b819c2b3a3fafa0daf432afeed",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "2dcb13e0-456b-5d87-a144-e9d3e6fc5b38",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_8.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_8.jpg",
+        "local_path": "files/proposals/bu/09.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          415
+        ],
+        "bytes": 128251,
+        "sha256": "aab8d3a69ace2a9043a40ba4978fe71bef23c89c360ee9a08e320e5e59a0b0e8",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "839f8c20-9ec4-5202-bd53-1d60b9474f1c",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_9.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_9.jpg",
+        "local_path": "files/proposals/bu/10.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          415
+        ],
+        "bytes": 105044,
+        "sha256": "db6baa4b349048809180abeda6d7b7a13c637c34493d32c4086816ecec3964de",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "ad929ad5-c885-59d5-9667-977c8c48dbee",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_10.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_10.jpg",
+        "local_path": "files/proposals/bu/11.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          415
+        ],
+        "bytes": 70619,
+        "sha256": "27d76834dd87662c6a85f8bba870d284a208590b18213cf6d5bad31d4042bc6f",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      }
+    ],
+    "images": [
+      {
+        "uid": "187391a9-09ca-5785-b311-b6e49df65de7",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/taipei-1.jpg",
+        "title": "taipei-1.jpg",
+        "local_path": "files/proposals/bu/02.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          386
+        ],
+        "bytes": 233301,
+        "sha256": "55d6d8a369b05f44769ebdf4c67eb18110d0b4d1eb3416593b223a5d8119edda",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "c9a802c8-33f7-5618-824e-6652e9dc6ce5",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_2.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_2.jpg",
+        "local_path": "files/proposals/bu/03.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          386
+        ],
+        "bytes": 160271,
+        "sha256": "d7b8df9259919a21cc510d33e8a6ec71013ce25300f757519f27012b50690ac1",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "ffddb19e-967a-5218-b625-6a1fa1696332",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_3.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_3.jpg",
+        "local_path": "files/proposals/bu/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          300
+        ],
+        "bytes": 143683,
+        "sha256": "8fe9401c5d5f8ddaacdcd7fc0b0b5fab4b8f3386a24e4ce41da7a76c5f1e667f",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "d8156890-c98a-5bf0-b2d8-9be086e370d8",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_4.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_4.jpg",
+        "local_path": "files/proposals/bu/05.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          386
+        ],
+        "bytes": 191228,
+        "sha256": "4860a54a70c7747e1ec005470b71983da9670da440274933a05952868308171e",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "c9076081-668c-5c64-9319-80504301c7a1",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_5.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_5.jpg",
+        "local_path": "files/proposals/bu/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          386
+        ],
+        "bytes": 189627,
+        "sha256": "53048d15ebd846178ef5f6c8f61b0fd0f902a869b91301fed3712a36215f1bd6",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "f6d59ae0-f00d-578d-9f8a-8b252f5af30b",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_6.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_6.jpg",
+        "local_path": "files/proposals/bu/07.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          401
+        ],
+        "bytes": 216324,
+        "sha256": "9ae3b9dfa7f34fa526e517b7a352c36271730fe045d199cf1a8233a32f71181f",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "ca457590-0743-5263-8c73-d90a6d1ab510",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_7.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_7.jpg",
+        "local_path": "files/proposals/bu/08.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          415
+        ],
+        "bytes": 105336,
+        "sha256": "519fdff0e517ad09f6e9557923a150391a8e13b819c2b3a3fafa0daf432afeed",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "2dcb13e0-456b-5d87-a144-e9d3e6fc5b38",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_8.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_8.jpg",
+        "local_path": "files/proposals/bu/09.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          415
+        ],
+        "bytes": 128251,
+        "sha256": "aab8d3a69ace2a9043a40ba4978fe71bef23c89c360ee9a08e320e5e59a0b0e8",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "839f8c20-9ec4-5202-bd53-1d60b9474f1c",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_9.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_9.jpg",
+        "local_path": "files/proposals/bu/10.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          415
+        ],
+        "bytes": 105044,
+        "sha256": "db6baa4b349048809180abeda6d7b7a13c637c34493d32c4086816ecec3964de",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      },
+      {
+        "uid": "ad929ad5-c885-59d5-9667-977c8c48dbee",
+        "url": "http://www.evolo.us/wp-content/uploads/2010/11/B+U_Taipei-Performing_Arts_Center_10.jpg",
+        "title": "B+U_Taipei-Performing_Arts_Center_10.jpg",
+        "local_path": "files/proposals/bu/11.jpg",
+        "status": "saved",
+        "dimensions": [
+          600,
+          415
+        ],
+        "bytes": 70619,
+        "sha256": "27d76834dd87662c6a85f8bba870d284a208590b18213cf6d5bad31d4042bc6f",
+        "credit": "B+U / https://www.evolo.us/taipei-performing-arts-center-bu/"
+      }
+    ]
+  },
+  {
+    "uid": "8a1348f1-77ce-59bb-b00a-883c23c466cb",
+    "architect": "Ojanen Chiou Architects",
+    "status": "Конкурсное предложение; награда не установлена",
+    "source_url": "https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center",
+    "note": "Авторская страница: планы первого, второго и четвёртого уровней, разрезы и концептуальные схемы.",
+    "files": [
+      {
+        "uid": "19cf6aa9-8021-59ab-943b-03b07751b973",
+        "url": "https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center",
+        "title": "Ojanen Chiou Architects — публикация",
+        "local_path": "files/proposals/ojanen/source.html",
+        "status": "saved",
+        "bytes": 269019,
+        "sha256": "89f63adc8d870f1897b369b299174dc144016b70ac7a1c25b8dc8194bb5b750d"
+      },
+      {
+        "uid": "a050f0b9-922b-5d5f-82b7-ea0ab16ec10b",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/bfecb2f5-5041-4222-862d-67798ce496f6/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-site-ground-floor-plan.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-site-ground-floor-plan.jpg",
+        "local_path": "files/proposals/ojanen/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 564060,
+        "sha256": "64309e695ada17c499f0e267c4d33fc3c2e5a75a022dd208585589d371f75e8e",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "dabb32c3-f8bb-50f3-826f-8c83aaa26575",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/4fd79625-244a-4830-b7fa-43273fba73ed/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-second-floor-plan.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-second-floor-plan.jpg",
+        "local_path": "files/proposals/ojanen/02.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 331942,
+        "sha256": "16093512af7306957423bcecba4b9bee670cdb06920b01391af0ded33c9ab1c6",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "55c41757-6826-5394-9d6f-8b799cb5ebc0",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/fff085ce-7d27-4f1a-822b-7bea966ad3ff/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-concept-fourth-floor-plan.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-concept-fourth-floor-plan.jpg",
+        "local_path": "files/proposals/ojanen/03.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 345632,
+        "sha256": "ff5f075f1d95e9efe2f787f97ad19103c6393d6a710187acb040be636df56e24",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "944c7d3a-fc60-5674-80e1-8bf76bea54ad",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/4f85872c-e518-4f09-ac82-0504d9767c98/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section-3.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section-3.jpg",
+        "local_path": "files/proposals/ojanen/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 167828,
+        "sha256": "9b6516a856a0885a04b5b12ba92904ae33b278eaa2fb52f054c2856d17342319",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "79b08615-b7dd-558b-9222-e33945fca4c8",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/1c100454-7da3-4a52-9cf8-4cbffb687c56/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section-2.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section-2.jpg",
+        "local_path": "files/proposals/ojanen/05.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 164406,
+        "sha256": "4f8f0dfeedb856a284ae8e10b4928cb563ae55c2cdacc15d8b2ea543cec9a93f",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "0c9277b7-45de-5b62-b86e-838d4fcaf004",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/71cbf23e-faa3-4d33-8be2-1f16728da5ec/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section.jpg",
+        "local_path": "files/proposals/ojanen/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 201898,
+        "sha256": "bde2bcb149f826452a744b7c5bb3ccdd0f9748b376ae8e1bf743117b1d344af4",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "108b42dd-daea-5e83-81c7-d24f93c36a3f",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/05941f04-d12d-440f-a801-f350765cdf2e/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-model-views-elevations.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-model-views-elevations.jpg",
+        "local_path": "files/proposals/ojanen/07.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 313965,
+        "sha256": "b768cc2b9dc1d30dc52a8e5a9b134ae761d5ff80755e93a9809718bbeb32b836",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "2fe02b03-1fe6-551c-8819-70d5cbfc461b",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/1ba02394-3e10-4788-91de-02c4cdb21346/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-model-views-elevations-2.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-model-views-elevations-2.jpg",
+        "local_path": "files/proposals/ojanen/08.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 337997,
+        "sha256": "fad02f881bde5a1db1e54c9a0dab50dbfb7fd7266b22602c6727061d6c47709c",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "1db71fe6-2d5a-5694-8132-6d46e342eef7",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/1728402728272-X7XS9K6ZSRMYG9NRR148/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-entry-plaza-rendering-main.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-entry-plaza-rendering-main.jpg",
+        "local_path": "files/proposals/ojanen/09.jpg",
+        "status": "saved",
+        "dimensions": [
+          2240,
+          1121
+        ],
+        "bytes": 270349,
+        "sha256": "886351279d953a47b08cd8dea2831bda888b831441c2cee97cdac2984f8c5b8d",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "21c17786-5784-5065-acbf-2eed8aa9bf34",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/edf04953-f1a2-45c6-94fc-7c45cddfc48a/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-concept-diagram.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-concept-diagram.jpg",
+        "local_path": "files/proposals/ojanen/10.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 434089,
+        "sha256": "50545132d2dff51c9703567c067865d96870a42f6fae3a0e7ccca48387b0cb8d",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "ea73c788-2191-5638-a0c9-5a633adfd1d2",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/22071b0c-bb06-43d5-b20a-1f444f6b551e/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-context-diagram.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-context-diagram.jpg",
+        "local_path": "files/proposals/ojanen/11.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 317059,
+        "sha256": "f7381cf0e83f3b5ce81f43b281b15cab5f2da6071989fbb906d1a3d724bb17ae",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "67f4b916-8364-551c-b684-fd966878a0b0",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/8acaa07c-ef00-409b-b4c1-53c59883cc26/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-entry-plaza-rendering.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-entry-plaza-rendering.jpg",
+        "local_path": "files/proposals/ojanen/12.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 336623,
+        "sha256": "04256ccbf5560efddbe24e53326f8bff7cae224a1246b2eeab940069341e17be",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "8f122855-d423-5146-82eb-34a9393f901c",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/eebf5c15-705b-4ad9-a653-06959f3ac9f9/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-building-concept-diagram.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-building-concept-diagram.jpg",
+        "local_path": "files/proposals/ojanen/13.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 339853,
+        "sha256": "838c92c1fde7dba2a471bc30c83103f2bb0883ec0a2acf59f5d93c2bc0bbf1ba",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "b283a49d-cb24-52a7-84ae-876aa5c10999",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/25ecc35b-70cc-41b4-a160-3a83ac9a271f/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-sustainability-concept-diagram.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-sustainability-concept-diagram.jpg",
+        "local_path": "files/proposals/ojanen/14.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 154550,
+        "sha256": "2690432431c85de69e8f9a07d80a04c7b0fdae08c93342a5fd456563d487c799",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      }
+    ],
+    "images": [
+      {
+        "uid": "a050f0b9-922b-5d5f-82b7-ea0ab16ec10b",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/bfecb2f5-5041-4222-862d-67798ce496f6/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-site-ground-floor-plan.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-site-ground-floor-plan.jpg",
+        "local_path": "files/proposals/ojanen/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 564060,
+        "sha256": "64309e695ada17c499f0e267c4d33fc3c2e5a75a022dd208585589d371f75e8e",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "dabb32c3-f8bb-50f3-826f-8c83aaa26575",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/4fd79625-244a-4830-b7fa-43273fba73ed/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-second-floor-plan.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-second-floor-plan.jpg",
+        "local_path": "files/proposals/ojanen/02.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 331942,
+        "sha256": "16093512af7306957423bcecba4b9bee670cdb06920b01391af0ded33c9ab1c6",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "55c41757-6826-5394-9d6f-8b799cb5ebc0",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/fff085ce-7d27-4f1a-822b-7bea966ad3ff/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-concept-fourth-floor-plan.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-concept-fourth-floor-plan.jpg",
+        "local_path": "files/proposals/ojanen/03.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 345632,
+        "sha256": "ff5f075f1d95e9efe2f787f97ad19103c6393d6a710187acb040be636df56e24",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "944c7d3a-fc60-5674-80e1-8bf76bea54ad",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/4f85872c-e518-4f09-ac82-0504d9767c98/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section-3.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section-3.jpg",
+        "local_path": "files/proposals/ojanen/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 167828,
+        "sha256": "9b6516a856a0885a04b5b12ba92904ae33b278eaa2fb52f054c2856d17342319",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "79b08615-b7dd-558b-9222-e33945fca4c8",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/1c100454-7da3-4a52-9cf8-4cbffb687c56/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section-2.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section-2.jpg",
+        "local_path": "files/proposals/ojanen/05.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 164406,
+        "sha256": "4f8f0dfeedb856a284ae8e10b4928cb563ae55c2cdacc15d8b2ea543cec9a93f",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "0c9277b7-45de-5b62-b86e-838d4fcaf004",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/71cbf23e-faa3-4d33-8be2-1f16728da5ec/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-cross-section.jpg",
+        "local_path": "files/proposals/ojanen/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 201898,
+        "sha256": "bde2bcb149f826452a744b7c5bb3ccdd0f9748b376ae8e1bf743117b1d344af4",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "108b42dd-daea-5e83-81c7-d24f93c36a3f",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/05941f04-d12d-440f-a801-f350765cdf2e/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-model-views-elevations.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-model-views-elevations.jpg",
+        "local_path": "files/proposals/ojanen/07.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 313965,
+        "sha256": "b768cc2b9dc1d30dc52a8e5a9b134ae761d5ff80755e93a9809718bbeb32b836",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "2fe02b03-1fe6-551c-8819-70d5cbfc461b",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/1ba02394-3e10-4788-91de-02c4cdb21346/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-model-views-elevations-2.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-model-views-elevations-2.jpg",
+        "local_path": "files/proposals/ojanen/08.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 337997,
+        "sha256": "fad02f881bde5a1db1e54c9a0dab50dbfb7fd7266b22602c6727061d6c47709c",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "1db71fe6-2d5a-5694-8132-6d46e342eef7",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/1728402728272-X7XS9K6ZSRMYG9NRR148/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-entry-plaza-rendering-main.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-entry-plaza-rendering-main.jpg",
+        "local_path": "files/proposals/ojanen/09.jpg",
+        "status": "saved",
+        "dimensions": [
+          2240,
+          1121
+        ],
+        "bytes": 270349,
+        "sha256": "886351279d953a47b08cd8dea2831bda888b831441c2cee97cdac2984f8c5b8d",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "21c17786-5784-5065-acbf-2eed8aa9bf34",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/edf04953-f1a2-45c6-94fc-7c45cddfc48a/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-concept-diagram.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-concept-diagram.jpg",
+        "local_path": "files/proposals/ojanen/10.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 434089,
+        "sha256": "50545132d2dff51c9703567c067865d96870a42f6fae3a0e7ccca48387b0cb8d",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "ea73c788-2191-5638-a0c9-5a633adfd1d2",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/22071b0c-bb06-43d5-b20a-1f444f6b551e/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-context-diagram.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-context-diagram.jpg",
+        "local_path": "files/proposals/ojanen/11.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 317059,
+        "sha256": "f7381cf0e83f3b5ce81f43b281b15cab5f2da6071989fbb906d1a3d724bb17ae",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "67f4b916-8364-551c-b684-fd966878a0b0",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/8acaa07c-ef00-409b-b4c1-53c59883cc26/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-entry-plaza-rendering.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-entry-plaza-rendering.jpg",
+        "local_path": "files/proposals/ojanen/12.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 336623,
+        "sha256": "04256ccbf5560efddbe24e53326f8bff7cae224a1246b2eeab940069341e17be",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "8f122855-d423-5146-82eb-34a9393f901c",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/eebf5c15-705b-4ad9-a653-06959f3ac9f9/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-building-concept-diagram.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-building-concept-diagram.jpg",
+        "local_path": "files/proposals/ojanen/13.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 339853,
+        "sha256": "838c92c1fde7dba2a471bc30c83103f2bb0883ec0a2acf59f5d93c2bc0bbf1ba",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      },
+      {
+        "uid": "b283a49d-cb24-52a7-84ae-876aa5c10999",
+        "url": "https://images.squarespace-cdn.com/content/v1/65e751c6171bb1438eec4693/25ecc35b-70cc-41b4-a160-3a83ac9a271f/ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-sustainability-concept-diagram.jpg",
+        "title": "ojanen-chiou-architects-civic-cultural-taiwan-taipei-performing-arts-center-competition-sustainability-concept-diagram.jpg",
+        "local_path": "files/proposals/ojanen/14.jpg",
+        "status": "saved",
+        "dimensions": [
+          2400,
+          1697
+        ],
+        "bytes": 154550,
+        "sha256": "2690432431c85de69e8f9a07d80a04c7b0fdae08c93342a5fd456563d487c799",
+        "credit": "Ojanen Chiou Architects / https://www.ocarch.net/portfolio-civic-cultural/taipei-performing-arts-center"
+      }
+    ]
+  },
+  {
+    "uid": "49da26bd-d3e2-5709-8fae-cfa4b0e18dd1",
+    "architect": "Apicella + Bunton",
+    "status": "Конкурсное предложение; награда не установлена",
+    "source_url": "https://www.apicellabunton.com/project/taipei-performing-arts-center/",
+    "note": "Авторская страница подтверждает участие; три зала и приподнятый общественный парк.",
+    "files": [
+      {
+        "uid": "cd06fa39-46e0-58df-90a1-186d9a49c33f",
+        "url": "https://www.apicellabunton.com/project/taipei-performing-arts-center/",
+        "title": "Apicella + Bunton — публикация",
+        "local_path": null,
+        "status": "unavailable",
+        "error": "403 Client Error: Forbidden for url: https://www.apicellabunton.com/project/taipei-performing-arts-center/"
+      }
+    ],
+    "images": []
+  },
+  {
+    "uid": "af1198e1-6beb-5f23-95f4-99a14762e5aa",
+    "architect": "NL Architects",
+    "status": "Конкурсное предложение, не финалист",
+    "source_url": "https://www.e-architect.com/taiwan/taipei-performing-arts-center-building",
+    "note": "Публикация проекта бюро. Три театральных объёма подняты над общественной площадью.",
+    "files": [
+      {
+        "uid": "e9d69fe9-8e2a-54ae-97bf-0a88a78b46e9",
+        "url": "https://www.e-architect.com/taiwan/taipei-performing-arts-center-building",
+        "title": "NL Architects — публикация",
+        "local_path": "files/proposals/nl/source.html",
+        "status": "saved",
+        "bytes": 60171,
+        "sha256": "30103febfc23f3cdd0e42ba0fa7375e0e77d4e83498024da7826ad77ff03d53c"
+      },
+      {
+        "uid": "f53aa229-3040-52d7-837b-be94b33498cd",
+        "url": "https://www.e-architect.com/wp-content/uploads/2009/03/taipei-performing-arts-center-building-by-nl-architects.jpg",
+        "title": "Taipei Performing Arts Center design by NL Architects",
+        "local_path": "files/proposals/nl/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          900,
+          637
+        ],
+        "bytes": 101164,
+        "sha256": "a5a2058f1b87a9b0f675ce0ff94482c18f1445704207a8096f0346949ba81b65",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "ea939657-606f-565f-b33b-869f871ea6f8",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_2tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": null,
+        "status": "unavailable",
+        "error": "403 Client Error: Forbidden for url: https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_2tb.jpg",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "d0b89a17-4993-5eb4-b5d9-830517a52a3d",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_3tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": "files/proposals/nl/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 5288,
+        "sha256": "c3891460c543c00f27dd89e67e85e8901073b74173d4bd93eb6162bd9667cf09",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "4c6c1281-d34f-50f0-bab6-5bbba63347ea",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_4tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": null,
+        "status": "unavailable",
+        "error": "403 Client Error: Forbidden for url: https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_4tb.jpg",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "a5dc21a8-9c5e-5630-ad84-87c6aca080b5",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_5tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": "files/proposals/nl/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4565,
+        "sha256": "1e462d4a1fa949713326119423dd27f907037dd2967acedd96e30e8f21b58710",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "57e9cb17-502d-5ca7-9bdc-f32b7ca12d10",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_6tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": null,
+        "status": "unavailable",
+        "error": "403 Client Error: Forbidden for url: https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_6tb.jpg",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "45ed7859-5fee-5c29-befd-ff834b77c590",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_7tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": null,
+        "status": "unavailable",
+        "error": "403 Client Error: Forbidden for url: https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_7tb.jpg",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "34ecbe5f-6d7e-58c5-811a-b7a75901a041",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_8tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": null,
+        "status": "unavailable",
+        "error": "403 Client Error: Forbidden for url: https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_8tb.jpg",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "946a007b-ba9c-5a28-ba5c-02df861a307a",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_9tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": null,
+        "status": "unavailable",
+        "error": "403 Client Error: Forbidden for url: https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_9tb.jpg",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      }
+    ],
+    "images": [
+      {
+        "uid": "f53aa229-3040-52d7-837b-be94b33498cd",
+        "url": "https://www.e-architect.com/wp-content/uploads/2009/03/taipei-performing-arts-center-building-by-nl-architects.jpg",
+        "title": "Taipei Performing Arts Center design by NL Architects",
+        "local_path": "files/proposals/nl/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          900,
+          637
+        ],
+        "bytes": 101164,
+        "sha256": "a5a2058f1b87a9b0f675ce0ff94482c18f1445704207a8096f0346949ba81b65",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "d0b89a17-4993-5eb4-b5d9-830517a52a3d",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_3tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": "files/proposals/nl/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 5288,
+        "sha256": "c3891460c543c00f27dd89e67e85e8901073b74173d4bd93eb6162bd9667cf09",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      },
+      {
+        "uid": "a5dc21a8-9c5e-5630-ad84-87c6aca080b5",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_nla230309_5tb.jpg",
+        "title": "Performing Arts Center Taipei",
+        "local_path": "files/proposals/nl/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4565,
+        "sha256": "1e462d4a1fa949713326119423dd27f907037dd2967acedd96e30e8f21b58710",
+        "credit": "NL Architects / https://www.e-architect.com/taiwan/taipei-performing-arts-center-building"
+      }
+    ]
+  },
+  {
+    "uid": "fbd32a19-de4b-5ce8-b9e7-ccb4f421bdd7",
+    "architect": "Studio Nicoletti Associates",
+    "status": "Конкурсное предложение, не финалист",
+    "source_url": "https://www.e-architect.com/taiwan/performing-arts-centre-taipei",
+    "note": "Публикация 03.11.2008; проект под общим покрытием. Иллюстрации на странице могут включать сравнительное изображение OMA.",
+    "files": [
+      {
+        "uid": "2534380b-9ebf-5f05-9433-f57e0c874f8a",
+        "url": "https://www.e-architect.com/taiwan/performing-arts-centre-taipei",
+        "title": "Studio Nicoletti Associates — публикация",
+        "local_path": "files/proposals/nicoletti/source.html",
+        "status": "saved",
+        "bytes": 64308,
+        "sha256": "7a80ec84dc480eacfba24a5ad32d4764a091ca9bb1a95c8afab808462dbbcfa2"
+      },
+      {
+        "uid": "25ba5192-2f32-59bf-a966-589a542a4825",
+        "url": "https://www.e-architect.com/wp-content/uploads/2008/11/performing-arts-centre-taipei-by-studio-nicoletti-associates.jpg",
+        "title": "Performing Arts Centre Taipei Entry design by Studio Nicoletti Associates",
+        "local_path": "files/proposals/nicoletti/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          900,
+          591
+        ],
+        "bytes": 77971,
+        "sha256": "e4b6f1492b964c155d8697cd2c3c9e5e06880136da3334569f02915f3d89d637",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      },
+      {
+        "uid": "f65eb610-01e8-5f77-8b86-7f3b8e56b9e8",
+        "url": "https://www.e-architect.com/images/stories/taiwan/performing_arts_centre_taipei_sna031108_2tb.jpg",
+        "title": "Performing Arts Centre Taipei",
+        "local_path": "files/proposals/nicoletti/03.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 3479,
+        "sha256": "428d304dc3c1d7d3c5215f7318db9c836c46860d88ed0bfbfd78685a27c93f3c",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      },
+      {
+        "uid": "bbc7d1d9-e600-55e4-9cf7-c0c8d8ffe817",
+        "url": "https://www.e-architect.com/images/stories/taiwan/performing_arts_centre_taipei_sna031108_3tb.jpg",
+        "title": "Performing Arts Centre Taiwan",
+        "local_path": "files/proposals/nicoletti/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 3703,
+        "sha256": "cfbce6beb0da8c46134e39549d0afec5aa7707318b4ee25c5a6bc70b113c7853",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      },
+      {
+        "uid": "05ddf2ad-0fee-5e5d-b87e-0314133dee13",
+        "url": "https://www.e-architect.com/images/stories/taiwan/performing_arts_centre_taipei_sna031108_4tb.jpg",
+        "title": "Performing Arts Centre Taipei",
+        "local_path": "files/proposals/nicoletti/05.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 3245,
+        "sha256": "90c6b33bda7855c520bf776ee4e87075aa3d6f288850b73d732f5a0333534cbb",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      },
+      {
+        "uid": "12f0e637-87a4-519e-ba23-86cb38ed1c0f",
+        "url": "https://www.e-architect.com/images/stories/taiwan/performing_arts_centre_taipei_sna031108_5tb.jpg",
+        "title": "Performing Arts Centre Taipei",
+        "local_path": "files/proposals/nicoletti/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4832,
+        "sha256": "17ded1b834a314dce6a7e64a77562341b9c97330066de9b8c5fd4d003bc8068c",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      }
+    ],
+    "images": [
+      {
+        "uid": "25ba5192-2f32-59bf-a966-589a542a4825",
+        "url": "https://www.e-architect.com/wp-content/uploads/2008/11/performing-arts-centre-taipei-by-studio-nicoletti-associates.jpg",
+        "title": "Performing Arts Centre Taipei Entry design by Studio Nicoletti Associates",
+        "local_path": "files/proposals/nicoletti/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          900,
+          591
+        ],
+        "bytes": 77971,
+        "sha256": "e4b6f1492b964c155d8697cd2c3c9e5e06880136da3334569f02915f3d89d637",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      },
+      {
+        "uid": "f65eb610-01e8-5f77-8b86-7f3b8e56b9e8",
+        "url": "https://www.e-architect.com/images/stories/taiwan/performing_arts_centre_taipei_sna031108_2tb.jpg",
+        "title": "Performing Arts Centre Taipei",
+        "local_path": "files/proposals/nicoletti/03.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 3479,
+        "sha256": "428d304dc3c1d7d3c5215f7318db9c836c46860d88ed0bfbfd78685a27c93f3c",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      },
+      {
+        "uid": "bbc7d1d9-e600-55e4-9cf7-c0c8d8ffe817",
+        "url": "https://www.e-architect.com/images/stories/taiwan/performing_arts_centre_taipei_sna031108_3tb.jpg",
+        "title": "Performing Arts Centre Taiwan",
+        "local_path": "files/proposals/nicoletti/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 3703,
+        "sha256": "cfbce6beb0da8c46134e39549d0afec5aa7707318b4ee25c5a6bc70b113c7853",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      },
+      {
+        "uid": "05ddf2ad-0fee-5e5d-b87e-0314133dee13",
+        "url": "https://www.e-architect.com/images/stories/taiwan/performing_arts_centre_taipei_sna031108_4tb.jpg",
+        "title": "Performing Arts Centre Taipei",
+        "local_path": "files/proposals/nicoletti/05.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 3245,
+        "sha256": "90c6b33bda7855c520bf776ee4e87075aa3d6f288850b73d732f5a0333534cbb",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      },
+      {
+        "uid": "12f0e637-87a4-519e-ba23-86cb38ed1c0f",
+        "url": "https://www.e-architect.com/images/stories/taiwan/performing_arts_centre_taipei_sna031108_5tb.jpg",
+        "title": "Performing Arts Centre Taipei",
+        "local_path": "files/proposals/nicoletti/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4832,
+        "sha256": "17ded1b834a314dce6a7e64a77562341b9c97330066de9b8c5fd4d003bc8068c",
+        "credit": "Studio Nicoletti Associates / https://www.e-architect.com/taiwan/performing-arts-centre-taipei"
+      }
+    ]
+  },
+  {
+    "uid": "bbce1497-1466-5f94-a99f-32db12e84a79",
+    "architect": "Morphosis + J.J. Pan",
+    "status": "Финалист, 2-е место",
+    "source_url": "https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis",
+    "note": "Публикация материалов второй стадии, команда и консультанты. Отдельные планы и разрезы доступны через публикации конкурсного проекта.",
+    "files": [
+      {
+        "uid": "b33dcdd7-2abb-5f9f-9232-b21852ce8e54",
+        "url": "https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis",
+        "title": "Morphosis + J.J. Pan — публикация",
+        "local_path": "files/proposals/morphosis/source.html",
+        "status": "saved",
+        "bytes": 63530,
+        "sha256": "6f933e61e57006c05d19ea4aaf2984e82ed7eecc924b9f451d44512d7f72abeb"
+      },
+      {
+        "uid": "ba77a6b5-a96a-54cc-aba2-a7647b27e196",
+        "url": "https://www.e-architect.com/wp-content/uploads/2009/03/taipei-performing-arts-center-morphosis.jpg",
+        "title": "Performing Arts Center Taipei - Morphosis Taiwan",
+        "local_path": "files/proposals/morphosis/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          900,
+          402
+        ],
+        "bytes": 39232,
+        "sha256": "1b89d6ad9f505f57dd811e29ef466f0d04bbee492d3fbb87bf310b95953702e5",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      },
+      {
+        "uid": "2d9654c0-3f36-58e1-9e8a-0ba895d5c208",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_m300309_2tb.jpg",
+        "title": "Taipei Performing Arts Center design",
+        "local_path": "files/proposals/morphosis/03.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 3681,
+        "sha256": "beb4e867b666a587b6883e0be393c590036029a58cb98f62b6d77dda4dbf14f2",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      },
+      {
+        "uid": "1a63c50c-ddae-5187-b297-161bb097e64b",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_m300309_3tb.jpg",
+        "title": "Taipei Performing Arts Centre",
+        "local_path": "files/proposals/morphosis/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4095,
+        "sha256": "df8cc3e91d75d8dc77d41e5dcf404f1e4d7bf1a7988c5de0218718b7b5547c18",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      },
+      {
+        "uid": "bd80b0fb-9648-5f3d-85bb-93dfdeccf341",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_m300309_5tb.jpg",
+        "title": "Taipei Performing Arts Center Building",
+        "local_path": "files/proposals/morphosis/05.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4234,
+        "sha256": "b7846f26884bee39aca0d7e15f131782994bd68136b10da6b1ac7c9a7e8deef5",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      },
+      {
+        "uid": "f283a176-aaa5-54e7-b18f-b9935beaeb64",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_m300309_4tb.jpg",
+        "title": "Taipei Performing Arts Center Taiwan",
+        "local_path": "files/proposals/morphosis/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4209,
+        "sha256": "eb285ba09fde4ca4389ef1ff7161566e600b06db7f913d2979d5158638bcdd4e",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      }
+    ],
+    "images": [
+      {
+        "uid": "ba77a6b5-a96a-54cc-aba2-a7647b27e196",
+        "url": "https://www.e-architect.com/wp-content/uploads/2009/03/taipei-performing-arts-center-morphosis.jpg",
+        "title": "Performing Arts Center Taipei - Morphosis Taiwan",
+        "local_path": "files/proposals/morphosis/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          900,
+          402
+        ],
+        "bytes": 39232,
+        "sha256": "1b89d6ad9f505f57dd811e29ef466f0d04bbee492d3fbb87bf310b95953702e5",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      },
+      {
+        "uid": "2d9654c0-3f36-58e1-9e8a-0ba895d5c208",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_m300309_2tb.jpg",
+        "title": "Taipei Performing Arts Center design",
+        "local_path": "files/proposals/morphosis/03.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 3681,
+        "sha256": "beb4e867b666a587b6883e0be393c590036029a58cb98f62b6d77dda4dbf14f2",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      },
+      {
+        "uid": "1a63c50c-ddae-5187-b297-161bb097e64b",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_m300309_3tb.jpg",
+        "title": "Taipei Performing Arts Centre",
+        "local_path": "files/proposals/morphosis/04.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4095,
+        "sha256": "df8cc3e91d75d8dc77d41e5dcf404f1e4d7bf1a7988c5de0218718b7b5547c18",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      },
+      {
+        "uid": "bd80b0fb-9648-5f3d-85bb-93dfdeccf341",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_m300309_5tb.jpg",
+        "title": "Taipei Performing Arts Center Building",
+        "local_path": "files/proposals/morphosis/05.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4234,
+        "sha256": "b7846f26884bee39aca0d7e15f131782994bd68136b10da6b1ac7c9a7e8deef5",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      },
+      {
+        "uid": "f283a176-aaa5-54e7-b18f-b9935beaeb64",
+        "url": "https://www.e-architect.com/images/stories/taiwan/taipei_performing_arts_center_m300309_4tb.jpg",
+        "title": "Taipei Performing Arts Center Taiwan",
+        "local_path": "files/proposals/morphosis/06.jpg",
+        "status": "saved",
+        "dimensions": [
+          100,
+          100
+        ],
+        "bytes": 4209,
+        "sha256": "eb285ba09fde4ca4389ef1ff7161566e600b06db7f913d2979d5158638bcdd4e",
+        "credit": "Morphosis + J.J. Pan / https://www.e-architect.com/taiwan/taipei-performing-arts-center-morphosis"
+      }
+    ]
+  },
+  {
+    "uid": "77b894c1-9570-5ac8-8789-d42fac84cd69",
+    "architect": "Ábalos + Sentkiewicz",
+    "status": "Финалист, 3-е место",
+    "source_url": "https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre",
+    "note": "Галерея конкурсного предложения второй стадии: планы, разрезы, модели и визуализации.",
+    "files": [
+      {
+        "uid": "4606499d-bab4-586e-bf99-0d7ca6e2493e",
+        "url": "https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre",
+        "title": "Ábalos + Sentkiewicz — публикация",
+        "local_path": "files/proposals/abalos/source.html",
+        "status": "saved",
+        "bytes": 752015,
+        "sha256": "cf0942a57b5d8c43833f481b1b1bc703a46d4ba967dd2a2eec95e79b6f435982"
+      },
+      {
+        "uid": "769b6ed5-787c-5b45-8574-63fa6d0181bd",
+        "url": "https://images.adsttc.com/media/images/55e6/15a9/8450/b50b/9b00/002a/medium_jpg/646361529_planta-34-50.jpg?1441142180",
+        "title": "646361529_planta-34-50.jpg",
+        "local_path": "files/proposals/abalos/769b6ed5-787.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 90709,
+        "sha256": "1feffc9a4e4a2cf975746e16116359131b3be402a22e5224556be8ef75365e24",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "cfa12fd7-f092-56ca-beb9-5a466810d612",
+        "url": "https://images.adsttc.com/media/images/55e6/15a0/8450/b50b/9b00/0029/medium_jpg/1287382051_planta-23-30.jpg?1441142171",
+        "title": "1287382051_planta-23-30.jpg",
+        "local_path": "files/proposals/abalos/cfa12fd7-f09.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 91717,
+        "sha256": "2973e4391602db3e3ead3e01d50d1354da447efc99f87d2bbfe51b4ee1f7e19d",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "ef7d397c-5838-5612-bccc-af25a7139ae9",
+        "url": "https://images.adsttc.com/media/images/55e6/1586/8450/b50b/9b00/0026/medium_jpg/734928943_planta-comercial.jpg?1441142144",
+        "title": "734928943_planta-comercial.jpg",
+        "local_path": "files/proposals/abalos/ef7d397c-583.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 113098,
+        "sha256": "2f315e794afd8a43498c1cbfd4ee9596396fcbcf579d72a1da2ea0bea725d14a",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "725ac18d-3f6d-5b17-8c54-e1abb7571119",
+        "url": "https://images.adsttc.com/media/images/55e6/1597/8450/b50b/9b00/0028/medium_jpg/1790418741_planta-19-80.jpg?1441142162",
+        "title": "1790418741_planta-19-80.jpg",
+        "local_path": "files/proposals/abalos/725ac18d-3f6.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 91451,
+        "sha256": "2372c1ac84b05b1727e55b8add83715b69b0427db8caa3a6d3ea64573136dadd",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "be2246ab-a218-5e19-94c6-a2ffd80fd860",
+        "url": "https://images.adsttc.com/media/images/55e6/158e/8450/b50b/9b00/0027/medium_jpg/1395354018_planta-parque.jpg?1441142153",
+        "title": "1395354018_planta-parque.jpg",
+        "local_path": "files/proposals/abalos/be2246ab-a21.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 114479,
+        "sha256": "a7e3d06c1c2a8be487caa66a74b1a7e3b8fabb5decb800fb41ede65cba924357",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "a1140d52-5192-5b4d-8dcd-c46de2015951",
+        "url": "https://images.adsttc.com/media/images/55e6/157d/8450/b50b/9b00/0025/medium_jpg/1727741420_planta-aparcamiento.jpg?1441142135",
+        "title": "1727741420_planta-aparcamiento.jpg",
+        "local_path": "files/proposals/abalos/a1140d52-519.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 85671,
+        "sha256": "06df8172e4d4ac8d6d259527e2c9459aa3ec0412dc22fce7ecf1b10172c21721",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "dd40d193-6fb0-58c3-b55e-ebf19e0c4cae",
+        "url": "https://images.adsttc.com/media/images/55e6/14cb/8450/b50b/9b00/0013/newsletter/166111994_2009-004.jpg?1441141959",
+        "title": "166111994_2009-004.jpg",
+        "local_path": "files/proposals/abalos/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          750,
+          375
+        ],
+        "bytes": 108988,
+        "sha256": "0c2583865539bbdcee81ea8362c8ad6246dee6a9a87cb5b8fcb7a0d7724faba5",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "93a587f7-8e0c-5acd-9989-18560e455492",
+        "url": "https://images.adsttc.com/media/images/55e6/1512/8450/b50b/9b00/001a/medium_jpg/1149425638_cam-cub-04.jpg?1441142028",
+        "title": "1149425638_cam-cub-04.jpg",
+        "local_path": "files/proposals/abalos/93a587f7-8e0.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          294
+        ],
+        "bytes": 92690,
+        "sha256": "5fae3789530d9fdd42314d56f5920d6132e90f899f7eb33e8fecf1e797571f31",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "2f4dfd82-034e-55f2-87a0-72b68dd4afbf",
+        "url": "https://images.adsttc.com/media/images/55e6/14df/8450/b50b/9b00/0015/medium_jpg/944252757_cam-cub-01.jpg?1441141977",
+        "title": "944252757_cam-cub-01.jpg",
+        "local_path": "files/proposals/abalos/2f4dfd82-034.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          294
+        ],
+        "bytes": 92501,
+        "sha256": "10462af4c83f068911832eced23e9eae1d48cc20fbcadf010bc888532c96e8bb",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "1d32c0e0-12d4-5fa1-ad9f-78efd7f9678f",
+        "url": "https://images.adsttc.com/media/images/55e6/1539/8450/b50b/9b00/001e/medium_jpg/569232343_cam-par-01.jpg?1441142066",
+        "title": "569232343_cam-par-01.jpg",
+        "local_path": "files/proposals/abalos/1d32c0e0-12d.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          294
+        ],
+        "bytes": 82268,
+        "sha256": "71263d5b620a356c63419971700adcebf77e8a9373c0fd676318a0de878067fb",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "ce0c0a64-650a-51df-ad6e-9484955f70b3",
+        "url": "https://images.adsttc.com/media/images/55e6/1573/8450/b50b/9b00/0024/medium_jpg/477171786_situacion.jpg?1441142125",
+        "title": "477171786_situacion.jpg",
+        "local_path": "files/proposals/abalos/ce0c0a64-650.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 103933,
+        "sha256": "ff2b0918c11be791663e3586914e9f0b3a5f23084cb244a732d40ac1d78126ee",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "02f3b6fc-2dbe-583e-ae30-c3e3e53e4e5f",
+        "url": "https://images.adsttc.com/media/images/55e6/1557/8450/b50b/9b00/0021/medium_jpg/1077692108_cam-sala-04-b.jpg?1441142097",
+        "title": "1077692108_cam-sala-04-b.jpg",
+        "local_path": "files/proposals/abalos/02f3b6fc-2db.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          293
+        ],
+        "bytes": 101870,
+        "sha256": "65ac7d23c317c8a06faf1ddd2a4c646b4412e9c77918a56488b0328f1f9c8fe8",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "198c3433-86b9-50b1-bb2d-6d2b87b8b1db",
+        "url": "https://images.adsttc.com/media/images/55e6/1525/8450/b50b/9b00/001c/medium_jpg/273830923_cam-ma-02.jpg?1441142047",
+        "title": "273830923_cam-ma-02.jpg",
+        "local_path": "files/proposals/abalos/198c3433-86b.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          293
+        ],
+        "bytes": 93089,
+        "sha256": "5900703c16925911c83a2f5c50c2ac0700f279cd01c2c0c8f5b8ed46b2e5c812",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "12b2d214-64ec-53b2-bb31-f04fdd1f7813",
+        "url": "https://images.adsttc.com/media/images/55e6/156a/8450/b50b/9b00/0023/medium_jpg/1281114800_cam-vest-01.jpg?1441142116",
+        "title": "1281114800_cam-vest-01.jpg",
+        "local_path": "files/proposals/abalos/12b2d214-64e.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          294
+        ],
+        "bytes": 81837,
+        "sha256": "26474fe459261b33b7bed80d29d1be0f8960c1a605550591bd06e8e295dac606",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "131b095e-fb35-5904-ba51-10c29d38b46e",
+        "url": "https://images.adsttc.com/media/images/55e6/15c5/8450/b50b/9b00/002d/medium_jpg/1592986382_levels-axo.jpg?1441142207",
+        "title": "1592986382_levels-axo.jpg",
+        "local_path": "files/proposals/abalos/131b095e-fb3.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          825
+        ],
+        "bytes": 112268,
+        "sha256": "67a8aad28828b15526ae761e776f84a69d95854ba0eaed0be26960f892e5e769",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "6ba352d4-0521-5fbf-80a8-3551c3055662",
+        "url": "https://images.adsttc.com/media/images/55e6/15bc/8450/b50b/9b00/002c/medium_jpg/1142437133_secciones.jpg?1441142199",
+        "title": "1142437133_secciones.jpg",
+        "local_path": "files/proposals/abalos/6ba352d4-052.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          355
+        ],
+        "bytes": 92165,
+        "sha256": "b480ceea2584dd2afcc16f7ebc0e96abde95d2c2a70e38a5f064ded963c58421",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "7d611b89-94ca-5f44-90a1-5574d72c1bfb",
+        "url": "https://images.adsttc.com/media/images/55e6/1543/8450/b50b/9b00/001f/medium_jpg/752139020_cam-par-03.jpg?1441142077",
+        "title": "752139020_cam-par-03.jpg",
+        "local_path": "files/proposals/abalos/7d611b89-94c.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          291
+        ],
+        "bytes": 92687,
+        "sha256": "7835a2fa8b061f70311934a14ea2bd7af29c318bfc5a17a4bf28d652eecd9779",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "a73606cc-d6d4-5430-9778-5dc110750cbb",
+        "url": "https://images.adsttc.com/media/images/55e6/14fd/8450/b50b/9b00/0018/medium_jpg/519079997_cam-ae-02.jpg?1441142007",
+        "title": "519079997_cam-ae-02.jpg",
+        "local_path": "files/proposals/abalos/a73606cc-d6d.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          293
+        ],
+        "bytes": 114160,
+        "sha256": "274731763c1c4ac1a3564d88e60bbc90a4e08b796a8fe98741168eea75f95acd",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      }
+    ],
+    "images": [
+      {
+        "uid": "769b6ed5-787c-5b45-8574-63fa6d0181bd",
+        "url": "https://images.adsttc.com/media/images/55e6/15a9/8450/b50b/9b00/002a/medium_jpg/646361529_planta-34-50.jpg?1441142180",
+        "title": "646361529_planta-34-50.jpg",
+        "local_path": "files/proposals/abalos/769b6ed5-787.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 90709,
+        "sha256": "1feffc9a4e4a2cf975746e16116359131b3be402a22e5224556be8ef75365e24",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "cfa12fd7-f092-56ca-beb9-5a466810d612",
+        "url": "https://images.adsttc.com/media/images/55e6/15a0/8450/b50b/9b00/0029/medium_jpg/1287382051_planta-23-30.jpg?1441142171",
+        "title": "1287382051_planta-23-30.jpg",
+        "local_path": "files/proposals/abalos/cfa12fd7-f09.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 91717,
+        "sha256": "2973e4391602db3e3ead3e01d50d1354da447efc99f87d2bbfe51b4ee1f7e19d",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "ef7d397c-5838-5612-bccc-af25a7139ae9",
+        "url": "https://images.adsttc.com/media/images/55e6/1586/8450/b50b/9b00/0026/medium_jpg/734928943_planta-comercial.jpg?1441142144",
+        "title": "734928943_planta-comercial.jpg",
+        "local_path": "files/proposals/abalos/ef7d397c-583.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 113098,
+        "sha256": "2f315e794afd8a43498c1cbfd4ee9596396fcbcf579d72a1da2ea0bea725d14a",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "725ac18d-3f6d-5b17-8c54-e1abb7571119",
+        "url": "https://images.adsttc.com/media/images/55e6/1597/8450/b50b/9b00/0028/medium_jpg/1790418741_planta-19-80.jpg?1441142162",
+        "title": "1790418741_planta-19-80.jpg",
+        "local_path": "files/proposals/abalos/725ac18d-3f6.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 91451,
+        "sha256": "2372c1ac84b05b1727e55b8add83715b69b0427db8caa3a6d3ea64573136dadd",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "be2246ab-a218-5e19-94c6-a2ffd80fd860",
+        "url": "https://images.adsttc.com/media/images/55e6/158e/8450/b50b/9b00/0027/medium_jpg/1395354018_planta-parque.jpg?1441142153",
+        "title": "1395354018_planta-parque.jpg",
+        "local_path": "files/proposals/abalos/be2246ab-a21.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 114479,
+        "sha256": "a7e3d06c1c2a8be487caa66a74b1a7e3b8fabb5decb800fb41ede65cba924357",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "a1140d52-5192-5b4d-8dcd-c46de2015951",
+        "url": "https://images.adsttc.com/media/images/55e6/157d/8450/b50b/9b00/0025/medium_jpg/1727741420_planta-aparcamiento.jpg?1441142135",
+        "title": "1727741420_planta-aparcamiento.jpg",
+        "local_path": "files/proposals/abalos/a1140d52-519.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 85671,
+        "sha256": "06df8172e4d4ac8d6d259527e2c9459aa3ec0412dc22fce7ecf1b10172c21721",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "dd40d193-6fb0-58c3-b55e-ebf19e0c4cae",
+        "url": "https://images.adsttc.com/media/images/55e6/14cb/8450/b50b/9b00/0013/newsletter/166111994_2009-004.jpg?1441141959",
+        "title": "166111994_2009-004.jpg",
+        "local_path": "files/proposals/abalos/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          750,
+          375
+        ],
+        "bytes": 108988,
+        "sha256": "0c2583865539bbdcee81ea8362c8ad6246dee6a9a87cb5b8fcb7a0d7724faba5",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "93a587f7-8e0c-5acd-9989-18560e455492",
+        "url": "https://images.adsttc.com/media/images/55e6/1512/8450/b50b/9b00/001a/medium_jpg/1149425638_cam-cub-04.jpg?1441142028",
+        "title": "1149425638_cam-cub-04.jpg",
+        "local_path": "files/proposals/abalos/93a587f7-8e0.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          294
+        ],
+        "bytes": 92690,
+        "sha256": "5fae3789530d9fdd42314d56f5920d6132e90f899f7eb33e8fecf1e797571f31",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "2f4dfd82-034e-55f2-87a0-72b68dd4afbf",
+        "url": "https://images.adsttc.com/media/images/55e6/14df/8450/b50b/9b00/0015/medium_jpg/944252757_cam-cub-01.jpg?1441141977",
+        "title": "944252757_cam-cub-01.jpg",
+        "local_path": "files/proposals/abalos/2f4dfd82-034.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          294
+        ],
+        "bytes": 92501,
+        "sha256": "10462af4c83f068911832eced23e9eae1d48cc20fbcadf010bc888532c96e8bb",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "1d32c0e0-12d4-5fa1-ad9f-78efd7f9678f",
+        "url": "https://images.adsttc.com/media/images/55e6/1539/8450/b50b/9b00/001e/medium_jpg/569232343_cam-par-01.jpg?1441142066",
+        "title": "569232343_cam-par-01.jpg",
+        "local_path": "files/proposals/abalos/1d32c0e0-12d.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          294
+        ],
+        "bytes": 82268,
+        "sha256": "71263d5b620a356c63419971700adcebf77e8a9373c0fd676318a0de878067fb",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "ce0c0a64-650a-51df-ad6e-9484955f70b3",
+        "url": "https://images.adsttc.com/media/images/55e6/1573/8450/b50b/9b00/0024/medium_jpg/477171786_situacion.jpg?1441142125",
+        "title": "477171786_situacion.jpg",
+        "local_path": "files/proposals/abalos/ce0c0a64-650.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          396
+        ],
+        "bytes": 103933,
+        "sha256": "ff2b0918c11be791663e3586914e9f0b3a5f23084cb244a732d40ac1d78126ee",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "02f3b6fc-2dbe-583e-ae30-c3e3e53e4e5f",
+        "url": "https://images.adsttc.com/media/images/55e6/1557/8450/b50b/9b00/0021/medium_jpg/1077692108_cam-sala-04-b.jpg?1441142097",
+        "title": "1077692108_cam-sala-04-b.jpg",
+        "local_path": "files/proposals/abalos/02f3b6fc-2db.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          293
+        ],
+        "bytes": 101870,
+        "sha256": "65ac7d23c317c8a06faf1ddd2a4c646b4412e9c77918a56488b0328f1f9c8fe8",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "198c3433-86b9-50b1-bb2d-6d2b87b8b1db",
+        "url": "https://images.adsttc.com/media/images/55e6/1525/8450/b50b/9b00/001c/medium_jpg/273830923_cam-ma-02.jpg?1441142047",
+        "title": "273830923_cam-ma-02.jpg",
+        "local_path": "files/proposals/abalos/198c3433-86b.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          293
+        ],
+        "bytes": 93089,
+        "sha256": "5900703c16925911c83a2f5c50c2ac0700f279cd01c2c0c8f5b8ed46b2e5c812",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "12b2d214-64ec-53b2-bb31-f04fdd1f7813",
+        "url": "https://images.adsttc.com/media/images/55e6/156a/8450/b50b/9b00/0023/medium_jpg/1281114800_cam-vest-01.jpg?1441142116",
+        "title": "1281114800_cam-vest-01.jpg",
+        "local_path": "files/proposals/abalos/12b2d214-64e.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          294
+        ],
+        "bytes": 81837,
+        "sha256": "26474fe459261b33b7bed80d29d1be0f8960c1a605550591bd06e8e295dac606",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "131b095e-fb35-5904-ba51-10c29d38b46e",
+        "url": "https://images.adsttc.com/media/images/55e6/15c5/8450/b50b/9b00/002d/medium_jpg/1592986382_levels-axo.jpg?1441142207",
+        "title": "1592986382_levels-axo.jpg",
+        "local_path": "files/proposals/abalos/131b095e-fb3.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          825
+        ],
+        "bytes": 112268,
+        "sha256": "67a8aad28828b15526ae761e776f84a69d95854ba0eaed0be26960f892e5e769",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "6ba352d4-0521-5fbf-80a8-3551c3055662",
+        "url": "https://images.adsttc.com/media/images/55e6/15bc/8450/b50b/9b00/002c/medium_jpg/1142437133_secciones.jpg?1441142199",
+        "title": "1142437133_secciones.jpg",
+        "local_path": "files/proposals/abalos/6ba352d4-052.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          355
+        ],
+        "bytes": 92165,
+        "sha256": "b480ceea2584dd2afcc16f7ebc0e96abde95d2c2a70e38a5f064ded963c58421",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "7d611b89-94ca-5f44-90a1-5574d72c1bfb",
+        "url": "https://images.adsttc.com/media/images/55e6/1543/8450/b50b/9b00/001f/medium_jpg/752139020_cam-par-03.jpg?1441142077",
+        "title": "752139020_cam-par-03.jpg",
+        "local_path": "files/proposals/abalos/7d611b89-94c.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          291
+        ],
+        "bytes": 92687,
+        "sha256": "7835a2fa8b061f70311934a14ea2bd7af29c318bfc5a17a4bf28d652eecd9779",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      },
+      {
+        "uid": "a73606cc-d6d4-5430-9778-5dc110750cbb",
+        "url": "https://images.adsttc.com/media/images/55e6/14fd/8450/b50b/9b00/0018/medium_jpg/519079997_cam-ae-02.jpg?1441142007",
+        "title": "519079997_cam-ae-02.jpg",
+        "local_path": "files/proposals/abalos/a73606cc-d6d.jpg",
+        "status": "saved",
+        "dimensions": [
+          528,
+          293
+        ],
+        "bytes": 114160,
+        "sha256": "274731763c1c4ac1a3564d88e60bbc90a4e08b796a8fe98741168eea75f95acd",
+        "credit": "Ábalos + Sentkiewicz / https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre"
+      }
+    ]
+  },
+  {
+    "uid": "00445d5c-db44-599b-9cc5-8a002ec2af28",
+    "architect": "Jakob + MacFarlane",
+    "status": "Поощрение первого тура",
+    "source_url": "https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/",
+    "note": "Конкурсное предложение; степень детализации определяется сохранёнными иллюстрациями.",
+    "files": [
+      {
+        "uid": "9788ffd2-b366-59e5-a254-5717d13ee76b",
+        "url": "https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/",
+        "title": "Jakob + MacFarlane — публикация",
+        "local_path": "files/proposals/jakob/source.html",
+        "status": "saved",
+        "bytes": 169302,
+        "sha256": "e8408ede1574a3068a207488f4c38b4b18075da5c711877abfdd8f018c4532fe"
+      },
+      {
+        "uid": "e6a86d15-43bb-5423-97fd-edce06243db8",
+        "url": "https://www.designboom.com/cms/images/rid/jake00.jpg",
+        "title": "jakob + macfarlane / dominique jakob : TPAC   taipei performing art center proposal",
+        "local_path": "files/proposals/jakob/e6a86d15-43b.jpg",
+        "status": "saved",
+        "dimensions": [
+          550,
+          363
+        ],
+        "bytes": 45017,
+        "sha256": "514708835b78689bde062c4ecc3be38dcd93215f27dfa0b6f2f4b28945c7e329",
+        "credit": "Jakob + MacFarlane / https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/"
+      },
+      {
+        "uid": "73f9d198-8dcc-54ba-823d-80e0b9f0fed7",
+        "url": "https://static.designboom.com/cms/images/ridhika/jake00.jpg",
+        "title": "jakob + macfarlane / dominique jakob : TPAC   taipei performing art center proposal - 1",
+        "local_path": "files/proposals/jakob/73f9d198-8dc.jpg",
+        "status": "saved",
+        "dimensions": [
+          550,
+          381
+        ],
+        "bytes": 54932,
+        "sha256": "19e1d4a5ca76bb5d100e79a90360c8d18a6b5d17860c2096769b651e7f32232a",
+        "credit": "Jakob + MacFarlane / https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/"
+      },
+      {
+        "uid": "f738adcb-ca38-5477-b373-81db8021d189",
+        "url": "https://static.designboom.com/cms/images/rid/jake01.jpg",
+        "title": "jakob + macfarlane / dominique jakob : TPAC   taipei performing art center proposal - 2",
+        "local_path": "files/proposals/jakob/f738adcb-ca3.jpg",
+        "status": "saved",
+        "dimensions": [
+          550,
+          363
+        ],
+        "bytes": 44893,
+        "sha256": "70981decf9b3b596cd768bd9d25fe3ffcf85defb5982c69d79f236a08458a8f9",
+        "credit": "Jakob + MacFarlane / https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/"
+      },
+      {
+        "uid": "06bf8f99-35ae-5efd-a364-3cc34d0324be",
+        "url": "https://static.designboom.com/cms/images/rid/jake03.jpg",
+        "title": "jakob + macfarlane / dominique jakob : TPAC   taipei performing art center proposal - 3",
+        "local_path": "files/proposals/jakob/06bf8f99-35a.jpg",
+        "status": "saved",
+        "dimensions": [
+          629,
+          302
+        ],
+        "bytes": 41014,
+        "sha256": "2382b541240f2abe03071f6a8b56e6845182f35dc70c858d3d1bbd0a405869b3",
+        "credit": "Jakob + MacFarlane / https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/"
+      }
+    ],
+    "images": [
+      {
+        "uid": "e6a86d15-43bb-5423-97fd-edce06243db8",
+        "url": "https://www.designboom.com/cms/images/rid/jake00.jpg",
+        "title": "jakob + macfarlane / dominique jakob : TPAC   taipei performing art center proposal",
+        "local_path": "files/proposals/jakob/e6a86d15-43b.jpg",
+        "status": "saved",
+        "dimensions": [
+          550,
+          363
+        ],
+        "bytes": 45017,
+        "sha256": "514708835b78689bde062c4ecc3be38dcd93215f27dfa0b6f2f4b28945c7e329",
+        "credit": "Jakob + MacFarlane / https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/"
+      },
+      {
+        "uid": "73f9d198-8dcc-54ba-823d-80e0b9f0fed7",
+        "url": "https://static.designboom.com/cms/images/ridhika/jake00.jpg",
+        "title": "jakob + macfarlane / dominique jakob : TPAC   taipei performing art center proposal - 1",
+        "local_path": "files/proposals/jakob/73f9d198-8dc.jpg",
+        "status": "saved",
+        "dimensions": [
+          550,
+          381
+        ],
+        "bytes": 54932,
+        "sha256": "19e1d4a5ca76bb5d100e79a90360c8d18a6b5d17860c2096769b651e7f32232a",
+        "credit": "Jakob + MacFarlane / https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/"
+      },
+      {
+        "uid": "f738adcb-ca38-5477-b373-81db8021d189",
+        "url": "https://static.designboom.com/cms/images/rid/jake01.jpg",
+        "title": "jakob + macfarlane / dominique jakob : TPAC   taipei performing art center proposal - 2",
+        "local_path": "files/proposals/jakob/f738adcb-ca3.jpg",
+        "status": "saved",
+        "dimensions": [
+          550,
+          363
+        ],
+        "bytes": 44893,
+        "sha256": "70981decf9b3b596cd768bd9d25fe3ffcf85defb5982c69d79f236a08458a8f9",
+        "credit": "Jakob + MacFarlane / https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/"
+      },
+      {
+        "uid": "06bf8f99-35ae-5efd-a364-3cc34d0324be",
+        "url": "https://static.designboom.com/cms/images/rid/jake03.jpg",
+        "title": "jakob + macfarlane / dominique jakob : TPAC   taipei performing art center proposal - 3",
+        "local_path": "files/proposals/jakob/06bf8f99-35a.jpg",
+        "status": "saved",
+        "dimensions": [
+          629,
+          302
+        ],
+        "bytes": 41014,
+        "sha256": "2382b541240f2abe03071f6a8b56e6845182f35dc70c858d3d1bbd0a405869b3",
+        "credit": "Jakob + MacFarlane / https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/"
+      }
+    ]
+  },
+  {
+    "uid": "5b29b4cd-2d43-5e48-8e01-66211396b0c0",
+    "architect": "OMA",
+    "status": "Победитель, 1-е место",
+    "source_url": "https://www.archdaily.com/12728/oma-wins-competition-for-the-taipei-performing-arts-centre",
+    "note": "Конкурсная версия 2009 года для сравнения с альтернативами; отличается по стадии от построенного здания.",
+    "files": [
+      {
+        "uid": "d197646d-614f-58e4-8045-776a901ea1de",
+        "url": "https://www.archdaily.com/12728/oma-wins-competition-for-the-taipei-performing-arts-centre",
+        "title": "OMA — публикация",
+        "local_path": "files/proposals/oma/source.html",
+        "status": "saved",
+        "bytes": 736001,
+        "sha256": "84aa39cbb4b5b2ab9e3ab62b88f41b10bb4c9f6c56695e30db128ee141af272d"
+      },
+      {
+        "uid": "be2dbabe-58e6-504e-8961-ad1b965f2ba8",
+        "url": "https://images.adsttc.com/media/images/55e6/14c8/8450/b5eb/7300/0012/newsletter/901724913_taipei-parthesius700-2921.jpg?1441141953",
+        "title": "901724913_taipei-parthesius700-2921.jpg",
+        "local_path": "files/proposals/oma/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          750,
+          636
+        ],
+        "bytes": 111486,
+        "sha256": "1baec5812b9c5ae4fa5f33c978ed933b99ad06a73bf9082ecff1823bf508b050",
+        "credit": "OMA / https://www.archdaily.com/12728/oma-wins-competition-for-the-taipei-performing-arts-centre"
+      }
+    ],
+    "images": [
+      {
+        "uid": "be2dbabe-58e6-504e-8961-ad1b965f2ba8",
+        "url": "https://images.adsttc.com/media/images/55e6/14c8/8450/b5eb/7300/0012/newsletter/901724913_taipei-parthesius700-2921.jpg?1441141953",
+        "title": "901724913_taipei-parthesius700-2921.jpg",
+        "local_path": "files/proposals/oma/01.jpg",
+        "status": "saved",
+        "dimensions": [
+          750,
+          636
+        ],
+        "bytes": 111486,
+        "sha256": "1baec5812b9c5ae4fa5f33c978ed933b99ad06a73bf9082ecff1823bf508b050",
+        "credit": "OMA / https://www.archdaily.com/12728/oma-wins-competition-for-the-taipei-performing-arts-centre"
+      }
+    ]
+  },
+  {
+    "uid": "d93ed9ae-a865-56e7-8049-335264f8b1c8",
+    "architect": "MVRDV + Artech Architects",
+    "status": "Поощрение первого тура",
+    "source_url": "https://www.e-architect.com/taiwan/performing-arts-centre-taipei",
+    "note": "Статус подтверждён списком первого тура. Самостоятельный комплект чертежей в этом проходе не получен.",
+    "files": [],
+    "images": []
+  },
+  {
+    "uid": "8dc6ffc6-0748-5b15-b945-2d21d6d23b95",
+    "architect": "SURV Associates / Hung-an Yeh",
+    "status": "Поощрение первого тура",
+    "source_url": "https://www.e-architect.com/taiwan/performing-arts-centre-taipei",
+    "note": "Статус подтверждён списком первого тура. Самостоятельный комплект чертежей в этом проходе не получен.",
+    "files": [],
+    "images": []
+  },
+  {
+    "uid": "583cd014-5f38-523c-8acb-0456999d3ec6",
+    "architect": "Zaha Hadid Architects",
+    "status": "Поощрение первого тура",
+    "source_url": "https://www.e-architect.com/taiwan/performing-arts-centre-taipei",
+    "note": "Статус подтверждён списком первого тура. Самостоятельный комплект чертежей в этом проходе не получен.",
+    "files": [],
+    "images": []
+  }
+]
