@@ -13,6 +13,9 @@ import { api, type MaterialFolderRow, type MaterialsRefreshResult } from "../api
 export function Materials({ allowed }: { allowed: boolean }) {
   const [items, setItems] = useState<MaterialFolderRow[]>([]);
   const [filter, setFilter] = useState("");
+  const [root, setRoot] = useState("");
+  const [type, setType] = useState("");
+  const [withFilesOnly, setWithFilesOnly] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<MaterialsRefreshResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +42,14 @@ export function Materials({ allowed }: { allowed: boolean }) {
   };
 
   const q = filter.trim().toLowerCase();
-  const shown = q ? items.filter((it) => (it.path + " " + it.title_ru).toLowerCase().includes(q)) : items;
+  // Фильтры: раздел, тип записи, есть ли файлы, текст — по названию (русскому
+  // и английскому) и по пути папки.
+  const types = [...new Map(items.filter((it) => !root || it.root === root)
+    .map((it) => [it.type, it.type_title])).entries()].sort((a, b) => a[1].localeCompare(b[1], "ru"));
+  const shown = items.filter((it) =>
+    (!root || it.root === root) && (!type || it.type === type) &&
+    (!withFilesOnly || (withFilesOnly === "yes" ? it.files > 0 : it.files === 0)) &&
+    (!q || `${it.title_ru} ${it.title_en ?? ""} ${it.path}`.toLowerCase().includes(q)));
   const withFiles = items.filter((it) => it.files > 0).length;
 
   return (
@@ -61,8 +71,22 @@ export function Materials({ allowed }: { allowed: boolean }) {
         <button type="button" disabled={busy} onClick={refresh}>
           {busy ? "Обновляем…" : "Обновить файловую структуру"}
         </button>
-        <input type="search" placeholder="Папка или запись" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <span className="hint">Папок: {items.length}, с файлами: {withFiles}</span>
+        <input type="search" placeholder="Название записи или папки" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <select value={root} onChange={(e) => { setRoot(e.target.value); setType(""); }}>
+          <option value="">Все разделы</option>
+          <option value="what">ЧТО / ПРОЕКТЫ</option>
+          <option value="who">КТО / ЛЮДИ</option>
+        </select>
+        <select value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="">Все типы</option>
+          {types.map(([code, title]) => <option key={code} value={code}>{title}</option>)}
+        </select>
+        <select value={withFilesOnly} onChange={(e) => setWithFilesOnly(e.target.value)}>
+          <option value="">С файлами и пустые</option>
+          <option value="yes">Только с файлами</option>
+          <option value="no">Только пустые</option>
+        </select>
+        <span className="hint">Показано: {shown.length} из {items.length}, с файлами: {withFiles}</span>
       </div>
       <div className="table-scroll">
         <table className="value-table">

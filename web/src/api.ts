@@ -68,9 +68,12 @@ export interface MaterialFolderRow {
   entity_id: number;
   slug: string | null;
   title_ru: string;
+  title_en: string | null;
   path: string;
   synced_at: string | null;
   root: string;
+  type: string;
+  type_title: string;
   files: number;
 }
 

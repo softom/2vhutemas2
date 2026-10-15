@@ -68,10 +68,12 @@ export async function materialsOf(entityId: number) {
 researchMaterials.get("/research-materials", async (c: Context<AppEnv>) => {
   requirePermission(c.get("principal"), "edit");
   const rows = await sql`
-    select m.entity_id, e.slug, e.title_ru, m.path, m.synced_at,
+    select m.entity_id, e.slug, e.title_ru, e.title_en, m.path, m.synced_at,
            (app.entity_type_path(e.type_id) -> 0 ->> 'code') as root,
+           ty.code as type, ty.title_ru as type_title,
            (select count(*) from app.material_files f where f.entity_id = m.entity_id)::int as files
       from app.entity_materials m join app.entities e on e.id = m.entity_id
+      join app.entity_types ty on ty.id = e.type_id
      order by m.path
   `;
   return c.json({ items: rows });
