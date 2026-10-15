@@ -14,10 +14,13 @@ import { api, type MaterialFolderRow, type MaterialsRefreshResult } from "../api
 const segs = (path: string) => path.split("/").map(encodeURIComponent).join("/");
 const explorerHref = (path: string) => `vhutemas-folder:${segs(path)}`;
 const dropboxHref = (path: string) => `https://www.dropbox.com/home/2VHUTEMAS/${segs(path)}`;
+/** Путь Windows для адресной строки Проводника (корень — как у Dropbox на компьютере редакции). */
+const windowsPath = (path: string) => "E:\\Dropbox\\2VHUTEMAS\\" + path.replaceAll("/", "\\");
 
 export function Materials({ allowed }: { allowed: boolean }) {
   const [items, setItems] = useState<MaterialFolderRow[]>([]);
   const [filter, setFilter] = useState("");
+  const [copied, setCopied] = useState<number | null>(null);
   const [root, setRoot] = useState("");
   const [type, setType] = useState("");
   const [withFilesOnly, setWithFilesOnly] = useState("");
@@ -104,6 +107,10 @@ export function Materials({ allowed }: { allowed: boolean }) {
               <tr key={it.entity_id}>
                 <td>
                   <a href={explorerHref(it.path)} title="Открыть в Проводнике"><code>{it.path}</code></a>
+                  {" "}<button type="button" className="ghost" title={`Скопировать путь: ${windowsPath(it.path)}`}
+                    onClick={() => navigator.clipboard.writeText(windowsPath(it.path)).then(() => setCopied(it.entity_id))}>
+                    {copied === it.entity_id ? "скопировано" : "копировать путь"}
+                  </button>
                   {" "}<a className="hint" href={dropboxHref(it.path)} target="_blank" rel="noreferrer" title="Открыть в веб-Dropbox">Dropbox ↗</a>
                 </td>
                 <td><Link to={`/entities/${it.slug ?? it.entity_id}`}>{it.title_ru}</Link></td>
