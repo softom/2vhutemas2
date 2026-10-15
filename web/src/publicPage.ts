@@ -94,7 +94,7 @@ export async function enhancePublicPage() {
   const dialog = document.createElement("dialog");
   dialog.className = "reader-lightbox";
   dialog.setAttribute("aria-label", "Просмотр изображений");
-  dialog.innerHTML = `<div class="reader-lightbox-actions"><button type="button" data-prev aria-label="Предыдущее изображение">←</button><button type="button" data-next aria-label="Следующее изображение">→</button><button type="button" data-close>Закрыть</button></div><figure><img alt=""><figcaption></figcaption></figure>`;
+  dialog.innerHTML = `<div class="reader-lightbox-actions"><button type="button" data-prev aria-label="Предыдущее изображение">←</button><button type="button" data-next aria-label="Следующее изображение">→</button><button type="button" data-full>На весь экран</button><button type="button" data-close>Закрыть</button></div><figure><img alt=""><figcaption></figcaption></figure>`;
   const image = dialog.querySelector("img")!;
   const caption = dialog.querySelector("figcaption")!;
   const show = (index: number) => {
@@ -115,12 +115,35 @@ export async function enhancePublicPage() {
       show(index);
       dialog.showModal();
     }));
+    // Полный экран — по кнопке, двойному щелчку по картинке и клавише F;
+    // выход — Esc. На весь экран разворачивается рисунок с подписью.
+    const figure = dialog.querySelector("figure")!;
+    // Браузер может отказать в полном экране (встроенные окна, запреты) —
+    // тогда просмотр растягивается на всё окно браузера.
+    const toggleFull = () => {
+      if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
+      if (dialog.classList.contains("is-full")) { dialog.classList.remove("is-full"); return; }
+      const fallback = () => dialog.classList.add("is-full");
+      if (figure.requestFullscreen) figure.requestFullscreen().catch(fallback);
+      else fallback();
+    };
+    dialog.querySelector("[data-full]")!.addEventListener("click", toggleFull);
+    image.addEventListener("dblclick", toggleFull);
+    dialog.addEventListener("close", () => {
+      dialog.classList.remove("is-full");
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    });
     dialog.querySelector("[data-close]")!.addEventListener("click", () => dialog.close());
     dialog.querySelector("[data-prev]")!.addEventListener("click", () => show(current - 1));
     dialog.querySelector("[data-next]")!.addEventListener("click", () => show(current + 1));
     dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
     dialog.addEventListener("close", () => opener?.focus());
     dialog.addEventListener("keydown", (event) => {
+      if ((event.key === "f" || event.key === "F" || event.key === "а" || event.key === "А") &&
+          !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        toggleFull();
+      }
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
         show(current + (event.key === "ArrowLeft" ? -1 : 1));
