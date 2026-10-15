@@ -1,0 +1,23 @@
+{
+  "uid": "5470e129-2408-408d-9686-910e3e566f62",
+  "kind": "derived-extract",
+  "source": "../Материалы для программы Тайбэйского центра/files/competition/06-Program(Chinese-and-English)_P037-P048.pdf",
+  "source_sha256": "61fe69949d6f5ec15e8aa971e924def590cdb230a34c06f65f68edd4330ea709",
+  "source_pdf_page": 5,
+  "printed_pages": [
+    45,
+    46
+  ],
+  "section": "3.2.2 Floor Area",
+  "grand_total_m2": 39125,
+  "outputs": [
+    {
+      "path": "files/documents/Programme-p045-p046-floor-area.pdf",
+      "sha256": "ded3a37f74f6459947dab4b25178a293951f9db1d91057687168ca906bc4f5dc"
+    },
+    {
+      "path": "files/documents/Programme-p045-p046-floor-area.png",
+      "sha256": "eef3bf2fd7ff8308d178b15b9672dde9e05475a3c76147f0fdb1abc8f6e15586"
+    }
+  ]
+}
