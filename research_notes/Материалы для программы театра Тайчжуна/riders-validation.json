@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-15",
+  "attachments": 141,
+  "formats": {
+    "JPG": 16,
+    "PDF": 92,
+    "DWG": 32,
+    "ZIP": 1
+  },
+  "pdf_pages": 462,
+  "original_bytes": 304774395,
+  "archive_bytes": 282440943,
+  "archive_sha256": "f5f34ce6ffc98f8a5ea872aa1cc432eed0fc729943218074f686775c7cdffaec",
+  "zip_crc": "passed",
+  "missing_files": 0
+}
