@@ -357,6 +357,8 @@ code $API/entities/$EID/card >/dev/null
 missing "материалы: гостю раздел не отдаётся" 'research-materials' "$(body)"
 missing "материалы: путь не попадает в публичную страницу" 'ОБЪЕКТЫ/smoke' "$(curl -s http://127.0.0.1:7073/entities/$EID)"
 check "материалы: отвязка" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d '{"path":null}' $API/entities/$EID/research-materials)"
+check "материалы: обновление структуры гостю закрыто" 401 "$(code -X POST -H "$JSON" -d '{}' $API/research-materials/refresh)"
+check "страница «Материалы» отдаётся" 200 "$(code http://127.0.0.1:7073/materials)"
 
 echo "── Страница для поисковика"
 # Готовый HTML записи (Р-65) проверяем снаружи, через Caddy: ломается

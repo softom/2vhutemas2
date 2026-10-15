@@ -17,6 +17,7 @@ export type ErrorCode =
   | "link_requires_justification"
   | "payload_too_large"
   | "rate_limited"
+  | "unavailable"
   | "internal_error";
 
 const STATUS: Record<ErrorCode, number> = {
@@ -30,6 +31,7 @@ const STATUS: Record<ErrorCode, number> = {
   link_requires_justification: 422,
   payload_too_large: 413,
   rate_limited: 429,
+  unavailable: 503,
   internal_error: 500,
 };
 

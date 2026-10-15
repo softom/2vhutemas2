@@ -63,6 +63,25 @@ async function token(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+/** Папка материалов записи (0051). */
+export interface MaterialFolderRow {
+  entity_id: number;
+  slug: string | null;
+  title_ru: string;
+  path: string;
+  synced_at: string | null;
+  root: string;
+  files: number;
+}
+
+export interface MaterialsRefreshResult {
+  created: number;
+  linked: number;
+  unmatched: string[];
+  entities: number;
+  files: number;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const accessToken = await token();
@@ -655,6 +674,9 @@ export const api = {
   deleteParameter: (id: string) =>
     request<void>(`/parameters/${id}`, { method: "DELETE" }),
   parameterSets: () => request<{ items: ParameterSetRow[] }>("/parameter-sets"),
+  materialFolders: () => request<{ items: MaterialFolderRow[] }>("/research-materials"),
+  refreshMaterials: () =>
+    request<MaterialsRefreshResult>("/research-materials/refresh", { method: "POST", body: JSON.stringify({}) }),
   updateParameterSet: (code: string, body: unknown) =>
     request<{ code: string; title_ru: string }>(`/parameter-sets/${code}`, {
       method: "PATCH",

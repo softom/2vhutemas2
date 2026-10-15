@@ -79,6 +79,18 @@ export const config = {
       passages: Number(optional("SEARCH_AI_PASSAGES", "10")),
     },
   },
+  /**
+   * Материалы в работе (0051, 0052): папки в Dropbox. Приложение Dropbox с
+   * доступом «App folder» видит только свою папку; ключи — только в .env
+   * сервера. Без ключей кнопка «Обновить файловую структуру» отвечает 503.
+   */
+  dropbox: {
+    appKey: Deno.env.get("DROPBOX_APP_KEY")?.trim() || null,
+    appSecret: Deno.env.get("DROPBOX_APP_SECRET")?.trim() || null,
+    refreshToken: Deno.env.get("DROPBOX_REFRESH_TOKEN")?.trim() || null,
+    /** Корень внутри папки приложения; "" — сама папка приложения. */
+    root: optional("DROPBOX_ROOT", ""),
+  },
   /** Версия контракта: клиент сверяет её через GET /capabilities. */
   contractVersion: "1.0.0-draft",
   blockNoteSchemaVersion: 1,

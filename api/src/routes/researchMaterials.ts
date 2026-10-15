@@ -2,8 +2,8 @@
  * Материалы в работе: папка исследований у записи и опись её файлов.
  *
  * Решение пользователя 2026-10-15: материалы по объектам собираются раньше,
- * чем готовы к публикации. Файлы остаются в research_notes на компьютере
- * редакции; сайт хранит ссылку на папку и опись — что собрано, сколько, что
+ * чем готовы к публикации. Файлы складываются в Dropbox, в папку 2VHUTEMAS
+ * (ЧТО/ПРОЕКТЫ, КТО/ЛЮДИ); сайт хранит ссылку на папку и опись — что собрано, сколько, что
  * уже ушло в медиатеку. Всё это видят только редакторы: таблицы вне версий
  * записи и не публикуются (0051).
  *
@@ -15,14 +15,15 @@ import { sql, transaction } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
 import { require as requirePermission } from "../lib/auth.ts";
 import type { AppEnv } from "../lib/http.ts";
+import { createFolders, dropboxPath, dropboxReady, listAll } from "../lib/dropbox.ts";
 
 export const researchMaterials = new Hono<AppEnv>();
 
-/** Путь папки внутри research_notes: относительный, без «..» и обратных слешей. */
+/** Путь папки внутри 2VHUTEMAS: относительный, без «..» и обратных слешей. */
 function cleanPath(raw: unknown): string {
   const path = String(raw ?? "").trim().replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
   if (!path || path.split("/").includes("..")) {
-    throw new ApiError("validation_failed", "Путь папки — относительный путь внутри research_notes");
+    throw new ApiError("validation_failed", "Путь папки — относительный путь внутри 2VHUTEMAS");
   }
   return path;
 }
@@ -136,4 +137,127 @@ researchMaterials.put("/entities/:id/research-materials/files", async (c: Contex
     await tx`update app.entity_materials set synced_at = now() where entity_id = ${id}`;
   });
   return c.json({ entity_id: id, files: files.length });
+});
+
+/**
+ * Разделы Dropbox по ветвям записей и префиксы папок по типам (0052).
+ * Решение пользователя 2026-10-15: ЧТО/ПРОЕКТЫ и КТО/ЛЮДИ, тип — префиксом
+ * имени папки: «арх_объекты_Национальный театр Тайчжуна».
+ */
+const SECTIONS: Record<string, string> = { what: "ЧТО/ПРОЕКТЫ", who: "КТО/ЛЮДИ" };
+const PREFIXES: Record<string, string> = {
+  architecture_object: "арх_объекты",
+  urban_concept: "градостроительство",
+  performance: "постановки",
+  book: "книги",
+  article: "статьи",
+  web_page: "веб_страницы",
+  theory_concept: "теории",
+  video: "видео",
+  what: "что",
+  person: "люди",
+  company: "компании",
+};
+
+/** Имя папки, допустимое в Dropbox и Windows. */
+function folderName(prefix: string, title: string): string {
+  const clean = title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "");
+  return `${prefix}_${clean || "без названия"}`.slice(0, 180);
+}
+
+const norm = (t: string) => t.replaceAll("ё", "е").replaceAll("Ё", "Е").replace(/\s+/g, " ").trim().toLowerCase();
+
+/**
+ * «Обновить файловую структуру»: сопоставить папки, положенные вручную,
+ * досоздать папки записям без папки, снять опись файлов.
+ */
+researchMaterials.post("/research-materials/refresh", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  if (!dropboxReady()) {
+    throw new ApiError("unavailable", "Dropbox не подключён: на сервере нет ключей приложения");
+  }
+  const entities = await sql<{ id: number; title_ru: string; type: string; type_title: string; root: string; path: string | null }>`
+    select e.id, e.title_ru, ty.code as type, ty.title_ru as type_title,
+           app.entity_type_path(e.type_id) -> 0 ->> 'code' as root, m.path
+      from app.entities e
+      join app.entity_types ty on ty.id = e.type_id
+      left join app.entity_materials m on m.entity_id = e.id
+     where e.status <> 'archived'
+       and app.entity_type_path(e.type_id) -> 0 ->> 'code' in ('what', 'who')
+     order by e.title_ru
+  `;
+  const prefixOf = (e: { type: string; type_title: string }) =>
+    PREFIXES[e.type] ?? norm(e.type_title).replace(/[^a-zа-я0-9]+/g, "_").replace(/^_|_$/g, "");
+
+  const listing = await listAll();
+  const folders = new Map(listing.filter((x) => x.tag === "folder").map((x) => [x.path.toLowerCase(), x.path]));
+  const taken = new Set(entities.filter((e) => e.path).map((e) => e.path!.toLowerCase()));
+
+  // 1. Папки, положенные вручную: «<префикс>_<название>» или просто название.
+  const linked: { id: number; path: string }[] = [];
+  const unmatched: string[] = [];
+  for (const [root, section] of Object.entries(SECTIONS)) {
+    const head = section.toLowerCase() + "/";
+    for (const [key, path] of folders) {
+      if (!key.startsWith(head) || key.slice(head.length).includes("/") || taken.has(key)) continue;
+      const name = norm(path.slice(section.length + 1));
+      const hits = entities.filter((e) => !e.path && e.root === root &&
+        (norm(e.title_ru) === name || norm(folderName(prefixOf(e), e.title_ru)) === name));
+      if (hits.length === 1) {
+        hits[0].path = path;
+        taken.add(key);
+        linked.push({ id: hits[0].id, path });
+      } else {
+        unmatched.push(path);
+      }
+    }
+  }
+
+  // 2. Записям без папки — новая папка.
+  const created: { id: number; path: string }[] = [];
+  for (const e of entities) {
+    if (e.path) continue;
+    let path = `${SECTIONS[e.root]}/${folderName(prefixOf(e), e.title_ru)}`;
+    if (taken.has(path.toLowerCase())) path = `${path} (${e.id})`;
+    e.path = path;
+    taken.add(path.toLowerCase());
+    created.push({ id: e.id, path });
+  }
+  await createFolders([...Object.values(SECTIONS), ...created.map((x) => x.path)]
+    .filter((p) => !folders.has(p.toLowerCase())).map(dropboxPath));
+
+  // 3. Таблица соответствия и опись файлов.
+  const files = listing.filter((x) => x.tag === "file");
+  let counted = 0;
+  await transaction(principal.contributorId, async (tx) => {
+    for (const x of [...linked, ...created]) {
+      await tx`insert into app.entity_materials (entity_id, path) values (${x.id}, ${x.path})
+               on conflict (entity_id) do nothing`;
+    }
+    for (const e of entities) {
+      const head = e.path!.toLowerCase() + "/";
+      const own = files.filter((f) => f.path.toLowerCase().startsWith(head)).map((f) => ({
+        path: f.path.slice(head.length), size: f.size, modified: f.modified, hash: f.contentHash,
+      }));
+      counted += own.length;
+      const payload = JSON.stringify(own);
+      await tx`delete from app.material_files where entity_id = ${e.id}
+                 and rel_path not in (select x->>'path' from jsonb_array_elements(${payload}::jsonb) x)`;
+      if (own.length) {
+        await tx`
+          insert into app.material_files (entity_id, rel_path, size_bytes, modified_at, content_hash, seen_at)
+          select ${e.id}, x->>'path', (x->>'size')::bigint, (x->>'modified')::timestamptz, x->>'hash', now()
+            from jsonb_array_elements(${payload}::jsonb) x
+          on conflict (entity_id, rel_path) do update
+            set size_bytes = excluded.size_bytes, modified_at = excluded.modified_at,
+                content_hash = excluded.content_hash, seen_at = now(),
+                -- sha256 присылает локальный скрипт; при другом размере он устарел.
+                sha256 = case when app.material_files.size_bytes = excluded.size_bytes
+                              then app.material_files.sha256 end
+        `;
+      }
+      await tx`update app.entity_materials set synced_at = now() where entity_id = ${e.id}`;
+    }
+  });
+  return c.json({ created: created.length, linked: linked.length, unmatched, entities: entities.length, files: counted });
 });

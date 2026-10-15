@@ -874,15 +874,15 @@ type Materials = NonNullable<Awaited<ReturnType<typeof materialsOf>>>;
 
 /**
  * «Материалы в работе» — только в карточке для редактора: папка в
- * research_notes, что в ней собрано по подпапкам и что уже в медиатеке
+ * Dropbox 2VHUTEMAS, что в ней собрано по подпапкам и что уже в медиатеке
  * (по контрольной сумме). Гостевая страница этот раздел не получает.
  */
 function materialsHtml(m: Materials | null): string {
   const e = escapeHtml;
   if (!m) {
     return `<section class="research-materials"><h2>Материалы в работе <span class="badge">видят редакторы</span></h2>` +
-      `<p class="hint">Папка материалов не привязана. Привязать: <code>python tools/sync_materials.py --create &lt;слаг&gt;</code> ` +
-      `или <code>--link &lt;слаг&gt; &lt;папка&gt;</code>.</p></section>`;
+      `<p class="hint">Папка материалов не привязана. Положите папку с названием записи в <code>2VHUTEMAS/ЧТО/ПРОЕКТЫ</code> или <code>КТО/ЛЮДИ</code> ` +
+      `и запустите <code>python tools/sync_materials.py</code>.</p></section>`;
   }
   const total = m.files.reduce((a, f) => a + Number(f.size_bytes), 0);
   const inMedia = m.files.filter((f) => f.media_entity_id).length;
@@ -908,7 +908,7 @@ function materialsHtml(m: Materials | null): string {
       `<div class="table-scroll"><table class="value-table"><tbody>${rows}</tbody></table></div></details>`;
   }).join("");
   return `<section class="research-materials"><h2>Материалы в работе <span class="badge">видят редакторы</span></h2>` +
-    `<p class="hint">Папка <code>research_notes/${e(m.path)}</code> · ${m.files.length} файлов, ${bytesText(total)} · ` +
+    `<p class="hint">Папка <code>2VHUTEMAS/${e(m.path)}</code> · ${m.files.length} файлов, ${bytesText(total)} · ` +
     `в медиатеке ${inMedia} · опись обновлена: ${e(synced)}</p>${blocks}</section>`;
 }
 
@@ -1176,6 +1176,7 @@ pages.get("/robots.txt", (c) => {
     "Disallow: /entities/*/edit",
     "Disallow: /media",
     "Disallow: /parameters",
+    "Disallow: /materials",
 
     // /old/ не закрываем здесь: запрет обхода помешал бы поисковику увидеть
     // noindex, который Caddy ставит прежнему сайту, и старые страницы
@@ -1239,8 +1240,9 @@ function appOnly(c: Context<AppEnv>, title: string) {
 
 const APP_ONLY_TITLES: Record<string, string> = {
   "/login": "Вход", "/parameters": "Параметры", "/robot": "Робот новостей",
+  "/materials": "Материалы в работе",
 };
-for (const path of ["/login", "/media", "/media/*", "/parameters", "/robot", "/robot/*"]) {
+for (const path of ["/login", "/media", "/media/*", "/parameters", "/materials", "/robot", "/robot/*"]) {
   const title = APP_ONLY_TITLES[path.replace("/*", "")] ?? "Медиатека";
   pages.get(path, (c) => appOnly(c, title));
 }
