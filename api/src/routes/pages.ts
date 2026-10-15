@@ -908,7 +908,7 @@ function materialsHtml(m: Materials | null): string {
       `<div class="table-scroll"><table class="value-table"><tbody>${rows}</tbody></table></div></details>`;
   }).join("");
   return `<section class="research-materials"><h2>Материалы в работе <span class="badge">видят редакторы</span></h2>` +
-    `<p class="hint">Папка <code>2VHUTEMAS/${e(m.path)}</code> · ${m.files.length} файлов, ${bytesText(total)} · ` +
+    `<p class="hint">Папка <a href="vhutemas-folder:${e(m.path.split("/").map(encodeURIComponent).join("/"))}" title="Открыть в Проводнике"><code>2VHUTEMAS/${e(m.path)}</code></a> · ${m.files.length} файлов, ${bytesText(total)} · ` +
     `в медиатеке ${inMedia} · опись обновлена: ${e(synced)}</p>${blocks}</section>`;
 }
 
