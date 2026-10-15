@@ -77,6 +77,7 @@ export interface MaterialFolderRow {
 export interface MaterialsRefreshResult {
   created: number;
   linked: number;
+  renamed: number;
   unmatched: string[];
   entities: number;
   files: number;

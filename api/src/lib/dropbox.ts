@@ -63,9 +63,26 @@ export async function createFolders(paths: string[]): Promise<void> {
     let result = await rpc<{ ".tag": string; async_job_id?: string }>("files/create_folder_batch", {
       paths: chunk, autorename: false, force_async: false,
     });
-    while (result[".tag"] === "async_job_id" || result[".tag"] === "in_progress") {
+    // Ответ «in_progress» номера задания не несёт — номер берётся из первого ответа.
+    const job = result.async_job_id;
+    while (job && (result[".tag"] === "async_job_id" || result[".tag"] === "in_progress")) {
       await new Promise((r) => setTimeout(r, 1000));
-      result = await rpc("files/create_folder_batch/check", { async_job_id: result.async_job_id });
+      result = await rpc("files/create_folder_batch/check", { async_job_id: job });
+    }
+  }
+}
+
+/** Переименовать (переместить) папки вместе с содержимым. */
+export async function moveFolders(entries: { from: string; to: string }[]): Promise<void> {
+  for (let i = 0; i < entries.length; i += 500) {
+    const chunk = entries.slice(i, i + 500).map((e) => ({ from_path: e.from, to_path: e.to }));
+    let result = await rpc<{ ".tag": string; async_job_id?: string }>("files/move_batch_v2", {
+      entries: chunk, autorename: false,
+    });
+    const job = result.async_job_id;
+    while (job && (result[".tag"] === "async_job_id" || result[".tag"] === "in_progress")) {
+      await new Promise((r) => setTimeout(r, 1000));
+      result = await rpc("files/move_batch/check_v2", { async_job_id: job });
     }
   }
 }

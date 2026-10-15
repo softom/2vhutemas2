@@ -47,12 +47,12 @@ export function Materials({ allowed }: { allowed: boolean }) {
       <h1>Материалы в работе</h1>
       <p className="sub">
         Папки Dropbox <code>2VHUTEMAS</code>: <code>ЧТО/ПРОЕКТЫ</code> и <code>КТО/ЛЮДИ</code>, папка записи —
-        «тип_название». Материалы не публикуются; опись видят только редакторы на странице записи.
+        «тип_название (English)». Материалы не публикуются; опись видят только редакторы на странице записи.
       </p>
       {error && <p className="error">{error}</p>}
       {result && (
         <p className="notice">
-          Новых папок: {result.created}, сопоставлено вручную положенных: {result.linked},
+          Новых папок: {result.created}, сопоставлено: {result.linked}, переименовано: {result.renamed},
           файлов в описи: {result.files}.
           {result.unmatched.length > 0 && <> Не сопоставлены: {result.unmatched.join(", ")}.</>}
         </p>

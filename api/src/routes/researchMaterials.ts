@@ -15,7 +15,7 @@ import { sql, transaction } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
 import { require as requirePermission } from "../lib/auth.ts";
 import type { AppEnv } from "../lib/http.ts";
-import { createFolders, dropboxPath, dropboxReady, listAll } from "../lib/dropbox.ts";
+import { createFolders, dropboxPath, dropboxReady, listAll, moveFolders } from "../lib/dropbox.ts";
 
 export const researchMaterials = new Hono<AppEnv>();
 
@@ -159,10 +159,17 @@ const PREFIXES: Record<string, string> = {
   company: "компании",
 };
 
-/** Имя папки, допустимое в Dropbox и Windows. */
-function folderName(prefix: string, title: string): string {
-  const clean = title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "");
-  return `${prefix}_${clean || "без названия"}`.slice(0, 180);
+const cleanName = (t: string) =>
+  t.replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "");
+
+/**
+ * Имя папки, допустимое в Dropbox и Windows: «<тип>_<название> (<English>)».
+ * Английское название — в скобках (указание пользователя 2026-10-15), если есть.
+ */
+function folderName(prefix: string, title: string, titleEn: string | null = null): string {
+  const en = cleanName(titleEn ?? "");
+  const base = `${prefix}_${cleanName(title) || "без названия"}`;
+  return (en && norm(en) !== norm(cleanName(title)) ? `${base} (${en})` : base).slice(0, 200);
 }
 
 const norm = (t: string) => t.replaceAll("ё", "е").replaceAll("Ё", "Е").replace(/\s+/g, " ").trim().toLowerCase();
@@ -176,8 +183,10 @@ researchMaterials.post("/research-materials/refresh", async (c: Context<AppEnv>)
   if (!dropboxReady()) {
     throw new ApiError("unavailable", "Dropbox не подключён: на сервере нет ключей приложения");
   }
-  const entities = await sql<{ id: number; title_ru: string; type: string; type_title: string; root: string; path: string | null }>`
-    select e.id, e.title_ru, ty.code as type, ty.title_ru as type_title,
+  const entities = await sql<{
+    id: number; title_ru: string; title_en: string | null; type: string; type_title: string; root: string; path: string | null;
+  }>`
+    select e.id, e.title_ru, e.title_en, ty.code as type, ty.title_ru as type_title,
            app.entity_type_path(e.type_id) -> 0 ->> 'code' as root, m.path
       from app.entities e
       join app.entity_types ty on ty.id = e.type_id
@@ -193,20 +202,37 @@ researchMaterials.post("/research-materials/refresh", async (c: Context<AppEnv>)
   const folders = new Map(listing.filter((x) => x.tag === "folder").map((x) => [x.path.toLowerCase(), x.path]));
   const taken = new Set(entities.filter((e) => e.path).map((e) => e.path!.toLowerCase()));
 
-  // 1. Папки, положенные вручную: «<префикс>_<название>» или просто название.
+  // 1. Папки, положенные вручную: «<префикс>_<название> (<English>)», без
+  //    английского или просто название. Папку, заведённую кнопкой по прежнему
+  //    образцу (без английского), кнопка переименовывает.
   const linked: { id: number; path: string }[] = [];
+  const renamed: { from: string; to: string }[] = [];
   const unmatched: string[] = [];
   for (const [root, section] of Object.entries(SECTIONS)) {
     const head = section.toLowerCase() + "/";
     for (const [key, path] of folders) {
       if (!key.startsWith(head) || key.slice(head.length).includes("/") || taken.has(key)) continue;
       const name = norm(path.slice(section.length + 1));
-      const hits = entities.filter((e) => !e.path && e.root === root &&
-        (norm(e.title_ru) === name || norm(folderName(prefixOf(e), e.title_ru)) === name));
+      // Одноимённым записям кнопка дописывает « (номер)» — по нему и узнаются.
+      const byId = name.match(/ \((\d+)\)$/);
+      const hits = byId
+        ? entities.filter((e) => !e.path && e.id === Number(byId[1]))
+        : entities.filter((e) => !e.path && e.root === root &&
+          [e.title_ru, folderName(prefixOf(e), e.title_ru), folderName(prefixOf(e), e.title_ru, e.title_en)]
+            .some((n) => norm(n) === name));
       if (hits.length === 1) {
-        hits[0].path = path;
+        const e = hits[0];
+        let target = path;
+        const old = norm(folderName(prefixOf(e), e.title_ru));
+        const wanted = `${section}/${folderName(prefixOf(e), e.title_ru, e.title_en)}`;
+        if ((name === old || byId) && wanted !== path && !folders.has(wanted.toLowerCase()) && !taken.has(wanted.toLowerCase())) {
+          renamed.push({ from: path, to: wanted });
+          target = wanted;
+        }
+        e.path = target;
         taken.add(key);
-        linked.push({ id: hits[0].id, path });
+        taken.add(target.toLowerCase());
+        linked.push({ id: e.id, path: target });
       } else {
         unmatched.push(path);
       }
@@ -217,17 +243,22 @@ researchMaterials.post("/research-materials/refresh", async (c: Context<AppEnv>)
   const created: { id: number; path: string }[] = [];
   for (const e of entities) {
     if (e.path) continue;
-    let path = `${SECTIONS[e.root]}/${folderName(prefixOf(e), e.title_ru)}`;
+    let path = `${SECTIONS[e.root]}/${folderName(prefixOf(e), e.title_ru, e.title_en)}`;
     if (taken.has(path.toLowerCase())) path = `${path} (${e.id})`;
     e.path = path;
     taken.add(path.toLowerCase());
     created.push({ id: e.id, path });
   }
+  await moveFolders(renamed.map((r) => ({ from: dropboxPath(r.from), to: dropboxPath(r.to) })));
   await createFolders([...Object.values(SECTIONS), ...created.map((x) => x.path)]
     .filter((p) => !folders.has(p.toLowerCase())).map(dropboxPath));
 
   // 3. Таблица соответствия и опись файлов.
-  const files = listing.filter((x) => x.tag === "file");
+  // Опись снята до переименования — пути файлов переводятся на новые имена.
+  const files = listing.filter((x) => x.tag === "file").map((f) => {
+    const r = renamed.find((x) => f.path.toLowerCase().startsWith(x.from.toLowerCase() + "/"));
+    return r ? { ...f, path: r.to + f.path.slice(r.from.length) } : f;
+  });
   let counted = 0;
   await transaction(principal.contributorId, async (tx) => {
     for (const x of [...linked, ...created]) {
@@ -259,5 +290,5 @@ researchMaterials.post("/research-materials/refresh", async (c: Context<AppEnv>)
       await tx`update app.entity_materials set synced_at = now() where entity_id = ${e.id}`;
     }
   });
-  return c.json({ created: created.length, linked: linked.length, unmatched, entities: entities.length, files: counted });
+  return c.json({ created: created.length, linked: linked.length, renamed: renamed.length, unmatched, entities: entities.length, files: counted });
 });
