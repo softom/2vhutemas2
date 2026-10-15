@@ -342,6 +342,21 @@ check "повторное снятие" 409 "$(code -X POST -H "$AUTH" -H "$JSON
 check "гость снимать не может" 401 "$(code -X POST -H "$JSON" -d '{}' $API/entities/$EID/unpublish)"
 check "снова опубликовать ту же редакцию" 200 "$(code -X POST -H "$AUTH" -H "$JSON" -d '{}' $API/entities/$EID/publish)"
 check "запись снова видна гостю" 200 "$(code $API/entities/$EID)"
+# Материалы в работе (0051): папка и опись видны только редакторам.
+check "материалы: гостю закрыто" 401 "$(code $API/entities/$EID/research-materials)"
+check "материалы: путь с .. отклоняется" 400 "$(code -X PUT -H "$AUTH" -H "$JSON" -d '{"path":"ОБЪЕКТЫ/../x"}' $API/entities/$EID/research-materials)"
+check "материалы: привязка папки" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d '{"path":"ОБЪЕКТЫ/smoke"}' $API/entities/$EID/research-materials)"
+check "материалы: опись" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d '{"files":[{"path":"Чертежи/план.dxf","size":2048,"sha256":"'"$(printf '0%.0s' $(seq 64))"'"},{"path":"заметки.md","size":10}]}' $API/entities/$EID/research-materials/files)"
+code -H "$AUTH" $API/entities/$EID/research-materials >/dev/null
+contains "материалы: опись читается" '"Чертежи/план.dxf"' "$(body)"
+code -H "$AUTH" $API/research-materials >/dev/null
+contains "материалы: в общем списке" '"ОБЪЕКТЫ/smoke"' "$(body)"
+code -H "$AUTH" $API/entities/$EID/card >/dev/null
+contains "материалы: раздел в карточке редактора" 'research-materials' "$(body)"
+code $API/entities/$EID/card >/dev/null
+missing "материалы: гостю раздел не отдаётся" 'research-materials' "$(body)"
+missing "материалы: путь не попадает в публичную страницу" 'ОБЪЕКТЫ/smoke' "$(curl -s http://127.0.0.1:7073/entities/$EID)"
+check "материалы: отвязка" 200 "$(code -X PUT -H "$AUTH" -H "$JSON" -d '{"path":null}' $API/entities/$EID/research-materials)"
 
 echo "── Страница для поисковика"
 # Готовый HTML записи (Р-65) проверяем снаружи, через Caddy: ломается

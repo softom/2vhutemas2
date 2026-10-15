@@ -22,6 +22,7 @@ import { tags } from "./routes/tags.ts";
 import { dates } from "./routes/dates.ts";
 import { indicators } from "./routes/indicators.ts";
 import { parameters, parameterSets } from "./routes/parameters.ts";
+import { researchMaterials } from "./routes/researchMaterials.ts";
 import { newsRobot } from "./routes/newsRobot.ts";
 import { pageNotes } from "./routes/pageNotes.ts";
 import { search } from "./routes/search.ts";
@@ -159,6 +160,8 @@ app.route("/api/v1/tags", tags);
 app.route("/api/v1/entities-dates", dates);
 app.route("/api/v1/entities-indicators", indicators);
 app.route("/api/v1/parameters", parameters);
+// Материалы в работе (0051): папка исследований у записи и опись — только редакторам.
+app.route("/api/v1", researchMaterials);
 app.route("/api/v1/parameter-sets", parameterSets);
 app.route("/api/v1/materials", materials);
 app.route("/api/v1/news-robot", newsRobot);

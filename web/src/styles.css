@@ -815,3 +815,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .drawing-cal input { width: 90px; }
 .drawing-status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); }
 .drawing figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+/* Материалы в работе — раздел карточки только для редакторов. */
+.research-materials { margin-top: 28px; padding: 12px 14px; border: 1px dashed var(--line); }
+.research-materials h2 { margin-top: 0; }
+.research-materials code { font-size: 12px; }
+.materials-folder > summary { display: flex; justify-content: space-between; gap: 12px; cursor: pointer; padding: 6px 0; border-bottom: 1px solid var(--line); }

@@ -20,6 +20,7 @@ import { siteFooter, siteHeader } from "../lib/siteHeader.ts";
 import { CATALOG_HIDDEN_ROOTS } from "../lib/entityTypes.ts";
 import { dayTitle, loadNews, newsDay, newsFeedHtml, newsNavHtml, newsNeighbours, newsOrder, newsTopics, sameDayHtml, topicHtml } from "../lib/news.ts";
 import { canSeeDrafts } from "../lib/auth.ts";
+import { materialsOf } from "./researchMaterials.ts";
 import { ApiError } from "../lib/errors.ts";
 import { type AppEnv, log } from "../lib/http.ts";
 import {
@@ -862,7 +863,57 @@ function newsHead(card: PublicCard, extra: NewsExtra): string {
     `<div class="kick">Новость<span class="sl">//</span>${topics.join("") || e(card.type_title)}</div>`;
 }
 
-function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<typeof citation>, news: NewsExtra | null = null) {
+/** Размер файла по-человечески. */
+function bytesText(n: number): string {
+  if (n >= 1e9) return `${num(Math.round(n / 1e8) / 10)} ГБ`;
+  if (n >= 1e6) return `${num(Math.round(n / 1e5) / 10)} МБ`;
+  return `${num(Math.max(1, Math.round(n / 1e3)))} КБ`;
+}
+
+type Materials = NonNullable<Awaited<ReturnType<typeof materialsOf>>>;
+
+/**
+ * «Материалы в работе» — только в карточке для редактора: папка в
+ * research_notes, что в ней собрано по подпапкам и что уже в медиатеке
+ * (по контрольной сумме). Гостевая страница этот раздел не получает.
+ */
+function materialsHtml(m: Materials | null): string {
+  const e = escapeHtml;
+  if (!m) {
+    return `<section class="research-materials"><h2>Материалы в работе <span class="badge">видят редакторы</span></h2>` +
+      `<p class="hint">Папка материалов не привязана. Привязать: <code>python tools/sync_materials.py --create &lt;слаг&gt;</code> ` +
+      `или <code>--link &lt;слаг&gt; &lt;папка&gt;</code>.</p></section>`;
+  }
+  const total = m.files.reduce((a, f) => a + Number(f.size_bytes), 0);
+  const inMedia = m.files.filter((f) => f.media_entity_id).length;
+  const groups = new Map<string, typeof m.files>();
+  for (const f of m.files) {
+    const top = f.path.includes("/") ? f.path.slice(0, f.path.indexOf("/")) : "";
+    if (!groups.has(top)) groups.set(top, []);
+    groups.get(top)!.push(f);
+  }
+  const synced = m.synced_at ? new Date(m.synced_at).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" }) : "ещё не было";
+  const blocks = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, "ru")).map(([top, files]) => {
+    const size = files.reduce((a, f) => a + Number(f.size_bytes), 0);
+    const rows = files.map((f) => {
+      const name = top ? f.path.slice(top.length + 1) : f.path;
+      const status = f.media_entity_id
+        ? `<a href="${e(entityPath(f.media_slug ?? String(f.media_entity_id)))}">в медиатеке${f.media_published ? "" : " · черновик"}</a>`
+        : `<span class="hint">собрано</span>`;
+      const date = f.modified_at ? new Date(f.modified_at).toLocaleDateString("ru-RU") : "";
+      return `<tr><td>${e(name)}</td><td class="num">${bytesText(Number(f.size_bytes))}</td><td>${e(date)}</td><td>${status}</td></tr>`;
+    }).join("");
+    return `<details class="materials-folder"><summary><span>${e(top || "в корне папки")}</span>` +
+      `<span class="hint">${files.length} · ${bytesText(size)}</span></summary>` +
+      `<div class="table-scroll"><table class="value-table"><tbody>${rows}</tbody></table></div></details>`;
+  }).join("");
+  return `<section class="research-materials"><h2>Материалы в работе <span class="badge">видят редакторы</span></h2>` +
+    `<p class="hint">Папка <code>research_notes/${e(m.path)}</code> · ${m.files.length} файлов, ${bytesText(total)} · ` +
+    `в медиатеке ${inMedia} · опись обновлена: ${e(synced)}</p>${blocks}</section>`;
+}
+
+function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<typeof citation>, news: NewsExtra | null = null,
+                  materials: Materials | null | undefined = undefined) {
   const e = escapeHtml;
   const parts: string[] = [];
   const editPath = `/entities/${card.id}/edit`;
@@ -1035,6 +1086,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     const same = sameDayHtml(news.sameDay, day);
     if (same) parts.push(`<aside class="pc-news-day">${same}</aside>`);
   }
+  // Материалы в работе — только в карточке для редактора (materials передан).
+  if (materials !== undefined) parts.push(materialsHtml(materials));
   parts.push(`</article>`);
   return parts.join("");
 }
@@ -1100,7 +1153,10 @@ pages.get("/api/v1/entities/:key/card", async (c) => {
   }) : "";
   const cite = citation({ title: card.title_ru, slug: card.slug, authors: card.authors,
     year: new Date(card.modified_at).getFullYear() });
-  return c.json({ html: cardBody(card, description, cite, await newsExtra(card)), title: `${card.title_ru} — ${site.name}`,
+  // Редактор видит и «Материалы в работе» (0051); остальным раздел не отдаётся.
+  const canEdit = !!principal && (principal.permissions.has("edit") || principal.permissions.has("su"));
+  const materials = canEdit ? await materialsOf(card.id) : undefined;
+  return c.json({ html: cardBody(card, description, cite, await newsExtra(card), materials), title: `${card.title_ru} — ${site.name}`,
     path: entityPath(card.slug) });
 });
 

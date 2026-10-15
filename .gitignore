@@ -25,3 +25,6 @@ web/dist-ssr/
 news-robot/.state/
 news-robot/out/
 news-robot/inbox/
+
+# Материалы в работе: кэш контрольных сумм описи (tools/sync_materials.py).
+research_notes/.materials-cache.json

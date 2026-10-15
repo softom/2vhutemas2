@@ -250,6 +250,17 @@ BlockNote: `entityCard` — блок с `entityId, occurrenceId`; `entityMention
 
 Публикация без revision_id выбирает рабочую редакцию; с UID — указанную полную редакцию владельца. Повторная публикация той же версии — 409. Исторические частичные версии не публикуются. Связанные самостоятельные сущности вместе с записью автоматически не публикуются.
 
+### Материалы в работе (0051)
+
+| Метод и путь | Доступ | Вход → результат |
+|---|---|---|
+| `GET /research-materials` | `edit` | Все привязанные папки: `{items:[{entity_id,slug,title_ru,path,synced_at,root,files}]}` |
+| `GET /entities/{id}/research-materials` | `edit` | `{path,synced_at,files:[{path,size_bytes,modified_at,sha256,media_entity_id,media_slug,media_published}]}`; без папки — `path: null` |
+| `PUT /entities/{id}/research-materials` | `edit` | `{path}` — путь от корня `research_notes`, без `..`; `path: null` или пусто — отвязать (файлы не трогаются) |
+| `PUT /entities/{id}/research-materials/files` | `edit` | `{files:[{path,size,modified?,sha256?}]}` — опись целиком: недостающие строки удаляются, `synced_at` обновляется → `{entity_id,files}` |
+
+Файлы на сервер не уходят — только путь и опись. Таблицы вне версий записи и не публикуются; раздел «Материалы в работе» есть только в `GET /entities/{key}/card` для редактора. Файл считается «в медиатеке», если его sha256 совпал с оригиналом файла медиатеки. Опись присылает `tools/sync_materials.py` (`--create`, `--link`, `--unlink`, `--list`, без ключей — обновить все папки).
+
 ## Публичные страницы вне v1
 
 `GET /`, `/about`, `/about/{section}`, `/about/logo/tool`, `/entities/{key}`, `/entities/{key}/edit`, `/robots.txt`, `/sitemap.xml`; списки `/entities`, `/projects`, `/people`, `/lectures` зарегистрированы циклом в pages.ts. Старые адреса «О проекте» и номера опубликованных карточек перенаправляются на canonical. HTML карточки — один общий рендер. Экраны `/login`, `/media`, `/media/*`, `/parameters` получают оболочку приложения. Статические `/models/*.html`, assets и favicon обслуживает Caddy; это не API. Маршрут ключа IndexNow появляется по конфигурации, а не фиксированному секрету в WIKI.
