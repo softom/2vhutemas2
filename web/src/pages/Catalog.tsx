@@ -78,6 +78,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [types, setTypes] = useState<EntityType[]>([]);
   const [hiddenRoots, setHiddenRoots] = useState<string[]>([]);
+  const [groupsByBranch, setGroupsByBranch] = useState<Capabilities["catalog_groups"]>({});
   const [parameters, setParameters] = useState<SuggestedParameter[]>([]);
   const [optionParameters, setOptionParameters] = useState<SuggestedParameter[]>([]);
   const [loading, setLoading] = useState(!initial);
@@ -86,6 +87,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
   // Состояние фильтров — из адреса; правка фильтра правит адрес.
   const type = search.get("type") ?? branch ?? "";
+  const group = search.get("g") ?? "";
   const query = search.get("q") ?? "";
   const parameter = search.get("by") ?? "";
   const min = search.get("min") ?? "";
@@ -106,6 +108,8 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   };
   // Смена типа сбрасывает величину и отбор по выбору: у другого типа они свои.
   const setType = (code: string) => update({ type: code, by: null, min: null, max: null, order: null, opt: null });
+  const setGroup = (code: string) =>
+    update({ g: code, type: null, by: null, min: null, max: null, order: null, opt: null });
   const setQuery = (value: string) => update({ q: value });
   const setParameter = (value: string) => update({ by: value, min: null, max: null });
   const setMin = (value: string) => update({ min: value });
@@ -123,6 +127,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       .then((caps: Capabilities) => {
         setTypes(caps.entity_types ?? []);
         setHiddenRoots(caps.catalog_hidden_roots ?? []);
+        setGroupsByBranch(caps.catalog_groups ?? {});
       })
       .catch(() => setTypes([]));
   }, []);
@@ -142,9 +147,24 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   // Те же кнопки, что рисует сервер (pages.ts, typeChips): дети ветви или корни
   // дерева без скрытых ветвей — правило одно, приходит в capabilities.
   // Пока список типов не пришёл, держим кнопки, вложенные сервером: без мигания.
-  const chips = types.length === 0 ? (initial?.chips ?? []) : branch
+  const directChips = branch
     ? types.filter((item) => item.parent === branch)
     : types.filter((item) => item.depth === 0 && !hiddenRoots.includes(item.code));
+  // Двухуровневый отбор (2026-10-17): в разделе с группами первый ряд —
+  // группы, второй — типы выбранной группы. Тип вне групп — в «Прочее».
+  const configured = (branch && groupsByBranch?.[branch]) || [];
+  const grouped = new Set(configured.flatMap((g) => g.types));
+  const rest = directChips.filter((t) => !grouped.has(t.code)).map((t) => t.code);
+  const groups = configured.length && rest.length
+    ? [...configured, { code: "other", title_ru: "Прочее", types: rest }]
+    : configured;
+  const activeGroup = groups.find((g) => g.code === group) ?? null;
+  const titleOf = (code: string) => types.find((t) => t.code === code)?.title_ru ?? code;
+  const firstRow = types.length === 0 ? (initial?.chips ?? []) : groups.length
+    ? groups.map((g) => ({ code: g.code, title_ru: g.title_ru }))
+    : directChips;
+  // Что спросить у API: выбранный тип, иначе все типы группы, иначе ветвь.
+  const apiType = (search.get("type") ? type : activeGroup?.types.join(",")) || type || undefined;
 
   // Сортировать можно по числовым величинам выбранной ветви: ради этого
   // параметры и заведены (Р-38).
@@ -173,7 +193,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
     setLoading(true);
     const timer = setTimeout(() => {
       api.entities({
-        type: type || undefined,
+        type: apiType,
         q: query || undefined,
         parameter: parameter || undefined,
         min: min || undefined,
@@ -196,13 +216,13 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [type, query, parameter, min, max, descending, optKey]);
+  }, [apiType, query, parameter, min, max, descending, optKey]);
 
   const loadMore = () => {
     if (!cursor) return;
     setLoadingMore(true);
     api.entities({
-      type: type || undefined,
+      type: apiType,
       q: query || undefined,
       parameter: parameter || undefined,
       min: min || undefined,
@@ -229,20 +249,40 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         </p>
       </div>
 
-      {/* Быстрый отбор — ближайшие ветви раздела; глубже — список ниже (Р-91). */}
-      <div className="type-chips" role="group" aria-label="Тип записи">
-        {[{ code: branch ?? "", title_ru: branch ? "Все в разделе" : "Все" }, ...chips].map((chip) => (
-          <button
-            key={chip.code || "all"}
-            type="button"
-            className={type === chip.code ? "on" : undefined}
-            aria-pressed={type === chip.code}
-            onClick={() => setType(chip.code)}
-          >
-            {chip.title_ru}
-          </button>
-        ))}
+      {/* Первый ряд — группы раздела (или ближайшие ветви, если групп нет);
+          второй — типы выбранной группы (Р-91, 2026-10-17). */}
+      <div className="type-chips" role="group" aria-label={groups.length ? "Группа" : "Тип записи"}>
+        {[{ code: "", title_ru: branch ? "Все в разделе" : "Все" }, ...firstRow].map((chip) => {
+          const on = groups.length || (types.length === 0 && initial?.chips?.length)
+            ? group === chip.code && (chip.code !== "" || !search.get("type"))
+            : (chip.code ? type === chip.code : type === (branch ?? ""));
+          return (
+            <button
+              key={chip.code || "all"}
+              type="button"
+              className={on ? "on" : undefined}
+              aria-pressed={!!on}
+              onClick={() => (groups.length ? setGroup(chip.code) : setType(chip.code || (branch ?? "")))}
+            >
+              {chip.title_ru}
+            </button>
+          );
+        })}
       </div>
+      {activeGroup && (
+        <div className="type-chips sub" role="group" aria-label="Тип записи">
+          {[{ code: "", title_ru: "Вся группа" }, ...activeGroup.types.map((code) => ({ code, title_ru: titleOf(code) }))]
+            .map((chip) => {
+              const on = chip.code ? search.get("type") === chip.code : !search.get("type");
+              return (
+                <button key={chip.code || "all"} type="button" className={on ? "on" : undefined} aria-pressed={on}
+                  onClick={() => (chip.code ? setType(chip.code) : update({ type: null, by: null, min: null, max: null, order: null, opt: null }))}>
+                  {chip.title_ru}
+                </button>
+              );
+            })}
+        </div>
+      )}
 
       <div className="filters">
         <input
@@ -250,15 +290,18 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <select value={type} onChange={(e) => setType(e.target.value)}>
-          <option value={branch ?? ""}>{branch ? "Все в разделе" : "Все типы"}</option>
-          {shown.filter((t) => t.code !== branch).map((t) => (
-            <option key={t.code} value={t.code}>
-              {"  ".repeat(Math.max(t.depth - depthShift, 0)) +
-                (t.depth - depthShift > 0 ? "– " : "") + t.title_ru}
-            </option>
-          ))}
-        </select>
+        {/* Глубже кнопок — список всех типов раздела (только там, где групп нет). */}
+        {!groups.length && (
+          <select value={type} onChange={(e) => setType(e.target.value)}>
+            <option value={branch ?? ""}>{branch ? "Все в разделе" : "Все типы"}</option>
+            {shown.filter((t) => t.code !== branch).map((t) => (
+              <option key={t.code} value={t.code}>
+                {"  ".repeat(Math.max(t.depth - depthShift, 0)) +
+                  (t.depth - depthShift > 0 ? "– " : "") + t.title_ru}
+              </option>
+            ))}
+          </select>
+        )}
         {optionParameters.map((item) => {
           const value = optionValue(item.parameter);
           const groups = OPTION_GROUPS[item.parameter] ?? [];

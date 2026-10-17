@@ -17,7 +17,7 @@ import type { Context } from "hono";
 import { sql } from "../lib/db.ts";
 import { entities } from "./entities.ts";
 import { siteFooter, siteHeader } from "../lib/siteHeader.ts";
-import { CATALOG_HIDDEN_ROOTS } from "../lib/entityTypes.ts";
+import { CATALOG_GROUPS, CATALOG_HIDDEN_ROOTS } from "../lib/entityTypes.ts";
 import { dayTitle, loadNews, newsDay, newsFeedHtml, newsNavHtml, newsNeighbours, newsOrder, newsTopics, sameDayHtml, topicHtml } from "../lib/news.ts";
 import { canSeeDrafts } from "../lib/auth.ts";
 import { materialsOf } from "./researchMaterials.ts";
@@ -277,6 +277,9 @@ interface TypeChip {
  * (Catalog.tsx): кнопки видны сразу, без ожидания клиента.
  */
 async function typeChips(branch: string | null): Promise<TypeChip[]> {
+  // В разделе с группами первый ряд — группы (как в Catalog.tsx).
+  const groups = branch ? CATALOG_GROUPS[branch] : undefined;
+  if (groups) return groups.map((g) => ({ code: g.code, title_ru: g.title_ru }));
   return await sql<TypeChip>`
     select ty.code, ty.title_ru
       from app.entity_types ty
@@ -317,8 +320,7 @@ function catalogHtml(title: string, lead: string, page: CatalogPage, branch: str
       `<div style="margin-top:8px"><span class="badge status${row.material_status === "published" ? "" : " draft"}">${row.material_status === "published" ? "опубликовано" : "черновик"}</span></div></a>`;
   }).join("");
   // Поиск и отбор работают в приложении; здесь они держат место.
-  const filters = `<div class="filters"><input placeholder="Поиск по названию" disabled />` +
-    `<select disabled><option>${escapeHtml(typeLabel)}</option></select></div>`;
+  const filters = `<div class="filters"><input placeholder="Поиск по названию" disabled /></div>`;
   // «</» внутри строки закрыл бы тег скрипта раньше времени.
   const data = JSON.stringify({ branch: branch ?? "", page, chips }).replaceAll("</", "<\\/");
   const count = listCountHtml(page.items.length, !!page.next_cursor);

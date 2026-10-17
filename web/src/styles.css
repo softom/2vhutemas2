@@ -833,3 +833,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .reader-lightbox.is-full figure { margin: 4px 0 0; }
 .reader-lightbox.is-full img { max-height: calc(100vh - 7em); cursor: zoom-out; }
 .reader-lightbox.is-full figcaption a { color: inherit; }
+
+/* Кнопки отбора не заходят за левую колонку; второй ряд — типы группы (2026-10-17). */
+.type-chips { max-width: var(--c1); }
+.type-chips.sub { margin-top: -6px; padding-left: 12px; border-left: 2px solid var(--accent); }
+.type-chips.sub button { height: 32px; padding: 0 10px; font-size: 12px; border-width: 1px; }

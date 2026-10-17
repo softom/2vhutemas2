@@ -357,6 +357,8 @@ export interface Capabilities {
   entity_types: EntityType[];
   /** Ветви вне общего каталога «Всё» и его кнопок отбора (сервер: CATALOG_HIDDEN_ROOTS). */
   catalog_hidden_roots?: string[];
+  /** Группы кнопок отбора по разделам: первый ряд каталога. */
+  catalog_groups?: Record<string, { code: string; title_ru: string; types: string[] }[]>;
   dictionaries: Record<string, { code: string; title_ru: string }[]>;
   /** Вид записи по типу: компоненты режимов compact, card и editor. */
   presentations?: Record<string, Record<string, { component: string; parameter: string | null }[]>>;

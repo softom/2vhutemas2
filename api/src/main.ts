@@ -29,7 +29,7 @@ import { search } from "./routes/search.ts";
 import { startSearchIndexer } from "./lib/search.ts";
 import { materials } from "./routes/materials.ts";
 import { pages } from "./routes/pages.ts";
-import { CATALOG_HIDDEN_ROOTS } from "./lib/entityTypes.ts";
+import { CATALOG_GROUPS, CATALOG_HIDDEN_ROOTS } from "./lib/entityTypes.ts";
 
 const app = new Hono<AppEnv>();
 
@@ -133,6 +133,7 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
     },
     entity_types: types,
     catalog_hidden_roots: CATALOG_HIDDEN_ROOTS,
+    catalog_groups: CATALOG_GROUPS,
     dictionaries: grouped,
     presentations,
   });

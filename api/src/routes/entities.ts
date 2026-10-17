@@ -169,7 +169,8 @@ entities.get("/", async (c: Context<AppEnv>) => {
     where (${drafts} or e.is_published)
       and (${archived} or e.status <> 'archived')
       and (${type}::text is null
-           or e.type_id in (select app.entity_type_subtree(${type})))
+           -- Несколько ветвей через запятую — группа кнопок каталога.
+           or e.type_id in (select s from unnest(string_to_array(${type}, ',')) x, app.entity_type_subtree(trim(x)) s))
       -- Тексты интерфейса проекта показываются в «О проекте», а изображения
       -- и документы — материалы о записях — в медиатеке и самих карточках:
       -- в общем каталоге они заслонили бы предметы (Р-84).
