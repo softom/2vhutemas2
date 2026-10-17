@@ -61,7 +61,7 @@ status: сверено с маршрутами API и миграциями 0026�
 
 | Метод и путь | Доступ | Вход → результат |
 |---|---|---|
-| `GET /entities` | чтение | Каталог, `items`, `next_cursor`; фильтры ниже |
+| `GET /entities` | чтение | Каталог, `items`, `next_cursor`. Фильтры: `type` (ветвь целиком), `q`, `parameter` + `min`/`max`/`sort=parameter`/`order`, `values`, `opt=<параметр>:<вариант>,<вариант>` (отбор по выбору, можно несколько `opt`; например `opt=competition_state:results,cancelled` — завершённые конкурсы) |
 | `GET /entities/{id}` | чтение | Также принимает текущий/прежний slug. Поля записи, `body_json`, `indicators`, `tags`, `media`, `sources`, `authors`, `compact`, `material_id`, указатели версий, `citation`, `canonical_url` |
 | `GET /entities/{key}/card` | чтение | JSON с HTML единственной карточки для авторизованного интерфейса |
 | `GET /entities/{id}/parameters` | чтение | Подсказки параметров ветви и индивидуальных наборов; параметр blocks исключён |

@@ -115,6 +115,13 @@ entities.get("/", async (c: Context<AppEnv>) => {
     (c.req.query("values") ?? "").split(",").map((code) => code.trim()).filter(Boolean),
   );
   const descending = c.req.query("order") === "desc";
+  // Отбор по значениям выбора: ?opt=competition_state:announced,open,jury —
+  // запись проходит, если значение параметра — один из вариантов. Несколько
+  // opt — все условия сразу (2026-10-17: «завершённые и активные конкурсы»).
+  const optionFilters = JSON.stringify((c.req.queries("opt") ?? []).map((raw) => {
+    const [code, list = ""] = raw.split(":", 2);
+    return { p: code.trim(), codes: list.split(",").map((x) => x.trim()).filter(Boolean) };
+  }).filter((f) => f.p && f.codes.length));
   const drafts = canSeeDrafts(principal);
   // Архив в каталоге не показывается: он не «ещё не готово», а «убрано».
   // Найти убранное можно явным запросом ?archived=1 — для восстановления.
@@ -170,6 +177,14 @@ entities.get("/", async (c: Context<AppEnv>) => {
            (select s from unnest(${CATALOG_HIDDEN_ROOTS}::text[]) r, app.entity_type_subtree(r) s))
       and (${search}::text is null or e.title_ru ilike ${"%" + (search ?? "") + "%"}
            or e.title_en ilike ${"%" + (search ?? "") + "%"})
+      and not exists (
+            select 1 from jsonb_array_elements(${optionFilters}::jsonb) f
+             where not exists (
+                   select 1 from app.parameters p
+                     join app.parameter_options o on o.parameter_id = p.id
+                    where p.code = f->>'p'
+                      and o.code in (select jsonb_array_elements_text(f->'codes'))
+                      and o.id = (app.snapshot_value(e.id, ${drafts}, p.id)->>'option_id')::uuid))
       and (${min}::numeric is null or pv.num_value >= ${min})
       and (${max}::numeric is null or pv.num_value <= ${max})
       and (${sortByValue} or ${after}::bigint is null or e.id > ${after})

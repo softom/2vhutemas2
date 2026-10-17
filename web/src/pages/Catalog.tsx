@@ -4,9 +4,13 @@
  * Одна и та же страница служит и общим каталогом, и разделами меню: «Проекты»
  * — это ветвь «Что» (Р-64), «Авторы» — ветвь «Кто». Отдельных механизмов для них не
  * заводим, меняется только начальная ветвь и заголовок (Р-37).
+ *
+ * Все фильтры живут в адресе страницы (2026-10-17: «сбросить ссылку на
+ * страницу с выборкой»): тип, поиск, величина и её границы, порядок и отбор
+ * по параметрам-выборам (?opt=competition_state:open,jury).
  */
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ListCount } from "../ui/ListCount";
 import { EntityTile } from "../ui/EntityTile";
 import {
@@ -37,6 +41,17 @@ let initialCatalog: {
     }
   })();
 
+/**
+ * Готовые группы вариантов для отбора: «активные» и «завершённые» конкурсы
+ * (2026-10-17). Остальные параметры-выборы отбираются по одному варианту.
+ */
+const OPTION_GROUPS: Record<string, { label: string; codes: string[] }[]> = {
+  competition_state: [
+    { label: "Активные", codes: ["announced", "open", "jury"] },
+    { label: "Завершённые", codes: ["results", "cancelled"] },
+  ],
+};
+
 function takeInitial(branch: string) {
   const found = initialCatalog && initialCatalog.branch === branch ? initialCatalog : null;
   initialCatalog = null;
@@ -52,7 +67,10 @@ interface Props {
 }
 
 export function Catalog({ canCreate, branch, title, sub }: Props) {
-  const [initial] = useState(() => takeInitial(branch ?? ""));
+  const [search, setSearch] = useSearchParams();
+  // Адрес с фильтрами — первая страница сервера (без фильтров) не подходит.
+  const filtered = [...search.keys()].length > 0;
+  const [initial] = useState(() => (filtered ? null : takeInitial(branch ?? "")));
   const [items, setItems] = useState<EntityListItem[]>(initial?.page.items ?? []);
   // Каталог отдаётся страницами; без этого записи за первой страницей
   // были не видны вовсе.
@@ -60,15 +78,45 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [types, setTypes] = useState<EntityType[]>([]);
   const [hiddenRoots, setHiddenRoots] = useState<string[]>([]);
-  const [type, setType] = useState(branch ?? "");
-  const [query, setQuery] = useState("");
   const [parameters, setParameters] = useState<SuggestedParameter[]>([]);
-  const [parameter, setParameter] = useState("");
-  const [min, setMin] = useState("");
-  const [max, setMax] = useState("");
-  const [descending, setDescending] = useState(false);
+  const [optionParameters, setOptionParameters] = useState<SuggestedParameter[]>([]);
   const [loading, setLoading] = useState(!initial);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Состояние фильтров — из адреса; правка фильтра правит адрес.
+  const type = search.get("type") ?? branch ?? "";
+  const query = search.get("q") ?? "";
+  const parameter = search.get("by") ?? "";
+  const min = search.get("min") ?? "";
+  const max = search.get("max") ?? "";
+  const descending = search.get("order") === "desc";
+  const opt = search.getAll("opt");
+  const optKey = opt.join("|");
+  const update = (changes: Record<string, string | string[] | null>) => {
+    const next = new URLSearchParams(search);
+    for (const [key, value] of Object.entries(changes)) {
+      next.delete(key);
+      for (const item of Array.isArray(value) ? value : value ? [value] : []) next.append(key, item);
+    }
+    // Раздел меню сам задаёт ветвь — её в адрес не пишем.
+    if (next.get("type") === (branch ?? "")) next.delete("type");
+    setSearch(next, { replace: true });
+    setCopied(false);
+  };
+  // Смена типа сбрасывает величину и отбор по выбору: у другого типа они свои.
+  const setType = (code: string) => update({ type: code, by: null, min: null, max: null, order: null, opt: null });
+  const setQuery = (value: string) => update({ q: value });
+  const setParameter = (value: string) => update({ by: value, min: null, max: null });
+  const setMin = (value: string) => update({ min: value });
+  const setMax = (value: string) => update({ max: value });
+  const setDescending = (value: boolean) => update({ order: value ? "desc" : null });
+  const optionValue = (code: string) => opt.find((item) => item.startsWith(code + ":"))?.slice(code.length + 1) ?? "";
+  const setOption = (code: string, value: string) =>
+    update({ opt: [...opt.filter((item) => !item.startsWith(code + ":")), ...(value ? [`${code}:${value}`] : [])] });
+  const copyLink = () => {
+    navigator.clipboard.writeText(location.href).then(() => setCopied(true)).catch(() => {});
+  };
 
   useEffect(() => {
     api.capabilities()
@@ -78,11 +126,6 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       })
       .catch(() => setTypes([]));
   }, []);
-
-  useEffect(() => {
-    setType(branch ?? "");
-    setQuery("");
-  }, [branch]);
 
   /** В разделе показываем только его ветвь: остальное дерево здесь лишнее. */
   const inBranch = (code: string): boolean => {
@@ -105,21 +148,24 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
   // Сортировать можно по числовым величинам выбранной ветви: ради этого
   // параметры и заведены (Р-38).
+  // Отбор по выбору — параметры-выборы типа: у конкурса «Состояние»,
+  // «Формат», «Для кого».
   useEffect(() => {
-    setParameter("");
     if (!type) {
       setParameters([]);
+      setOptionParameters([]);
       return;
     }
     api.parametersForType(type)
-      .then((result) =>
-        setParameters(
-          (result.items ?? []).filter((item) =>
-            item.value_type === "number" || item.value_type === "integer"
-          ),
-        )
-      )
-      .catch(() => setParameters([]));
+      .then((result) => {
+        const items = result.items ?? [];
+        setParameters(items.filter((item) => item.value_type === "number" || item.value_type === "integer"));
+        setOptionParameters(items.filter((item) => item.value_type === "option" && item.options.length > 0));
+      })
+      .catch(() => {
+        setParameters([]);
+        setOptionParameters([]);
+      });
   }, [type]);
 
   useEffect(() => {
@@ -134,6 +180,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         max: max || undefined,
         sort: parameter ? "parameter" : undefined,
         order: descending ? "desc" : "asc",
+        opt,
       })
         .then((page) => {
           if (!cancelled) {
@@ -149,7 +196,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [type, query, parameter, min, max, descending]);
+  }, [type, query, parameter, min, max, descending, optKey]);
 
   const loadMore = () => {
     if (!cursor) return;
@@ -162,6 +209,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       max: max || undefined,
       sort: parameter ? "parameter" : undefined,
       order: descending ? "desc" : "asc",
+      opt,
       cursor,
     })
       .then((page) => {
@@ -211,6 +259,28 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
             </option>
           ))}
         </select>
+        {optionParameters.map((item) => {
+          const value = optionValue(item.parameter);
+          const groups = OPTION_GROUPS[item.parameter] ?? [];
+          return (
+            <select key={item.parameter} value={value} title={item.title}
+              onChange={(e) => setOption(item.parameter, e.target.value)}>
+              <option value="">{item.title}: все</option>
+              {groups.map((g) => <option key={g.label} value={g.codes.join(",")}>{g.label}</option>)}
+              {item.options.map((o) => <option key={o.code} value={o.code}>{o.title}</option>)}
+            </select>
+          );
+        })}
+        {filtered && (
+          <>
+            <button type="button" className="ghost" onClick={copyLink} title="Ссылка на эту выборку">
+              {copied ? "Ссылка скопирована" : "Скопировать ссылку"}
+            </button>
+            <button type="button" className="ghost" onClick={() => { setSearch(new URLSearchParams(), { replace: true }); setCopied(false); }}>
+              Сбросить фильтры
+            </button>
+          </>
+        )}
         {canCreate && (
           <Link to={type ? `/entities/new?type=${type}` : "/entities/new"}>
             <button type="button">Создать запись</button>

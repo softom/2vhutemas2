@@ -569,9 +569,12 @@ export const api = {
       /** Коды величин, значения которых нужны в списке. */
       values?: string;
       limit?: string;
+      /** Отбор по выбору: «код_параметра:вариант,вариант». */
+      opt?: string[];
     },
   ) => {
     const search = new URLSearchParams();
+    for (const item of params.opt ?? []) search.append("opt", item);
     // Отбор по ветви целиком: корневая ветвь — это прежний фильтр по виду.
     if (params.type) search.set("type", params.type);
     if (params.q) search.set("q", params.q);

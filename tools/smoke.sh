@@ -79,6 +79,8 @@ contains "каталог рисует компактный вид" '"compact":['
 
 echo "── Объекты"
 check "каталог гостю" 200 "$(code $API/entities)"
+check "каталог: отбор по выбору" 200 "$(code "$API/entities?type=competition&opt=competition_state:results,cancelled")"
+missing "каталог: отбор по выбору отсекает лишнее" '"type":"architecture_object"' "$(body)"
 check "каталог под входом" 200 "$(code -H "$AUTH" $API/entities)"
 # Прежнее имя поля принимается как псевдоним корневой ветви (Р-37).
 C=$(curl -s -X POST -H "$AUTH" -H "$JSON" -d '{"kind":"object","slug":"smoke-proverka","title_ru":"smoke: проверка"}' $API/entities)
