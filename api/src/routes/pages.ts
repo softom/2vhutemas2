@@ -308,7 +308,7 @@ function catalogHtml(title: string, lead: string, page: CatalogPage, branch: str
   const cards = page.items.map((row, index) => {
     const view = compactParts(row.compact);
     // Первая плашка мозаики крупная — ей нужен экранный размер снимка (Р-91).
-    const url = compactPicture(view, index === 0 ? "page" : "thumbnail");
+    const url = compactPicture(view, index === 0 ? "screen" : "thumbnail");
     const picture = !view.picture ? "" : url
       ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" />`
       : `<div class="card-no-cover">без изображения</div>`;
@@ -1011,7 +1011,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } })();
       const platform = /youtu\.?be/.test(host) ? "YouTube" : /vk\.com|vkvideo/.test(host) ? "VK Видео" : /rutube/.test(host) ? "Rutube" : host;
       const own = card.media[0];
-      const cover = own ? mediaUrl(own.asset_id, "page") : card.video_cover;
+      const cover = own ? mediaUrl(own.asset_id, "screen") : card.video_cover;
       const credit = own ? null : [channel, platform].filter(Boolean).join(" · ");
       return `<h2>Видео</h2><figure class="video-cover">` +
         (cover ? `<a href="${e(url)}" rel="noopener"><img src="${e(cover)}" alt="${e(card.title_ru)}" loading="lazy" /></a>` : "") +
@@ -1026,7 +1026,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     // Изображение — цитата (Р-68): под каждым автор и источник.
     gallery: () => card.media.length === 0 ? "" :
       `<h2>Изображения</h2><div class="public-gallery">${
-        card.media.map((m) => figureHtml(mediaUrl(m.asset_id, "page"), m.caption ?? card.title_ru, m)).join("")
+        card.media.map((m) => figureHtml(mediaUrl(m.asset_id, "screen"), m.caption ?? card.title_ru, m)).join("")
       }</div>`,
     // Чертежи — просмотр DXF с замерами (скрипт страницы подключает его, когда
     // раздел попадает на экран). Подпись — как у цитаты (Р-68): автор,

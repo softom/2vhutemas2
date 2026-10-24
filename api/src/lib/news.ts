@@ -165,7 +165,7 @@ function kicker(row: NewsRow): string {
 
 function picture(row: NewsRow, large: boolean): string {
   const view = compactParts(row.compact);
-  const url = compactPicture(view, large ? "page" : "thumbnail");
+  const url = compactPicture(view, large ? "screen" : "thumbnail");
   // Нет снимка — нет и места под него: заглушка во всю ширину тяжелее пустоты.
   return url
     ? `<a class="news-pic" href="${e(entityPath(row.slug))}" tabindex="-1" aria-hidden="true"><img src="${e(url)}" alt="" loading="lazy" /></a>`

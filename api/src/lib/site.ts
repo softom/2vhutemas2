@@ -38,7 +38,7 @@ export function absolute(path: string): string {
 }
 
 /** Файл медиатеки, доступный без входа: для og:image и изображений в разметке. */
-export function mediaUrl(assetId: string, variant: "screen" | "page" | "thumbnail" | "original" = "screen"): string {
+export function mediaUrl(assetId: string, variant: "screen" | "thumbnail" | "original" = "screen"): string {
   return absolute(`/api/v1/media/${assetId}/file?variant=${variant}`);
 }
 

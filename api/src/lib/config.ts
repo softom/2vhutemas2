@@ -48,12 +48,10 @@ export const config = {
       "MEDIA_ALLOWED_MIME",
       "image/jpeg,image/png,image/gif,image/webp,image/avif,image/tiff,image/heic,application/pdf,video/mp4,image/vnd.dxf",
     ).split(",").map((t) => t.trim()),
-    screenMaxEdge: Number(optional("MEDIA_SCREEN_MAX_EDGE", "2560")),
-    /** Вариант для колонки страницы (0053): ~550 px колонки × 2,5 для плотных экранов. */
-    pageMaxEdge: Number(optional("MEDIA_PAGE_MAX_EDGE", "1400")),
+    screenMaxEdge: Number(optional("MEDIA_SCREEN_MAX_EDGE", "1600")),
     thumbnailMaxEdge: Number(optional("MEDIA_THUMBNAIL_MAX_EDGE", "400")),
     quality: Number(optional("MEDIA_QUALITY", "82")),
-    recipeVersion: optional("MEDIA_RECIPE_VERSION", "v1"),
+    recipeVersion: optional("MEDIA_RECIPE_VERSION", "v2"),
   },
   /**
    * Поиск (Р-109). Векторы — через Polza.AI; без ключа поиск только по словам.

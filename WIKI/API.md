@@ -191,7 +191,7 @@ BlockNote: `entityCard` — блок с `entityId, occurrenceId`; `entityMention
 | `POST /media` | `create_delete` | multipart с `file` → файл и новая запись-изображение; варианты создаются сервером |
 | `GET /media/{id}` | чтение | Файл, его entity_id, сведения и варианты |
 | `PATCH /media/{id}` | `edit` | JSON сведений; `visibility: public/private` меняет публикацию записи |
-| `GET /media/{id}/file` | чтение/медиа-cookie | `variant=thumbnail/page/screen/original` (по умолчанию screen; `page` — до 1400 px для колонки страницы, у старых файлов создаётся при первом запросе, 0053); бинарный файл, готовность и доступ проверяются |
+| `GET /media/{id}/file` | чтение/медиа-cookie | `variant=thumbnail/screen/original` (по умолчанию screen); бинарный файл, готовность и доступ проверяются |
 | `POST /media/{id}/derivatives` | `edit` | Повтор генерации из неизменного оригинала |
 | `POST /media/attachments` | `edit` | `{entity_id, asset_id, role?}` → `{attachment_id, link_id}`; создаёт опубликованную связь illustration |
 | `PUT /media/attachments/order` | `edit` | `{entity_id, order:[ID связи]}`; переставляет и публикует редакции связей |

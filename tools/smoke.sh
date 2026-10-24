@@ -165,7 +165,6 @@ check "загрузка файла" "да" "$([ -n "$AID" ] && echo да || echo
 contains "превью готово" '"thumbnail"' "$A"
 check "приватный файл гостю" 404 "$(code "$API/media/$AID/file?variant=thumbnail")"
 check "файл под входом" 200 "$(code -H "$AUTH" "$API/media/$AID/file?variant=thumbnail")"
-check "вариант для колонки страницы (0053)" 200 "$(code -H "$AUTH" "$API/media/$AID/file?variant=page")"
 # Ссылки на автора и источник — задача редактора, а не запрет (Р-68):
 # файл публикуется и без них, но попадает в список ждущих ссылок.
 check "файл без ссылок публикуется" 200 "$(code -X PATCH -H "$AUTH" -H "$JSON" -d '{"visibility":"public"}' $API/media/$AID)"

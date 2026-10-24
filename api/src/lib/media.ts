@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { config } from "./config.ts";
 import { ApiError } from "./errors.ts";
 
-export type Variant = "original" | "screen" | "page" | "thumbnail";
+export type Variant = "original" | "screen" | "thumbnail";
 
 /** Обёртка над ImageMagick: см. Dockerfile, она чинит пути к библиотекам. */
 const MAGICK = "/usr/local/bin/magickw";
@@ -158,8 +158,6 @@ export async function makeDerivative(
   const source = `${config.media.root}/${originalKey}`;
   const maxEdge = variant === "screen"
     ? config.media.screenMaxEdge
-    : variant === "page"
-    ? config.media.pageMaxEdge
     : config.media.thumbnailMaxEdge;
   const storageKey = `derived/${assetId}/${variant}-${config.media.recipeVersion}.webp`;
   const target = `${config.media.root}/${storageKey}`;
@@ -168,7 +166,7 @@ export async function makeDerivative(
   // Анимированный GIF: экранная версия сохраняет движение (анимированный
   // WebP, все кадры), превью — первый кадр. У прочих форматов — первый кадр
   // или первая страница.
-  const animated = originalKey.endsWith(".gif") && variant !== "thumbnail";
+  const animated = originalKey.endsWith(".gif") && variant === "screen";
   const result = await run(MAGICK, animated
     ? [
       source,

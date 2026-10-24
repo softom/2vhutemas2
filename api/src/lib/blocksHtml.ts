@@ -51,7 +51,7 @@ export function compactParts(compact: CompactItem[] | undefined) {
 }
 
 /** Адрес изображения компактного вида: файл медиатеки или внешний кадр. */
-export function compactPicture(parts: ReturnType<typeof compactParts>, variant: "thumbnail" | "page" | "screen"): string | null {
+export function compactPicture(parts: ReturnType<typeof compactParts>, variant: "thumbnail" | "screen"): string | null {
   return parts.image ? mediaUrl(parts.image, variant) : parts.src;
 }
 
@@ -75,7 +75,7 @@ function compactCard(target: RefTarget, note: string): string {
     parts.mark ? SOURCE_MARK : ""}${escapeHtml(target.title)}</a>` +
     (kind ? `<div class="entity-card-kind">${escapeHtml(kind)}</div>` : "") +
     (note ? `<div class="entity-card-note">${escapeHtml(note)}</div>` : "") + `</div>`;
-  const url = compactPicture(parts, "page");
+  const url = compactPicture(parts, "screen");
   return url
     ? `<div class="entity-card with-cover${shape}"><img src="${escapeHtml(url)}" alt="" loading="lazy" />${text}</div>`
     : `<div class="entity-card${shape}">${text}</div>`;
@@ -255,7 +255,7 @@ function block(item: Block, ctx: RenderContext): string {
       // Вставка в тексте подписана так же, как в галерее: своя подпись блока,
       // иначе — подпись записи «Изображение», и всегда «Автор · Источник» (Р-68).
       const caption = String(props.caption || credit?.caption || "");
-      if (credit) return figureHtml(mediaUrl(assetId, "page"), caption, credit);
+      if (credit) return figureHtml(mediaUrl(assetId), caption, credit);
       return caption ? `<p>${escapeHtml(caption)}</p>` : "";
     }
     case "modelEmbed":

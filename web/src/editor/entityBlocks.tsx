@@ -157,7 +157,7 @@ function EntityCardView({ props }: { props: Record<string, string> }) {
   });
   // Изображение, его форма, знак и значения — по компактному виду типа.
   const view = compactParts(card.compact);
-  const cover = compactPicture(view, "page");
+  const cover = compactPicture(view, "screen");
   const href = `/entities/${props.entityId}`;
   const open = useInAppLink(href);
 

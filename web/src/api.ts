@@ -162,7 +162,7 @@ export function compactParts(compact: CompactItem[] | undefined) {
 /** Адрес изображения компактного вида: файл медиатеки или внешний кадр. */
 export function compactPicture(
   view: ReturnType<typeof compactParts>,
-  variant: "thumbnail" | "page" | "screen",
+  variant: "thumbnail" | "screen",
 ): string | null {
   return view.image ? api.mediaFileUrl(view.image, variant) : view.src;
 }
@@ -807,7 +807,7 @@ export const api = {
     request<MediaAsset>("/media", { method: "POST", body: form }),
   updateMedia: (id: string, body: unknown) =>
     request<MediaAsset>(`/media/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  mediaFileUrl: (id: string, variant: "thumbnail" | "page" | "screen" | "original") =>
+  mediaFileUrl: (id: string, variant: "thumbnail" | "screen" | "original") =>
     `${API_BASE}/media/${id}/file?variant=${variant}`,
 };
 
