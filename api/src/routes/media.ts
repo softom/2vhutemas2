@@ -285,8 +285,51 @@ media.post("/", async (c: Context<AppEnv>) => {
   return c.json(result, 201);
 });
 
+/** Записать готовую производную как текущую. */
+async function saveDerivative(assetId: string, variant: Exclude<Variant, "original">, derived: Awaited<ReturnType<typeof makeDerivative>>) {
+  await transaction(null, async (tx) => {
+    await tx`
+      update app.media_files set is_current = false
+      where asset_id = ${assetId} and variant = ${variant} and is_current
+    `;
+    await tx`
+      insert into app.media_files (asset_id, variant, source_file_id, storage_key, mime_type,
+                                   size_bytes, width, height, sha256, status, recipe_version,
+                                   transform_params, generated_at)
+      values (${assetId}, ${variant},
+              (select id from app.media_files
+                where asset_id = ${assetId} and variant = 'original' and is_current),
+              ${derived.storageKey}, ${derived.mimeType}, ${derived.sizeBytes},
+              ${derived.width}, ${derived.height}, ${derived.sha256}, 'ready', 'v1',
+              ${JSON.stringify({ variant, recipe: config.media.recipeVersion })}::jsonb, now())
+    `;
+  });
+}
+
+/**
+ * Вариант «page» у файлов, загруженных до 0053, создаётся при первом
+ * запросе. Одновременные запросы одного файла ждут одной работы.
+ */
+const pending = new Map<string, Promise<void>>();
+async function ensurePage(assetId: string): Promise<boolean> {
+  const original = await sql<{ storage_key: string; mime_type: string }>`
+    select storage_key, mime_type from app.media_files
+     where asset_id = ${assetId} and variant = 'original' and is_current and status = 'ready'
+  `;
+  if (!original[0] || !canDerive(original[0].mime_type)) return false;
+  let job = pending.get(assetId);
+  if (!job) {
+    job = makeDerivative(original[0].storage_key, assetId, "page")
+      .then((derived) => saveDerivative(assetId, "page", derived))
+      .finally(() => pending.delete(assetId));
+    pending.set(assetId, job);
+  }
+  await job;
+  return true;
+}
+
 async function generateDerivatives(assetId: string, originalKey: string, requestId: string) {
-  for (const variant of ["screen", "thumbnail"] as const) {
+  for (const variant of ["screen", "page", "thumbnail"] as const) {
     try {
       const derived = await makeDerivative(originalKey, assetId, variant);
       await transaction(null, async (tx) => {
@@ -336,12 +379,12 @@ media.get("/:id", async (c: Context<AppEnv>) => {
 media.get("/:id/file", async (c: Context<AppEnv>) => {
   const principal = c.get("principal");
   const assetId = c.req.param("id") ?? "";
-  const variant = (c.req.query("variant") ?? "screen") as Variant;
-  if (!["original", "screen", "thumbnail"].includes(variant)) {
+  let variant = (c.req.query("variant") ?? "screen") as Variant;
+  if (!["original", "screen", "page", "thumbnail"].includes(variant)) {
     throw new ApiError("validation_failed", "Неизвестный вариант файла");
   }
 
-  const rows = await sql<{ storage_key: string; mime_type: string; status: string; published: boolean }>`
+  const find = () => sql<{ storage_key: string; mime_type: string; status: string; published: boolean }>`
     select f.storage_key, f.mime_type, f.status, e.status = 'published' as published
       from app.media_files f
       join app.media_assets a on a.id = f.asset_id
@@ -349,6 +392,13 @@ media.get("/:id/file", async (c: Context<AppEnv>) => {
      where f.asset_id = ${assetId} and f.variant = ${variant} and f.is_current
        and a.archived_at is null and e.status <> 'archived'
   `;
+  let rows = await find();
+  // «page» ещё нет (файл загружен до 0053) — создаём; не вышло — экранный.
+  if (!rows[0] && variant === "page") {
+    const made = await ensurePage(assetId).catch(() => false);
+    if (!made) variant = "screen";
+    rows = await find();
+  }
   const row = rows[0];
   if (!row) throw new ApiError("not_found", "Вариант файла не найден");
   if (row.status !== "ready") {

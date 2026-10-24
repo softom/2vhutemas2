@@ -21,7 +21,7 @@ interface Props {
 
 export function EntityTile({ title, kind, compact, href, large, children }: Props) {
   const view = compactParts(compact);
-  const picture = compactPicture(view, large ? "screen" : "thumbnail");
+  const picture = compactPicture(view, large ? "page" : "thumbnail");
   const className = view.portrait ? "card portrait" : "card";
   const body = (
     <>
