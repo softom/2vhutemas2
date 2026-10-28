@@ -9,7 +9,8 @@
 Перед запуском: https://www.dropbox.com/developers/apps → Create app →
 Scoped access → доступ, имя 2VHUTEMAS. Вкладка Permissions: отметить
 files.metadata.read, files.metadata.write и files.content.write
-(создание папки Dropbox считает записью) → Submit. Вкладка Settings:
+(создание папки Dropbox считает записью), sharing.read и sharing.write
+(ссылки на файлы для сайта) → Submit. Вкладка Settings:
 App key и App secret.
 
 Корень папок определяется сам: если в Dropbox есть /2VHUTEMAS (доступ
@@ -53,8 +54,16 @@ secret = from_clipboard("App secret")
 url = "https://www.dropbox.com/oauth2/authorize?" + urllib.parse.urlencode(
     {"client_id": key, "response_type": "code", "token_access_type": "offline"})
 print("\nОткрывается страница Dropbox: нажмите «Разрешить» и скопируйте код.")
+print("Если после входа в Dropbox страница потерялась, откройте этот адрес в браузере,\n"
+      "где вы уже вошли в Dropbox:\n  " + url)
 webbrowser.open(url)
-code = from_clipboard("код со страницы Dropbox")
+# Код одноразовый и не секрет: его можно вставить прямо сюда (правый щелчок
+# или Ctrl+V); пустой Enter — взять из буфера обмена.
+code = input("Вставьте код и нажмите Enter (пустой Enter — из буфера): ").strip()
+if not code:
+    code = from_clipboard("код со страницы Dropbox")
+elif not re.fullmatch(r"[A-Za-z0-9_\-.]{8,}", code):
+    sys.exit("Это не похоже на код Dropbox: ожидаются латинские буквы и цифры.")
 
 try:
     token = post("https://api.dropboxapi.com/oauth2/token", {
@@ -67,7 +76,8 @@ if not refresh:
 
 # Права ключа фиксируются в момент разрешения: без нужных — ничего не пишем.
 granted = set((token.get("scope") or "").split())
-missing = {"files.metadata.read", "files.metadata.write", "files.content.write"} - granted
+missing = {"files.metadata.read", "files.metadata.write", "files.content.write",
+           "sharing.read", "sharing.write"} - granted
 if missing:
     sys.exit(f"У ключа нет прав: {', '.join(sorted(missing))}. В App Console этого приложения "
              "(App key — тот, что вы копировали) на вкладке Permissions отметьте их, нажмите Submit "

@@ -1,0 +1,71 @@
+[
+  {
+    "uid": "f348d756-81ef-41a6-ade3-9313f5255092",
+    "title": "results",
+    "url": "https://forgemind.net/media/台北藝術中心taipei-performing-arts-center競圖結果公布-由-rem-koolhaas-oma-勝出/",
+    "local_path": null,
+    "status": "failed",
+    "error": "406 Client Error: Not Acceptable for url: https://forgemind.net/media/%E5%8F%B0%E5%8C%97%E8%97%9D%E8%A1%93%E4%B8%AD%E5%BF%83taipei-performing-arts-center%E7%AB%B6%E5%9C%96%E7%B5%90%E6%9E%9C%E5%85%AC%E5%B8%83-%E7%94%B1-rem-koolhaas-oma-%E5%8B%9D%E5%87%BA/"
+  },
+  {
+    "uid": "7e4be5a4-d992-4365-ba2a-404dc8414036",
+    "title": "jakob",
+    "url": "https://www.designboom.com/architecture/jakob-macfarlane-dominique-jakob-tpac-taipei-performing-art-center-proposal/",
+    "local_path": "files/finalists/jakob.html",
+    "status": "downloaded",
+    "bytes": 169302,
+    "sha256": "58895850114c766599494682bdf3a21203c982dd13332c02939586b81676320f"
+  },
+  {
+    "uid": "20a28dd6-ebdb-41e4-a010-a54c66b9e1c7",
+    "title": "abalos",
+    "url": "https://www.archdaily.com/12843/abalossentkiewicz-project-for-the-taipei-performing-arts-centre",
+    "local_path": "files/finalists/abalos.html",
+    "status": "downloaded",
+    "bytes": 752015,
+    "sha256": "cf0942a57b5d8c43833f481b1b1bc703a46d4ba967dd2a2eec95e79b6f435982"
+  },
+  {
+    "uid": "dfc37891-04db-4e6e-b742-adf1fd85de41",
+    "title": "abalos-engineer",
+    "url": "https://www.klcse.com/taipei-performing-art-center.html",
+    "local_path": null,
+    "status": "failed",
+    "error": "403 Client Error: Forbidden for url: https://www.klcse.com/taipei-performing-art-center.html"
+  },
+  {
+    "uid": "cbdd4a96-4ed3-4cdd-84f4-3d299f552a81",
+    "title": "abalos-pdf",
+    "url": "https://www.arauacustica.com/files/noticias/pdf_esp_312.pdf",
+    "local_path": null,
+    "status": "failed",
+    "error": "403 Client Error: Forbidden for url: https://www.arauacustica.com/files/noticias/pdf_esp_312.pdf"
+  },
+  {
+    "uid": "d995cdb5-4b91-4c75-8c2c-19a5e6dc22c9",
+    "title": "morphosis",
+    "url": "https://www.morphosis.com/architecture/42/",
+    "local_path": "files/finalists/morphosis.html",
+    "status": "downloaded",
+    "bytes": 1464,
+    "sha256": "620de3c98b4b6df15cb890af3bc02bfef1fe3162b1f4757bda6baf3903420c13"
+  },
+  {
+    "uid": "af821b1b-bc8d-43f6-beeb-4428c971e6c4",
+    "title": "shortlist",
+    "url": "https://www.e-architect.com/taiwan/performing-arts-centre-taipei",
+    "local_path": "files/finalists/shortlist.html",
+    "status": "downloaded",
+    "bytes": 64308,
+    "sha256": "c795153a270130209ed034db703fa9ed641461dba8813ee17b7579d90bd6d99e"
+  },
+  {
+    "uid": "a89107e5-f022-4957-bdce-73cecc8c0046",
+    "title": "awards",
+    "url": "https://akichiatlas.com/en/archives/taipei_performing_arts.php",
+    "local_path": "files/finalists/awards.html",
+    "status": "downloaded",
+    "bytes": 22696,
+    "sha256": "026704f1ec30d4a00953398eb312c7a580b2b8278dd7af303c443c3346f9a4de"
+  }
+]
