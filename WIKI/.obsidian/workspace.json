@@ -20,8 +20,21 @@
               "icon": "lucide-file",
               "title": "Описание проекта"
             }
+          },
+          {
+            "id": "cb3eee1c89c7f2e8",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.14.4"
+              },
+              "icon": "lucide-book-up",
+              "title": "примечания к выпуску 1.14.4"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -188,7 +201,7 @@
       "bases:Создать новую базу": false
     }
   },
-  "active": "a8f13fb08152fa66",
+  "active": "cb3eee1c89c7f2e8",
   "lastOpenFiles": [
     "Лекция об архитектурном ПО — план 2026-10-05.md.tmp.80748.6c6f6ebdf23a",
     "Лекция об архитектурном ПО — план 2026-10-05.md.tmp.80748.66a59fadfb55",
