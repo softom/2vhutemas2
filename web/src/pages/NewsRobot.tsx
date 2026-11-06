@@ -67,7 +67,8 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       const [o, h] = await Promise.all([api.robotOverview(), api.robotHealth().catch(() => null)]);
       setOv(o);
       setHealth(h);
-      preparing.current = o.queue.items.some((i) => !["готово", "ошибка"].includes(o.prepared[i.story_key]?.status ?? ""))
+      preparing.current = Boolean(o.retriage_queued || o.retriage_status?.running)
+        || o.queue.items.some((i) => !["готово", "ошибка"].includes(o.prepared[i.story_key]?.status ?? ""))
         || Object.values(o.prepared).some((p) => Boolean(p.cover?.pending)
           || ["промпт готовится", "генерируется"].includes(p.cover?.status ?? ""));
       const id = runId ?? o.runs[0]?.id ?? null;
@@ -128,7 +129,7 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       {status && <p className="notice">{status}</p>}
       {ov && !ov.connected && <p className="notice">Папки робота на сервере не подключены к API.</p>}
       {ov && run && <Progress ov={ov} run={run} />}
-      {ov && run && section === "" && <Overview ov={ov} run={run} />}
+      {ov && run && section === "" && <Overview ov={ov} run={run} act={act} />}
       {ov && run && section === "news" && <News ov={ov} run={run} act={act} />}
       {section === "resonance" && <Resonance />}
       {ov && section === "stack" && <Stack ov={ov} act={act} />}
@@ -229,12 +230,12 @@ function Progress({ ov, run }: { ov: RobotOverview; run: RobotRunView }) {
   );
 }
 
-function Overview({ ov, run }: { ov: RobotOverview; run: RobotRunView }) {
+function Overview({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act }) {
   const openRecs = ov.candidates.filter((c) => OPEN.has(c.status)).length;
   return (
     <>
       <ul>
-        <li><Link to="/robot/news">Новости</Link>: историй {run.candidates.length}, переведено {run.news.filter((n) => n.news).length}</li>
+        <li><Link to="/robot/news">Новости</Link>: историй в прогоне {run.candidates.length}, в промежуточной БД (30 дней) — {ov.prompt_view?.pool?.candidates_count ?? "—"}, переведено {run.news.filter((n) => n.news).length}</li>
         <li><Link to="/robot/stack">Стек</Link>: в стеке {ov.queue.items.length}</li>
         <li><Link to="/robot/sites">Сайты</Link>: включено {ov.sources.filter((s) => s.enabled).length} из {ov.sources.length}</li>
         <li><Link to="/robot/recs">Рекомендации</Link>: ждут решения {openRecs}</li>
@@ -242,6 +243,7 @@ function Overview({ ov, run }: { ov: RobotOverview; run: RobotRunView }) {
       </ul>
       <h2>Как робот понимает ваш выбор</h2>
       <Learning learned={ov.learned} />
+      <TrainPromptBox ov={ov} act={act} defaultOpen />
     </>
   );
 }
@@ -250,12 +252,12 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const inStack = new Set(ov.queue.items.map((i) => i.story_key));
   const pendingVerdict = Object.fromEntries(ov.pending.filter((p) => p.action === "judge" && p.story_key)
     .map((p) => [p.story_key!, p.verdict]));
-  // Истории из всех прогонов за две недели (Р-105); пока список не пришёл — текущий прогон.
+  // Истории из промежуточной БД за 30 дней (новости старше месяца удаляются из БД для оценки).
   type Row = RobotStory & { partial?: boolean; run_id?: string; run_started?: string; written?: boolean };
   const [stories, setStories] = useState<Row[] | null>(null);
   useEffect(() => {
-    api.robotStories(14).then((r) => setStories(r.items)).catch(() => setStories(null));
-  }, [run.id, run.candidates.length, ov.queue.items.length]);
+    api.robotStories(30).then((r) => setStories(r.items)).catch(() => setStories(null));
+  }, [run.id, run.candidates.length, ov.queue.items.length, ov.retriage_status?.finished_at, ov.prompt_view?.updated_at]);
   const runRows: Row[] = run.candidates.length ? run.candidates : run.partial.map((p) => ({
     story_key: p.story_key ?? p.id ?? "", final: p.interest ?? 0, interest: p.interest ?? 0, title_ru: p.title_ru ?? p.title ?? "",
     topic: p.topic, kind: p.kind, reason: p.reason, competition: p.competition,
@@ -323,9 +325,10 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       })}
       <h2>Отбор и ранжирование</h2>
       <p className="hint">
-        Истории всех прогонов за две недели, одна строка на историю. Просмотренные — с вашим «Да / Нет» или в стеке —
-        скрыты; их видно во вкладке «Просмотренные».
+        Промежуточная БД собранных новостей за последние 30 дней (новости старше месяца удаляются из базы автоматически).
+        Просмотренные — с вашим «Да / Нет» или в стеке — скрыты; их видно во вкладке «Просмотренные».
       </p>
+      <TrainPromptBox ov={ov} act={act} />
       <div className="robot-tabs filters">
         {([["new", "Непросмотренные"], ["seen", "Просмотренные"], ["all", "Все"]] as const).map(([code, title]) => (
           <a key={code} href="#" className={view === code ? "active" : undefined}
@@ -1297,6 +1300,118 @@ function Learning({ learned }: { learned: RobotLearned | null }) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Наглядность отбора: полный промпт train (triage), промежуточная БД за 30 дней и переоценка базы новым промптом.
+ */
+function TrainPromptBox({ ov, act, defaultOpen = false }: { ov: RobotOverview; act: Act; defaultOpen?: boolean }) {
+  const pv = ov.prompt_view;
+  const rs = ov.retriage_status;
+  const busy = Boolean(ov.retriage_queued || rs?.running);
+  const [profileText, setProfileText] = useState(pv?.profile_text ?? ov.learned?.profile_text ?? "");
+  const [template, setTemplate] = useState(pv?.template ?? "");
+  const [mode, setMode] = useState<"unjudged" | "all">("unjudged");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pv?.profile_text && !profileText) setProfileText(pv.profile_text);
+    if (pv?.template && !template) setTemplate(pv.template);
+  }, [pv?.profile_text, pv?.template]);
+
+  const submit = async (opts: { recalibrate?: boolean; prompt_only?: boolean }) => {
+    setMsg("отправляем запрос роботу…");
+    try {
+      await api.robotRetriage({
+        profile_text: profileText.trim() || undefined,
+        triage_template: template.trim() || undefined,
+        mode,
+        recalibrate: opts.recalibrate,
+        prompt_only: opts.prompt_only,
+      });
+      setMsg(opts.prompt_only
+        ? "Промпт передан роботу — обновится в течение минуты."
+        : "Запрос передан роботу: он начнёт переоценку базы в течение минуты.");
+      await act(async () => {});
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  };
+
+  const pool = pv?.pool;
+  return (
+    <details className="block" open={defaultOpen || busy}>
+      <summary>
+        <b>Промпт отбора (train) и промежуточная база за 30 дней</b>
+        {pool && (
+          <span className="hint">
+            {" "}· в БД за {pool.window_days} дн.: материалов {pool.items_count}, историй {pool.candidates_count}
+            {pool.pruned_count ? `, удалено старше месяца ${pool.pruned_count}` : ""}
+            {pool.last_retriage_at ? ` · переоценка ${when(pool.last_retriage_at)}` : ""}
+          </span>
+        )}
+        {busy && <span style={{ color: "var(--accent)" }}> · идёт переоценка…</span>}
+      </summary>
+      {busy && (
+        <p className="notice">
+          <b>{rs?.running ? `${rs.stage ?? "Переоценка базы"}: ${rs.done ?? 0} / ${rs.total ?? "—"}` : "Запрос в очереди у робота (возьмёт в течение минуты)…"}</b>
+        </p>
+      )}
+      {rs && !rs.running && rs.finished_at && (
+        <p className="hint">
+          Последняя операция ({when(rs.finished_at)}): {rs.error ? <span className="error">{rs.error}</span> : `${rs.stage ?? "готово"}, оценено материалов: ${rs.done ?? 0}, историй в пуле: ${rs.candidates ?? pool?.candidates_count ?? "—"}`}
+        </p>
+      )}
+      <p className="hint">
+        Собранные из лент новости хранятся в промежуточной базе 30 дней (материалы старше месяца удаляются автоматически).
+        Вы можете прочитать полный промпт отбора (train), изменить профиль вкуса или шаблон промпта и переоценить базу новостей.
+      </p>
+      {pv?.full_prompt && (
+        <details style={{ marginBottom: "0.75rem" }}>
+          <summary><b>Прочитать полный промпт train целиком (как его получает LLM)</b></summary>
+          <pre className="robot-log" style={{ whiteSpace: "pre-wrap", maxHeight: "28rem" }}>{pv.full_prompt}</pre>
+        </details>
+      )}
+      <h4>Профиль вкуса в промпте (блок «{"{{profile}}"}»)</h4>
+      <textarea
+        rows={9}
+        style={{ width: "100%", fontFamily: "monospace", fontSize: "0.9em" }}
+        value={profileText}
+        onChange={(e) => setProfileText(e.target.value)}
+        placeholder="Правила «Ценим …» и «Не ценим …»"
+      />
+      <details style={{ marginTop: "0.5rem", marginBottom: "0.75rem" }}>
+        <summary className="hint">Шаблон системного промпта train (triage.md, содержит {"{{profile}}"} и {"{{examples}}"})</summary>
+        <textarea
+          rows={12}
+          style={{ width: "100%", fontFamily: "monospace", fontSize: "0.85em", marginTop: "0.5rem" }}
+          value={template}
+          onChange={(e) => setTemplate(e.target.value)}
+        />
+        {pv?.default_template && template !== pv.default_template && (
+          <p><button type="button" className="ghost" onClick={() => setTemplate(pv.default_template!)}>Вернуть исходный шаблон промпта</button></p>
+        )}
+      </details>
+      <p className="hint">
+        <label>
+          <input type="checkbox" checked={mode === "all"} onChange={(e) => setMode(e.target.checked ? "all" : "unjudged")} />{" "}
+          переоценить все материалы за 30 дней (включая уже отмеченные вами «Да / Нет»; по умолчанию переоцениваются только непросмотренные)
+        </label>
+      </p>
+      <p>
+        <button type="button" disabled={busy} onClick={() => submit({ recalibrate: false, prompt_only: false })}>
+          Сохранить промпт и переоценить базу
+        </button>{" "}
+        <button type="button" className="ghost" disabled={busy} onClick={() => submit({ recalibrate: true, prompt_only: false })}>
+          Пересчитать профиль по решениям (+/−) и переоценить базу
+        </button>{" "}
+        <button type="button" className="ghost" disabled={busy} onClick={() => submit({ prompt_only: true })}>
+          Только сохранить промпт
+        </button>
+        {msg && <span className="hint"> · {msg}</span>}
+      </p>
+    </details>
   );
 }
 

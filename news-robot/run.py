@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from robot import discover, learn, pipeline, report  # noqa: E402
+from robot import discover, learn, pipeline, pool, report  # noqa: E402
 from robot.fetch import Fetcher  # noqa: E402
 from robot.llm import LLM  # noqa: E402
 from robot.state import State  # noqa: E402
@@ -101,7 +101,7 @@ def prepare_command(args) -> int:
     llm = LLM(cfg.get("news.llm.base_url") or "https://api.polza.ai/api/v1",
               args.model or os.environ.get("NEWS_LLM_MODEL") or cfg.get("news.llm.model"),
               cfg.get("news.llm.api_key_env") or "POLZA_API_KEY", logdir / "llm",
-              token_limit=120_000, extra=pipeline.llm_extra(cfg))
+              token_limit=300_000, extra=pipeline.llm_extra(cfg))
 
     def log(level, stage, msg, **extra):
         rec = {"ts": _dt.now(_tz.utc).isoformat(timespec="seconds"), "level": level, "stage": stage, "msg": msg, **extra}
@@ -123,6 +123,20 @@ def prepare_command(args) -> int:
         log(level, stage, msg, **extra)
         if msg in ("перевод начат", "перегенерация начата"):
             beat(f"{msg}: {extra.get('story')}")
+
+    # Переоценка промежуточной базы (30 дней) по запросу со страницы или обновление снимка промпта
+    try:
+        pool.run_retriage(ROOT, llm, logged, pipeline, beat=beat)
+        if not pool.prompt_snapshot_path(ROOT).exists():
+            st = State(ROOT / ".state" / "state.json")
+            pdata = pool.load(ROOT)
+            if not pdata.get("items"):
+                sources = {s["id"]: s for s in pipeline.all_sources(st)}
+                pool.bootstrap_from_runs(ROOT, pdata, sources=sources, days=pool.WINDOW_DAYS)
+                pool.save(ROOT, pdata)
+            pool.write_prompt_snapshot(ROOT, st, pipeline)
+    except Exception as e:  # noqa: BLE001
+        log("error", "retriage", "ошибка переоценки базы", error=f"{type(e).__name__}: {e}"[:200])
 
     beat("проверяет стек")
     from robot import cover, publish as _publish
@@ -170,6 +184,7 @@ def learn_command(args) -> int:
                 print("\nПрофиль вкуса не обновлён: ключ или модель LLM не заданы. Поправки по статистике посчитаны.")
     finally:
         state.save()
+        pool.write_prompt_snapshot(ROOT, state, pipeline)
     return 0
 
 
@@ -221,12 +236,23 @@ def main() -> int:
                     help="с --prepare: опубликовать готовое сейчас, не дожидаясь слота (all — всё готовое в стеке)")
     ap.add_argument("--dedupe", action="store_true",
                     help="пройти по прогонам за две недели: повторы историй и сверка с сайтом (Р-115)")
+    ap.add_argument("--retriage", action="store_true",
+                    help="переоценить промежуточную базу новостей за 30 дней текущим промптом отбора")
     ap.add_argument("--prepare", action="store_true",
                     help="подготовить новости из стека: перевод, текст, сверка (cron каждую минуту)")
     args = ap.parse_args()
 
     if args.candidates or args.propose or args.include or args.once or args.reject:
         return candidates_command(args)
+    if args.retriage:
+        cfg = pipeline.load_config()
+        llm = LLM(cfg.get("news.llm.base_url") or "https://api.polza.ai/api/v1",
+                  args.model or os.environ.get("NEWS_LLM_MODEL") or cfg.get("news.llm.model"),
+                  cfg.get("news.llm.api_key_env") or "POLZA_API_KEY", ROOT / "out" / "prepare" / "llm",
+                  token_limit=300_000, extra=pipeline.llm_extra(cfg))
+        pool.run_retriage(ROOT, llm, lambda lvl, st, msg, **kw: print(lvl, st, msg, kw), pipeline,
+                          force_request={"recalibrate": bool(args.calibrate), "mode": "unjudged"})
+        return 0
     if args.calibrate or args.judge:
         return learn_command(args)
     if args.prepare:

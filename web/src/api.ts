@@ -440,6 +440,34 @@ export interface RobotSourceRow {
 /** Раздел «Робот»: сводка, вид прогона, стек (Р-96). */
 export interface RobotQueueItem { story_key: string; run_id?: string; title?: string; topic?: string; final?: number; url?: string; date: string; time: string; by?: string }
 export interface RobotQueue { items: RobotQueueItem[]; times: string[]; days: string[] }
+export interface RobotPromptView {
+  updated_at?: string;
+  template: string;
+  default_template?: string;
+  is_custom_template?: boolean;
+  profile_text: string;
+  examples_text: string;
+  full_prompt: string;
+  pool?: {
+    window_days: number;
+    items_count: number;
+    scored_count: number;
+    candidates_count: number;
+    pruned_count?: number;
+    last_retriage_at?: string | null;
+    updated_at?: string | null;
+  };
+}
+export interface RobotRetriageStatus {
+  running?: boolean;
+  stage?: string;
+  done?: number;
+  total?: number;
+  candidates?: number;
+  error?: string;
+  started_at?: string;
+  finished_at?: string;
+}
 export interface RobotOverview {
   connected: boolean;
   runs: { id: string; done: boolean; started_at?: string }[];
@@ -448,6 +476,9 @@ export interface RobotOverview {
   judged: Record<string, "yes" | "no">;
   pending: { action: string; domain?: string; url?: string; story_key?: string; verdict?: string; decision?: string }[];
   learned: RobotLearned;
+  prompt_view?: RobotPromptView | null;
+  retriage_status?: RobotRetriageStatus | null;
+  retriage_queued?: boolean;
   queue: RobotQueue;
   prepared: Record<string, RobotPrepared>;
   orders_pending?: { story_key: string; topic: string; section: string; urls: string[]; at: string }[];
@@ -631,10 +662,17 @@ export const api = {
   robotSources: () => request<{ items: RobotSourceRow[]; connected: boolean }>("/news-robot/sources"),
   robotOverview: () => request<RobotOverview>("/news-robot/overview"),
   robotHealth: () => request<RobotHealth>("/news-robot/health"),
-  robotStories: (days = 14) =>
+  robotStories: (days = 30) =>
     request<{ items: (RobotStory & { run_id: string; run_started: string; written: boolean })[]; days: number }>(
       `/news-robot/stories?days=${days}`,
     ),
+  robotRetriage: (body: {
+    profile_text?: string;
+    triage_template?: string;
+    mode?: "unjudged" | "all";
+    recalibrate?: boolean;
+    prompt_only?: boolean;
+  }) => request<{ queued: unknown }>("/news-robot/retriage", { method: "POST", body: JSON.stringify(body) }),
   robotOrder: (body: { topic: string; section: string; input: string; note?: string; position?: string }) =>
     request<{ queued: { story_key: string } }>("/news-robot/order", { method: "POST", body: JSON.stringify(body) }),
   robotPrepared: (key: string) => request<RobotPreparedFull>(`/news-robot/prepared/${encodeURIComponent(key)}`),

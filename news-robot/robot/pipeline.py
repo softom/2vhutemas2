@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,7 +20,7 @@ from urllib.parse import urlsplit
 import httpx
 import yaml
 
-from . import checks, discover, learn, lists, similar
+from . import checks, discover, learn, lists, pool, similar
 from .article import fetch_article
 from .feeds import Item, NotAFeed, item_id, parse, passes_filters
 from .fetch import FetchError, Fetcher
@@ -214,15 +215,37 @@ def seed_examples() -> dict:
     return yaml.safe_load((ROOT / "prompts" / "examples.yaml").read_text(encoding="utf-8"))
 
 
+_NARROW_3D_RE = re.compile(
+    r"gaussian splat|3dgs|splat|облак\w* точек|point cloud|меш\w*|mesh|реконструкц\w* 3d|3d-реконструкц|из одного изображен|из одного снимка|single-image 3d",
+    re.I,
+)
+
+
 def examples_text(state: State | None = None) -> str:
-    """Образцы: последние решения редактора (до 20 «да» и 20 «нет») и первый блок."""
+    """Образцы: последние решения редактора (до 20 «да» и 25 «нет») и первый блок.
+    Если в свежих отказах («нет») больше 5 статей по узкой 3D-реконструкции / сплатам / облакам точек,
+    то старые единичные «да» из этой узкой подтемы не дублируются в верхушке примеров (защита от переобучения)."""
     ex = seed_examples()
     chosen, rejected = list(ex["chosen"]), list(ex["rejected"])
     if state is not None:
         recent = sorted(learn.judgments(state), key=lambda j: j["at"], reverse=True)
-        chosen = [j["title"] for j in recent if j["verdict"] == "yes" and j.get("title")][:20] + chosen
-        rejected = [j["title"] for j in recent if j["verdict"] == "no" and j.get("title")][:20] + rejected
-    return "\n".join([f"ДА — {t}" for t in chosen[:40]] + [f"НЕТ — {t}" for t in rejected[:40]])
+        rec_no = [j["title"] for j in recent if j["verdict"] == "no" and j.get("title")]
+        rec_yes = [j["title"] for j in recent if j["verdict"] == "yes" and j.get("title")]
+        narrow_no_count = sum(1 for t in rec_no[:35] if _NARROW_3D_RE.search(t))
+        if narrow_no_count >= 5:
+            # Оставляем не более 1 прорывного примера 3D в ДА, чтобы LLM не копировала ключевые слова
+            kept_yes = []
+            narrow_yes = 0
+            for t in rec_yes:
+                if _NARROW_3D_RE.search(t):
+                    if narrow_yes >= 1:
+                        continue
+                    narrow_yes += 1
+                kept_yes.append(t)
+            rec_yes = kept_yes
+        chosen = rec_yes[:20] + chosen
+        rejected = rec_no[:25] + rejected
+    return "\n".join([f"ДА — {t}" for t in chosen[:35]] + [f"НЕТ — {t}" for t in rejected[:45]])
 
 
 def profile_text(state: State | None = None) -> str:
@@ -233,8 +256,16 @@ def profile_text(state: State | None = None) -> str:
     return "\n".join(ln for ln in text.splitlines() if not ln.startswith("<!--")).strip()
 
 
+def build_triage_prompt(state: State | None = None) -> str:
+    learned = (state.data.get("learned") or {}) if state is not None else {}
+    custom_tpl = (learned.get("custom_triage_prompt") or "").strip()
+    if custom_tpl:
+        return custom_tpl.replace("{{profile}}", profile_text(state)).replace("{{examples}}", examples_text(state))
+    return prompt("triage", examples=examples_text(state), profile=profile_text(state))
+
+
 def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int, state: State | None = None) -> dict[str, dict]:
-    system = prompt("triage", examples=examples_text(state), profile=profile_text(state))
+    system = build_triage_prompt(state)
     scores: dict[str, dict] = {}
     run.triage_total = len(run.items)
     for i in range(0, len(run.items), batch):
@@ -262,6 +293,12 @@ def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int, state: Stat
 
 
 # ── 3. Склейка и ранжирование ────────────────────────────────────────────────
+
+_ARCH_CONTEXT_RE = re.compile(
+    r"architect|building|floor\s*plan|facade|urban|bim|revit|rhino|grasshopper|archicad|здани|архитект|фасад|планировк|интерьер|градостро|конструкц",
+    re.I,
+)
+
 
 def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: dict,
          state: State | None = None) -> list[dict]:
@@ -294,9 +331,15 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
         final -= stale
         # Главный материал истории — из самого надёжного издания.
         lead = max(items, key=lambda i: (sources[i.source_id].get("trust", 5), len(i.summary)))
+        title_ru = s.get("title_ru") or lead.title
+        combined_text = f"{title_ru} {lead.title} {s.get('reason') or ''}"
+        is_arxiv = all(i.source_id.startswith("arxiv") for i in items)
+        # Защита от потока узкотехнических препринтов (облака точек, меши, сплаты и т.д.) без прямой архитектурной сути
+        if _NARROW_3D_RE.search(combined_text) and not _ARCH_CONTEXT_RE.search(combined_text):
+            final -= 25 if is_arxiv else 15
         result.append({
             "story_key": st["story_key"], "final": max(0, min(100, final)), "interest": interest,
-            "title_ru": s.get("title_ru") or lead.title, "topic": s.get("topic"), "kind": s.get("kind"),
+            "title_ru": title_ru, "topic": s.get("topic"), "kind": s.get("kind"),
             "competition": bool(s.get("competition")), "students_eligible": s.get("students_eligible"),
             "reason": s.get("reason"), "lead_item": lead.id,
             "republished_from": next((i.republished_from for i in items if i.republished_from), None),
@@ -522,6 +565,8 @@ def run(args) -> Run:
                 r.write_done += 1
                 log(r, "error", "write", "новость не написана", story=cand["story_key"], error=str(e))
         _dump(out / "news.json", r.news)
+        written_keys = {st["candidate"]["story_key"] for st in r.news if st.get("news") and st.get("candidate")}
+        pool.ingest_run(ROOT, r.id, r.items, scores, r.candidates, written_keys, sources)
         r.link_domains = link_domains(r.news, sources)
         _dump(out / "link_domains.json", r.link_domains)
         added = state.add_link_candidates(r.link_domains)
@@ -540,6 +585,7 @@ def run(args) -> Run:
         state.save()
         fetcher.close()
         write_sources_snapshot(state)
+        pool.write_prompt_snapshot(ROOT, state, sys.modules[__name__])
         _dump(out / "summary.json", summary(r, status, state))
         log(r, "info", "run", "конец", status=status)
 

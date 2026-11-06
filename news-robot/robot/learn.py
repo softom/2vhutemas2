@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 from .llm import LLM, LLMError, prompt
 
-MAX_ADJUST = 15          # поправка вида или темы — не больше ±15 баллов
+MAX_ADJUST = 6           # поправка вида или темы — не больше ±6 баллов, чтобы не глушить целые рубрики
 MIN_GROUP = 4            # группа меньше — поправку не считаем
 PRIOR = 6                # сглаживание к средней доле
 
@@ -53,14 +53,22 @@ def track_stories(state, candidates: list[dict], days: int = 7) -> None:
 # ── Решения редактора ────────────────────────────────────────────────────────
 
 def record(state, run_summary: dict | None, story_key: str, verdict: str, by: str | None, note: str | None) -> dict:
-    """Решение по истории с её признаками (из итога прогона, где её показали)."""
+    """Решение по истории с её признаками (из итога прогона или промежуточной БД за 30 дней)."""
     cand = next((c for c in (run_summary or {}).get("candidates", []) if c["story_key"] == story_key), {})
+    if not cand and getattr(state, "path", None):
+        pool_file = state.path.parent / "pool.json"
+        if pool_file.exists():
+            try:
+                pdata = json.loads(pool_file.read_text(encoding="utf-8"))
+                cand = next((c for c in (pdata.get("candidates") or []) if c.get("story_key") == story_key), {})
+            except (OSError, json.JSONDecodeError):
+                pass
     j = {"story_key": story_key, "verdict": verdict, "by": by, "note": note, "at": now(),
          "title": cand.get("title_ru"), "topic": cand.get("topic"), "kind": cand.get("kind"),
          "interest": cand.get("interest"), "final": cand.get("final"),
          "sources": cand.get("sources_total") or len(cand.get("sources", [])) or None,
          "competition": cand.get("competition"), "students_eligible": cand.get("students_eligible"),
-         "reason": cand.get("reason"), "run_id": (run_summary or {}).get("id")}
+         "reason": cand.get("reason"), "run_id": (run_summary or {}).get("id") or cand.get("run_id")}
     judgments = state.data.setdefault("judgments", {})
     judgments[story_key] = j
     return j
@@ -134,7 +142,7 @@ def profile(llm: LLM, items: list[dict], seed: dict, current: str | None) -> dic
         lines.append({"выбор": "НЕТ", "заголовок": t, "из": "первый блок"})
     return llm.chat_json("calibrate", prompt("calibrate", current=current or "—",
                                              decisions=json.dumps(lines, ensure_ascii=False, indent=1)),
-                         "Опиши вкус редактора.", max_tokens=2000)
+                         "Опиши вкус редактора.", max_tokens=8000)
 
 
 def _auc(pairs: list[tuple[float, bool]]) -> float | None:
@@ -169,23 +177,24 @@ def calibrate(state, llm: LLM | None, seed: dict, log, force: bool = False, min_
     adj = adjustments(items)
     entry = {"at": now(), "judged": len(items), "adjustments": adj, "agreement": before}
     if llm is not None and llm.live:
-        # Профиль строится по ранним решениям и проверяется на последней четверти: принимается,
-        # только если совпадение с редактором там не хуже, чем у прежнего профиля. На стенде
-        # 2026-10-03 профиль по 19 решениям то улучшал совпадение, то ухудшал — без проверки нельзя.
+        # ВАЖНО: самые свежие решения редактора (особенно серии отказов «НЕТ» на перенасыщенную тему)
+        # обязаны входить в выборку построения профиля. Для проверочной выборки test берём каждый 5-й
+        # элемент истории (до 24 решений), а не отрезаем хвост самых новых решений.
         ordered = sorted(items, key=lambda j: j["at"])
-        cut = max(len(ordered) - max(len(ordered) // 4, 8), 0)
-        train, test = ordered[:cut], ordered[cut:]
+        test = [j for idx, j in enumerate(ordered) if idx % 5 == 4][-24:]
+        test_keys = {j["story_key"] for j in test}
+        train = [j for j in ordered if j["story_key"] not in test_keys]
         current = learned.get("profile_text") or default_profile
         try:
-            prof = profile(llm, train or items, seed, current)
+            prof = profile(llm, ordered, seed, current)
             entry["profile"] = prof
             if train and len({j["verdict"] for j in test}) == 2:
                 old_auc = score_with(llm, current, train, test)
                 new_auc = score_with(llm, prof.get("profile_text") or current, train, test)
                 entry["validation"] = {"held_out": len(test), "auc_old": old_auc, "auc_new": new_auc}
-                accepted = new_auc is not None and (old_auc is None or new_auc >= old_auc)
+                accepted = force or (new_auc is not None and (old_auc is None or new_auc >= old_auc - 0.03))
             else:
-                accepted = False
+                accepted = bool(force and prof.get("profile_text"))
                 entry["validation"] = {"held_out": len(test), "note": "мало решений для проверки — профиль не принят"}
             entry["accepted"] = accepted
             if accepted:

@@ -143,7 +143,9 @@ newsRobot.post("/inbox", async (c) => {
     // Решение редактора по истории: «выпустил бы» или «нет» — по нему робот учит ранжирование (Р-93).
     const story = String(body.story_key ?? "");
     const run = String(body.run_id ?? "");
-    if (!STORY.test(story) || !RUN_ID.test(run)) throw new ApiError("validation_failed", "Неверная история или прогон");
+    if (!STORY.test(story) || (!RUN_ID.test(run) && run !== "retriage" && run !== "pool")) {
+      throw new ApiError("validation_failed", "Неверная история или прогон");
+    }
     if (!["yes", "no"].includes(String(body.verdict))) throw new ApiError("validation_failed", "Решение: yes или no");
     msg = { action: "judge", story_key: story, run_id: run, verdict: body.verdict, note };
   } else if (body?.action === "propose") {
@@ -284,6 +286,9 @@ newsRobot.get("/overview", async (c) => {
   );
   const learned = { ...(state?.learned ?? {}) };
   delete learned.history;
+  const promptView = await readJson<Row>(`${ROOT}/state/triage_prompt.json`);
+  const retriageStatus = await readJson<Row>(`${ROOT}/state/retriage_status.json`);
+  const retriageQueued = (await readJson<Row>(`${ROOT}/inbox/retriage.json`)) !== null;
   return c.json({
     connected: state !== null || runs.length > 0,
     runs,
@@ -292,10 +297,38 @@ newsRobot.get("/overview", async (c) => {
     judged: Object.fromEntries(Object.entries(state?.judgments ?? {}).map(([k, v]) => [k, v.verdict])),
     pending,
     learned,
+    prompt_view: promptView,
+    retriage_status: retriageStatus,
+    retriage_queued: retriageQueued,
     queue: await readQueue(),
     prepared: await preparedIndex(),
     orders_pending: await pendingOrders(),
   });
+});
+
+/**
+ * Изменение промпта отбора (train) и переоценка промежуточной БД новостей за 30 дней.
+ * Кладёт запрос в inbox/retriage.json; минутное задание робота берёт его в течение минуты.
+ */
+newsRobot.post("/retriage", async (c) => {
+  const principal = requirePermission(c.get("principal"), "su");
+  const body = await c.req.json().catch(() => null) as Row | null;
+  const profileText = typeof body?.profile_text === "string" ? body.profile_text.slice(0, 12000) : undefined;
+  const triageTemplate = typeof body?.triage_template === "string" ? body.profile_only ? undefined : body.triage_template.slice(0, 20000) : undefined;
+  const mode = body?.mode === "all" ? "all" : "unjudged";
+  const recalibrate = Boolean(body?.recalibrate);
+  const promptOnly = Boolean(body?.prompt_only);
+  const req = {
+    profile_text: profileText,
+    triage_template: triageTemplate,
+    mode,
+    recalibrate,
+    prompt_only: promptOnly,
+    by: principal.displayName,
+    at: new Date().toISOString(),
+  };
+  await Deno.writeTextFile(`${ROOT}/inbox/retriage.json`, JSON.stringify(req, null, 1));
+  return c.json({ queued: req }, 202);
 });
 
 /**
@@ -709,19 +742,37 @@ async function pendingOrders(): Promise<Row[]> {
  */
 newsRobot.get("/stories", async (c) => {
   requirePermission(c.get("principal"), "su");
-  const days = Math.min(60, Math.max(1, Number(c.req.query("days") ?? 14) || 14));
+  // Новости старше месяца (30 дней) удаляются из БД для оценки.
+  const days = Math.min(30, Math.max(1, Number(c.req.query("days") ?? 30) || 30));
   const since = Date.now() - days * 86400000;
+  const isFreshEnough = (cand: Row, fallbackIso?: string) => {
+    const srcDates = Array.isArray(cand.sources)
+      ? (cand.sources as Row[]).map((s) => String(s.date ?? "")).filter(Boolean).sort()
+      : [];
+    const first = String(cand.republished_from ?? cand.first_date ?? srcDates[0] ?? fallbackIso ?? "");
+    if (!first) return true;
+    const t = new Date(first.length === 10 ? `${first}T00:00:00Z` : first).getTime();
+    return Number.isNaN(t) || t >= since;
+  };
   // Повторы и сверка с сайтом (Р-115): робот пишет .state/similar.json — какая история повторяет
   // какую и что на сайте уже есть. Повтор в списке не показывается: его издания уходят главной истории.
   const similar = await readJson<{ aliases?: Record<string, { to: string; title?: string }>; site?: Record<string, Row> }>(
     `${ROOT}/state/similar.json`);
   const aliases = similar?.aliases ?? {};
+  const pool = await readJson<{ updated_at?: string; candidates?: Row[]; written_keys?: string[] }>(`${ROOT}/state/pool.json`);
+  const poolUpdated = pool?.updated_at ? new Date(pool.updated_at).getTime() : 0;
+  const hasPool = Array.isArray(pool?.candidates) && pool!.candidates!.length > 0;
   const seen = new Set<string>();
   const items: Row[] = [];
   const repeats = new Map<string, Row[]>();
+
+  // 1. Если после обновления промежуточной БД (.state/pool.json) прошёл новый прогон, берём его истории первыми;
+  //    если pool.json ещё не создан — читаем прогоны за окно days.
   for (const id of await runIds()) {
     const started = await runStart(id);
-    if (new Date(started).getTime() < since) break;
+    const startedMs = new Date(started).getTime();
+    if (startedMs < since) break;
+    if (hasPool && startedMs <= poolUpdated) break;
     const dir = `${ROOT}/out/${id}`;
     const summary = await readJson<{ candidates?: Row[]; news?: Row[] }>(`${dir}/summary.json`);
     const cands = summary?.candidates ?? (await readJson<Row[]>(`${dir}/candidates.json`)) ?? [];
@@ -730,6 +781,7 @@ newsRobot.get("/stories", async (c) => {
         .filter((n) => n.news).map((n) => String((n.candidate as Row)?.story_key)),
     );
     for (const cand of cands) {
+      if (!isFreshEnough(cand, started)) continue;
       const key = String(cand.story_key);
       if (seen.has(key)) continue;
       seen.add(key);
@@ -741,6 +793,31 @@ newsRobot.get("/stories", async (c) => {
       items.push({ ...cand, run_id: id, run_started: started, written: written.has(key), site: similar?.site?.[key] ?? cand.site });
     }
   }
+
+  // 2. Промежуточная база новостей за 30 дней (.state/pool.json), включая переоценённые новым промптом истории.
+  if (hasPool) {
+    const writtenSet = new Set(pool?.written_keys ?? []);
+    for (const cand of pool!.candidates!) {
+      if (!isFreshEnough(cand, pool?.updated_at)) continue;
+      const key = String(cand.story_key);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const runId = String(cand.run_id || "pool");
+      const isWritten = Boolean(cand.written) || writtenSet.has(key);
+      const main = aliases[key]?.to;
+      if (main) {
+        repeats.set(main, [...(repeats.get(main) ?? []), { ...cand, run_id: runId, written: isWritten }]);
+        continue;
+      }
+      items.push({
+        ...cand,
+        run_id: runId,
+        written: isWritten,
+        site: similar?.site?.[key] ?? cand.site,
+      });
+    }
+  }
+
   const shown = new Set(items.map((i) => String(i.story_key)));
   for (const [main, list] of repeats) {
     const item = items.find((i) => i.story_key === main);

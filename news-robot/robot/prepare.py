@@ -52,21 +52,35 @@ def _write(path: Path, data) -> None:
     tmp.replace(path)
 
 
-def _run_story(run_dir: Path, key: str) -> tuple[dict | None, dict | None]:
-    """Кандидат истории и уже написанная новость из прогона, где её показали."""
+def _run_story(run_dir: Path, key: str, root: Path | None = None) -> tuple[dict | None, dict | None]:
+    """Кандидат истории и уже написанная новость из прогона или промежуточной БД (.state/pool.json)."""
     summary = _read(run_dir / "summary.json") or {}
     cands = summary.get("candidates") or _read(run_dir / "candidates.json", []) or []
     cand = next((c for c in cands if c.get("story_key") == key), None)
     written = _read(run_dir / "news.json", []) or summary.get("news") or []
     story = next((s for s in written if (s.get("candidate") or {}).get("story_key") == key and s.get("news")), None)
+    if cand is None and root is not None:
+        pdata = _read(root / ".state" / "pool.json") or {}
+        cand = next((c for c in (pdata.get("candidates") or []) if c.get("story_key") == key), None)
     return cand, story
+
+
+def _pool_items(root: Path) -> dict[str, Item]:
+    pdata = _read(root / ".state" / "pool.json") or {}
+    return {
+        k: Item(**{fk: fv for fk, fv in v.items() if fk in Item.__dataclass_fields__})
+        for k, v in (pdata.get("items") or {}).items()
+        if isinstance(v, dict) and v.get("id") and v.get("source_id")
+    }
 
 
 def _story_inputs(root: Path, run_id: str, key: str, pipeline):
     run_dir = root / "out" / str(run_id or "")
-    cand, _ = _run_story(run_dir, key)
+    cand, _ = _run_story(run_dir, key, root=root)
     items = {d["id"]: Item(**{k: v for k, v in d.items() if k in Item.__dataclass_fields__})
              for d in _read(run_dir / "items.json", []) or []}
+    if not items or (cand and cand.get("lead_item") not in items):
+        items = {**_pool_items(root), **items}
     sources = {s["id"]: s for s in pipeline.all_sources(State(root / ".state" / "state.json"))}
     return cand, items, sources
 
@@ -299,7 +313,7 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
                     _write(path, rec)
                 continue
             run_dir = root / "out" / str(q.get("run_id") or "")
-            cand, story = _run_story(run_dir, key)
+            cand, story = _run_story(run_dir, key, root=root)
             if story is not None:
                 rec.update(status="готово", ready_at=now(), origin="прогон", story=story, run_id=q.get("run_id"))
                 _write(path, rec)
@@ -320,6 +334,8 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
             log("info", "prepare", "перевод начат", story=key)
             items = {d["id"]: Item(**{k: v for k, v in d.items() if k in Item.__dataclass_fields__})
                      for d in _read(run_dir / "items.json", []) or []}
+            if not items or cand.get("lead_item") not in items:
+                items = {**_pool_items(root), **items}
             if cand.get("lead_item") not in items:
                 rec.update(status="ошибка", error="материал истории не сохранён в прогоне", attempts=MAX_ATTEMPTS)
                 _write(path, rec)
