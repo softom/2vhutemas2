@@ -592,6 +592,25 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 /* Раздел «Робот». */
 .robot-tabs a { padding: 4px 0; border-bottom: 2px solid transparent; }
 .robot-tabs a.active { border-bottom-color: var(--accent); }
+.robot-block-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+.robot-block-nav a { display: flex; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--line); color: var(--text); text-decoration: none; min-width: 0; }
+.robot-block-nav a.active { border-color: var(--accent); background: var(--surface); box-shadow: inset 0 -3px var(--accent); }
+.robot-block-number { color: var(--accent); font-weight: 700; font-size: 20px; flex-shrink: 0; }
+.robot-block-heading h2 { margin-bottom: 4px; }
+.robot-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin: 12px 0; }
+.robot-toolbar select { max-width: 100%; }
+.robot-service { margin: 12px 0; }
+.robot-block-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.robot-block-card { display: block; padding: 20px; border: 1px solid var(--line); background: var(--surface); color: var(--text); text-decoration: none; }
+.robot-block-card:hover { border-color: var(--accent); }
+.robot-block-card h2 { margin: 8px 0; }
+.robot-block-card p { margin: 8px 0 16px; }
+.robot-summary { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 16px 0; }
+.robot-table-scroll { overflow-x: auto; max-width: 100%; }
+.robot-prepared { margin: 24px 0; }
+.robot-block-nav a:focus-visible, .robot-block-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 700px) { .robot-block-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 440px) { .robot-block-grid { grid-template-columns: 1fr; } .robot-block-nav a { padding: 10px 8px; font-size: 13px; } }
 .robot-bars { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .robot-bar h3 { margin: 0; font-size: 14px; }
 .robot-bar p { margin: 4px 0; }

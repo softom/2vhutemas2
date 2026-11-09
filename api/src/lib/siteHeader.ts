@@ -14,8 +14,8 @@ export function siteHeader(principal: Principal | null, path = "/"): string {
   ];
   // Подменю пункта: раздел «Робот» (Р-96) — разделы страницы робота, только su.
   const submenus: Record<string, [string, string][]> = {
-    "/robot": [["/robot/news", "Новости"], ["/robot/stack", "Стек"], ["/robot/sites", "Сайты"],
-      ["/robot/recs", "Рекомендации"], ["/robot/log", "Журнал"]],
+    "/robot": [["/robot/collect", "1. Сбор"], ["/robot/classify", "2. Классификатор"],
+      ["/robot/news", "3. Редактор"], ["/robot/recs", "4. Источники"]],
   };
   const nav = items.filter(([, , visible]) => visible).map(([href, label]) => {
     // «Новости» — главная и её архив /news.

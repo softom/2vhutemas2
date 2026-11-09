@@ -2,7 +2,8 @@
  * Раздел «Робот» — только `su` (Р-92…Р-94, Р-96).
  *
  * Робот новостей — отдельный процесс на сервере (news-robot/). Здесь
- * редактор видит его работу и управляет ею. Подменю раздела:
+ * редактор видит его работу и управляет ею. Четыре блока: сбор, классификатор,
+ * редактор и расширение источников. Старые адреса разделов сохранены. Подразделы:
  * обзор (прогресс этапов, обучение), новости (отбор, перевод, ранжирование),
  * стек на публикацию (слоты выхода по дням), сайты мониторинга,
  * рекомендации к добавлению, журнал. Пока прогон идёт, страница
@@ -29,9 +30,7 @@ import {
   type RobotStory,
 } from "../api";
 
-const SECTIONS: [string, string][] = [
-  ["", "Обзор"], ["news", "Новости"], ["resonance", "Резонанс"], ["stack", "Стек"], ["sites", "Сайты"], ["recs", "Рекомендации"], ["log", "Журнал"],
-];
+import { ROBOT_BLOCKS, RobotBlockNav, RobotDashboard, CollectionResult, ClassificationResult } from "./robotBlocks";
 const TOPIC: Record<string, string> = { architecture: "Архитектура", neurogeneration: "Нейрогенерация", software: "ПО" };
 const KIND: Record<string, string> = {
   building: "здание", material: "материал", tool: "инструмент", competition: "конкурс", education: "образование",
@@ -107,12 +106,9 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
   return (
     <section className="robot">
       <h1>Робот новостей</h1>
-      <nav className="robot-tabs filters" aria-label="Разделы робота">
-        {SECTIONS.map(([code, title]) => (
-          <Link key={code} to={code ? `/robot/${code}` : "/robot"} className={section === code ? "active" : undefined}>
-            {title}
-          </Link>
-        ))}
+      <RobotBlockNav section={section} />
+      <div className="robot-toolbar">
+        <Link to="/robot" aria-current={section === "" ? "page" : undefined}>Обзор блоков</Link>
         {ov && ov.runs.length > 0 && (
           <select value={runId ?? ""} onChange={(e) => setRunId(e.target.value)} aria-label="Прогон">
             {ov.runs.map((r) => (
@@ -123,20 +119,31 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
             ))}
           </select>
         )}
-      </nav>
-      {health && <Health h={health} />}
+      </div>
+      {health && <details className="robot-service"><summary>Состояние служб</summary><Health h={health} /></details>}
       {error && <p className="error">{error}</p>}
       {status && <p className="notice">{status}</p>}
       {ov && !ov.connected && <p className="notice">Папки робота на сервере не подключены к API.</p>}
-      {ov && run && <Progress ov={ov} run={run} />}
-      {ov && run && section === "" && <Overview ov={ov} run={run} act={act} />}
+      {ov && run && ["", "collect", "classify"].includes(section) && <Progress ov={ov} run={run} />}
+      {ov && section === "" && <RobotDashboard ov={ov} run={run} />}
+      {ov && section === "collect" && <CollectionResult run={run} />}
+      {ov && section === "classify" && <>
+        <ClassificationResult run={run} />
+        <TrainPromptBox ov={ov} act={act} />
+        <details className="block"><summary>Обучение и точность доводов</summary><Learning learned={ov.learned} /></details>
+      </>}
       {ov && run && section === "news" && <News ov={ov} run={run} act={act} />}
+      {ov && !run && section === "news" && <p className="notice">Кандидаты появятся после первого прогона. Вы можете <Link to="/robot/orders">заказать новость</Link>.</p>}
+      {ov && section === "orders" && <Orders ov={ov} act={act} />}
       {section === "resonance" && <Resonance />}
       {ov && section === "stack" && <Stack ov={ov} act={act} />}
       {ov && section === "sites" && <Sites ov={ov} run={run} />}
       {ov && section === "recs" && <Recs ov={ov} act={act} />}
       {run && section === "log" && <LogView key={run.id} runId={run.id} live={run.running} />}
       {ov && section === "preview" && key && <Preview storyKey={key} ov={ov} />}
+      {!ov && !error && <p role="status">Загружаем пульт…</p>}
+      {section !== "" && !ROBOT_BLOCKS.some((b) => (b.sections as readonly string[]).includes(section)) &&
+        <p className="notice">Такого раздела нет. <Link to="/robot">Открыть обзор блоков</Link></p>}
       {ov && !ov.runs.length && <p className="notice">Прогонов пока не было.</p>}
     </section>
   );
@@ -230,24 +237,6 @@ function Progress({ ov, run }: { ov: RobotOverview; run: RobotRunView }) {
   );
 }
 
-function Overview({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act }) {
-  const openRecs = ov.candidates.filter((c) => OPEN.has(c.status)).length;
-  return (
-    <>
-      <ul>
-        <li><Link to="/robot/news">Новости</Link>: историй в прогоне {run.candidates.length}, в промежуточной БД (30 дней) — {ov.prompt_view?.pool?.candidates_count ?? "—"}, переведено {run.news.filter((n) => n.news).length}</li>
-        <li><Link to="/robot/stack">Стек</Link>: в стеке {ov.queue.items.length}</li>
-        <li><Link to="/robot/sites">Сайты</Link>: включено {ov.sources.filter((s) => s.enabled).length} из {ov.sources.length}</li>
-        <li><Link to="/robot/recs">Рекомендации</Link>: ждут решения {openRecs}</li>
-        <li><Link to="/robot/log">Журнал</Link>: предупреждений и ошибок {run.errors.length}</li>
-      </ul>
-      <h2>Как робот понимает ваш выбор</h2>
-      <Learning learned={ov.learned} />
-      <TrainPromptBox ov={ov} act={act} defaultOpen />
-    </>
-  );
-}
-
 function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act }) {
   const inStack = new Set(ov.queue.items.map((i) => i.story_key));
   const pendingVerdict = Object.fromEntries(ov.pending.filter((p) => p.action === "judge" && p.story_key)
@@ -301,34 +290,12 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const shownRows = topic ? rows.filter((c) => c.topic === topic) : rows;
   return (
     <>
-      <Orders ov={ov} act={act} />
-
-      <h2>Переведено заранее</h2>
-      <p className="hint">Лучшие истории прогона робот переводит сам; остальные — после «В стек». Готовая новость открывается по заголовку в таблице.</p>
-      {run.news.length === 0 && <p className="hint">{run.running ? "Тексты появятся по мере готовности." : "В этом прогоне текстов нет."}</p>}
-      {run.news.map((s) => {
-        const n = s.news ?? {}, img = n.images?.[0];
-        const cand = run.candidates.find((c) => c.story_key === s.candidate.story_key);
-        return (
-          <details className="block" key={s.candidate.story_key}>
-            <summary><b>{n.title ?? s.candidate.story_key}</b> <span className="hint">· оценка {s.candidate.final}
-              {s.issues.length ? ` · замечаний ${s.issues.length}` : ""}</span></summary>
-            {img && <figure><img src={img.url} alt="" loading="lazy" style={{ maxWidth: "100%" }} /><figcaption className="hint">{img.caption}</figcaption></figure>}
-            <p><b>{n.lead}</b></p>
-            {n.paragraphs?.map((p, i) => <p key={i}>{p}</p>)}
-            {n.more && <p className="hint">{n.more}</p>}
-            {[...s.issues, ...s.warnings].map((x, i) => <p className="error" key={i}>{x}</p>)}
-            <p>{inStack.has(s.candidate.story_key) ? <span className="hint">в стеке</span>
-              : cand && <button type="button" onClick={() => toStack(cand, n.title)}>В стек</button>}</p>
-          </details>
-        );
-      })}
-      <h2>Отбор и ранжирование</h2>
+      <h2>Стек кандидатов</h2>
       <p className="hint">
         Промежуточная БД собранных новостей за последние 30 дней (новости старше месяца удаляются из базы автоматически).
         Просмотренные — с вашим «Да / Нет» или в стеке — скрыты; их видно во вкладке «Просмотренные».
       </p>
-      <TrainPromptBox ov={ov} act={act} />
+      <p className="hint"><Link to="/robot/classify">Настройки классификатора и переоценка →</Link></p>
       <div className="robot-tabs filters">
         {([["new", "Непросмотренные"], ["seen", "Просмотренные"], ["all", "Все"]] as const).map(([code, title]) => (
           <a key={code} href="#" className={view === code ? "active" : undefined}
@@ -391,6 +358,29 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
           </tbody>
         </table>
       )}
+      <details className="robot-prepared">
+        <summary>Тексты, подготовленные в выбранном прогоне ({run.news.length})</summary>
+      <h2>Переведено заранее</h2>
+      <p className="hint">Лучшие истории прогона робот переводит сам; остальные — после «В стек». Готовая новость открывается по заголовку в таблице.</p>
+      {run.news.length === 0 && <p className="hint">{run.running ? "Тексты появятся по мере готовности." : "В этом прогоне текстов нет."}</p>}
+      {run.news.map((s) => {
+        const n = s.news ?? {}, img = n.images?.[0];
+        const cand = run.candidates.find((c) => c.story_key === s.candidate.story_key);
+        return (
+          <details className="block" key={s.candidate.story_key}>
+            <summary><b>{n.title ?? s.candidate.story_key}</b> <span className="hint">· оценка {s.candidate.final}
+              {s.issues.length ? ` · замечаний ${s.issues.length}` : ""}</span></summary>
+            {img && <figure><img src={img.url} alt="" loading="lazy" style={{ maxWidth: "100%" }} /><figcaption className="hint">{img.caption}</figcaption></figure>}
+            <p><b>{n.lead}</b></p>
+            {n.paragraphs?.map((p, i) => <p key={i}>{p}</p>)}
+            {n.more && <p className="hint">{n.more}</p>}
+            {[...s.issues, ...s.warnings].map((x, i) => <p className="error" key={i}>{x}</p>)}
+            <p>{inStack.has(s.candidate.story_key) ? <span className="hint">в стеке</span>
+              : cand && <button type="button" onClick={() => toStack(cand, n.title)}>В стек</button>}</p>
+          </details>
+        );
+      })}
+      </details>
     </>
   );
 }
