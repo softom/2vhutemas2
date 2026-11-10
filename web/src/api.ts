@@ -441,6 +441,7 @@ export interface RobotSourceRow {
 export interface RobotQueueItem { story_key: string; run_id?: string; title?: string; topic?: string; final?: number; url?: string; date: string; time: string; by?: string }
 export interface RobotQueue { items: RobotQueueItem[]; times: string[]; days: string[] }
 export interface RobotPromptView {
+  category_prompts?: Record<string, { title: string; template: string; profile: string; full_prompt: string }>;
   updated_at?: string;
   template: string;
   default_template?: string;
@@ -709,6 +710,7 @@ export const api = {
       `/news-robot/stories?days=${days}`,
     ),
   robotRetriage: (body: {
+    category?: string; category_prompt?: string; category_profile?: string;
     profile_text?: string;
     triage_template?: string;
     mode?: "unjudged" | "all";

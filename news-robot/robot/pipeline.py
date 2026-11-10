@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from .editorial import section_profile, category_of
+from . import category_prompts
 
 import json
 import os
@@ -286,7 +287,6 @@ def build_triage_prompt(state: State | None = None) -> str:
 
 
 def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int, state: State | None = None) -> dict[str, dict]:
-    system = build_triage_prompt(state)
     scores: dict[str, dict] = {}
     run.triage_total = len(run.items)
     for i in range(0, len(run.items), batch):
@@ -296,7 +296,7 @@ def triage(run: Run, llm: LLM, sources: dict[str, dict], batch: int, state: Stat
                     "title": it.title, "summary": it.summary[:600], "url": it.url} for it in part]
         user = "Материалы:\n" + json.dumps(payload, ensure_ascii=False, indent=1)
         try:
-            result = llm.chat_json("triage", system, user, max_tokens=16000)
+            result = category_prompts.evaluate(llm, payload, state, profile_text(state), stage="triage")
         except LLMError as e:
             log(run, "error", "triage", "пачка не оценена", error=str(e), first=part[0].id)
             continue

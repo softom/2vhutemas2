@@ -13,7 +13,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import learn, similar
+from . import learn, similar, category_prompts
 from .feeds import Item, passes_filters
 from .llm import LLM, LLMError
 
@@ -287,13 +287,14 @@ def write_prompt_snapshot(root: Path, state, pipeline_mod) -> dict:
     tpl = custom_tpl or default_tpl
     prof = pipeline_mod.profile_text(state)
     ex = pipeline_mod.examples_text(state)
-    full_prompt = tpl.replace("{{profile}}", prof).replace("{{examples}}", ex)
+    full_prompt = "Оценка выполняется отдельным запросом каждой категории; действующие запросы находятся в category_prompts."
     pdata = load(root)
     snap = {
         "updated_at": now(),
         "template": tpl,
         "default_template": default_tpl,
         "is_custom_template": bool(custom_tpl),
+        "category_prompts": category_prompts.snapshots(state, prof),
         "profile_text": prof,
         "examples_text": ex,
         "full_prompt": full_prompt,
@@ -331,6 +332,13 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
     if applied:
         log("info", "retriage", "решения из ящика применены перед переоценкой", count=applied)
 
+    category = req.get("category")
+    if category in category_prompts.NAMES:
+        if isinstance(req.get("category_prompt"), str):
+            learned.setdefault("category_prompts", {})[category] = req["category_prompt"]
+        if isinstance(req.get("category_profile"), str):
+            learned["profile_text"] = category_prompts.replace_profile(pipeline_mod.profile_text(state), category, req["category_profile"])
+
     # 2. Обновляем промпт или профиль, если редактор передал их со страницы
     if isinstance(req.get("profile_text"), str):
         pt = req["profile_text"].strip()
@@ -358,6 +366,7 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
             log,
             force=True,
             default_profile=pipeline_mod.profile_text(None),
+            category=category if category in category_prompts.NAMES else None,
         )
     else:
         # Даже без LLM-калибровки пересчитываем статистические поправки с новым потолком MAX_ADJUST
@@ -366,6 +375,10 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
             learned["adjustments"] = learn.adjustments(items_j)
 
     state.save()
+    if req.get("prompt_only"):
+        write_prompt_snapshot(root, state, pipeline_mod)
+        _write(status_path(root), {"running": False, "stage": "промпт сохранён", "done": 0, "total": 0, "finished_at": now()})
+        return True
 
     # 4. Загружаем промежуточную БД, подтягиваем прогоны за 30 дней и удаляем всё старше 30 дней
     sources = {s["id"]: s for s in pipeline_mod.all_sources(state)}
@@ -373,12 +386,6 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
     bootstrap_from_runs(root, pdata, sources=sources, days=WINDOW_DAYS)
     pruned = prune(pdata, sources=sources, days=WINDOW_DAYS)
     log("info", "retriage", "промежуточная БД подготовлена", items=len(pdata["items"]), pruned_30d=pruned)
-
-    if req.get("prompt_only"):
-        save(root, pdata)
-        write_prompt_snapshot(root, state, pipeline_mod)
-        _write(status_path(root), {"running": False, "stage": "промпт сохранён", "done": 0, "total": 0, "finished_at": now()})
-        return True
 
     if not llm.live:
         save(root, pdata)
@@ -400,6 +407,8 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
         if not sid or sid not in sources:
             continue
         old_sc = old_scores.get(iid)
+        if category in category_prompts.NAMES and category_prompts.category_of(old_sc or {}) != category:
+            continue
         if old_sc is not None:
             if skip_keys and old_sc.get("story_key") in skip_keys:
                 continue
@@ -432,7 +441,6 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
     if hasattr(llm, "token_limit") and llm.token_limit:
         llm.token_limit = max(int(llm.token_limit), 800_000)
 
-    system = pipeline_mod.build_triage_prompt(state)
     new_scores = dict(old_scores)
     aborted: str | None = None
     done_n = total
@@ -455,7 +463,7 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
             for it in part
         ]
         try:
-            resp = llm.chat_json("retriage", system, "Материалы:\n" + json.dumps(payload, ensure_ascii=False, indent=1), max_tokens=16000)
+            resp = category_prompts.evaluate(llm, payload, state, pipeline_mod.profile_text(state), known=old_scores, stage="retriage")
         except LLMError as e:
             err_str = str(e)
             log("error", "retriage", "пачка не переоценена", error=err_str, first=part[0].id)

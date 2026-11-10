@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .editorial import category_of, section_profile
+from . import category_prompts
 from .llm import LLM, LLMError, prompt
 
 MAX_ADJUST = 6           # поправка вида или темы — не больше ±6 баллов, чтобы не глушить целые рубрики
@@ -466,9 +467,15 @@ def profile(llm: LLM, items: list[dict], seed: dict, current: str | None) -> dic
         lines.append({"выбор": "ДА", "заголовок": t, "из": "первый блок"})
     for t in seed.get("rejected", []):
         lines.append({"выбор": "НЕТ", "заголовок": t, "из": "первый блок"})
-    return llm.chat_json("calibrate", prompt("calibrate", current=current or "—",
-                                             decisions=json.dumps(lines, ensure_ascii=False, indent=1)),
-                         "Опиши вкус редактора.", max_tokens=8000)
+    category = category_of(items[0]) if items else "unclassified"
+    if category not in category_prompts.NAMES:
+        return {"profile_text": current or ""}
+    system = ("Уточни критерии редактора только для категории «" + category_prompts.NAMES[category] + "». "
+              "Не переноси причины момента (старое/повтор) в постоянный вкус. Неоценённые доводы не подтверждены. "
+              "Сохрани прежние правила без новых свидетельств. Верни JSON {\"profile_text\":\"правила только этой категории\"}. "
+              "Текущие правила: " + category_prompts.sections(current or "").get(category_prompts.NAMES[category], ""))
+    return llm.chat_json("calibrate-" + category, system, json.dumps(lines, ensure_ascii=False), max_tokens=4000)
+
 
 
 def _auc(pairs: list[tuple[float, bool]]) -> float | None:
@@ -481,18 +488,23 @@ def _auc(pairs: list[tuple[float, bool]]) -> float | None:
 
 def score_with(llm: LLM, profile_text: str, train: list[dict], test: list[dict]) -> float | None:
     """Совпадение с редактором на отложенных решениях вкуса при данном профиле (AUC)."""
-    examples = "\n".join(f"{'ДА' if j['verdict'] == 'yes' else 'НЕТ'} — {j.get('title') or j['story_key']}"
-                         for j in train[-40:] if not j.get("moment_only"))
-    eval_test = [j for j in test if not j.get("moment_only")] or test
-    payload = [{"id": str(i), "source": "", "date": "", "title": j.get("title") or j["story_key"],
-                "summary": j.get("reason") or "", "url": ""} for i, j in enumerate(eval_test)]
-    resp = llm.chat_json("validate", prompt("triage", examples=examples, profile=profile_text),
-                         "Материалы:\n" + json.dumps(payload, ensure_ascii=False, indent=1), max_tokens=16000)
-    got = {int(r["id"]): float(r.get("interest") or 0) for r in resp.get("items", []) if str(r.get("id", "")).isdigit()}
-    return _auc([(got.get(i, 0.0), j["verdict"] == "yes") for i, j in enumerate(eval_test)])
+    got = {}
+    eval_test = [j for j in test if not j.get("moment_only")]
+    for category in category_prompts.NAMES:
+        group = [(i,j) for i,j in enumerate(eval_test) if category_of(j) == category]
+        if not group: continue
+        examples = json.dumps([j for j in train[-40:] if category_of(j) == category and not j.get("moment_only")], ensure_ascii=False)
+        payload = [{"id":str(i),"title":j.get("title") or j["story_key"],"summary":j.get("reason") or ""} for i,j in group]
+        system = category_prompts.render(category_prompts.template_for(None,category),profile_text,examples,category)
+        resp = llm.chat_json("validate-"+category,system,json.dumps(payload,ensure_ascii=False),max_tokens=16000)
+        for r in resp.get("items",[]):
+            if str(r.get("id","")).isdigit(): got[int(r["id"])]=float(r.get("interest") or 0)
+    if len(got) != len(eval_test): return None
+    return _auc([(got[i],j["verdict"]=="yes") for i,j in enumerate(eval_test)])
 
 
-def calibrate(state, llm: LLM | None, seed: dict, log, force: bool = False, min_new: int = 15,
+
+def _calibrate_one(state, llm: LLM | None, seed: dict, log, force: bool = False, min_new: int = 15,
               default_profile: str = "") -> dict | None:
     """Пересчитать поправки и профиль, если накопилось min_new новых решений (или force)."""
     items = judgments(state)
@@ -511,7 +523,10 @@ def calibrate(state, llm: LLM | None, seed: dict, log, force: bool = False, min_
         train = [j for j in taste_ordered if j["story_key"] not in test_keys]
         current = learned.get("profile_text") or default_profile
         try:
-            prof = profile(llm, ordered, seed, current)
+            prof = profile(llm, train, seed, current)
+            if train and prof.get("profile_text"):
+                cat = category_of(train[0])
+                prof["profile_text"] = category_prompts.replace_profile(current, cat, prof["profile_text"])
             entry["profile"] = prof
             if train and len({j["verdict"] for j in test}) == 2:
                 old_auc = score_with(llm, current, train, test)
@@ -535,6 +550,35 @@ def calibrate(state, llm: LLM | None, seed: dict, log, force: bool = False, min_
     log("info", "learn", "калибровка", judged=len(items), precision=before["precision"],
         kinds=len(adj["kind"]), topics=len(adj["topic"]))
     return entry
+
+
+def calibrate(state, llm, seed, log, force=False, min_new=15, default_profile="", category=None):
+    from types import SimpleNamespace
+    import copy
+    learned = state.data.setdefault("learned", {"history": []})
+    histories = learned.setdefault("category_learning", {})
+    current = learned.get("profile_text") or default_profile
+    entries = {}
+    for code in category_prompts.NAMES:
+        if category and category != code: continue
+        group = {key:j for key,j in state.data.get("judgments",{}).items() if category_of(j)==code}
+        if not group: continue
+        local = copy.deepcopy(histories.get(code) or {"history": []})
+        local["profile_text"] = category_prompts.scoped_profile(current, code)
+        isolated = SimpleNamespace(data={"judgments":group,"learned":local,"saturated_topics":{}})
+        entry = _calibrate_one(isolated,llm,{},log,force,min_new,local["profile_text"])
+        if entry is None: continue
+        histories[code]=local;entries[code]=entry
+        if entry.get("accepted"):
+            body=category_prompts.sections(local["profile_text"]).get(category_prompts.NAMES[code], "")
+            current=category_prompts.replace_profile(current,code,body)
+    if not entries: return None
+    learned["profile_text"]=current
+    learned["adjustments"]=adjustments(judgments(state),state)
+    learned["judged_at_calibration"]=len(judgments(state))
+    result={"at":now(),"categories":entries,"judged":len(judgments(state)),"profile":{"profile_text":current}}
+    learned["history"]=(learned.get("history",[])+[result])[-30:]
+    return result
 
 
 def apply(c: dict, learned: dict) -> int:

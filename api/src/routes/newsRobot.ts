@@ -333,12 +333,21 @@ newsRobot.get("/overview", async (c) => {
 newsRobot.post("/retriage", async (c) => {
   const principal = requirePermission(c.get("principal"), "su");
   const body = await c.req.json().catch(() => null) as Row | null;
+  const allowedCategories = ["architecture", "software", "ai", "competitions", "site", "knowledge"];
+  const category = typeof body?.category === "string" ? body.category : undefined;
+  if (category !== undefined && !allowedCategories.includes(category)) throw new ApiError("validation_failed", "Неизвестная категория");
+  const categoryPrompt = typeof body?.category_prompt === "string" ? body.category_prompt : undefined;
+  const categoryProfile = typeof body?.category_profile === "string" ? body.category_profile : undefined;
+  if ((categoryPrompt !== undefined || categoryProfile !== undefined) && !category) throw new ApiError("validation_failed", "Укажите категорию");
+  if (categoryPrompt !== undefined && (!categoryPrompt.trim() || categoryPrompt.length > 20000 || !categoryPrompt.includes("{{profile}}") || !categoryPrompt.includes("{{examples}}"))) throw new ApiError("validation_failed", "Промпт должен содержать {{profile}} и {{examples}} и быть не длиннее 20000 символов");
+  if (categoryProfile !== undefined && categoryProfile.length > 12000) throw new ApiError("validation_failed", "Профиль слишком длинный");
   const profileText = typeof body?.profile_text === "string" ? body.profile_text.slice(0, 12000) : undefined;
   const triageTemplate = typeof body?.triage_template === "string" ? body.profile_only ? undefined : body.triage_template.slice(0, 20000) : undefined;
   const mode = body?.mode === "all" ? "all" : "unjudged";
   const recalibrate = Boolean(body?.recalibrate);
   const promptOnly = Boolean(body?.prompt_only);
   const req = {
+    category, category_prompt: categoryPrompt, category_profile: categoryProfile,
     profile_text: profileText,
     triage_template: triageTemplate,
     mode,

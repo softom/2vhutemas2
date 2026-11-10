@@ -33,6 +33,7 @@ import {
 
 import { ROBOT_BLOCKS, RobotBlockNav, RobotDashboard, CollectionResult, ClassificationResult } from "./robotBlocks";
 import { NEWS_CATEGORIES, CATEGORY_NAMES, newsCategory, VALUE_REASONS, splitProfile, joinProfile } from "./newsCategories";
+import { CategoryClassifier } from "./CategoryClassifier";
 const TOPIC: Record<string, string> = { architecture: "Архитектура", neurogeneration: "Нейрогенерация", software: "ПО" };
 const KIND: Record<string, string> = {
   building: "здание", material: "материал", tool: "инструмент", competition: "конкурс", education: "образование",
@@ -126,12 +127,11 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       {error && <p className="error">{error}</p>}
       {status && <p className="notice">{status}</p>}
       {ov && !ov.connected && <p className="notice">Папки робота на сервере не подключены к API.</p>}
-      {ov && run && ["", "collect", "classify"].includes(section) && <Progress ov={ov} run={run} />}
+      {ov && run && ["", "collect"].includes(section) && <Progress ov={ov} run={run} />}
       {ov && section === "" && <RobotDashboard ov={ov} run={run} />}
       {ov && section === "collect" && <CollectionResult run={run} />}
       {ov && section === "classify" && <>
-        <ClassificationResult run={run} />
-        <TrainPromptBox ov={ov} act={act} />
+        <CategoryClassifier ov={ov} run={run} act={act} />
         <details className="block"><summary>Обучение и точность доводов</summary><Learning learned={ov.learned} /></details>
       </>}
       {ov && run && section === "news" && <News ov={ov} run={run} act={act} />}
