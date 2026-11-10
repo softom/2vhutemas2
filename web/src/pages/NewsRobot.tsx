@@ -33,6 +33,7 @@ import {
 
 import { ROBOT_BLOCKS, RobotBlockNav, RobotDashboard, CollectionResult, ClassificationResult } from "./robotBlocks";
 import { NEWS_CATEGORIES, CATEGORY_NAMES, newsCategory, VALUE_REASONS, splitProfile, joinProfile } from "./newsCategories";
+import { PositiveReason } from "./PositiveReason";
 import { CategoryClassifier } from "./CategoryClassifier";
 const TOPIC: Record<string, string> = { architecture: "Архитектура", neurogeneration: "Нейрогенерация", software: "ПО" };
 const KIND: Record<string, string> = {
@@ -384,13 +385,14 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
     }
   };
 
-  const clickYes = (c: Row, reason: string) => {
+  const clickYes = async (c: Row, reason: string) => {
     const note = (customNotes[c.story_key] ?? ov.judged_details?.[c.story_key]?.note ?? "").trim();
     const selected = reason === "custom" ? note : reason;
     if (!selected) { setRowNote(r => ({ ...r, [c.story_key]: "Укажите свою причину в поле слева." })); return; }
     setPositiveReasons(p => ({ ...p, [c.story_key]: selected }));
     const marks = getStoryMarks(c);
-    void sendJudge(c, "yes", marks, undefined, null, note || undefined, selected);
+    setRowNote(r => ({ ...r, [c.story_key]: "" }));
+    await sendJudge(c, "yes", marks, undefined, null, note || undefined, selected);
   };
 
   const clickNo = (c: Row) => {
@@ -637,11 +639,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                     )}
                   </td>
                   <td>{!c.partial && <>
-                    <select aria-label={`Причина положительной оценки: ${c.title_ru}`} value="" onChange={e => { if (e.target.value) clickYes(c, e.target.value); }}>
-                      <option value="">{v === "yes" ? "Оценено положительно · причина…" : "Выпустил бы, потому что…"}</option>
-                      {VALUE_REASONS[newsCategory(c)].map(reason => <option key={reason} value={reason}>{reason}</option>)}
-                      <option value="custom">Своя причина из поля слева</option>
-                    </select>{" "}
+                    <PositiveReason title={c.title_ru} reasons={VALUE_REASONS[newsCategory(c)]} initialNote={noteVal} judged={v === "yes"} submit={reason => clickYes(c, reason)} />
                     {ov.judged_details?.[c.story_key]?.claims?.filter(cl => cl.id.startsWith("editor_")).map(cl => <p className="hint" key={cl.id}>{cl.text}</p>)}
                     <button type="button" className={v === "no" ? undefined : "ghost"} onClick={() => clickNo(c)}>Нет</button>
                   </>}</td>
