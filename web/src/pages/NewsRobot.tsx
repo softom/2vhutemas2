@@ -62,12 +62,15 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
   const [status, setStatus] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const preparing = useRef(false);
+  const refreshVersion = useRef(0);
 
   const refresh = useCallback(async () => {
     clearTimeout(timer.current);
+    const version = ++refreshVersion.current;
     let running = false;
     try {
       const [o, h] = await Promise.all([api.robotOverview(), api.robotHealth().catch(() => null)]);
+      if (version !== refreshVersion.current) return;
       setOv(o);
       setHealth(h);
       preparing.current = Boolean(o.retriage_queued || o.retriage_status?.running)
@@ -78,11 +81,13 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       if (id && id !== runId) setRunId(id);
       if (id) {
         const r = await api.robotRunView(id);
+        if (version !== refreshVersion.current) return;
         setRun(r);
         running = r.running;
       }
       setError(null);
     } catch (e) {
+      if (version !== refreshVersion.current) return;
       setError((e as Error).message);
     }
     // Идёт прогон или в стеке есть новость в переводе — обновляем часто.
@@ -92,7 +97,7 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
   useEffect(() => {
     if (!allowed) return;
     refresh();
-    return () => clearTimeout(timer.current);
+    return () => { ++refreshVersion.current; clearTimeout(timer.current); };
   }, [allowed, refresh]);
 
   if (!allowed) return <p className="error">Раздел робота доступен только суперпользователю.</p>;
@@ -304,6 +309,8 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const [view, setView] = useState<"new" | "seen" | "all">("new");
   const rows = allRows.filter((c) => view === "all" || (view === "new" ? !reviewed(c) : reviewed(c)));
   const [topic, setTopic] = useState("");
+  const [page, setPage] = useState(0);
+  const pageSize = 30;
   // Ответ — прямо в строке: сообщение вверху страницы из середины таблицы не видно.
   const [rowNote, setRowNote] = useState<Record<string, string>>({});
   // Отметки редактора по доводам робота (story_key -> { claim_id -> "true" | "false" }), «уже была такая тема» и своя причина.
@@ -458,6 +465,14 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const counts = rows.reduce<Record<string, number>>((m, c) => ({ ...m, [newsCategory(c)]: (m[newsCategory(c)] ?? 0) + 1 }), {});
   const categoryOptions = [...NEWS_CATEGORIES, ["unclassified", "Без категории"]] as readonly (readonly [string, string])[];
   const shownRows = (topic ? rows.filter(c => newsCategory(c) === topic) : rows).slice().sort((a, b) => categoryOptions.findIndex(([id]) => id === newsCategory(a)) - categoryOptions.findIndex(([id]) => id === newsCategory(b)));
+  const pageCount = Math.max(1, Math.ceil(shownRows.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visibleRows = shownRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  const pager = <nav className="robot-toolbar" aria-label="Страницы кандидатов">
+    <button type="button" className="ghost" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Предыдущие</button>
+    <span>Страница {currentPage + 1} из {pageCount} · Всего {shownRows.length}</span>
+    <button type="button" className="ghost" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>Следующие</button>
+  </nav>;
   return (
     <>
       <h2>Стек кандидатов</h2>
@@ -469,7 +484,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       <div className="robot-tabs filters">
         {([["new", "Непросмотренные"], ["seen", "Просмотренные"], ["all", "Все"]] as const).map(([code, title]) => (
           <a key={code} href="#" className={view === code ? "active" : undefined}
-            onClick={(e) => { e.preventDefault(); setView(code); }}>
+            onClick={(e) => { e.preventDefault(); setView(code); setPage(0); }}>
             {title} ({allRows.filter((c) => code === "all" || (code === "new" ? !reviewed(c) : reviewed(c))).length})
           </a>
         ))}
@@ -477,16 +492,17 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       <div className="robot-tabs filters">
         {[["", "Все категории"], ...categoryOptions].map(([code, title]) => (
           <a key={code} href="#" className={topic === code ? "active" : undefined}
-            onClick={(e) => { e.preventDefault(); setTopic(code); }}>
+            onClick={(e) => { e.preventDefault(); setTopic(code); setPage(0); }}>
             {title} ({code ? counts[code] ?? 0 : rows.length})
           </a>
         ))}
       </div>
+      {pager}
       {rows.length === 0 ? <p className="hint">{run.running ? "Отбор ещё не начался." : "Отбора в этом прогоне не было."}</p> : (
         <table className="grid-table">
           <thead><tr><th>#</th><th>Оценка</th><th title="Возраст истории / сколько раз её повторили другие издания и прогоны / насколько она близка к записям сайта">Свежесть / повтор / связь</th><th>Тема</th><th>Новость</th><th>Доводы и сомнения робота</th><th>Причина положительной оценки</th><th>Стек</th><th>Публикация</th></tr></thead>
           <tbody>
-            {shownRows.map((c, i) => {
+            {visibleRows.map((c, i) => {
               const v = ov.judged[c.story_key] ?? pendingVerdict[c.story_key];
               const claimsList = defaultClaimsForStory(c);
               const forClaims = claimsList.filter((cl) => cl.pole === "for");
@@ -496,9 +512,9 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
               const noteVal = customNotes[c.story_key] ?? ov.judged_details?.[c.story_key]?.note ?? "";
               return (
                 <Fragment key={c.story_key || i}>
-                {(i === 0 || newsCategory(shownRows[i - 1]) !== newsCategory(c)) && <tr className="robot-category-heading"><th colSpan={9}>{CATEGORY_NAMES[newsCategory(c)] ?? "Без категории"}</th></tr>}
+                {(i === 0 || newsCategory(visibleRows[i - 1]) !== newsCategory(c)) && <tr className="robot-category-heading"><th colSpan={9}>{CATEGORY_NAMES[newsCategory(c)] ?? "Без категории"}</th></tr>}
                 <tr>
-                  <td>{i + 1}</td>
+                  <td>{currentPage * pageSize + i + 1}</td>
                   <td>
                     <b>{c.final}</b>
                     {!c.partial && <><br /><span className="hint">LLM {c.interest}</span></>}
@@ -653,6 +669,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
           </tbody>
         </table>
       )}
+      {pager}
       <details className="robot-prepared">
         <summary>Тексты, подготовленные в выбранном прогоне ({run.news.length})</summary>
       <h2>Переведено заранее</h2>
