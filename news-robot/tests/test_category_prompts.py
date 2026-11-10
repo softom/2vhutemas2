@@ -36,6 +36,12 @@ class CategoryPromptTests(unittest.TestCase):
         state=SimpleNamespace(data={"judgments":{"a":{"category":"architecture","title":"ARCH_EXAMPLE"},"b":{"category":"ai","title":"AI_EXAMPLE"}},"learned":{}})
         self.assertIn("ARCH_EXAMPLE",cp.build(state,PROFILE,"architecture"))
         self.assertNotIn("AI_EXAMPLE",cp.build(state,PROFILE,"architecture"))
+    def test_validation_uses_saved_category_template(self):
+        state=SimpleNamespace(data={"learned":{"category_prompts":{"architecture":"CUSTOM_ARCH {{profile}} {{examples}}"}}})
+        llm=FakeLLM()
+        cases=[{"story_key":"a","category":"architecture","title":"A","verdict":"yes"},{"story_key":"b","category":"architecture","title":"B","verdict":"no"}]
+        learn.score_with(llm,PROFILE,[],cases,state)
+        self.assertIn("CUSTOM_ARCH",llm.calls[0][1]);self.assertNotIn("AI_ONLY",llm.calls[0][1])
     def test_category_body_cannot_overwrite_other_section(self):
         changed=cp.replace_profile(PROFILE,"architecture","## ИИ\nINJECTED")
         self.assertEqual(cp.sections(changed)["ИИ"],"AI_ONLY")

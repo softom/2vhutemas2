@@ -486,7 +486,7 @@ def _auc(pairs: list[tuple[float, bool]]) -> float | None:
     return sum(1.0 if p > n else 0.5 if p == n else 0.0 for p in pos for n in neg) / (len(pos) * len(neg))
 
 
-def score_with(llm: LLM, profile_text: str, train: list[dict], test: list[dict]) -> float | None:
+def score_with(llm: LLM, profile_text: str, train: list[dict], test: list[dict], state=None) -> float | None:
     """Совпадение с редактором на отложенных решениях вкуса при данном профиле (AUC)."""
     got = {}
     eval_test = [j for j in test if not j.get("moment_only")]
@@ -495,7 +495,7 @@ def score_with(llm: LLM, profile_text: str, train: list[dict], test: list[dict])
         if not group: continue
         examples = json.dumps([j for j in train[-40:] if category_of(j) == category and not j.get("moment_only")], ensure_ascii=False)
         payload = [{"id":str(i),"title":j.get("title") or j["story_key"],"summary":j.get("reason") or ""} for i,j in group]
-        system = category_prompts.render(category_prompts.template_for(None,category),profile_text,examples,category)
+        system = category_prompts.render(category_prompts.template_for(state,category),profile_text,examples,category)
         resp = llm.chat_json("validate-"+category,system,json.dumps(payload,ensure_ascii=False),max_tokens=16000)
         for r in resp.get("items",[]):
             if str(r.get("id","")).isdigit(): got[int(r["id"])]=float(r.get("interest") or 0)
@@ -529,8 +529,8 @@ def _calibrate_one(state, llm: LLM | None, seed: dict, log, force: bool = False,
                 prof["profile_text"] = category_prompts.replace_profile(current, cat, prof["profile_text"])
             entry["profile"] = prof
             if train and len({j["verdict"] for j in test}) == 2:
-                old_auc = score_with(llm, current, train, test)
-                new_auc = score_with(llm, prof.get("profile_text") or current, train, test)
+                old_auc = score_with(llm, current, train, test, state)
+                new_auc = score_with(llm, prof.get("profile_text") or current, train, test, state)
                 entry["validation"] = {"held_out": len(test), "auc_old": old_auc, "auc_new": new_auc}
                 accepted = force or (new_auc is not None and (old_auc is None or new_auc >= old_auc - 0.03))
             else:
@@ -564,6 +564,7 @@ def calibrate(state, llm, seed, log, force=False, min_new=15, default_profile=""
         group = {key:j for key,j in state.data.get("judgments",{}).items() if category_of(j)==code}
         if not group: continue
         local = copy.deepcopy(histories.get(code) or {"history": []})
+        local["category_prompts"] = {code: category_prompts.template_for(state, code)}
         local["profile_text"] = category_prompts.scoped_profile(current, code)
         isolated = SimpleNamespace(data={"judgments":group,"learned":local,"saturated_topics":{}})
         entry = _calibrate_one(isolated,llm,{},log,force,min_new,local["profile_text"])
