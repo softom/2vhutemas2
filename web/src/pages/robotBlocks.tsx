@@ -23,12 +23,12 @@ export function RobotBlockNav({ section }: { section: string }) {
         <span className="robot-block-number" aria-hidden="true">{b.number}</span><span>{b.title}</span>
       </Link>)}
     </nav>
-    {active && active.id !== "classify" && <header className="robot-block-heading"><h2>Блок {active.number}. {active.title}</h2><p className="hint">{active.description}</p></header>}
-    {active && SUBPAGES[active.id] && <nav className="robot-tabs filters" aria-label={`Разделы блока «${active.title}»`}>
+    {active && SUBPAGES[active.id] && <nav className={active.id === "editor" ? "robot-block-nav robot-editor-nav" : "robot-tabs filters"} aria-label={`Разделы блока «${active.title}»`}>
       {SUBPAGES[active.id].map(([code, path, title]) => <Link key={code} to={path}
         className={section === code || (section === "preview" && code === "news") ? "active" : undefined}
         aria-current={section === code ? "page" : undefined}>{title}</Link>)}
     </nav>}
+    {active && active.id !== "classify" && <header className="robot-block-heading"><h2>Блок {active.number}. {active.title}</h2><p className="hint">{active.description}</p></header>}
   </>;
 }
 
