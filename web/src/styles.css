@@ -859,3 +859,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .type-chips.sub button { height: 32px; padding: 0 10px; font-size: 12px; border-width: 1px; }
 
 .robot-category-heading th { background: var(--surface); color: var(--accent); font-size: 18px; padding: 16px 10px; }
+
+/* Категории классификатора — второй уровень навигации блоков. */
+.robot-category-nav { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: -8px; }
+.robot-category-nav button { border: 1px solid var(--line); background: transparent; color: var(--text); padding: 12px; text-align: left; font: inherit; border-radius: 0; }
+.robot-category-nav button.active { border-color: var(--accent); background: var(--surface); box-shadow: inset 0 -3px var(--accent); }
+.robot-category-nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 900px) { .robot-category-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 440px) { .robot-category-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

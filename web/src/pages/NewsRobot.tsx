@@ -110,6 +110,7 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
     <section className="robot">
       <h1>Робот новостей</h1>
       <RobotBlockNav section={section} />
+      {ov && section === "classify" && <CategoryClassifier ov={ov} run={run} act={act} />}
       <div className="robot-toolbar">
         <Link to="/robot" aria-current={section === "" ? "page" : undefined}>Обзор блоков</Link>
         {ov && ov.runs.length > 0 && (
@@ -131,7 +132,6 @@ export function NewsRobot({ allowed }: { allowed: boolean }) {
       {ov && section === "" && <RobotDashboard ov={ov} run={run} />}
       {ov && section === "collect" && <CollectionResult run={run} />}
       {ov && section === "classify" && <>
-        <CategoryClassifier ov={ov} run={run} act={act} />
         <details className="block"><summary>Обучение и точность доводов</summary><Learning learned={ov.learned} /></details>
       </>}
       {ov && run && section === "news" && <News ov={ov} run={run} act={act} />}

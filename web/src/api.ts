@@ -441,7 +441,7 @@ export interface RobotSourceRow {
 export interface RobotQueueItem { story_key: string; run_id?: string; title?: string; topic?: string; final?: number; url?: string; date: string; time: string; by?: string }
 export interface RobotQueue { items: RobotQueueItem[]; times: string[]; days: string[] }
 export interface RobotPromptView {
-  category_prompts?: Record<string, { title: string; template: string; profile: string; full_prompt: string }>;
+  category_prompts?: Record<string, { title: string; template: string; profile: string; full_prompt: string; common_rules?: string; classifier_prompt?: string }>;
   updated_at?: string;
   template: string;
   default_template?: string;

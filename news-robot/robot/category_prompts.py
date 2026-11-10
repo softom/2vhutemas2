@@ -42,7 +42,7 @@ def build(state, profile, category):
     return render(template_for(state, category), profile, examples_for(state, category), category)
 
 def snapshots(state, profile):
-    return {category:{"title":title,"template":template_for(state,category),"profile":sections(profile).get(title,""),"full_prompt":build(state,profile,category)} for category,title in NAMES.items()}
+    return {category:{"title":title,"common_rules":sections(profile).get("Общие правила",""),"classifier_prompt":CLASSIFIER,"template":template_for(state,category),"profile":sections(profile).get(title,""),"full_prompt":build(state,profile,category)} for category,title in NAMES.items()}
 
 def evaluate(llm, payload, state, profile, known=None, stage="triage"):
     known = known or {}; assigned = {}; unresolved = []
