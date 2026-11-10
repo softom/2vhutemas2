@@ -12,10 +12,11 @@
  * Решения «да / нет» и по сайтам уходят роботу в ящик и применяются при
  * следующем запуске; стек принадлежит редактору и меняется сразу.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   api,
+  type RobotClaim,
   type RobotHealth,
   type RobotLearned,
   type RobotLogLine,
@@ -31,6 +32,7 @@ import {
 } from "../api";
 
 import { ROBOT_BLOCKS, RobotBlockNav, RobotDashboard, CollectionResult, ClassificationResult } from "./robotBlocks";
+import { NEWS_CATEGORIES, CATEGORY_NAMES, newsCategory, VALUE_REASONS, splitProfile, joinProfile } from "./newsCategories";
 const TOPIC: Record<string, string> = { architecture: "Архитектура", neurogeneration: "Нейрогенерация", software: "ПО" };
 const KIND: Record<string, string> = {
   building: "здание", material: "материал", tool: "инструмент", competition: "конкурс", education: "образование",
@@ -237,6 +239,43 @@ function Progress({ ov, run }: { ov: RobotOverview; run: RobotRunView }) {
   );
 }
 
+const CLAIM_KIND_LABEL: Record<string, string> = {
+  arch_value: "ценность",
+  novelty: "новизна",
+  freshness: "свежесть",
+  resonance: "резонанс",
+  students: "студентам",
+  saturation: "насыщение",
+  doubt: "сомнение",
+};
+
+function defaultClaimsForStory(c: RobotStory): RobotClaim[] {
+  if (Array.isArray(c.claims) && c.claims.length > 0) return c.claims;
+  const list: RobotClaim[] = [];
+  if (c.reason) {
+    list.push({ id: "arch_value_0", kind: "arch_value", pole: "for", by: "llm", text: c.reason });
+  }
+  if (!c.republished_from && typeof c.age_days === "number" && c.age_days <= 2) {
+    list.push({
+      id: "freshness",
+      kind: "freshness",
+      pole: "for",
+      by: "robot",
+      text: `Свежее: вышло ${c.age_days <= 0 ? "сегодня" : c.age_days === 1 ? "вчера" : "2 дня назад"}`,
+    });
+  }
+  if (c.sources.length >= 2) {
+    list.push({
+      id: "resonance",
+      kind: "resonance",
+      pole: "for",
+      by: "robot",
+      text: `Резонанс: ${c.sources.length} изд.`,
+    });
+  }
+  return list;
+}
+
 function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act }) {
   const inStack = new Set(ov.queue.items.map((i) => i.story_key));
   const pendingVerdict = Object.fromEntries(ov.pending.filter((p) => p.action === "judge" && p.story_key)
@@ -266,6 +305,138 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
   const [topic, setTopic] = useState("");
   // Ответ — прямо в строке: сообщение вверху страницы из середины таблицы не видно.
   const [rowNote, setRowNote] = useState<Record<string, string>>({});
+  // Отметки редактора по доводам робота (story_key -> { claim_id -> "true" | "false" }), «уже была такая тема» и своя причина.
+  const [claimMarks, setClaimMarks] = useState<Record<string, Record<string, "true" | "false">>>({});
+  const [satMarks, setSatMarks] = useState<Record<string, boolean>>({});
+  const [customNotes, setCustomNotes] = useState<Record<string, string>>({});
+  const [positiveReasons, setPositiveReasons] = useState<Record<string, string>>({});
+  const [askWhyNo, setAskWhyNo] = useState<Record<string, boolean>>({});
+
+  const getStoryMarks = (c: Row): Record<string, "true" | "false"> => {
+    if (claimMarks[c.story_key]) return claimMarks[c.story_key];
+    const saved = ov.judged_details?.[c.story_key]?.claims;
+    if (!saved?.length) return {};
+    const m: Record<string, "true" | "false"> = {};
+    for (const cl of saved) {
+      if (cl.id && (cl.verdict === "true" || cl.verdict === "false")) m[cl.id] = cl.verdict;
+    }
+    return m;
+  };
+  const isStorySaturated = (key: string): boolean =>
+    satMarks[key] !== undefined ? satMarks[key] : Boolean(ov.judged_details?.[key]?.saturated);
+
+  const sendJudge = (
+    c: Row,
+    verdict: "yes" | "no",
+    overrideMarks?: Record<string, "true" | "false">,
+    overrideSat?: boolean,
+    momentReason?: string | null,
+    overrideNote?: string,
+    explicitReason?: string,
+  ) => {
+    const key = c.story_key;
+    keep(key);
+    setAskWhyNo((p) => ({ ...p, [key]: false }));
+    const marks = overrideMarks ?? getStoryMarks(c);
+    const sat = overrideSat !== undefined ? overrideSat : isStorySaturated(key);
+    const noteText = (overrideNote !== undefined ? overrideNote : (customNotes[key] ?? ov.judged_details?.[key]?.note ?? "")).trim() || undefined;
+    const selectedReason = verdict === "yes" ? explicitReason ?? positiveReasons[key] : undefined;
+    const baseClaims = [...defaultClaimsForStory(c), ...((selectedReason || verdict === "no") ? [] : (ov.judged_details?.[key]?.claims ?? []).filter(cl => cl.id.startsWith("editor_") && !defaultClaimsForStory(c).some(b => b.id === cl.id)))];
+    const payloadClaims: RobotClaim[] = baseClaims.map((cl) => {
+      let cv: "true" | "false" | null = marks[cl.id] ?? (cl.id.startsWith("editor_") ? cl.verdict ?? null : null);
+      if (!cv && sat && cl.kind === "saturation") cv = "true";
+      if (!cv && sat && cl.kind === "novelty") cv = "false";
+      return { ...cl, verdict: cv };
+    });
+    if (selectedReason) payloadClaims.push({ id: `editor_${newsCategory(c)}_value`, kind: "arch_value", pole: "for", text: `[${CATEGORY_NAMES[newsCategory(c)] ?? "Без категории"}] ${selectedReason}`, verdict: "true" });
+    return act(() =>
+      api.robotInbox({
+        action: "judge",
+        run_id: c.run_id ?? run.id,
+        story_key: key,
+        verdict,
+        note: noteText,
+        claims: payloadClaims,
+        saturated: sat,
+        moment_reason: momentReason ?? (sat ? "saturated" : null),
+      }),
+    );
+  };
+
+  const toggleClaimMark = (c: Row, claim: RobotClaim, mark: "true" | "false") => {
+    const key = c.story_key;
+    keep(key);
+    const cur = getStoryMarks(c);
+    const nextVal = cur[claim.id] === mark ? undefined : mark;
+    const nextMarks: Record<string, "true" | "false"> = { ...cur };
+    if (nextVal) nextMarks[claim.id] = nextVal;
+    else delete nextMarks[claim.id];
+    setClaimMarks((prev) => ({ ...prev, [key]: nextMarks }));
+    const nextSat = claim.kind === "saturation" ? nextVal === "true" : isStorySaturated(key);
+    if (claim.kind === "saturation") setSatMarks((prev) => ({ ...prev, [key]: nextSat }));
+
+    const curVerdict = ov.judged[key] ?? pendingVerdict[key];
+    // Если редактор нажал «Нет» и система спросила «где робот ошибся?», отметка неверного довода или верного сомнения сразу отправляет «Нет».
+    if (askWhyNo[key] && ((claim.pole === "for" && nextVal === "false") || (claim.pole === "doubt" && nextVal === "true"))) {
+      void sendJudge(c, "no", nextMarks, nextSat);
+    } else if (curVerdict === "yes" || curVerdict === "no") {
+      void sendJudge(c, curVerdict, nextMarks, nextSat);
+    }
+  };
+
+  const clickYes = (c: Row, reason: string) => {
+    const note = (customNotes[c.story_key] ?? ov.judged_details?.[c.story_key]?.note ?? "").trim();
+    const selected = reason === "custom" ? note : reason;
+    if (!selected) { setRowNote(r => ({ ...r, [c.story_key]: "Укажите свою причину в поле слева." })); return; }
+    setPositiveReasons(p => ({ ...p, [c.story_key]: selected }));
+    const marks = getStoryMarks(c);
+    void sendJudge(c, "yes", marks, undefined, null, note || undefined, selected);
+  };
+
+  const clickNo = (c: Row) => {
+    const key = c.story_key;
+    keep(key);
+    const marks = getStoryMarks(c);
+    const sat = isStorySaturated(key);
+    const note = (customNotes[key] ?? "").trim();
+    const baseClaims = defaultClaimsForStory(c);
+    const hasReason =
+      sat ||
+      Boolean(note) ||
+      baseClaims.some((cl) => (cl.pole === "for" && marks[cl.id] === "false") || (cl.pole === "doubt" && marks[cl.id] === "true"));
+    if (hasReason) {
+      void sendJudge(c, "no", marks, sat);
+    } else {
+      setAskWhyNo((prev) => ({ ...prev, [key]: true }));
+    }
+  };
+
+  const quickNoReason = (c: Row, reasonCode: "saturated" | "not_arch" | "weak_arch" | "stale") => {
+    const key = c.story_key;
+    const baseClaims = defaultClaimsForStory(c);
+    const nextMarks: Record<string, "true" | "false"> = { ...getStoryMarks(c) };
+    let nextSat = isStorySaturated(key);
+    if (reasonCode === "saturated") {
+      nextSat = true;
+      setSatMarks((prev) => ({ ...prev, [key]: true }));
+      for (const cl of baseClaims) {
+        if (cl.kind === "saturation") nextMarks[cl.id] = "true";
+        if (cl.kind === "novelty") nextMarks[cl.id] = "false";
+      }
+    } else if (reasonCode === "not_arch" || reasonCode === "weak_arch") {
+      for (const cl of baseClaims) {
+        if (cl.kind === "arch_value" || cl.kind === "novelty") nextMarks[cl.id] = "false";
+        if (cl.kind === "doubt") nextMarks[cl.id] = "true";
+      }
+    } else if (reasonCode === "stale") {
+      for (const cl of baseClaims) {
+        if (cl.kind === "freshness") nextMarks[cl.id] = cl.pole === "for" ? "false" : "true";
+      }
+    }
+    setClaimMarks((prev) => ({ ...prev, [key]: nextMarks }));
+    void sendJudge(c, "no", nextMarks, nextSat, reasonCode);
+  };
+
   const toStack = async (c: RobotStory, title?: string) => {
     keep(c.story_key);
     setRowNote((r) => ({ ...r, [c.story_key]: "ставим…" }));
@@ -280,20 +451,17 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       setRowNote((r) => ({ ...r, [c.story_key]: (e as Error).message }));
     }
   };
-  const judge = (story: string, verdict: "yes" | "no", runId?: string) => {
-    keep(story);
-    return act(() => api.robotInbox({ action: "judge", run_id: runId ?? run.id, story_key: story, verdict }));
-  };
   const written = new Set([...run.news.map((n) => n.candidate.story_key),
     ...allRows.filter((c) => c.written).map((c) => c.story_key)]);
-  const counts = rows.reduce<Record<string, number>>((m, c) => ({ ...m, [c.topic ?? ""]: (m[c.topic ?? ""] ?? 0) + 1 }), {});
-  const shownRows = topic ? rows.filter((c) => c.topic === topic) : rows;
+  const counts = rows.reduce<Record<string, number>>((m, c) => ({ ...m, [newsCategory(c)]: (m[newsCategory(c)] ?? 0) + 1 }), {});
+  const categoryOptions = [...NEWS_CATEGORIES, ["unclassified", "Без категории"]] as readonly (readonly [string, string])[];
+  const shownRows = (topic ? rows.filter(c => newsCategory(c) === topic) : rows).slice().sort((a, b) => categoryOptions.findIndex(([id]) => id === newsCategory(a)) - categoryOptions.findIndex(([id]) => id === newsCategory(b)));
   return (
     <>
       <h2>Стек кандидатов</h2>
       <p className="hint">
         Промежуточная БД собранных новостей за последние 30 дней (новости старше месяца удаляются из базы автоматически).
-        Просмотренные — с вашим «Да / Нет» или в стеке — скрыты; их видно во вкладке «Просмотренные».
+        Оценивайте не просто тему, а <b>доводы робота</b> (✓ верно / ✗ неверно): так робот учится рассуждениям и отделяет вкус от временного насыщения темы («уже была такая тема»).
       </p>
       <p className="hint"><Link to="/robot/classify">Настройки классификатора и переоценка →</Link></p>
       <div className="robot-tabs filters">
@@ -305,7 +473,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
         ))}
       </div>
       <div className="robot-tabs filters">
-        {[["", "Все"], ["architecture", "Архитектура"], ["neurogeneration", "Нейрогенерация"], ["software", "ПО"]].map(([code, title]) => (
+        {[["", "Все категории"], ...categoryOptions].map(([code, title]) => (
           <a key={code} href="#" className={topic === code ? "active" : undefined}
             onClick={(e) => { e.preventDefault(); setTopic(code); }}>
             {title} ({code ? counts[code] ?? 0 : rows.length})
@@ -314,16 +482,28 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
       </div>
       {rows.length === 0 ? <p className="hint">{run.running ? "Отбор ещё не начался." : "Отбора в этом прогоне не было."}</p> : (
         <table className="grid-table">
-          <thead><tr><th>#</th><th>Оценка</th><th title="Возраст истории / сколько раз её повторили другие издания и прогоны / насколько она близка к записям сайта">Свежесть / повтор / связь</th><th>Тема</th><th>Новость</th><th>Почему</th><th>Выпустил бы?</th><th>Стек</th><th>Публикация</th></tr></thead>
+          <thead><tr><th>#</th><th>Оценка</th><th title="Возраст истории / сколько раз её повторили другие издания и прогоны / насколько она близка к записям сайта">Свежесть / повтор / связь</th><th>Тема</th><th>Новость</th><th>Доводы и сомнения робота</th><th>Причина положительной оценки</th><th>Стек</th><th>Публикация</th></tr></thead>
           <tbody>
             {shownRows.map((c, i) => {
               const v = ov.judged[c.story_key] ?? pendingVerdict[c.story_key];
+              const claimsList = defaultClaimsForStory(c);
+              const forClaims = claimsList.filter((cl) => cl.pole === "for");
+              const doubtClaims = claimsList.filter((cl) => cl.pole === "doubt");
+              const marks = getStoryMarks(c);
+              const sat = isStorySaturated(c.story_key);
+              const noteVal = customNotes[c.story_key] ?? ov.judged_details?.[c.story_key]?.note ?? "";
               return (
-                <tr key={c.story_key || i}>
+                <Fragment key={c.story_key || i}>
+                {(i === 0 || newsCategory(shownRows[i - 1]) !== newsCategory(c)) && <tr className="robot-category-heading"><th colSpan={9}>{CATEGORY_NAMES[newsCategory(c)] ?? "Без категории"}</th></tr>}
+                <tr>
                   <td>{i + 1}</td>
-                  <td><b>{c.final}</b>{!c.partial && <><br /><span className="hint">LLM {c.interest}</span></>}</td>
+                  <td>
+                    <b>{c.final}</b>
+                    {!c.partial && <><br /><span className="hint">LLM {c.interest}</span></>}
+                    {Boolean(c.saturation_penalty) && <><br /><span className="error" title="Временный штраф за насыщение темы">насыщ. −{c.saturation_penalty}</span></>}
+                  </td>
                   <td><Freshness c={c} /><Similarity c={c} /></td>
-                  <td>{TOPIC[c.topic ?? ""] ?? c.topic}<br /><span className="hint">{KIND[c.kind ?? ""] ?? c.kind}{c.competition ? " · конкурс" : ""}</span></td>
+                  <td>{CATEGORY_NAMES[newsCategory(c)] ?? "Без категории"}<br /><span className="hint">{KIND[c.kind ?? ""] ?? c.kind}{c.competition ? " · конкурс" : ""}</span></td>
                   <td>
                     {ov.prepared[c.story_key]?.status === "готово" && inStack.has(c.story_key)
                       ? <Link to={`/robot/preview/${c.story_key}`}><b>{ov.prepared[c.story_key].title || c.title_ru}</b></Link>
@@ -343,16 +523,133 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                         <span key={h.id}>{n > 0 && " · "}<SiteHit hit={h} /></span>))}</div>
                     )}
                   </td>
-                  <td className="hint">{c.reason}</td>
+                  <td style={{ minWidth: "20rem" }}>
+                    {forClaims.length > 0 && (
+                      <div style={{ marginBottom: doubtClaims.length ? "0.35rem" : "0.2rem" }}>
+                        <div className="hint" style={{ fontSize: "0.78em" }}>Почему робот выбрал:</div>
+                        {forClaims.map((cl) => {
+                          const m = marks[cl.id] ?? (v === "yes" ? "true" : undefined);
+                          return (
+                            <div key={cl.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.35rem", margin: "0.15rem 0", fontSize: "0.88em" }}>
+                              <span style={m === "false" ? { textDecoration: "line-through", opacity: 0.7 } : undefined}>
+                                • {cl.text}{" "}
+                                <span className="hint" style={{ fontSize: "0.85em" }}>[{CLAIM_KIND_LABEL[cl.kind] ?? cl.kind}]</span>
+                              </span>
+                              {!c.partial && (
+                                <span style={{ whiteSpace: "nowrap" }}>
+                                  <button
+                                    type="button"
+                                    className={m === "true" ? undefined : "ghost"}
+                                    style={{ padding: "0.05rem 0.35rem", fontSize: "0.8em" }}
+                                    title="Довод верен"
+                                    onClick={() => toggleClaimMark(c, cl, "true")}
+                                  >✓</button>{" "}
+                                  <button
+                                    type="button"
+                                    className={m === "false" ? undefined : "ghost"}
+                                    style={{ padding: "0.05rem 0.35rem", fontSize: "0.8em", ...(m === "false" ? { background: "var(--accent)", borderColor: "var(--accent)" } : {}) }}
+                                    title="Довод ошибочен"
+                                    onClick={() => toggleClaimMark(c, cl, "false")}
+                                  >✗</button>
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {doubtClaims.length > 0 && (
+                      <div style={{ marginBottom: "0.25rem" }}>
+                        <div className="hint" style={{ fontSize: "0.78em" }}>Сомнения робота:</div>
+                        {doubtClaims.map((cl) => {
+                          const m = marks[cl.id];
+                          return (
+                            <div key={cl.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.35rem", margin: "0.15rem 0", fontSize: "0.88em" }}>
+                              <span className={m === "true" ? "error" : "hint"}>
+                                ⚠ {cl.text}{" "}
+                                <span className="hint" style={{ fontSize: "0.85em" }}>[{CLAIM_KIND_LABEL[cl.kind] ?? cl.kind}]</span>
+                              </span>
+                              {!c.partial && (
+                                <span style={{ whiteSpace: "nowrap" }}>
+                                  <button
+                                    type="button"
+                                    className={m === "true" ? undefined : "ghost"}
+                                    style={{ padding: "0.05rem 0.35rem", fontSize: "0.8em" }}
+                                    title="Сомнение справедливо (это действительно минус)"
+                                    onClick={() => toggleClaimMark(c, cl, "true")}
+                                  >✓</button>{" "}
+                                  <button
+                                    type="button"
+                                    className={m === "false" ? undefined : "ghost"}
+                                    style={{ padding: "0.05rem 0.35rem", fontSize: "0.8em" }}
+                                    title="Сомнение напрасно"
+                                    onClick={() => toggleClaimMark(c, cl, "false")}
+                                  >✗</button>
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {!c.partial && (
+                      <div style={{ marginTop: "0.25rem", display: "flex", flexWrap: "wrap", gap: "0.25rem", alignItems: "center" }}>
+                        <button
+                          type="button"
+                          className={sat ? undefined : "ghost"}
+                          style={{ padding: "0.1rem 0.45rem", fontSize: "0.78em" }}
+                          title="Тема хорошая, но похожих новостей сейчас слишком много: временно приглушить похожие истории на 3 недели, не портя профиль вкуса"
+                          onClick={() => quickNoReason(c, "saturated")}
+                        >
+                          {sat ? "✓ Уже была такая тема" : "Уже была такая тема"}
+                        </button>
+                        <input
+                          style={{ fontSize: "0.8em", padding: "0.1rem 0.35rem", flex: 1, minWidth: "8rem" }}
+                          placeholder="+ своя причина (Enter)"
+                          value={noteVal}
+                          onChange={(e) => setCustomNotes((p) => ({ ...p, [c.story_key]: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && (v === "yes" || v === "no" || askWhyNo[c.story_key])) {
+                              void sendJudge(c, v === "yes" ? "yes" : "no", undefined, undefined, null, (e.target as HTMLInputElement).value);
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+                    {askWhyNo[c.story_key] && (
+                      <div className="block" style={{ marginTop: "0.35rem", padding: "0.4rem 0.55rem", fontSize: "0.83em" }}>
+                        <div><b>Где робот ошибся?</b> <span className="hint">(отметьте ✗ у довода выше или выберите в 1 клик):</span></div>
+                        <div style={{ marginTop: "0.25rem", display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                          <button type="button" className="ghost" style={{ padding: "0.1rem 0.45rem", fontSize: "0.9em" }} onClick={() => quickNoReason(c, "saturated")}>
+                            Уже была такая тема
+                          </button>
+                          <button type="button" className="ghost" style={{ padding: "0.1rem 0.45rem", fontSize: "0.9em" }} onClick={() => quickNoReason(c, "not_arch")}>
+                            Не для архитектора / узкотехнично
+                          </button>
+                          <button type="button" className="ghost" style={{ padding: "0.1rem 0.45rem", fontSize: "0.9em" }} onClick={() => quickNoReason(c, "weak_arch")}>
+                            Слабая архитектура / рядовое
+                          </button>
+                          <button type="button" className="ghost" style={{ padding: "0.1rem 0.45rem", fontSize: "0.9em" }} onClick={() => quickNoReason(c, "stale")}>
+                            Старое / неактуально
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </td>
                   <td>{!c.partial && <>
-                    <button type="button" className={v === "yes" ? undefined : "ghost"} onClick={() => judge(c.story_key, "yes", (c as Row).run_id)}>Да</button>{" "}
-                    <button type="button" className={v === "no" ? undefined : "ghost"} onClick={() => judge(c.story_key, "no", (c as Row).run_id)}>Нет</button>
+                    <select aria-label={`Причина положительной оценки: ${c.title_ru}`} value="" onChange={e => { if (e.target.value) clickYes(c, e.target.value); }}>
+                      <option value="">{v === "yes" ? "Оценено положительно · причина…" : "Выпустил бы, потому что…"}</option>
+                      {VALUE_REASONS[newsCategory(c)].map(reason => <option key={reason} value={reason}>{reason}</option>)}
+                      <option value="custom">Своя причина из поля слева</option>
+                    </select>{" "}
+                    {ov.judged_details?.[c.story_key]?.claims?.filter(cl => cl.id.startsWith("editor_")).map(cl => <p className="hint" key={cl.id}>{cl.text}</p>)}
+                    <button type="button" className={v === "no" ? undefined : "ghost"} onClick={() => clickNo(c)}>Нет</button>
                   </>}</td>
                   <td>{!c.partial && (inStack.has(c.story_key) ? <span className="hint">в стеке</span>
                     : <button type="button" className="ghost" onClick={() => toStack(c)}>В стек</button>)}
                     {rowNote[c.story_key] && <div className="error">{rowNote[c.story_key]}</div>}</td>
                   <td><Publication storyKey={c.story_key} ov={ov} /></td>
-                </tr>
+                </tr></Fragment>
               );
             })}
           </tbody>
@@ -1267,21 +1564,61 @@ function Learning({ learned }: { learned: RobotLearned | null }) {
   if (!a) {
     return (
       <p className="hint">
-        Отмечайте истории в разделе «Новости»: «Да» или «Нет». Когда наберётся 15 решений, робот пересчитает поправки
-        ранжирования и через LLM обновит описание вашего вкуса — оно заменит общее описание в промпте отбора, если на
-        отложенных решениях совпадёт с вами не хуже прежнего.
+        Отмечайте истории в разделе «Редактор»: причину положительной оценки или «Нет» и проверяйте доводы робота (✓ / ✗). Когда наберётся 15 решений,
+        робот пересчитает поправки ранжирования и через LLM обновит описание вашего вкуса.
       </p>
     );
   }
   const sign = (n: number) => (n > 0 ? `+${n}` : String(n));
+  const cstats = a.claims;
+  const claimRows = Object.entries(cstats?.by_kind ?? {});
   return (
     <>
       <p className="hint">
-        Решений: {a.n} · выбрано в среднем {Math.round(a.base_rate * 100)}%
+        Решений всего: {a.n_total ?? a.n} (по вкусу: {a.n}
+        {cstats?.moment_only_count ? `, только по моменту «уже было / старое» без влияния на профиль вкуса: ${cstats.moment_only_count}` : ""})
+        {" "}· выбрано в среднем {Math.round(a.base_rate * 100)}%
         {a.per_extra_source != null && ` · каждое следующее издание той же истории: ${sign(a.per_extra_source)} к оценке`}
       </p>
       {Object.keys(a.kind).length > 0 && (
         <p>Поправки по виду материала: {Object.entries(a.kind).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${KIND[k] ?? k} ${sign(v)}`).join(" · ")}</p>
+      )}
+      {cstats && (
+        <div className="block" style={{ marginBottom: "0.75rem" }}>
+          <h3>Доводы робота и насыщение тем</h3>
+          <p className="hint">
+            Историй с оценёнными доводами: <b>{cstats.judged_with_claims}</b>
+            {" "}· активных насыщенных тем («уже была такая тема», штраф 21 день): <b>{cstats.saturated_active_count}</b>
+          </p>
+          {claimRows.some(([, r]) => r.total > 0) && (
+            <table className="grid-table" style={{ marginTop: "0.4rem" }}>
+              <thead>
+                <tr><th>Вид довода</th><th>Кто пишет</th><th>Подтверждено (✓)</th><th>Опровергнуто (✗)</th><th>Точность</th></tr>
+              </thead>
+              <tbody>
+                {claimRows.map(([k, r]) => (
+                  <tr key={k}>
+                    <td>{r.label}</td>
+                    <td className="hint">{r.by === "robot" ? "робот (факты / векторы)" : "LLM (суть)"}</td>
+                    <td>{r.confirmed}</td>
+                    <td>{r.refuted}</td>
+                    <td>{r.accuracy != null ? <b>{Math.round(r.accuracy * 100)}%</b> : <span className="hint">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {(cstats.saturated_active?.length ?? 0) > 0 && (
+            <details style={{ marginTop: "0.4rem" }}>
+              <summary className="hint">Сейчас приглушены как «уже была такая тема» ({cstats.saturated_active!.length})</summary>
+              <ul className="hint">
+                {cstats.saturated_active!.map((s) => (
+                  <li key={s.story_key}>{s.title} ({s.at.slice(0, 10)})</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
       )}
       {learned?.profile_text && (
         <div className="block">
@@ -1363,22 +1700,20 @@ function TrainPromptBox({ ov, act, defaultOpen = false }: { ov: RobotOverview; a
           <pre className="robot-log" style={{ whiteSpace: "pre-wrap", maxHeight: "28rem" }}>{pv.full_prompt}</pre>
         </details>
       )}
-      <h4>Профиль вкуса в промпте (блок «{"{{profile}}"}»)</h4>
-      <textarea
-        rows={9}
-        style={{ width: "100%", fontFamily: "monospace", fontSize: "0.9em" }}
-        value={profileText}
-        onChange={(e) => setProfileText(e.target.value)}
-        placeholder="Правила «Ценим …» и «Не ценим …»"
-      />
+      <h4>Критерии по категориям (блок «{"{{profile}}"}»)</h4>
+      <p className="hint">Общие правила действуют для всех; правила категории — только для неё. Изменения сохраняются кнопками ниже.</p>
+      {splitProfile(profileText).map((part, index) => <details key={index} className="block">
+        <summary><b>{part.title}</b></summary>
+        <textarea aria-label={`Критерии: ${part.title}`} rows={6} style={{ width: "100%" }} value={part.body}
+          onChange={e => { const sections = splitProfile(profileText); sections[index] = { ...part, body: e.target.value }; setProfileText(joinProfile(sections)); }} />
+      </details>)}
       <details style={{ marginTop: "0.5rem", marginBottom: "0.75rem" }}>
         <summary className="hint">Шаблон системного промпта train (triage.md, содержит {"{{profile}}"} и {"{{examples}}"})</summary>
-        <textarea
-          rows={12}
-          style={{ width: "100%", fontFamily: "monospace", fontSize: "0.85em", marginTop: "0.5rem" }}
-          value={template}
-          onChange={(e) => setTemplate(e.target.value)}
-        />
+        {splitProfile(template).map((part, index) => <details key={index} className="block">
+          <summary>{part.title}</summary>
+          <textarea aria-label={`Раздел промпта: ${part.title}`} rows={8} style={{ width: "100%", fontFamily: "monospace" }} value={part.body}
+            onChange={e => { const sections = splitProfile(template); sections[index] = { ...part, body: e.target.value }; setTemplate(joinProfile(sections)); }} />
+        </details>)}
         {pv?.default_template && template !== pv.default_template && (
           <p><button type="button" className="ghost" onClick={() => setTemplate(pv.default_template!)}>Вернуть исходный шаблон промпта</button></p>
         )}

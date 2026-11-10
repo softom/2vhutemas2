@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from .editorial import section_profile, category_of
+
 import json
 import os
 import re
@@ -221,37 +223,56 @@ _NARROW_3D_RE = re.compile(
 )
 
 
+def _format_example_line(j: dict) -> str:
+    title = f"[{category_of(j)}] " + (j.get("title") or j.get("story_key") or "")
+    fb = learn.format_claim_feedback(j)
+    if j.get("verdict") == "yes":
+        parts = []
+        if fb["confirmed"]:
+            parts.append("верно: " + "; ".join(fb["confirmed"][:2]))
+        if fb["refuted"]:
+            parts.append("но неверно: " + "; ".join(fb["refuted"][:2]))
+        return f"{title} [{'; '.join(parts)}]" if parts else title
+    else:
+        parts = []
+        if fb["refuted"]:
+            parts.append("ошибка робота: " + "; ".join(fb["refuted"][:2]))
+        if j.get("note"):
+            parts.append(str(j["note"]))
+        return f"{title} [{'; '.join(parts)}]" if parts else title
+
+
 def examples_text(state: State | None = None) -> str:
-    """Образцы: последние решения редактора (до 20 «да» и 25 «нет») и первый блок.
-    Если в свежих отказах («нет») больше 5 статей по узкой 3D-реконструкции / сплатам / облакам точек,
-    то старые единичные «да» из этой узкой подтемы не дублируются в верхушке примеров (защита от переобучения)."""
+    """Образцы: последние решения редактора (до 20 «да» и 25 «нет») с проверенными доводами и первый блок.
+    Решения только по причинам момента (moment_only: «уже была такая тема», «старое») не попадают в список
+    постоянных отказов вкуса. Если в свежих отказах больше 5 статей по узкой 3D-реконструкции / сплатам,
+    то старые единичные «да» из этой узкой подтемы не дублируются в верхушке примеров."""
     ex = seed_examples()
     chosen, rejected = list(ex["chosen"]), list(ex["rejected"])
     if state is not None:
         recent = sorted(learn.judgments(state), key=lambda j: j["at"], reverse=True)
-        rec_no = [j["title"] for j in recent if j["verdict"] == "no" and j.get("title")]
-        rec_yes = [j["title"] for j in recent if j["verdict"] == "yes" and j.get("title")]
-        narrow_no_count = sum(1 for t in rec_no[:35] if _NARROW_3D_RE.search(t))
+        rec_no_objs = [j for j in recent if j["verdict"] == "no" and j.get("title") and not j.get("moment_only")]
+        rec_yes_objs = [j for j in recent if j["verdict"] == "yes" and j.get("title")]
+        narrow_no_count = sum(1 for j in recent[:35] if j["verdict"] == "no" and _NARROW_3D_RE.search(j.get("title") or ""))
         if narrow_no_count >= 5:
-            # Оставляем не более 1 прорывного примера 3D в ДА, чтобы LLM не копировала ключевые слова
             kept_yes = []
             narrow_yes = 0
-            for t in rec_yes:
-                if _NARROW_3D_RE.search(t):
+            for j in rec_yes_objs:
+                if _NARROW_3D_RE.search(j.get("title") or ""):
                     if narrow_yes >= 1:
                         continue
                     narrow_yes += 1
-                kept_yes.append(t)
-            rec_yes = kept_yes
-        chosen = rec_yes[:20] + chosen
-        rejected = rec_no[:25] + rejected
+                kept_yes.append(j)
+            rec_yes_objs = kept_yes
+        chosen = [_format_example_line(j) for j in rec_yes_objs[:20]] + chosen
+        rejected = [_format_example_line(j) for j in rec_no_objs[:25]] + rejected
     return "\n".join([f"ДА — {t}" for t in chosen[:35]] + [f"НЕТ — {t}" for t in rejected[:45]])
 
 
 def profile_text(state: State | None = None) -> str:
     learned = (state.data.get("learned") or {}) if state is not None else {}
     if learned.get("profile_text"):
-        return learned["profile_text"]
+        return section_profile(learned["profile_text"])
     text = (ROOT / "prompts" / "profile_default.md").read_text(encoding="utf-8")
     return "\n".join(ln for ln in text.splitlines() if not ln.startswith("<!--")).strip()
 
@@ -298,6 +319,135 @@ _ARCH_CONTEXT_RE = re.compile(
     r"architect|building|floor\s*plan|facade|urban|bim|revit|rhino|grasshopper|archicad|здани|архитект|фасад|планировк|интерьер|градостро|конструкц",
     re.I,
 )
+_NOVELTY_RE = re.compile(
+    r"нов\w+|впервые|прорыв|запус\w+|представ\w+|релиз|update|агент\w*|генерац\w+|автоматиз\w*",
+    re.I,
+)
+
+
+def build_claims(c: dict, s: dict | None = None, sat: dict | None = None) -> list[dict]:
+    """Собирает проверяемые доводы «за» и сомнения для претендента:
+    - доводы вкуса от LLM (arch_value, novelty) и сомнения по сути (doubt);
+    - доводы и сомнения момента от самого робота (freshness, resonance, students, saturation)."""
+    s = s or {}
+    claims: list[dict] = []
+
+    # 1. Доводы «за» от LLM (или из reason, если история оценена до появления поля claims)
+    raw_claims = s.get("claims") or c.get("llm_claims") or []
+    if isinstance(raw_claims, list) and raw_claims:
+        for idx, rc in enumerate(raw_claims[:3]):
+            if not isinstance(rc, dict) or not rc.get("text"):
+                continue
+            k = rc.get("kind") if rc.get("kind") in ("arch_value", "novelty") else "arch_value"
+            claims.append({
+                "id": f"{k}_{idx}",
+                "kind": k,
+                "pole": "for",
+                "by": "llm",
+                "text": str(rc["text"]).strip(),
+            })
+    else:
+        reason = (s.get("reason") or c.get("reason") or "").strip()
+        if reason:
+            parts = [p.strip() for p in re.split(r"\s+[—–]\s+|;\s+", reason) if len(p.strip()) >= 8]
+            if len(parts) >= 2:
+                k0 = "novelty" if _NOVELTY_RE.search(parts[0]) else "arch_value"
+                k1 = "arch_value" if k0 == "novelty" else ("novelty" if _NOVELTY_RE.search(parts[1]) else "arch_value")
+                claims.append({"id": f"{k0}_0", "kind": k0, "pole": "for", "by": "llm", "text": parts[0]})
+                claims.append({"id": f"{k1}_1", "kind": k1, "pole": "for", "by": "llm", "text": parts[1]})
+            else:
+                k0 = "novelty" if _NOVELTY_RE.search(reason) and c.get("kind") in ("tool", "research") else "arch_value"
+                claims.append({"id": f"{k0}_0", "kind": k0, "pole": "for", "by": "llm", "text": reason})
+
+    # 2. Доводы «за» от робота (факты момента)
+    age = c.get("age_days")
+    repub = c.get("republished_from")
+    if not repub and isinstance(age, int) and age <= 2:
+        when = "сегодня" if age <= 0 else ("вчера" if age == 1 else "2 дня назад")
+        claims.append({
+            "id": "freshness",
+            "kind": "freshness",
+            "pole": "for",
+            "by": "robot",
+            "text": f"Свежее: вышло {when} ({c.get('first_date') or ''})".rstrip(" ()"),
+        })
+    src_n = c.get("sources_total") or len(c.get("sources") or [])
+    if src_n >= 2:
+        claims.append({
+            "id": "resonance",
+            "kind": "resonance",
+            "pole": "for",
+            "by": "robot",
+            "text": f"Резонанс: тему подхватили {src_n} изд.",
+        })
+    if c.get("competition") and c.get("students_eligible"):
+        claims.append({
+            "id": "students",
+            "kind": "students",
+            "pole": "for",
+            "by": "robot",
+            "text": "Конкурс открыт для студентов",
+        })
+
+    # 3. Сомнения от LLM
+    raw_doubts = s.get("doubts") or c.get("llm_doubts") or []
+    if isinstance(raw_doubts, list):
+        for idx, d in enumerate(raw_doubts[:2]):
+            txt = (d.get("text") if isinstance(d, dict) else str(d or "")).strip()
+            if txt:
+                claims.append({
+                    "id": f"doubt_{idx}",
+                    "kind": "doubt",
+                    "pole": "doubt",
+                    "by": "llm",
+                    "text": txt,
+                })
+
+    combined = f"{c.get('title_ru') or ''} {c.get('reason') or ''}"
+    if _NARROW_3D_RE.search(combined) and not _ARCH_CONTEXT_RE.search(combined):
+        if not any(cl["kind"] == "doubt" for cl in claims):
+            claims.append({
+                "id": "doubt_narrow3d",
+                "kind": "doubt",
+                "pole": "doubt",
+                "by": "robot",
+                "text": "Узкотехнический 3D/CV-препринт без прямого архитектурного применения",
+            })
+
+    # 4. Сомнения момента от робота (давность, насыщение темы по векторам)
+    if repub:
+        claims.append({
+            "id": "freshness_stale",
+            "kind": "freshness",
+            "pole": "doubt",
+            "by": "robot",
+            "text": f"Перепечатка старого материала (оригинал от {repub})",
+        })
+    elif isinstance(age, int) and age >= 5:
+        claims.append({
+            "id": "freshness_stale",
+            "kind": "freshness",
+            "pole": "doubt",
+            "by": "robot",
+            "text": f"Не свежее: прошло {age} дн. с публикации",
+        })
+
+    if sat:
+        sim_n = sat.get("similar_14d") or 0
+        rej_n = sat.get("rejected_similar") or 0
+        sat_n = sat.get("saturated_hits") or 0
+        if sat_n >= 1 or rej_n >= 2 or sim_n >= 3:
+            ex = sat.get("examples") or []
+            ex_tail = f" (напр., «{ex[0]}»)" if ex else ""
+            claims.append({
+                "id": "saturation",
+                "kind": "saturation",
+                "pole": "doubt",
+                "by": "robot",
+                "text": f"Похожих за 14 дней: {max(sim_n, rej_n)}, из них ваших «нет»: {rej_n}{ex_tail}",
+            })
+
+    return claims
 
 
 def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: dict,
@@ -313,6 +463,13 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
         if (s.get("interest") or 0) > (st["score"].get("interest") or 0):
             st["score"] = s
     now = datetime.now(timezone.utc)
+    vec_store = {}
+    vf = ROOT / ".state" / "story_vectors.json"
+    if vf.exists():
+        try:
+            vec_store = json.loads(vf.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            vec_store = {}
     result = []
     for st in stories.values():
         s, items = st["score"], st["items"]
@@ -337,17 +494,18 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
         # Защита от потока узкотехнических препринтов (облака точек, меши, сплаты и т.д.) без прямой архитектурной сути
         if _NARROW_3D_RE.search(combined_text) and not _ARCH_CONTEXT_RE.search(combined_text):
             final -= 25 if is_arxiv else 15
-        result.append({
+        cand = {
             "story_key": st["story_key"], "final": max(0, min(100, final)), "interest": interest,
-            "title_ru": title_ru, "topic": s.get("topic"), "kind": s.get("kind"),
+            "title_ru": title_ru, "topic": s.get("topic"), "kind": s.get("kind"), "category": category_of(s),
             "competition": bool(s.get("competition")), "students_eligible": s.get("students_eligible"),
             "reason": s.get("reason"), "lead_item": lead.id,
             "republished_from": next((i.republished_from for i in items if i.republished_from), None),
-            # Свежесть: дата первой публикации, возраст на день прогона и снятые за давность баллы.
             "first_date": min(dated).date().isoformat() if dated else None, "age_days": age, "stale": stale,
             "sources": [{"source": sources[i.source_id]["title"], "url": i.url, "title": i.title,
                          "date": (i.published or "")[:10]} for i in items],
-        })
+            "_score_obj": s,
+        }
+        result.append(cand)
     if state is not None:
         # Повторение истории за неделю: издания, подхватившие её в прошлых прогонах, тоже считаются.
         learn.track_stories(state, result)
@@ -356,7 +514,13 @@ def rank(run: Run, scores: dict[str, dict], sources: dict[str, dict], weights: d
             run_n = len({s["source"] for s in c["sources"]})
             earlier = min(max(c.get("sources_total", run_n) - run_n, 0), max(0, 3 - (run_n - 1)))
             c["adjust"] = learn.apply(c, learned)
-            c["final"] = max(0, min(100, c["final"] + earlier * weights["per_extra_source"] + c["adjust"]))
+            sat = learn.saturation_info(c["story_key"], state, ROOT, vec_store)
+            c["saturation_penalty"] = sat.get("penalty") or 0
+            c["final"] = max(0, min(100, c["final"] + earlier * weights["per_extra_source"] + c["adjust"] - c["saturation_penalty"]))
+            c["claims"] = build_claims(c, c.pop("_score_obj", None), sat)
+    else:
+        for c in result:
+            c["claims"] = build_claims(c, c.pop("_score_obj", None), None)
     result.sort(key=lambda c: c["final"], reverse=True)
     return result
 

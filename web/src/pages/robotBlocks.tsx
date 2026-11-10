@@ -1,3 +1,4 @@
+import { CATEGORY_NAMES, newsCategory } from "./newsCategories";
 import { Link } from "react-router-dom";
 import type { RobotOverview, RobotRunView } from "../api";
 
@@ -70,12 +71,12 @@ export function ClassificationResult({ run }: { run: RobotRunView | null }) {
   if (!run) return <p className="notice">Результаты классификации появятся после первого прогона.</p>;
   return <>
     <h3>Результат выбранного прогона</h3>
-    <p className="hint">Сейчас робот использует три темы. Шесть категорий и отдельная постоянная проверка отвергнутых историй ещё не подключены.</p>
+    <p className="hint">Критерии разделены по шести категориям. Для прежних историй категория определена по теме и виду материала; после переоценки используется результат классификации. Постоянная память отказов ещё требует реализации.</p>
     {run.candidates.length === 0 ? <p className="notice">{run.running ? "Оценка идёт. Готовые истории появятся после объединения повторов." : "В этом прогоне кандидатов нет."}</p> :
       <div className="robot-table-scroll" role="region" aria-label="Результаты классификации" tabIndex={0}>
         <table className="grid-table"><thead><tr><th>История</th><th>Тема</th><th>Оценка</th><th>Совпадения</th><th>Основание</th></tr></thead>
           <tbody>{run.candidates.map((c) => <tr key={c.story_key}>
-            <td>{c.title_ru}</td><td>{{ architecture: "Архитектура", software: "ПО", neurogeneration: "ИИ" }[c.topic ?? ""] ?? c.topic ?? "—"}</td>
+            <td>{c.title_ru}</td><td>{CATEGORY_NAMES[newsCategory(c)] ?? "Без категории"}</td>
             <td>{c.final}</td><td>{c.site?.news ? "Есть опубликованная новость" : c.repeats?.length ? `Повторов: ${c.repeats.length}` : "Совпадений не указано"}</td>
             <td>{c.reason || "—"}</td>
           </tr>)}</tbody>

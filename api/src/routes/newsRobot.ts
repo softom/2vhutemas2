@@ -140,14 +140,27 @@ newsRobot.post("/inbox", async (c) => {
     }
     msg = { action: "decide", domain, decision: body.decision, note };
   } else if (body?.action === "judge") {
-    // Решение редактора по истории: «выпустил бы» или «нет» — по нему робот учит ранжирование (Р-93).
+    // Решение редактора по истории: «выпустил бы» или «нет» + отметки по доводам робота (Р-93, 2026-11-07).
     const story = String(body.story_key ?? "");
     const run = String(body.run_id ?? "");
     if (!STORY.test(story) || (!RUN_ID.test(run) && run !== "retriage" && run !== "pool")) {
       throw new ApiError("validation_failed", "Неверная история или прогон");
     }
     if (!["yes", "no"].includes(String(body.verdict))) throw new ApiError("validation_failed", "Решение: yes или no");
-    msg = { action: "judge", story_key: story, run_id: run, verdict: body.verdict, note };
+    const rawClaims = Array.isArray(body.claims) ? body.claims.slice(0, 12) : undefined;
+    const claims = rawClaims?.filter((x) => x && typeof x === "object").map((x) => {
+      const r = x as Record<string, unknown>;
+      return {
+        id: String(r.id ?? "").slice(0, 40),
+        kind: typeof r.kind === "string" ? r.kind.slice(0, 30) : undefined,
+        pole: r.pole === "doubt" ? "doubt" : "for",
+        text: typeof r.text === "string" ? r.text.slice(0, 240) : undefined,
+        verdict: r.verdict === "true" || r.verdict === true ? "true" : r.verdict === "false" || r.verdict === false ? "false" : undefined,
+      };
+    });
+    const saturated = Boolean(body.saturated);
+    const momentReason = typeof body.moment_reason === "string" ? body.moment_reason.slice(0, 40) : null;
+    msg = { action: "judge", story_key: story, run_id: run, verdict: body.verdict, note, claims, saturated, moment_reason: momentReason };
   } else if (body?.action === "propose") {
     let url: URL;
     try {
@@ -295,6 +308,13 @@ newsRobot.get("/overview", async (c) => {
     sources: (await readJson<Row[]>(`${ROOT}/state/sources.json`)) ?? [],
     candidates,
     judged: Object.fromEntries(Object.entries(state?.judgments ?? {}).map(([k, v]) => [k, v.verdict])),
+    judged_details: Object.fromEntries(Object.entries(state?.judgments ?? {}).map(([k, v]) => [k, {
+      verdict: v.verdict,
+      claims: v.claims ?? [],
+      saturated: Boolean(v.saturated),
+      moment_reason: v.moment_reason ?? null,
+      note: v.note ?? null,
+    }])),
     pending,
     learned,
     prompt_view: promptView,
@@ -828,6 +848,40 @@ newsRobot.get("/stories", async (c) => {
       const [first, ...rest] = list;
       items.push({ ...first, site: similar?.site?.[main] ?? similar?.site?.[String(first.story_key)] ?? first.site,
         repeats: rest.map((r) => ({ title_ru: r.title_ru, sources: r.sources })) });
+    }
+  }
+  for (const it of items) {
+    if (!Array.isArray(it.claims) || it.claims.length === 0) {
+      const cl: Row[] = [];
+      const reason = String(it.reason ?? "").trim();
+      if (reason) {
+        const parts = reason.split(/\s+[—–]\s+|;\s+/).map((p) => p.trim()).filter((p) => p.length >= 8);
+        if (parts.length >= 2) {
+          cl.push({ id: "arch_value_0", kind: "arch_value", pole: "for", by: "llm", text: parts[0] });
+          cl.push({ id: "novelty_1", kind: "novelty", pole: "for", by: "llm", text: parts[1] });
+        } else {
+          cl.push({ id: "arch_value_0", kind: "arch_value", pole: "for", by: "llm", text: reason });
+        }
+      }
+      const age = typeof it.age_days === "number" ? it.age_days : null;
+      const repub = it.republished_from ? String(it.republished_from) : null;
+      if (!repub && age !== null && age <= 2) {
+        cl.push({ id: "freshness", kind: "freshness", pole: "for", by: "robot",
+          text: `Свежее: вышло ${age <= 0 ? "сегодня" : age === 1 ? "вчера" : "2 дня назад"}` });
+      }
+      const srcN = Number(it.sources_total ?? (Array.isArray(it.sources) ? it.sources.length : 0));
+      if (srcN >= 2) {
+        cl.push({ id: "resonance", kind: "resonance", pole: "for", by: "robot", text: `Резонанс: тему подхватили ${srcN} изд.` });
+      }
+      if (it.competition && it.students_eligible) {
+        cl.push({ id: "students", kind: "students", pole: "for", by: "robot", text: "Конкурс открыт для студентов" });
+      }
+      if (repub) {
+        cl.push({ id: "freshness_stale", kind: "freshness", pole: "doubt", by: "robot", text: `Перепечатка старого материала (от ${repub})` });
+      } else if (age !== null && age >= 5) {
+        cl.push({ id: "freshness_stale", kind: "freshness", pole: "doubt", by: "robot", text: `Не свежее: прошло ${age} дн.` });
+      }
+      it.claims = cl;
     }
   }
   return c.json({ items, days });

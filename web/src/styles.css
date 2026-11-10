@@ -857,3 +857,5 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .type-chips { max-width: var(--c1); }
 .type-chips.sub { margin-top: -6px; padding-left: 12px; border-left: 2px solid var(--accent); }
 .type-chips.sub button { height: 32px; padding: 0 10px; font-size: 12px; border-width: 1px; }
+
+.robot-category-heading th { background: var(--surface); color: var(--accent); font-size: 18px; padding: 16px 10px; }

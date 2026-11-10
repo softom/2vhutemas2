@@ -468,12 +468,28 @@ export interface RobotRetriageStatus {
   started_at?: string;
   finished_at?: string;
 }
+export interface RobotClaim {
+  id: string;
+  kind: string;
+  pole: "for" | "doubt";
+  by?: "llm" | "robot";
+  text: string;
+  verdict?: "true" | "false" | null;
+}
+export interface RobotJudgedDetail {
+  verdict: "yes" | "no";
+  claims?: RobotClaim[];
+  saturated?: boolean;
+  moment_reason?: string | null;
+  note?: string | null;
+}
 export interface RobotOverview {
   connected: boolean;
   runs: { id: string; done: boolean; started_at?: string }[];
   sources: RobotSourceRow[];
   candidates: RobotSourceCandidate[];
   judged: Record<string, "yes" | "no">;
+  judged_details?: Record<string, RobotJudgedDetail>;
   pending: { action: string; domain?: string; url?: string; story_key?: string; verdict?: string; decision?: string }[];
   learned: RobotLearned;
   prompt_view?: RobotPromptView | null;
@@ -514,8 +530,12 @@ export interface RobotPreparedFull extends RobotPrepared {
   };
 }
 export interface RobotStory {
+  category?: string;
   story_key: string; final: number; interest: number; title_ru: string; topic?: string; kind?: string;
   competition?: boolean; reason?: string; sources: { source: string; url: string; date?: string }[];
+  /** Доводы «за» и сомнения робота, проверяемые редактором (2026-11-07). */
+  claims?: RobotClaim[];
+  saturation_penalty?: number;
   /** Свежесть: дата первой публикации, возраст на день прогона, баллы, снятые за давность. */
   first_date?: string | null; age_days?: number; stale?: number; republished_from?: string | null;
   /** Сверка с сайтом (Р-115): такая новость уже есть (news) и близкие записи (related). */
@@ -561,7 +581,29 @@ export interface RobotRunView {
 export interface RobotLearned {
   profile_text?: string;
   profile?: { likes?: string[]; dislikes?: string[]; surprises?: string[]; repetition?: string; changed?: string };
-  adjustments?: { base_rate: number; n: number; kind: Record<string, number>; topic: Record<string, number>; per_extra_source?: number };
+  adjustments?: {
+    base_rate: number;
+    n: number;
+    n_total?: number;
+    kind: Record<string, number>;
+    topic: Record<string, number>;
+    per_extra_source?: number;
+    claims?: {
+      judged_with_claims: number;
+      moment_only_count: number;
+      saturated_active_count: number;
+      saturated_active?: { story_key: string; title: string; at: string; topic?: string; kind?: string }[];
+      by_kind: Record<string, {
+        label: string;
+        pole: "for" | "doubt";
+        by: "llm" | "robot";
+        confirmed: number;
+        refuted: number;
+        total: number;
+        accuracy: number | null;
+      }>;
+    };
+  };
   judged_at_calibration?: number;
   history?: { at: string; judged: number; agreement: { precision: number | null; hits: number; total: number } }[];
 }
@@ -701,7 +743,16 @@ export const api = {
   robotInbox: (body:
     | { action: "decide"; domain: string; decision: "include" | "once" | "reject"; note?: string }
     | { action: "propose"; url: string; note?: string }
-    | { action: "judge"; run_id: string; story_key: string; verdict: "yes" | "no"; note?: string }) =>
+    | {
+        action: "judge";
+        run_id: string;
+        story_key: string;
+        verdict: "yes" | "no";
+        note?: string;
+        claims?: RobotClaim[];
+        saturated?: boolean;
+        moment_reason?: string | null;
+      }) =>
     request<{ queued: unknown }>("/news-robot/inbox", { method: "POST", body: JSON.stringify(body) }),
   parametersForType: (code: string) =>
     request<{ items: SuggestedParameter[] }>(`/parameters/for-type/${code}`),
