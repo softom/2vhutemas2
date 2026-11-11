@@ -296,6 +296,8 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
     done = 0
     fetcher: Fetcher | None = Fetcher()
     try:
+        from . import entity_intake
+        entity_intake.flush(root, log)
         retries(root, log)
         dismissals(root, log)
         done += orders(root, llm, log, pipeline, fetcher)
@@ -315,6 +317,11 @@ def run(root: Path, llm: LLM, log, pipeline) -> int:
             run_dir = root / "out" / str(q.get("run_id") or "")
             cand, story = _run_story(run_dir, key, root=root)
             if story is not None:
+                try:
+                    _, intake_items, _ = _story_inputs(root, str(q.get('run_id') or ''), key, pipeline)
+                    entity_intake.enqueue(root, story, {}, intake_items, log)
+                except Exception as e:
+                    log('error', 'entity_intake', 'не удалось передать готовую новость в стек сущностей', story=key, error=str(e)[:300])
                 rec.update(status="готово", ready_at=now(), origin="прогон", story=story, run_id=q.get("run_id"))
                 _write(path, rec)
                 log("info", "prepare", "новость готова (из прогона)", story=key)

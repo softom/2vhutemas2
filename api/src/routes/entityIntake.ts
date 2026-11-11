@@ -181,3 +181,39 @@ entityIntake.post('/:id/approve',async c=>{
   return await loadIntake(tx,d.id);
  }));
 });
+
+// A proposal points to a dossier UID until its target entity has been published.
+entityIntake.post('/:id/relation-candidate',async c=>{
+ const actor=requirePermission(c.get('principal'),'edit'),input=await c.req.json();
+ return c.json(await transaction(actor.contributorId,async tx=>{
+  const d=await loadIntake(tx,uuid(c.req.param('id')),true);
+  if(d.version!==input.version)throw new ApiError('version_conflict','Эскиз изменился. Обновите карточку');
+  if(d.status==='done'||d.sketch?.state!=='ready')fail('Нужен редактируемый эскиз');
+  const index=input.index;if(!Number.isInteger(index)||index<0||index>=(d.sketch.related||[]).length)fail('Предложение не найдено');
+  const r=d.sketch.related[index];if(!['author','place'].includes(r.kind))fail('Сначала укажите тип предложения');
+  if(input.resolve===true){
+   if(!r.candidate_intake_id)fail('Кандидат не выбран');
+   const candidate=await loadIntake(tx,uuid(r.candidate_intake_id));
+   if(candidate.status!=='done'||!candidate.target_entity_id)fail('Кандидат ещё не опубликован');
+   const changed={...r,entity_id:Number(candidate.target_entity_id),confirmed:false};
+   const [checked]=await validateRelations(tx,[changed],[r],d.sketch.sources,d.sketch.target_entity_id);
+   d.sketch.related[index]=checked;
+  }else{
+   if(r.candidate_intake_id)return d;
+   if(r.entity_id)fail('К предложению уже прикреплена запись');
+   const title=text(r.name,500);if(!title)fail('Укажите название кандидата');
+   const candidateId=crypto.randomUUID();
+   await tx`insert into app.entity_intake(id,title,description) values(${candidateId},${title},${'Кандидат: '+(r.kind==='place'?'место':'автор')+'. '+(r.reason||'Уточнить по источникам')})`;
+   for(const source of d.sources){
+    const sid=crypto.randomUUID();
+    await tx`insert into app.entity_intake_sources(id,intake_id,url,title,description,publisher,author,published_at) values(${sid},${candidateId},${source.url},${source.title},${source.description},${source.publisher},${source.author},${source.published_at})`;
+    for(const media of source.media)await tx`insert into app.entity_intake_media(id,source_id,url,media_entity_id,kind,caption,author,status,error) values(${crypto.randomUUID()},${sid},${media.url},${media.media_entity_id},${media.kind},${media.caption},${media.author},${media.status},${media.error})`;
+   }
+   d.sketch.related[index]={...r,candidate_intake_id:candidateId,entity_id:null,confirmed:false};
+  }
+  const original=await loadIntake(tx,d.id);
+  await auditIntake(tx,original,actor.contributorId);
+  await tx`update app.entity_intake set sketch=${JSON.stringify(d.sketch)}::jsonb,version=version+1 where id=${d.id}`;
+  return await loadIntake(tx,d.id);
+ }));
+});

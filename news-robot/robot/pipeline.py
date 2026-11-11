@@ -608,6 +608,13 @@ def write_story(run: Run, cand: dict, items: dict[str, Item], sources: dict[str,
         except Exception as e:  # noqa: BLE001 — вычитка не удалась: мнение редактора не теряем
             news["opinion"] = position.strip()
             story["warnings"].append(f"мнение редакции не вычитано ({str(e)[:120]}) — стоит текст редактора как есть")
+    from . import entity_intake
+    try:
+        entity_intake.enqueue(ROOT, story, art, items,
+                              lambda level, stage, message, **kw: log(run, level, stage, message, **kw))
+    except Exception as e:
+        story['warnings'].append('Материалы не переданы в стек сущностей: '+str(e)[:160])
+        log(run, 'error', 'entity_intake', 'не удалось сохранить задание', error=str(e)[:300])
     return story
 
 

@@ -19,8 +19,10 @@ export async function validateRelations(tx:Tx,input:unknown,old:Row[],sources:Ro
  if(!Array.isArray(input)||input.length>30)fail('Не более 30 связей в эскизе');
  const result:Row[]=[],seen=new Set<string>();let places=0;
  for(const value of input as Row[]){
-  if(value&&!value.kind&&!value.confirmed){result.push({...value,kind:'author',confirmed:false,entity_id:null,role_id:null,reason:'',source_url:''});continue;}
+  if(value&&!value.kind&&!value.confirmed){result.push({...value,confirmed:false,entity_id:null});continue;}
   if(!value||!['author','place'].includes(value.kind))fail('Неверный вид связи');
+  const candidate=value.candidate_intake_id||null;
+  if(candidate && !old.some(r=>r.candidate_intake_id===candidate))fail('Кандидат должен быть создан из этого эскиза');
   const name=String(value.name||'').trim().slice(0,300),reason=String(value.reason||'').trim().slice(0,4000);
   const source_url=String(value.source_url||'').trim();
   const selected=value.entity_id==null||value.entity_id===''?null:Number(value.entity_id);
@@ -43,12 +45,13 @@ export async function validateRelations(tx:Tx,input:unknown,old:Row[],sources:Ro
   if(confirmed&&seen.has(key))fail('Одна связь выбрана дважды');if(confirmed)seen.add(key);
   if(confirmed&&value.kind==='place'&&++places>1)fail('Для адреса объекта выберите одно место');
   const prior=old.find(x=>x.kind===value.kind&&x.entity_id===selected&&x.role_id===role&&x.confirmed);
-  result.push({kind:value.kind,name,reason,source_url,entity_id:selected,role_id:role,confirmed,title,is_published:published,base_revision_id:confirmed&&prior?prior.base_revision_id:revision,matches:Array.isArray(value.matches)?value.matches.slice(0,12):[]});
+  result.push({manual:value.manual===true,candidate_intake_id:candidate,kind:value.kind,name,reason,source_url,entity_id:selected,role_id:role,confirmed,title,is_published:published,base_revision_id:confirmed&&prior?prior.base_revision_id:revision,matches:Array.isArray(value.matches)?value.matches.slice(0,12):[]});
  }
  return result;
 }
 function blocks(text:string,url:string):Row[]{return [{id:crypto.randomUUID(),type:'paragraph',content:[{type:'text',text,styles:{}}],children:[]},{id:crypto.randomUUID(),type:'paragraph',content:[{type:'link',href:url,content:[{type:'text',text:'Источник',styles:{}}]}],children:[]}];}
 export async function applyRelations(tx:Tx,id:number,relations:Row[],actor:string,dossierId:string){
+ if(relations.some(r=>r.candidate_intake_id&&!r.entity_id))fail('Сначала опубликуйте кандидата и обновите привязку, либо уберите предложение связи');
  const applied:Row[]=[];
  for(const r of relations.filter(r=>r.confirmed)){
   if(r.entity_id===id)fail('Нельзя связать сущность с самой собой');

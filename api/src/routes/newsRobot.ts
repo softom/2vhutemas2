@@ -12,12 +12,14 @@ import { ApiError } from "../lib/errors.ts";
 import { require as requirePermission } from "../lib/auth.ts";
 import type { AppEnv } from "../lib/http.ts";
 
+import { sql } from "../lib/db.ts";
+import { loadIntake } from "./entityIntake.ts";
 export const newsRobot = new Hono<AppEnv>();
 
 const ROOT = Deno.env.get("NEWS_ROBOT_DIR") ?? "/news-robot";
 const RUN_ID = /^\d{8}-\d{6}$/;
 const DOMAIN = /^[a-z0-9.-]+\.[a-z]{2,}$/;
-const STORY = /^[a-z0-9][a-z0-9-]{0,99}$/;
+const STORY = /^[a-z0-9][a-z0-9_-]{0,99}$/;
 
 async function readJson<T>(path: string): Promise<T | null> {
   try {
@@ -919,7 +921,7 @@ newsRobot.post("/cover", async (c) => {
     if (typeof body?.model === "string" && /^[a-z0-9./-]{3,80}$/.test(body.model)) req.model = body.model;
   }
   if (action === "apply") {
-    if (typeof body?.file !== "string" || !/^[a-z0-9-]+-\d+\.(png|jpg)$/.test(body.file)) {
+    if (typeof body?.file !== "string" || !/^[a-z0-9_-]+-\d+\.(png|jpg)$/.test(body.file)) {
       throw new ApiError("validation_failed", "Неверный вариант");
     }
     req.file = body.file;
@@ -964,7 +966,7 @@ newsRobot.post("/cover-upload", async (c) => {
 newsRobot.get("/covers/:file", async (c) => {
   requirePermission(c.get("principal"), "su");
   const file = c.req.param("file");
-  if (!/^[a-z0-9-]+-\d+\.(png|jpg)$/.test(file)) throw new ApiError("validation_failed", "Неверный файл");
+  if (!/^[a-z0-9_-]+-\d+\.(png|jpg)$/.test(file)) throw new ApiError("validation_failed", "Неверный файл");
   try {
     const data = await Deno.readFile(`${ROOT}/state/covers/${file}`);
     return new Response(data, { headers: { "content-type": file.endsWith(".png") ? "image/png" : "image/jpeg",
@@ -982,6 +984,14 @@ newsRobot.get("/cover-styles", async (c) => {
 
 
 type IntakeRaw = Record<string, any>;
+async function storyIntakeId(key:string):Promise<string>{
+ const namespace='6ba7b8119dad11d180b400c04fd430c8';
+ const prefix=Uint8Array.from(namespace.match(/../g)!,v=>parseInt(v,16));
+ const name=new TextEncoder().encode('https://2vhutemas.ru/news-story/'+key);
+ const input=new Uint8Array(prefix.length+name.length);input.set(prefix);input.set(name,prefix.length);
+ const bytes=new Uint8Array(await crypto.subtle.digest('SHA-1',input)).slice(0,16);bytes[6]=(bytes[6]&15)|80;bytes[8]=(bytes[8]&63)|128;
+ const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
 /** Dossier input: raw descriptions and media stay attached to their own source. */
 newsRobot.get("/intake-seed/:key", async c => {
  requirePermission(c.get("principal"), "su");
@@ -990,6 +1000,8 @@ newsRobot.get("/intake-seed/:key", async c => {
  const aliases=(await readJson<IntakeRaw>(`${ROOT}/state/similar.json`))?.aliases ?? {};
  const canonical=(key:string)=>{const seen=new Set<string>();while(aliases[key]?.to && !seen.has(key)){seen.add(key);key=aliases[key].to;}return key;};
  const target=canonical(key);
+ const intakeId=await storyIntakeId(target);
+ if((await sql`select id from app.entity_intake where id=${intakeId}`).length)return c.json(await loadIntake(sql,intakeId));
  const candidates=(pool?.candidates ?? []).filter((x:IntakeRaw)=>canonical(String(x.story_key))===target);
  const sources: IntakeRaw[]=[];const urls=new Set<string>();const originalRuns=new Map<string,IntakeRaw[]>();
  for(const [id,score] of Object.entries(pool?.scores ?? {}) as [string,IntakeRaw][]){
@@ -1006,5 +1018,5 @@ newsRobot.get("/intake-seed/:key", async c => {
  }
  for(const candidate of candidates) for(const src of candidate.sources||[]){if(urls.has(src.url))continue;urls.add(src.url);sources.push({id:crypto.randomUUID(),url:src.url,title:src.title||src.source||"Источник",publisher:src.source||"",description:"Описание ещё не получено. Требуется проверка источника.",author:"",published_at:src.date||null,media:[]});}
  if(!sources.length)throw new ApiError("not_found","Материалы истории не найдены в промежуточной базе");
- return c.json({id:crypto.randomUUID(),title:candidates[0]?.title_ru||sources[0].title,description:"Материалы из новостей. Авторство, типологию и связи необходимо проверить по источникам.",status:"proposed",reason:"",target_entity_id:null,version:0,sources});
+ return c.json({id:intakeId,title:candidates[0]?.title_ru||sources[0].title,description:"Материалы из новостей. Авторство, типологию и связи необходимо проверить по источникам.",status:"proposed",reason:"",target_entity_id:null,version:0,sources});
 });
