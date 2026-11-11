@@ -991,10 +991,16 @@ newsRobot.get("/intake-seed/:key", async c => {
  const canonical=(key:string)=>{const seen=new Set<string>();while(aliases[key]?.to && !seen.has(key)){seen.add(key);key=aliases[key].to;}return key;};
  const target=canonical(key);
  const candidates=(pool?.candidates ?? []).filter((x:IntakeRaw)=>canonical(String(x.story_key))===target);
- const sources: IntakeRaw[]=[];const urls=new Set<string>();
+ const sources: IntakeRaw[]=[];const urls=new Set<string>();const originalRuns=new Map<string,IntakeRaw[]>();
  for(const [id,score] of Object.entries(pool?.scores ?? {}) as [string,IntakeRaw][]){
   if(canonical(String(score.story_key))!==target) continue;
-  const raw=pool?.items?.[id];if(!raw || urls.has(raw.url))continue;urls.add(raw.url);
+  let raw=pool?.items?.[id];if(!raw || urls.has(raw.url))continue;urls.add(raw.url);
+  const run=String(raw.run_id||"");
+  if(RUN_ID.test(run)) {
+   if(!originalRuns.has(run)) originalRuns.set(run,(await readJson<IntakeRaw[]>(`${ROOT}/out/${run}/items.json`))||[]);
+   const original=originalRuns.get(run)!.find(x=>x.id===id && x.url===raw.url);
+   if(original)raw={...raw,summary:original.summary||raw.summary,images:raw.images?.length?raw.images:(original.images||[])};
+  }
   sources.push({id:crypto.randomUUID(),url:raw.url||"",title:raw.title||"Источник",description:raw.summary||"Описание ещё не получено. Требуется проверка источника.",author:raw.author||"",publisher:candidates.flatMap((c:IntakeRaw)=>c.sources||[]).find((s:IntakeRaw)=>s.url===raw.url)?.source||"",published_at:String(raw.published||"").slice(0,10)||null,
    media:(raw.images||[]).filter((m:IntakeRaw)=>/^https?:\/\//.test(m.url||"")).map((m:IntakeRaw)=>({id:crypto.randomUUID(),url:m.url,caption:m.caption||m.alt||"",author:"",kind:"image",status:"link",media_entity_id:null,error:""}))});
  }
