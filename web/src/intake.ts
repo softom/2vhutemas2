@@ -7,7 +7,7 @@ export interface IntakeRow {id:string;title:string;status:string;version:number;
 export const intake = {
  list:(q="",status="",page=0)=>request<{items:IntakeRow[];total:number}>(`/entity-intake?${new URLSearchParams({q,status,page:String(page)})}`),
  get:(id:string)=>request<Dossier>(`/entity-intake/${id}`),
- save:(d:Dossier)=>request<Dossier>(`/entity-intake${d.version?"/"+d.id:""}`,{method:d.version?"PUT":"POST",body:JSON.stringify(d)}),
+ save:(d:Dossier)=>{const {history: _history,...input}=d;return request<Dossier>(`/entity-intake${d.version?"/"+d.id:""}`,{method:d.version?"PUT":"POST",body:JSON.stringify(input)});},
  seed:(key:string)=>request<Dossier>(`/news-robot/intake-seed/${encodeURIComponent(key)}`),
 };
 export const blankSource=():IntakeSource=>({id:crypto.randomUUID(),url:"",title:"",description:"",publisher:"",author:"",published_at:null,media:[]});
