@@ -3,11 +3,12 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, type EntityListItem } from "../api";
 import { intake, blankDossier, blankSource, INTAKE_STATUS, type Dossier, type IntakeSource, type IntakeMedia, type IntakeRow } from "../intake";
 
-export function EntityIntakeDetails({allowed,canUpload}:{allowed:boolean;canUpload:boolean}) {
+export function EntityIntakeDetails({allowed,canUpload,embedded=false,onDirtyChange}:{allowed:boolean;canUpload:boolean;embedded?:boolean;onDirtyChange?:(dirty:boolean)=>void}) {
  const {id}=useParams();const [params]=useSearchParams();const story=params.get("story");const navigate=useNavigate();
  const [rows,setRows]=useState<IntakeRow[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(0),[q,setQ]=useState(""),[status,setStatus]=useState("");
  const [d,setD]=useState<Dossier|null>(null),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const [match,setMatch]=useState(""),[matches,setMatches]=useState<EntityListItem[]>([]),[mergeQ,setMergeQ]=useState(""),[mergeRows,setMergeRows]=useState<IntakeRow[]>([]);
+ useEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
  const saving=useRef(false);
  const [historyVersion,setHistoryVersion]=useState<number|null>(null);
  useEffect(()=>{if(!allowed||id)return;let live=true;intake.list(q,status,page).then(r=>{if(live){setRows(r.items);setTotal(r.total);}}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[allowed,id,q,status,page]);
@@ -23,7 +24,7 @@ export function EntityIntakeDetails({allowed,canUpload}:{allowed:boolean;canUplo
  const save=async()=>{if(!d||saving.current)return;saving.current=true;setBusy(true);setError("");try{const result=await intake.save(d);setD(result);setDirty(false);setNotice("Досье сохранено");if(id==='new')navigate('/entity-intake/'+result.id,{replace:true});}catch(e){setError((e as Error).message);}finally{setBusy(false);saving.current=false;}};
  const upload=async(sid:string,file:File)=>{setBusy(true);setError("");try{const form=new FormData();form.set('file',file);form.set('caption',file.name);const m=await api.uploadMedia(form);if(!m.entity_id)throw new Error('Не получен UID медиа');setD(v=>v?{...v,sources:v.sources.map(s=>s.id===sid?{...s,media:[...s.media,{id:crypto.randomUUID(),url:"",media_entity_id:m.entity_id!,kind:'image',caption:file.name,author:'',status:'stored',error:''}]}:s)}:v);setDirty(true);setNotice('Файл сохранён в медиатеке. Сохраните досье для закрепления источника.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
  const merge=async(target:string)=>{if(!d)return;setBusy(true);setError("");try{const current=await intake.get(target);const sources=structuredClone(current.sources);for(const incoming of d.sources){const same=incoming.url?sources.find(s=>s.url===incoming.url):null;if(!same){sources.push(incoming);continue;}if(!same.description.includes(incoming.description))same.description+='\n\n'+incoming.description;for(const m of incoming.media)if(!same.media.some(old=>(m.url&&old.url===m.url)||(m.media_entity_id&&old.media_entity_id===m.media_entity_id)))same.media.push(m);}setD({...current,sources,status:'reviewing'});setDirty(true);setNotice('Материалы добавлены в существующее досье. Проверьте и сохраните.');setMergeRows([]);}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
- return <section className="entity-intake"><h1>Стек сущностей для внесения в БД</h1>
+ return <section className="entity-intake">{embedded?<h2>Материалы и история</h2>:<h1>Стек сущностей для внесения в БД</h1>}
   <p className="hint">Досье с описаниями, источниками и медиа. Отбор в новости и пополнение каталога независимы.</p>
   {error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
   {!id?<>
