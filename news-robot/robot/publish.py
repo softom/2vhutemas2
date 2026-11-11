@@ -166,79 +166,8 @@ def _paragraph_text(text: str, source_url: str | None, source_title: str | None)
 
 
 def link_entities(api: Api, llm, rec: dict, log) -> list[dict]:
-    """Главный проект и его авторы: найти в базе или завести черновики; связь «архитектор».
-
-    Возвращает упоминания для текста новости: [{"text", "entity_id", "title"}].
-    Заведённое роботом публикуется вместе с новостью (publish), иначе ссылка вела бы в пустоту.
-    """
-    from .llm import LLMError, prompt
-    story = rec["story"]
-    cand = story.get("candidate") or {}
-    src = (cand.get("sources") or [{}])[0]
-    try:
-        found = llm.chat_json("entities", prompt("entities", facts=json.dumps(story.get("facts") or {}, ensure_ascii=False),
-                                                 news=json.dumps(story.get("news") or {}, ensure_ascii=False)),
-                              "Найди проект и авторов.", max_tokens=4000)
-    except LLMError as e:
-        log("warn", "entities", "проекты и авторы не определены", story=rec["story_key"], error=str(e)[:150])
-        return []
-    made = rec.setdefault("entities", {"created": [], "links": [], "used": []})
-    refs: dict[str, dict] = {}
-    project = found.get("project") or None
-    if project and project.get("title_ru"):
-        hit = find_entity(api, [project.get("title_ru"), project.get("title_original")], "what")
-        if hit:
-            refs["project"] = {"id": hit["id"], "title": hit.get("title_ru")}
-        else:
-            kind = project.get("kind") if project.get("kind") in ("architecture_object", "environment_object",
-                                                                    "competition_entry") else "architecture_object"
-            created = api.call("POST", "/entities", json={
-                "type": kind, "slug": slugify(project["title_ru"], "proekt"), "title_ru": project["title_ru"],
-                "title_original": project.get("title_original") or None,
-                "body_json": _paragraph_text(project.get("description") or "", src.get("url"), src.get("source")),
-            })
-            refs["project"] = {"id": created["id"], "title": project["title_ru"]}
-            made["created"].append({"id": created["id"], "kind": kind, "title": project["title_ru"]})
-            log("info", "entities", "проект заведён", story=rec["story_key"], entity=created["id"], title=project["title_ru"])
-    for i, a in enumerate(found.get("authors") or []):
-        if not a.get("name_ru"):
-            continue
-        hit = find_entity(api, [a.get("name_ru"), a.get("name_original")], "who")
-        if hit:
-            ref = {"id": hit["id"], "title": hit.get("title_ru")}
-        else:
-            kind = "person" if a.get("kind") == "person" else "company"
-            created = api.call("POST", "/entities", json={
-                "type": kind, "slug": slugify(a["name_ru"], "avtor"), "title_ru": a["name_ru"],
-                "title_original": a.get("name_original") or None,
-                "body_json": _paragraph_text(
-                    f"{'Архитектурное бюро' if kind == 'company' else 'Архитектор'}"
-                    + (f", автор проекта «{project['title_ru']}»." if project and project.get("title_ru") else "."),
-                    src.get("url"), src.get("source")),
-            })
-            ref = {"id": created["id"], "title": a["name_ru"]}
-            made["created"].append({"id": created["id"], "kind": kind, "title": a["name_ru"]})
-            log("info", "entities", "автор заведён", story=rec["story_key"], entity=created["id"], title=a["name_ru"])
-        refs[f"author:{i}"] = ref
-        # Связь «архитектор»: от автора к проекту, как в базе; основание — первоисточник.
-        # Если и проект, и автор уже были в базе, связь между ними, скорее всего, есть — не дублируем.
-        new_project = refs.get("project") and any(c["id"] == refs["project"]["id"] for c in made["created"])
-        if refs.get("project") and (not hit or new_project):
-            try:
-                link = api.call("POST", "/links", json={
-                    "from_entity_id": ref["id"], "to_entity_id": refs["project"]["id"], "role": "architect",
-                    "justification": {"text": f"По данным: {src.get('source') or 'первоисточник'} — {src.get('url') or ''}"},
-                })
-                made["links"].append(link["id"])
-            except ApiFailure as e:
-                log("warn", "entities", "связь не создана", story=rec["story_key"], error=str(e)[:150])
-    made["used"] = [{"ref": k, **v} for k, v in refs.items()]
-    mentions = []
-    for m in found.get("mentions") or []:
-        ref = refs.get(m.get("ref", ""))
-        if ref and m.get("text"):
-            mentions.append({"text": m["text"], "entity_id": ref["id"], "title": ref["title"]})
-    return mentions
+    """Catalog changes require approval in entity intake, never news publication."""
+    return []
 
 
 def apply_mentions(blocks: list[dict], mentions: list[dict]) -> list[dict]:
@@ -273,11 +202,6 @@ def create_draft(api: Api, rec: dict, q: dict, log, llm=None) -> None:
     sources = [*(news.get("sources") or []), *(cand.get("sources") or [])]
     title = (news.get("title") or cand.get("title_ru") or rec["story_key"]).strip()
     blocks = body_blocks(news, sources)
-    if llm is not None and getattr(llm, "live", False):
-        try:
-            blocks = apply_mentions(blocks, link_entities(api, llm, rec, log))
-        except ApiFailure as e:
-            log("warn", "entities", "проекты и авторы не связаны", story=rec["story_key"], error=str(e)[:150])
     created = api.call("POST", "/entities", json={
         "type": "news", "slug": slugify(title, rec["story_key"]), "title_ru": title,
         "body_json": blocks, "indicators": indicators(rec, q),
@@ -322,17 +246,7 @@ def update_release(api: Api, rec: dict, q: dict, log) -> None:
 
 
 def publish(api: Api, rec: dict, log) -> None:
-    # Сначала заведённые роботом проект и авторы со связями: ссылки новости не должны вести в пустоту (Р-106).
-    made = rec.get("entities") or {}
-    for e in made.get("created", []):
-        if not e.get("published"):
-            api.call("POST", f"/entities/{e['id']}/publish", json={"note": "Робот новостей: вместе с новостью"})
-            e["published"] = True
-    for link_id in made.get("links", []):
-        try:
-            api.call("POST", f"/links/{link_id}/publish", json={"note": "Робот новостей: вместе с новостью"})
-        except ApiFailure as e:
-            log("warn", "publish", "связь не опубликована", story=rec["story_key"], error=str(e)[:150])
+    # Publish only the news; legacy catalog proposals require separate approval.
     res = api.call("POST", f"/entities/{rec['entity_id']}/publish", json={"note": "Робот новостей: выход в слот"})
     rec["published_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     rec["publication"] = "вышла"
