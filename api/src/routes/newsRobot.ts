@@ -981,21 +981,22 @@ newsRobot.get("/cover-styles", async (c) => {
 });
 
 
+type IntakeRaw = Record<string, any>;
 /** Dossier input: raw descriptions and media stay attached to their own source. */
 newsRobot.get("/intake-seed/:key", async c => {
  requirePermission(c.get("principal"), "su");
  const key=c.req.param("key"); if(!STORY.test(key)) throw new ApiError("validation_failed","Некорректный ключ истории");
- const pool=await readJson<Row>(`${ROOT}/state/pool.json`);
- const aliases=(await readJson<Row>(`${ROOT}/state/similar.json`))?.aliases ?? {};
+ const pool=await readJson<IntakeRaw>(`${ROOT}/state/pool.json`);
+ const aliases=(await readJson<IntakeRaw>(`${ROOT}/state/similar.json`))?.aliases ?? {};
  const canonical=(key:string)=>{const seen=new Set<string>();while(aliases[key]?.to && !seen.has(key)){seen.add(key);key=aliases[key].to;}return key;};
  const target=canonical(key);
- const candidates=(pool?.candidates ?? []).filter((x:Row)=>canonical(String(x.story_key))===target);
- const sources: Row[]=[];const urls=new Set<string>();
- for(const [id,score] of Object.entries(pool?.scores ?? {}) as [string,Row][]){
+ const candidates=(pool?.candidates ?? []).filter((x:IntakeRaw)=>canonical(String(x.story_key))===target);
+ const sources: IntakeRaw[]=[];const urls=new Set<string>();
+ for(const [id,score] of Object.entries(pool?.scores ?? {}) as [string,IntakeRaw][]){
   if(canonical(String(score.story_key))!==target) continue;
   const raw=pool?.items?.[id];if(!raw || urls.has(raw.url))continue;urls.add(raw.url);
-  sources.push({id:crypto.randomUUID(),url:raw.url||"",title:raw.title||"Источник",description:raw.summary||"Описание ещё не получено. Требуется проверка источника.",author:raw.author||"",publisher:"",published_at:String(raw.published||"").slice(0,10)||null,
-   media:(raw.images||[]).filter((m:Row)=>/^https?:\/\//.test(m.url||"")).map((m:Row)=>({id:crypto.randomUUID(),url:m.url,caption:m.caption||m.alt||"",author:"",kind:"image",status:"link",media_entity_id:null,error:""}))});
+  sources.push({id:crypto.randomUUID(),url:raw.url||"",title:raw.title||"Источник",description:raw.summary||"Описание ещё не получено. Требуется проверка источника.",author:raw.author||"",publisher:candidates.flatMap((c:IntakeRaw)=>c.sources||[]).find((s:IntakeRaw)=>s.url===raw.url)?.source||"",published_at:String(raw.published||"").slice(0,10)||null,
+   media:(raw.images||[]).filter((m:IntakeRaw)=>/^https?:\/\//.test(m.url||"")).map((m:IntakeRaw)=>({id:crypto.randomUUID(),url:m.url,caption:m.caption||m.alt||"",author:"",kind:"image",status:"link",media_entity_id:null,error:""}))});
  }
  for(const candidate of candidates) for(const src of candidate.sources||[]){if(urls.has(src.url))continue;urls.add(src.url);sources.push({id:crypto.randomUUID(),url:src.url,title:src.title||src.source||"Источник",publisher:src.source||"",description:"Описание ещё не получено. Требуется проверка источника.",author:"",published_at:src.date||null,media:[]});}
  if(!sources.length)throw new ApiError("not_found","Материалы истории не найдены в промежуточной базе");

@@ -42,7 +42,7 @@ async function load(tx: Tx, id: string, lock=false): Promise<Row> {
  if(!rows.length) throw new ApiError("not_found","Досье не найдено");
  const sources=await tx<Row>`select * from app.entity_intake_sources where intake_id=${id} order by created_at,id`;
  const media=await tx<Row>`select m.* from app.entity_intake_media m join app.entity_intake_sources s on s.id=m.source_id where s.intake_id=${id} order by m.created_at,m.id`;
- return {...rows[0],sources:sources.map(s=>({...s,media:media.filter(m=>m.source_id===s.id)}))};
+ return {...rows[0],sources:sources.map(s=>({...s,published_at:s.published_at ? new Date(s.published_at).toISOString().slice(0,10) : null,media:media.filter(m=>m.source_id===s.id)}))};
 }
 entityIntake.use("*", async(c,next)=>{requirePermission(c.get("principal"),"edit");await next();});
 entityIntake.get("/", async c=>{
