@@ -483,6 +483,8 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
 
     pdata["scores"] = new_scores
 
+    similar.unify(new_scores, to_items(pdata, sources), root, pipeline_mod.load_config(), llm, log)
+
     # 6. Пересчитываем склейку и ранжирование по всей промежуточной БД за 30 дней
     cfg = pipeline_mod.load_config()
     weights = {k: (cfg.get(f"news.rank.{k}") if cfg.get(f"news.rank.{k}") is not None else v)

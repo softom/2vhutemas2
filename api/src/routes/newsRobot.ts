@@ -790,6 +790,11 @@ newsRobot.get("/stories", async (c) => {
   const similar = await readJson<{ aliases?: Record<string, { to: string; title?: string }>; site?: Record<string, Row> }>(
     `${ROOT}/state/similar.json`);
   const aliases = similar?.aliases ?? {};
+  const canonicalKey = (key: string) => {
+    const seen = new Set<string>(); let target = key;
+    while (aliases[target]?.to && !seen.has(target)) { seen.add(target); target = aliases[target].to; }
+    return seen.has(target) ? key : target;
+  };
   const pool = await readJson<{ updated_at?: string; candidates?: Row[]; written_keys?: string[] }>(`${ROOT}/state/pool.json`);
   const poolUpdated = pool?.updated_at ? new Date(pool.updated_at).getTime() : 0;
   const hasPool = Array.isArray(pool?.candidates) && pool!.candidates!.length > 0;
@@ -816,7 +821,8 @@ newsRobot.get("/stories", async (c) => {
       const key = String(cand.story_key);
       if (seen.has(key)) continue;
       seen.add(key);
-      const main = aliases[key]?.to;
+      const resolved = canonicalKey(key);
+      const main = resolved !== key ? resolved : null;
       if (main) {
         repeats.set(main, [...(repeats.get(main) ?? []), { ...cand, run_id: id, run_started: started, written: written.has(key) }]);
         continue;
@@ -835,7 +841,8 @@ newsRobot.get("/stories", async (c) => {
       seen.add(key);
       const runId = String(cand.run_id || "pool");
       const isWritten = Boolean(cand.written) || writtenSet.has(key);
-      const main = aliases[key]?.to;
+      const resolved = canonicalKey(key);
+      const main = resolved !== key ? resolved : null;
       if (main) {
         repeats.set(main, [...(repeats.get(main) ?? []), { ...cand, run_id: runId, written: isWritten }]);
         continue;
@@ -854,6 +861,10 @@ newsRobot.get("/stories", async (c) => {
     const item = items.find((i) => i.story_key === main);
     if (item) {
       item.repeats = list.map((r) => ({ title_ru: r.title_ru, sources: r.sources }));
+      const sources = [...(item.sources ?? []), ...list.flatMap(r => r.sources ?? [])];
+      item.sources = [...new Map(sources.map(s => [s.url, s])).values()];
+      item.sources_total = new Set(item.sources.map((s: Row) => { try { return new URL(s.url).hostname.replace(/^www\./, ""); } catch { return s.source; } })).size;
+      item.publications_total = item.sources.length;
     } else if (!shown.has(main)) {
       // Главная история старше окна: показываем самый свежий её повтор под его собственным ключом.
       const [first, ...rest] = list;

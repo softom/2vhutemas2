@@ -109,7 +109,7 @@ def same_event(llm, pairs: list[tuple[str, str]], log) -> list[bool]:
         for rec in res.get("pairs", []):
             n = rec.get("n")
             if isinstance(n, int) and 0 <= n < len(part):
-                verdicts[i + n] = bool(rec.get("same"))
+                verdicts[i + n] = rec.get("same") is True
     return verdicts
 
 
@@ -136,14 +136,15 @@ def match(new: list[dict], root: Path, cfg: dict, llm, log) -> dict[str, dict]:
     for n in new:
         if n["key"] in known:
             known[n["key"]]["last_seen"] = now()
-    aliases: dict[str, dict] = {n["key"]: prior[n["key"]] for n in new if n["key"] in prior and n["key"] not in known}
+            known[n["key"]]["context"] = n.get("context") or n["title"]
+    aliases: dict[str, dict] = {n["key"]: prior[n["key"]] for n in new if n["key"] in prior}
     if not fresh:
         _write(root / ".state" / "story_vectors.json", store)
         return aliases
     vecs = embed([n["text"] for n in fresh], cfg, s)
     grey: list[tuple[dict, str, float]] = []
-    pool = {k: v["vec"] for k, v in known.items()}
-    titles = {k: v.get("title", "") for k, v in known.items()}
+    pool = {k: v["vec"] for k, v in known.items() if k not in prior}
+    titles = {k: v.get("context") or v.get("title", "") for k, v in known.items()}
     pending: list[tuple[dict, list[float]]] = []
     for n, vec in zip(fresh, vecs):
         best_key, best = None, 0.0
@@ -151,16 +152,13 @@ def match(new: list[dict], root: Path, cfg: dict, llm, log) -> dict[str, dict]:
             c = cos(vec, v)
             if c > best:
                 best_key, best = k, c
-        if best_key and best >= s["same"]:
-            aliases[n["key"]] = {"to": best_key, "similarity": round(best, 3), "title": n["title"], "by": "вектор"}
-            continue
         if best_key and best >= s["maybe"]:
             grey.append((n, best_key, best))
         # Спорная история остаётся в сравнении: следующая может повторять именно её.
         pool[n["key"]] = vec
-        titles[n["key"]] = n["title"]
+        titles[n["key"]] = n.get("context") or n["title"]
         pending.append((n, vec))
-    for (n, to, sim), same in zip(grey, same_event(llm, [(n["title"], titles[to]) for n, to, _ in grey], log)):
+    for (n, to, sim), same in zip(grey, same_event(llm, [(n.get("context") or n["title"], titles[to]) for n, to, _ in grey], log)):
         if same:
             aliases[n["key"]] = {"to": to, "similarity": round(sim, 3), "title": n["title"], "by": "LLM"}
     # Цепочки (А → Б, Б → В) сводим к главной истории.
@@ -171,7 +169,7 @@ def match(new: list[dict], root: Path, cfg: dict, llm, log) -> dict[str, dict]:
             a["to"] = aliases[a["to"]]["to"]
     for n, vec in pending:
         if n["key"] not in aliases:
-            known[n["key"]] = {"title": n["title"], "vec": vec, "first_seen": now(), "last_seen": now()}
+            known[n["key"]] = {"title": n["title"], "context": n.get("context", n["title"]), "vec": vec, "first_seen": now(), "last_seen": now()}
     for a in aliases.values():
         if a["to"] in known:
             known[a["to"]]["last_seen"] = now()
@@ -199,7 +197,8 @@ def unify(scores: dict[str, dict], items: list, root: Path, cfg: dict, llm, log)
         if st is None or (sc.get("interest") or 0) > st["interest"]:
             title = sc.get("title_ru") or by_id[item_id].title
             stories[key] = {"key": key, "title": title, "interest": sc.get("interest") or 0,
-                            "text": f"{title}. {by_id[item_id].title}"}
+                            "text": f"{title}. {by_id[item_id].title}",
+                            "context": f"Кандидат: {title}\nИсточник: {by_id[item_id].title}\nСодержание: {by_id[item_id].summary[:1500]}"}
     try:
         aliases = match(list(stories.values()), root, cfg, llm, log)
     except Exception as e:  # noqa: BLE001 — без проверки повторов прогон идёт как раньше
