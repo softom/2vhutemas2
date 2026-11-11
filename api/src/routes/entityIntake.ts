@@ -4,6 +4,9 @@ import { require as requirePermission } from "../lib/auth.ts";
 import { ApiError } from "../lib/errors.ts";
 import type { AppEnv } from "../lib/http.ts";
 
+import { auditIntake, prepareSketch, publishSketch, cleanText } from "../lib/intakeSketch.ts";
+import { callerOf } from "../lib/aiJournal.ts";
+import { log } from "../lib/http.ts";
 export const entityIntake = new Hono<AppEnv>();
 type Row = Record<string, any>;
 const statuses = new Set(["proposed", "reviewing", "needs_info", "ready", "done", "rejected"]);
@@ -17,7 +20,7 @@ function validate(v: Row): Row {
  const status = text(v.status, 30) || "proposed"; if (!statuses.has(status)) fail("Неизвестный статус");
  const title = text(v.title, 500); if (!title) fail("Укажите название досье");
  const reason = text(v.reason); if (["needs_info","rejected"].includes(status) && !reason) fail("Укажите причину решения");
- if (!Array.isArray(v.sources) || !v.sources.length || v.sources.length > 100) fail("Нужен хотя бы один источник с описанием или медиа (не более 100)");
+ if (!Array.isArray(v.sources) || !v.sources.length || v.sources.length > 100) fail("Нужен хотя бы один источник (не более 100)");
  const ids = new Set<string>();
  const unique = (id: unknown) => { const s = uuid(id); if (ids.has(s)) fail("Повторяющийся UID в досье"); ids.add(s); return s; };
  const sources = v.sources.map((s: Row) => {
@@ -31,13 +34,13 @@ function validate(v: Row): Row {
    const error=text(m.error,2000); if(status === "error" && !error) fail("Укажите ошибку получения медиа");
    return {id:unique(m.id),url:address,media_entity_id,kind:text(m.kind,80)||"image",caption:text(m.caption,4000),author:text(m.author,1000),status,error};
   });
-  const title=text(s.title,500),description=text(s.description,60000); if(!title || (!description && !media.length)) fail("У источника нужны название и описание или медиа");
+  const title=text(s.title,500)||url(s.url),description=text(s.description,60000); if(!title || (!url(s.url) && !description && !media.length)) fail("Добавьте ссылку на источник");
   const date=text(s.published_at,10); if(date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date)) fail("Некорректная дата источника");
   return {id:unique(s.id),title,description,url:url(s.url),publisher:text(s.publisher,1000),author:text(s.author,1000),published_at:date||null,media};
  });
  return {id:uuid(v.id),title,description:text(v.description,60000),status,reason,target_entity_id:uid(v.target_entity_id),sources};
 }
-async function load(tx: Tx, id: string, lock=false): Promise<Row> {
+export async function loadIntake(tx: Tx, id: string, lock=false): Promise<Row> {
  const rows = lock ? await tx<Row>`select * from app.entity_intake where id=${id} for update` : await tx<Row>`select * from app.entity_intake where id=${id}`;
  if(!rows.length) throw new ApiError("not_found","Досье не найдено");
  const sources=await tx<Row>`select * from app.entity_intake_sources where intake_id=${id} order by created_at,id`;
@@ -51,11 +54,11 @@ entityIntake.get("/", async c=>{
  const items=await sql`select d.id,d.title,d.status,d.version,d.updated_at,d.target_entity_id,
  (select count(*)::int from app.entity_intake_sources s where s.intake_id=d.id) as sources_count,
  (select count(*)::int from app.entity_intake_media m join app.entity_intake_sources s on s.id=m.source_id where s.intake_id=d.id) as media_count
- from app.entity_intake d where (${status}='' or d.status=${status}) and (${q}='' or d.title ilike '%'||${q}||'%') order by d.updated_at desc,d.id limit 30 offset ${Math.floor(page)*30}`;
- const count=await sql<{total:number}>`select count(*)::int as total from app.entity_intake where (${status}='' or status=${status}) and (${q}='' or title ilike '%'||${q}||'%')`;
+ from app.entity_intake d where (${status}='' or (${status}='work' and d.status not in ('ready','done')) or d.status=${status}) and (${q}='' or d.title ilike '%'||${q}||'%') order by d.updated_at desc,d.id limit 30 offset ${Math.floor(page)*30}`;
+ const count=await sql<{total:number}>`select count(*)::int as total from app.entity_intake where (${status}='' or (${status}='work' and status not in ('ready','done')) or status=${status}) and (${q}='' or title ilike '%'||${q}||'%')`;
  return c.json({items,total:count[0].total});
 });
-entityIntake.get("/:id",async c=>c.json(await load(sql,uuid(c.req.param("id")))));
+entityIntake.get("/:id",async c=>c.json(await loadIntake(sql,uuid(c.req.param("id")))));
 async function save(c: any, creating: boolean) {
  const actor=requirePermission(c.get("principal"),"edit");
  const raw=await c.req.text(); if(new TextEncoder().encode(raw).length>1000000) throw new ApiError("payload_too_large","Досье больше 1 МБ; разделите материалы");
@@ -66,8 +69,10 @@ async function save(c: any, creating: boolean) {
   // Serializes same-UID POST retries and updates without a duplicate race.
   await tx`select pg_advisory_xact_lock(hashtextextended('entity-intake-write',0))`;
   const exists=await tx`select id from app.entity_intake where id=${d.id}`;
-  if(creating && exists.length) return await load(tx,d.id);
-  const old=creating?null:await load(tx,d.id,true);
+  if(creating && exists.length) return await loadIntake(tx,d.id);
+  const old=creating?null:await loadIntake(tx,d.id,true);
+  if(old?.sketch?.state === "running" && Date.now()-Date.parse(old.sketch.started_at)<300000) throw new ApiError("version_conflict","Дождитесь подготовки эскиза");
+  if(old?.sketch && old.status === "done") fail("Опубликованная карточка редактируется в каталоге");
   if(old && input!.version!==old.version) throw new ApiError("version_conflict","Досье уже изменилось. Откройте сохранённую версию; ваши правки не перезаписаны.");
   if(creating && d.status!=="proposed") fail("Новое досье начинается со статуса «Предложено»");
   if(d.target_entity_id && !(await tx`select id from app.entities where id=${d.target_entity_id} and status <> 'archived'`).length) fail("Целевая запись не найдена или архивирована");
@@ -84,7 +89,7 @@ async function save(c: any, creating: boolean) {
   if(creating) await tx`insert into app.entity_intake(id,title,description,status,reason,target_entity_id) values(${d.id},${d.title},${d.description},${d.status},${d.reason},${d.target_entity_id})`;
   else {
    const {history,...snapshot}=old!;
-   await tx`update app.entity_intake set title=${d.title},description=${d.description},status=${d.status},reason=${d.reason},target_entity_id=${d.target_entity_id},version=version+1,
+   await tx`update app.entity_intake set title=${d.title},description=${d.description},status=${d.status},reason=${d.reason},target_entity_id=${d.target_entity_id},sketch=case when sketch is null then null else sketch || '{"state":"stale"}'::jsonb end,version=version+1,
     history=history||${JSON.stringify([{at:new Date().toISOString(),by:actor.contributorId,snapshot}])}::jsonb where id=${d.id}`;
   }
   // Whole-dossier replacement is atomic; previous content is retained in history.
@@ -97,9 +102,77 @@ async function save(c: any, creating: boolean) {
    for(const m of s.media) await tx`insert into app.entity_intake_media(id,source_id,url,media_entity_id,kind,caption,author,status,error) values(${m.id},${s.id},${m.url},${m.media_entity_id},${m.kind},${m.caption},${m.author},${m.status},${m.error})
     on conflict(id) do update set url=excluded.url,media_entity_id=excluded.media_entity_id,kind=excluded.kind,caption=excluded.caption,author=excluded.author,status=excluded.status,error=excluded.error`;
   }
-  return await load(tx,d.id);
+  return await loadIntake(tx,d.id);
  });
  return c.json(result,creating?201:200);
 }
 entityIntake.post("/",c=>save(c,true));
 entityIntake.put("/:id",c=>save(c,false));
+
+
+entityIntake.get("/options/types",async c=>c.json({items:await sql`select id,title_ru from app.entity_types order by title_ru`}));
+entityIntake.post("/:id/prepare",async c=>{
+ const actor=requirePermission(c.get('principal'),'edit'),caller=await callerOf(c);
+ const input=await c.req.json();const id=uuid(c.req.param('id'));const job=crypto.randomUUID();
+ const d=await transaction(actor.contributorId,async tx=>{
+  const d=await loadIntake(tx,id,true);
+  if(d.version!==input.version)throw new ApiError('version_conflict','Стек изменился. Обновите карточку');
+  if(d.status==='done')fail('Карточка уже опубликована');
+  if(d.sketch?.state==='running'&&Date.now()-Date.parse(d.sketch.started_at)<300000)return d;
+  if(d.sketch?.description&&input.replace!==true)fail('Подтвердите повторную подготовку; текущий эскиз сохранится в истории');
+  await auditIntake(tx,d,actor.contributorId);
+  const sketch={...d.sketch,state:'running',job,started_at:new Date().toISOString()};
+  await tx`update app.entity_intake set sketch=${JSON.stringify(sketch)}::jsonb,status='reviewing',version=version+1 where id=${id}`;
+  return await loadIntake(tx,id);
+ });
+ if(d.sketch.job===job)void (async()=>{
+  try{
+   const sketch=await prepareSketch(d,caller);
+   await transaction(actor.contributorId,async tx=>{
+    const current=await loadIntake(tx,id,true);if(current.sketch?.job!==job||current.version!==d.version)return;
+    await auditIntake(tx,current,actor.contributorId);
+    for(const source of sketch.sources)await tx`insert into app.entity_intake_sources(id,intake_id,url,title,description) select ${crypto.randomUUID()},${id},${source.url},${source.title},${source.description} where not exists(select 1 from app.entity_intake_sources where intake_id=${id} and url=${source.url})`;
+    await tx`update app.entity_intake set sketch=${JSON.stringify(sketch)}::jsonb,status='ready',version=version+1 where id=${id}`;
+   });
+  }catch(e){
+   log('error',caller.requestId,'Не удалось подготовить эскиз',{intake_id:id,error:String(e)});
+   await transaction(actor.contributorId,async tx=>{
+    const current=await loadIntake(tx,id,true);if(current.sketch?.job!==job)return;
+    await auditIntake(tx,current,actor.contributorId);
+    await tx`update app.entity_intake set sketch=sketch||${JSON.stringify({state:'error',error:'Подготовка не завершена. Попробуйте ещё раз; материалы сохранены.'})}::jsonb,status='needs_info',reason='Ошибка подготовки эскиза',version=version+1 where id=${id}`;
+   });
+  }
+ })().catch(e=>log('error',caller.requestId,'Ошибка сохранения результата подготовки',{intake_id:id,error:String(e)}));
+ return c.json(d,202);
+});
+entityIntake.put('/:id/sketch',async c=>{
+ const actor=requirePermission(c.get('principal'),'edit'),input=await c.req.json();
+ return c.json(await transaction(actor.contributorId,async tx=>{
+  const d=await loadIntake(tx,uuid(c.req.param('id')),true);
+  if(d.version!==input.version)throw new ApiError('version_conflict','Эскиз изменился. Обновите карточку');
+  if(d.status==='done'||d.sketch?.state!=='ready')fail('Эскиз ещё не готов для правки');
+  const sk=input.sketch;if(!sk)fail('Нужен эскиз');
+  const title=cleanText(sk.title,500),description=cleanText(sk.description);if(!title||!description)fail('Укажите название и описание');
+  const type=uuid(sk.type_id);if(!(await tx`select id from app.entity_types where id=${type}`).length)fail('Неизвестный тип');
+  const target=uid(sk.target_entity_id);let revision=null;
+  if(target){const rows=await tx<Row>`select working_revision_id from app.entities where id=${target} and status <> 'archived'`;if(!rows.length)fail('Запись не найдена');revision=rows[0].working_revision_id;}
+  const sketch={...d.sketch,title,description,type_id:type,target_entity_id:target,target_revision_id:target===d.sketch.target_entity_id?d.sketch.target_revision_id:revision};
+  await auditIntake(tx,d,actor.contributorId);
+  await tx`update app.entity_intake set sketch=${JSON.stringify(sketch)}::jsonb,version=version+1 where id=${d.id}`;
+  return await loadIntake(tx,d.id);
+ }));
+});
+entityIntake.post('/:id/approve',async c=>{
+ const actor=requirePermission(c.get('principal'),'publish');requirePermission(actor,'edit');
+ const input=await c.req.json();if(input.confirm!==true)fail('Подтвердите публикацию просмотренной карточки');
+ return c.json(await transaction(actor.contributorId,async tx=>{
+  const d=await loadIntake(tx,uuid(c.req.param('id')),true);
+  if(d.status==='done'&&d.sketch?.state==='published')return d;
+  if(d.version!==input.version)throw new ApiError('version_conflict','Эскиз изменился. Проверьте новую версию');
+  if(!d.sketch?.target_entity_id)requirePermission(actor,'create_delete');
+  await auditIntake(tx,d,actor.contributorId);
+  const id=await publishSketch(tx,d,actor.contributorId);
+  await tx`update app.entity_intake set target_entity_id=${id},status='done',reason='Эскиз утверждён и опубликован',sketch=sketch||'{"state":"published"}'::jsonb,version=version+1 where id=${d.id}`;
+  return await loadIntake(tx,d.id);
+ }));
+});

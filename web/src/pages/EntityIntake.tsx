@@ -1,69 +1,44 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, type EntityListItem } from "../api";
-import { intake, blankDossier, blankSource, INTAKE_STATUS, type Dossier, type IntakeSource, type IntakeMedia, type IntakeRow } from "../intake";
+import { api } from "../api";
+import { intake, blankDossier, blankSource, type Dossier, type IntakeRow } from "../intake";
+import { EntityIntakeDetails } from "./EntityIntakeDetails";
 
-export function EntityIntake({allowed,canUpload}:{allowed:boolean;canUpload:boolean}) {
- const {id}=useParams();const [params]=useSearchParams();const story=params.get("story");const navigate=useNavigate();
- const [rows,setRows]=useState<IntakeRow[]>([]),[total,setTotal]=useState(0),[page,setPage]=useState(0),[q,setQ]=useState(""),[status,setStatus]=useState("");
- const [d,setD]=useState<Dossier|null>(null),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
- const [match,setMatch]=useState(""),[matches,setMatches]=useState<EntityListItem[]>([]),[mergeQ,setMergeQ]=useState(""),[mergeRows,setMergeRows]=useState<IntakeRow[]>([]);
- const saving=useRef(false);
- const [historyVersion,setHistoryVersion]=useState<number|null>(null);
- useEffect(()=>{if(!allowed||id)return;let live=true;intake.list(q,status,page).then(r=>{if(live){setRows(r.items);setTotal(r.total);}}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[allowed,id,q,status,page]);
- useEffect(()=>{if(!allowed||!id){setD(null);return;}let live=true;setError("");setNotice("");setD(null);setDirty(false);setMatches([]);setMergeRows([]);
-  const request=id==='new'?(story?intake.seed(story):Promise.resolve(blankDossier())):intake.get(id);
-  request.then(v=>{if(live){setD(v);setDirty(id==='new');}}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};
- },[allowed,id,story]);
- useEffect(()=>{if(!dirty)return;const f=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue="";};window.addEventListener('beforeunload',f);return()=>window.removeEventListener('beforeunload',f);},[dirty]);
- if(!allowed)return <p className="error">Стек доступен редакторам.</p>;
- const change=(patch:Partial<Dossier>)=>{setD(v=>v?{...v,...patch}:v);setDirty(true);setNotice("");};
- const source=(sid:string,patch:Partial<IntakeSource>)=>{setD(v=>v?{...v,sources:v.sources.map(s=>s.id===sid?{...s,...patch}:s)}:v);setDirty(true);};
- const media=(sid:string,mid:string,patch:Partial<IntakeMedia>)=>{setD(v=>v?{...v,sources:v.sources.map(s=>s.id===sid?{...s,media:s.media.map(m=>m.id===mid?{...m,...patch}:m)}:s)}:v);setDirty(true);};
- const save=async()=>{if(!d||saving.current)return;saving.current=true;setBusy(true);setError("");try{const result=await intake.save(d);setD(result);setDirty(false);setNotice("Досье сохранено");if(id==='new')navigate('/entity-intake/'+result.id,{replace:true});}catch(e){setError((e as Error).message);}finally{setBusy(false);saving.current=false;}};
- const upload=async(sid:string,file:File)=>{setBusy(true);setError("");try{const form=new FormData();form.set('file',file);form.set('caption',file.name);const m=await api.uploadMedia(form);if(!m.entity_id)throw new Error('Не получен UID медиа');setD(v=>v?{...v,sources:v.sources.map(s=>s.id===sid?{...s,media:[...s.media,{id:crypto.randomUUID(),url:"",media_entity_id:m.entity_id!,kind:'image',caption:file.name,author:'',status:'stored',error:''}]}:s)}:v);setDirty(true);setNotice('Файл сохранён в медиатеке. Сохраните досье для закрепления источника.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
- const merge=async(target:string)=>{if(!d)return;setBusy(true);setError("");try{const current=await intake.get(target);const sources=structuredClone(current.sources);for(const incoming of d.sources){const same=incoming.url?sources.find(s=>s.url===incoming.url):null;if(!same){sources.push(incoming);continue;}if(!same.description.includes(incoming.description))same.description+='\n\n'+incoming.description;for(const m of incoming.media)if(!same.media.some(old=>(m.url&&old.url===m.url)||(m.media_entity_id&&old.media_entity_id===m.media_entity_id)))same.media.push(m);}setD({...current,sources,status:'reviewing'});setDirty(true);setNotice('Материалы добавлены в существующее досье. Проверьте и сохраните.');setMergeRows([]);}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
- return <section className="entity-intake"><h1>Стек сущностей для внесения в БД</h1>
-  <p className="hint">Досье с описаниями, источниками и медиа. Отбор в новости и пополнение каталога независимы.</p>
-  {error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
-  {!id?<>
-   <Link className="button" to="/entity-intake/new">Добавить досье</Link>
-   <div className="filters"><label>Поиск<input value={q} onChange={e=>{setQ(e.target.value);setPage(0);}}/></label><label>Статус<select value={status} onChange={e=>{setStatus(e.target.value);setPage(0);}}><option value="">Все</option>{Object.entries(INTAKE_STATUS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label></div>
-   <p>Досье: {total}</p><table className="grid-table"><thead><tr><th>Сущность</th><th>Статус</th><th>Источники / медиа</th><th>Обновлено</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><Link to={'/entity-intake/'+r.id}>{r.title}</Link></td><td>{INTAKE_STATUS[r.status]}</td><td>{r.sources_count} / {r.media_count}</td><td>{new Date(r.updated_at).toLocaleString('ru-RU')}</td></tr>)}</tbody></table>
-   <div className="filters"><button disabled={!page} onClick={()=>setPage(page-1)}>Предыдущие</button><span>Страница {page+1}</span><button disabled={(page+1)*30>=total} onClick={()=>setPage(page+1)}>Следующие</button></div>
-  </>:!d?<p>Загрузка досье…</p>:<>
-   <div className="filters"><button disabled={busy} onClick={()=>void save()}>Сохранить досье</button><button className="ghost" disabled={busy} onClick={()=>{setDirty(false);navigate('/entity-intake');}}>{dirty?'Закрыть без сохранения':'К списку'}</button><span>{dirty?'Есть несохранённые изменения':`Версия ${d.version}`}</span></div>
-   <fieldset disabled={busy}><legend>Задание</legend><label>Название сущности<input value={d.title} onChange={e=>change({title:e.target.value})}/></label><label>Что внести: описание, авторы, типология, место, предлагаемые связи<textarea rows={5} value={d.description} onChange={e=>change({description:e.target.value})}/></label></fieldset>
-   {id==='new'&&<details className="block"><summary>Добавить материалы к существующему досье</summary><input aria-label="Поиск досье для дополнения" value={mergeQ} onChange={e=>setMergeQ(e.target.value)}/><button disabled={busy} onClick={()=>intake.list(mergeQ).then(r=>setMergeRows(r.items)).catch(e=>setError(e.message))}>Найти досье</button>{mergeRows.map(r=><p key={r.id}><button disabled={busy} className="ghost" onClick={()=>void merge(r.id)}>{r.title} — {INTAKE_STATUS[r.status]}</button></p>)}</details>}
-   <fieldset disabled={busy}><legend>Сопоставление с каталогом</legend><p>{d.target_entity_id?<>Связано с записью UID {d.target_entity_id}. <a target="_blank" rel="noreferrer" href={'/entities/'+d.target_entity_id+'/edit'}>Открыть редактор записи</a> <button className="ghost" onClick={()=>change({target_entity_id:null})}>Снять сопоставление</button></>:"Сущность ещё не сопоставлена."}</p>
-   <label>Название для поиска<input value={match} onChange={e=>setMatch(e.target.value)}/></label><button type="button" onClick={()=>api.entities({q:match,limit:'10'}).then(r=>setMatches(r.items)).catch(e=>setError(e.message))}>Найти в каталоге</button>
-   {matches.map(m=><p key={m.id}><button type="button" className="ghost" onClick={()=>{change({target_entity_id:m.id});setMatches([]);}}>{m.title_ru} · {m.type_title} · UID {m.id}</button></p>)}
-   <p><a href="/entities/new" target="_blank" rel="noreferrer">Создать сущность в обычном редакторе</a> — затем найдите её здесь. Создание и публикация не выполняются автоматически.</p></fieldset>
-   <h2>Источники и медиа ({d.sources.length})</h2>
-   {d.sources.map((s,i)=><details className="block" key={s.id} open><summary>{i+1}. {s.title||'Новый источник'} · медиа {s.media.length}</summary><fieldset disabled={busy}><legend>Источник</legend>
-    <label>Название источника<input value={s.title} onChange={e=>source(s.id,{title:e.target.value})}/></label><label>Ссылка на публикацию<input type="url" value={s.url} onChange={e=>source(s.id,{url:e.target.value})}/></label>
-    {s.url&&<a href={/^https?:\/\//.test(s.url)?s.url:undefined} target="_blank" rel="noreferrer">Открыть источник</a>}
-    <label>Описание и сведения из этого источника<textarea rows={5} value={s.description} onChange={e=>source(s.id,{description:e.target.value})}/></label>
-    <div className="filters"><label>Издание<input value={s.publisher} onChange={e=>source(s.id,{publisher:e.target.value})}/></label><label>Автор публикации<input value={s.author} onChange={e=>source(s.id,{author:e.target.value})}/></label><label>Дата<input type="date" value={s.published_at||''} onChange={e=>source(s.id,{published_at:e.target.value||null})}/></label></div>
-    {s.media.map(m=><div key={m.id} className="block"><b>Медиа · {m.media_entity_id?'Файл в медиатеке':m.status==='error'?'Ошибка получения':'Только ссылка'}</b>
-     <label>Ссылка на медиа<input type="url" value={m.url} onChange={e=>media(s.id,m.id,{url:e.target.value})}/></label>{m.url&&<a href={/^https?:\/\//.test(m.url)?m.url:undefined} target="_blank" rel="noreferrer">Открыть медиа</a>}
-     {m.media_entity_id&&<p><a href={'/entities/'+m.media_entity_id+'/edit'} target="_blank" rel="noreferrer">Медиатека · UID {m.media_entity_id}</a></p>}
-     <label>Вид<select aria-label="Вид медиа" value={m.kind} onChange={e=>media(s.id,m.id,{kind:e.target.value})}>{['image','plan','drawing','video','document','other'].map(v=><option key={v} value={v}>{{image:'Изображение',plan:'План',drawing:'Чертёж',video:'Видео',document:'Документ',other:'Другое'}[v]}</option>)}</select></label>
-     <label>Подпись<textarea aria-label="Подпись" rows={2} value={m.caption} onChange={e=>media(s.id,m.id,{caption:e.target.value})}/></label><label>Автор медиа<input value={m.author} onChange={e=>media(s.id,m.id,{author:e.target.value})}/></label>
-     {!m.media_entity_id&&<><label>Получение<select aria-label="Получение медиа" value={m.status} onChange={e=>media(s.id,m.id,{status:e.target.value})}><option value="link">Обнаружена ссылка</option><option value="error">Ошибка получения</option></select></label>{m.status==='error'&&<label>Описание ошибки<input value={m.error} onChange={e=>media(s.id,m.id,{error:e.target.value})}/></label>}</>}
-     <button type="button" className="ghost" onClick={()=>source(s.id,{media:s.media.filter(x=>x.id!==m.id)})}>Убрать из досье</button>
-    </div>)}
-    <button type="button" className="ghost" onClick={()=>source(s.id,{media:[...s.media,{id:crypto.randomUUID(),url:'',media_entity_id:null,kind:'image',caption:'',author:'',status:'link',error:''}]})}>Добавить ссылку на медиа</button>
-    {canUpload&&<label>Загрузить файл в медиатеку<input type="file" onChange={e=>{const f=e.target.files?.[0];if(f)void upload(s.id,f);e.target.value='';}}/></label>}
-    <p><button type="button" className="ghost" onClick={()=>change({sources:d.sources.filter(x=>x.id!==s.id)})}>Убрать источник из досье</button></p>
-   </fieldset></details>)}
-   <button disabled={busy} className="ghost" onClick={()=>change({sources:[...d.sources,blankSource()]})}>Добавить источник</button>
-   <fieldset disabled={busy}><legend>Проверка и решение</legend><label>Статус<select aria-label="Статус" value={d.status} onChange={e=>change({status:e.target.value,confirm_done:false})}>{Object.entries(INTAKE_STATUS).map(([k,v])=><option key={k} value={k} disabled={d.version===0&&k!=='proposed'}>{v}</option>)}</select></label>
-    <label>Причина решения / что внесено<textarea rows={3} value={d.reason} onChange={e=>change({reason:e.target.value})}/></label>
-    {d.status==='done'&&<label><input type="checkbox" checked={!!d.confirm_done} onChange={e=>change({confirm_done:e.target.checked})}/>Проверено: материалы и связи внесены в выбранную запись каталога.</label>}
-    <p className="hint">Сначала сохраните статус «Готово к внесению». После работы в редакторе записи проверьте результат и отметьте «Внесено».</p>
-   </fieldset><button disabled={busy} onClick={()=>void save()}>Сохранить досье</button>
-   {!!d.history?.length&&<details className="block"><summary>История изменений ({d.history.length})</summary>{d.history.map((h,i)=><details key={i} onToggle={e=>{if(e.currentTarget.open)setHistoryVersion(i);}}><summary>{new Date(h.at).toLocaleString('ru-RU')} · версия {h.snapshot.version} · {INTAKE_STATUS[h.snapshot.status]}</summary>{historyVersion===i&&<pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(h.snapshot,null,2)}</pre>}</details>)}</details>}
-  </>}
+export function EntityIntake({allowed,canUpload,canPublish=false}:{allowed:boolean;canUpload:boolean;canPublish?:boolean}) {
+ const {id}=useParams(),[params]=useSearchParams(),navigate=useNavigate();const story=params.get('story');
+ const [d,setD]=useState<Dossier|null>(null),[rows,setRows]=useState<IntakeRow[]>([]),[tab,setTab]=useState('work'),[page,setPage]=useState(0),[total,setTotal]=useState(0);
+ const [error,setError]=useState(''),[busy,setBusy]=useState(false),[dirty,setDirty]=useState(false),[confirm,setConfirm]=useState(false),[replace,setReplace]=useState(false),[advanced,setAdvanced]=useState(false);
+ const [types,setTypes]=useState<{id:string;title_ru:string}[]>([]),[query,setQuery]=useState(''),[matches,setMatches]=useState<{id:number;title_ru:string}[]>([]);
+ useEffect(()=>{if(!allowed)return;intake.types().then(r=>setTypes(r.items)).catch(e=>setError(e.message));},[allowed]);
+ useEffect(()=>{if(!allowed)return;let live=true;setError('');setDirty(false);setConfirm(false);setAdvanced(false);setReplace(false);setD(null);
+  if(id)(id==='new'?(story?intake.seed(story):Promise.resolve(blankDossier())):intake.get(id)).then(v=>{if(live)setD(v);}).catch(e=>{if(live)setError(e.message);});
+  else intake.list('',tab,page).then(r=>{if(live){setRows(r.items);setTotal(r.total);}}).catch(e=>{if(live)setError(e.message);});
+  return()=>{live=false;};
+ },[allowed,id,story,tab,page]);
+ const running=d?.sketch?.state==='running'&&Date.now()-Date.parse(d.sketch.started_at||'')<300000;
+ useEffect(()=>{if(!running||!d)return;let live=true;const timer=setInterval(()=>intake.get(d.id).then(v=>{if(live)setD(v);}).catch(e=>{if(live)setError(e.message);}),4000);return()=>{live=false;clearInterval(timer);};},[running,d?.id]);
+ useEffect(()=>{if(!dirty)return;const f=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',f);return()=>window.removeEventListener('beforeunload',f);},[dirty]);
+ async function run(fn:()=>Promise<Dossier>){if(busy)return;setBusy(true);setError('');try{const v=await fn();setD(v);setDirty(false);setConfirm(false);if(id==='new')navigate('/entity-intake/'+v.id,{replace:true});}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}}
+ function edit(p:Partial<Dossier>){if(d){setD({...d,...p});setDirty(true);setConfirm(false);}}
+ function sketch(p:object){if(d?.sketch)edit({sketch:{...d.sketch,...p}});}
+ const prepared=d?.sketch?.state==='ready',published=d?.status==='done';
+ if(!allowed)return <p>Нужны права редактора.</p>;
+ if(advanced)return <><button onClick={()=>setAdvanced(false)}>← Простой вид</button><EntityIntakeDetails allowed={allowed} canUpload={canUpload}/></>;
+ return <section className="entity-intake"><h1>Стек сущностей</h1>{error&&<p role="alert" className="error">{error}</p>}
+ {!id?<><nav className="filters" aria-label="Разделы стека">{[['work','В работе'],['ready','Подготовленные'],['done','Опубликованные']].map(([value,label])=><button key={value} className={tab===value?'':'ghost'} onClick={()=>{setTab(value);setPage(0);}}>{label}</button>)}<Link className="button" to="/entity-intake/new">+ Добавить</Link></nav>
+ <table><thead><tr><th>Название</th><th>Состояние</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><Link to={'/entity-intake/'+r.id}>{r.title}</Link></td><td>{{proposed:'Ожидает подготовки',reviewing:'Подготовка / проверка',ready:'Эскиз готов',done:'Опубликовано',needs_info:'Нужно уточнение',rejected:'Отложено'}[r.status]}</td></tr>)}</tbody></table>{!rows.length&&<p>Пока пусто.</p>}<div className="filters"><button disabled={!page} onClick={()=>setPage(page-1)}>Назад</button><span>{page+1}</span><button disabled={(page+1)*30>=total} onClick={()=>setPage(page+1)}>Далее</button></div></>:!d?<p>Загрузка…</p>:<>
+ <Link to="/entity-intake">← Стек</Link>
+ {published?<><h2>{d.sketch?.title||d.title}</h2><p>Опубликовано. <Link to={'/entities/'+d.target_entity_id+'/edit'}>Открыть карточку</Link></p></>:prepared&&d.sketch?<>
+ <h2>Эскиз</h2><p>Проверьте описание и источники. До утверждения карточка не опубликована.</p>
+ <fieldset disabled={busy}><label>Название<input value={d.sketch.title} onChange={e=>sketch({title:e.target.value})}/></label><label>Что это<select aria-label="Что это" value={d.sketch.type_id} onChange={e=>sketch({type_id:e.target.value})}>{types.map(t=><option key={t.id} value={t.id}>{t.title_ru}</option>)}</select></label><label>Описание<textarea aria-label="Описание" rows={14} value={d.sketch.description} onChange={e=>sketch({description:e.target.value})}/></label>
+ {!!d.sketch.questions.length&&<div className="block"><b>Проверить перед публикацией</b><ul>{d.sketch.questions.map((q,i)=><li key={i}>{q}</li>)}</ul></div>}
+ <h3>Источники</h3><ol>{d.sketch.sources.map((s,i)=><li key={i}><a href={s.url} target="_blank" rel="noreferrer">{s.title||s.url}</a><p>{s.description}</p></li>)}</ol>
+ {!!d.sketch.related?.length&&<details><summary>Авторы и места: совпадения в каталоге</summary>{d.sketch.related.map((r,i)=><p key={i}>{r.name}: {r.matches.length?r.matches.map(m=><Link key={m.id} to={'/entities/'+m.id+'/edit'} target="_blank">{m.title_ru} </Link>):'пока не найдено'}</p>)}<p>Совпадения — подсказки для проверки; новые связи автоматически не создаются.</p></details>}
+ <details open={!!d.sketch.matches.length}><summary>Этот объект уже есть на сайте?</summary><p>Для существующего объекта описание будет добавлено к прежнему тексту.</p><button className="ghost" onClick={()=>sketch({target_entity_id:null})}>Создать новую сущность</button>{[...d.sketch.matches,...matches].filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i).map(m=><p key={m.id}><button className="ghost" onClick={()=>sketch({target_entity_id:m.id})}>{d.sketch?.target_entity_id===m.id?'✓ ':''}{m.title_ru}</button></p>)}<input aria-label="Поиск существующего объекта" value={query} onChange={e=>setQuery(e.target.value)}/><button onClick={()=>api.entities({q:query,limit:'10'}).then(r=>setMatches(r.items)).catch(e=>setError(e.message))}>Найти</button></details>
+ <p>{d.sketch.target_entity_id?'Будет дополнена выбранная запись.':'Будет создана новая сущность.'}</p><button onClick={()=>void run(()=>intake.saveSketch(d))} disabled={!dirty}>Сохранить правки</button>
+ <label><input type="checkbox" checked={confirm} onChange={e=>setConfirm(e.target.checked)}/>Карточка и источники проверены</label><button disabled={!confirm||dirty||!canPublish||(!d.sketch.target_entity_id&&!canUpload)} onClick={()=>void run(()=>intake.approve(d))}>Утвердить и опубликовать</button>{dirty&&<p>Сначала сохраните правки.</p>}</fieldset>
+ </>:<><h2>{id==='new'?'Добавить объект':d.title}</h2><fieldset disabled={busy||running}><label>Название объекта<input value={d.title} onChange={e=>edit({title:e.target.value})}/></label><label>Источники</label>{d.sources.map((s,i)=><div className="filters" key={s.id}><input style={{flex:1,minWidth:200}} type="url" aria-label={'Источник '+(i+1)} placeholder="https://…" value={s.url} onChange={e=>edit({sources:d.sources.map(x=>x.id===s.id?{...x,url:e.target.value}:x)})}/>{d.sources.length>1&&<button className="ghost" aria-label={'Убрать источник '+(i+1)} onClick={()=>edit({sources:d.sources.filter(x=>x.id!==s.id)})}>×</button>}</div>)}<button className="ghost" onClick={()=>edit({sources:[...d.sources,blankSource()]})}>+ Источник</button><p><button onClick={()=>void run(()=>intake.save(d))}>Сохранить в стек</button> <button onClick={()=>void run(async()=>{const saved=dirty||!d.version?await intake.save(d):d;return intake.prepare(saved,replace);})} disabled={!!d.sketch?.description&&!replace}>Подготовить эскиз</button></p>{d.sketch?.description&&<label><input type="checkbox" checked={replace} onChange={e=>setReplace(e.target.checked)}/>Подготовить заново; прежний эскиз останется в истории</label>}</fieldset>{running&&<p role="status">Изучаем источники и готовим карточку. Можно вернуться в стек.</p>}{d.sketch?.state==='error'&&<p role="alert">{d.sketch.error}</p>}</>}
+ <details><summary>Материалы и история</summary><p>Сохранено источников: {d.sources.length}. Медиа: {d.sources.reduce((n,s)=>n+s.media.length,0)}.</p><button disabled={dirty||running} className="ghost" onClick={()=>setAdvanced(true)}>Открыть подробности</button></details>
+ </>}
  </section>;
 }
