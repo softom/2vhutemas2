@@ -32,11 +32,18 @@ try:
  with concurrent.futures.ThreadPoolExecutor(2) as pool:results=list(pool.map(lambda _:call('PUT','/entity-intake/'+d['id'],d),range(2)))
  check(sorted(s for s,_ in results)==[200,409])
  d=next(v for s,v in results if s==200);check(d['version']==2 and len(d['history'])==1 and d['history'][0]['snapshot']['sources'][0]['media'][0]['caption']=='Plan')
+ assets=call('GET','/media?limit=1')[1]['items']
+ if assets:
+  d['sources'][0]['media'][0]['media_entity_id']=assets[0]['entity_id']
+  code,d=call('PUT','/entity-intake/'+d['id'],d);check(code==200 and d['sources'][0]['media'][0]['status']=='stored')
  entities=call('GET','/entities?limit=1')[1]['items'];check(bool(entities));d['target_entity_id']=entities[0]['id'];d['status']='ready'
  code,d=call('PUT','/entity-intake/'+d['id'],d);check(code==200)
  d['status']='done';d['reason']='Test verification';d['confirm_done']=True
  code,d=call('PUT','/entity-intake/'+d['id'],d);check(code==200 and d['target_entity_id']==entities[0]['id'])
  check(call('GET','/entity-intake?q=SMOKE%20entity%20intake')[1]['total']>=2)
+ if os.environ.get('INTAKE_TEST_STORY'):
+  code,seed=call('GET','/news-robot/intake-seed/'+os.environ['INTAKE_TEST_STORY']);check(code==200 and any(s['media'] for s in seed['sources']))
+  ids.append(seed['id']);seed['title']='SMOKE entity intake seed '+seed['id'];check(call('POST','/entity-intake',seed)[0]==201)
  print('PASS',passed,'entity intake integration checks')
 finally:
  print('CLEANUP_UUIDS='+json.dumps(ids))
