@@ -51,7 +51,7 @@ export const CATALOG_GROUPS: Record<string, { code: string; title_ru: string; ty
     { code: "built", title_ru: "Постройки и проекты",
       types: ["architecture_object", "urban_concept", "environment_object", "study_work"] },
     { code: "competitions", title_ru: "Конкурсы и события", types: ["competition", "competition_entry", "event"] },
-    { code: "ideas", title_ru: "Идеи и тексты", types: ["theory_concept", "memorandum", "book", "article", "web_page"] },
+    { code: "ideas", title_ru: "Идеи и тексты", types: ["theory_concept", "memorandum", "book", "article"] },
     { code: "media", title_ru: "Медиа и искусство", types: ["video", "film", "music", "performance"] },
   ],
 };
