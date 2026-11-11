@@ -861,10 +861,11 @@ newsRobot.get("/stories", async (c) => {
     const item = items.find((i) => i.story_key === main);
     if (item) {
       item.repeats = list.map((r) => ({ title_ru: r.title_ru, sources: r.sources }));
-      const sources = [...(item.sources ?? []), ...list.flatMap(r => r.sources ?? [])];
-      item.sources = [...new Map(sources.map(s => [s.url, s])).values()];
-      item.sources_total = new Set(item.sources.map((s: Row) => { try { return new URL(s.url).hostname.replace(/^www\./, ""); } catch { return s.source; } })).size;
-      item.publications_total = item.sources.length;
+      const sources: Row[] = [...(Array.isArray(item.sources) ? item.sources : []), ...list.flatMap(r => Array.isArray(r.sources) ? r.sources : [])];
+      const mergedSources = [...new Map(sources.map(s => [s.url, s])).values()];
+      item.sources = mergedSources;
+      item.sources_total = new Set(mergedSources.map((s: Row) => { try { return new URL(String(s.url)).hostname.replace(/^www\./, ""); } catch { return s.source; } })).size;
+      item.publications_total = mergedSources.length;
     } else if (!shown.has(main)) {
       // Главная история старше окна: показываем самый свежий её повтор под его собственным ключом.
       const [first, ...rest] = list;
