@@ -635,6 +635,7 @@ export const api = {
 
   entities: (
     params: {
+      scope?: string;
       type?: string;
       q?: string;
       cursor?: string;
@@ -653,6 +654,7 @@ export const api = {
     const search = new URLSearchParams();
     for (const item of params.opt ?? []) search.append("opt", item);
     // Отбор по ветви целиком: корневая ветвь — это прежний фильтр по виду.
+    if (params.scope) search.set("scope", params.scope);
     if (params.type) search.set("type", params.type);
     if (params.q) search.set("q", params.q);
     if (params.cursor) search.set("cursor", params.cursor);

@@ -102,6 +102,8 @@ entities.get("/", async (c: Context<AppEnv>) => {
   // Отбор идёт по ветви дерева целиком: «всё под ветвью Кто» — это прежний
   // фильтр по виду, «зрелищные здания» — ветвь ниже. Механизм один (Р-37).
   const type = resolveTypeCode(c.req.query("type"), c.req.query("kind"));
+  const objects = c.req.query("scope") === "objects";
+  const newest = objects && c.req.query("sort") !== "parameter";
   const search = c.req.query("q")?.trim() || null;
   // Сортировка и отбор по величине — то, ради чего заведены параметры (Р-38).
   // Считаем по действующим показателям: иначе «по проекту» и «после
@@ -158,6 +160,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
                 and sv is not null),
              '{}'::jsonb) end as values
     from app.read_entities(${drafts}) e
+    join app.entities origin on origin.id = e.id
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
     -- Величина для отбора и сортировки — из снимка самой записи.
@@ -167,6 +170,8 @@ entities.get("/", async (c: Context<AppEnv>) => {
                  (select id from app.parameters where code = ${parameter})) sv) pv
       on ${parameter}::text is not null
     where (${drafts} or e.is_published)
+      and (not ${objects} or (e.type_id in (select app.entity_type_subtree('what'))
+           and e.type_id not in (select app.entity_type_subtree('news'))))
       and (${archived} or e.status <> 'archived')
       and (${type}::text is null
            -- Несколько ветвей через запятую — группа кнопок каталога.
@@ -188,10 +193,13 @@ entities.get("/", async (c: Context<AppEnv>) => {
                       and o.id = (app.snapshot_value(e.id, ${drafts}, p.id)->>'option_id')::uuid))
       and (${min}::numeric is null or pv.num_value >= ${min})
       and (${max}::numeric is null or pv.num_value <= ${max})
-      and (${sortByValue} or ${after}::bigint is null or e.id > ${after})
+      and (${sortByValue} or ${after}::bigint is null
+           or (${newest} and (origin.created_at,e.id) < (select created_at,id from app.entities where id=${after}))
+           or (not ${newest} and e.id > ${after}))
     order by case when ${sortByValue} and ${descending} then pv.num_value end desc nulls last,
              case when ${sortByValue} and not ${descending} then pv.num_value end asc nulls last,
-             e.id
+             case when ${newest} then origin.created_at end desc,
+             case when ${newest} then e.id end desc, e.id
     limit ${limit + 1}
   `;
 

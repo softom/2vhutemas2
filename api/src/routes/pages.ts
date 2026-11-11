@@ -247,7 +247,7 @@ interface CatalogPage {
  * (`GET /api/v1/entities`): те же записи, в том же порядке, столько же.
  */
 async function firstCatalogPage(branch: string | null): Promise<CatalogPage> {
-  const response = await entities.request(branch ? `/?type=${encodeURIComponent(branch)}` : "/");
+  const response = await entities.request(branch ? `/?type=${encodeURIComponent(branch)}${branch === "what" ? "&scope=objects" : ""}` : "/");
   return await response.json() as CatalogPage;
 }
 

@@ -134,9 +134,11 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
   /** В разделе показываем только его ветвь: остальное дерево здесь лишнее. */
   const inBranch = (code: string): boolean => {
+    if (branch === "what" && code === "news") return false;
     if (!branch) return true;
     let current: EntityType | undefined = types.find((item) => item.code === code);
     while (current) {
+      if (branch === "what" && current.code === "news") return false;
       if (current.code === branch) return true;
       current = types.find((item) => item.code === current?.parent);
     }
@@ -148,7 +150,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   // дерева без скрытых ветвей — правило одно, приходит в capabilities.
   // Пока список типов не пришёл, держим кнопки, вложенные сервером: без мигания.
   const directChips = branch
-    ? types.filter((item) => item.parent === branch)
+    ? types.filter((item) => item.parent === branch && inBranch(item.code))
     : types.filter((item) => item.depth === 0 && !hiddenRoots.includes(item.code));
   // Двухуровневый отбор (2026-10-17): в разделе с группами первый ряд —
   // группы, второй — типы выбранной группы. Тип вне групп — в «Прочее».
@@ -194,6 +196,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
     const timer = setTimeout(() => {
       api.entities({
         type: apiType,
+        scope: branch === "what" ? "objects" : undefined,
         q: query || undefined,
         parameter: parameter || undefined,
         min: min || undefined,
@@ -216,13 +219,14 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [apiType, query, parameter, min, max, descending, optKey]);
+  }, [branch, apiType, query, parameter, min, max, descending, optKey]);
 
   const loadMore = () => {
     if (!cursor) return;
     setLoadingMore(true);
     api.entities({
       type: apiType,
+        scope: branch === "what" ? "objects" : undefined,
       q: query || undefined,
       parameter: parameter || undefined,
       min: min || undefined,
