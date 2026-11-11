@@ -1,0 +1,21 @@
+import { useEffect, useState } from "react";
+import { intake, type SketchRelation } from "../intake";
+export function SketchRelations({value,sources,disabled,onChange}:{value:SketchRelation[];sources:{url:string;title:string}[];disabled:boolean;onChange:(v:SketchRelation[])=>void}){
+ const [roles,setRoles]=useState<{id:string;title_ru:string}[]>([]),[error,setError]=useState(''),[searching,setSearching]=useState<number|null>(null);
+ useEffect(()=>{let live=true;intake.relationOptions().then(r=>{if(live)setRoles(r.roles);}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[]);
+ function change(index:number,patch:Partial<SketchRelation>){onChange(value.map((r,i)=>i===index?{...r,kind:r.kind||'author',confirmed:false,...patch}:r));}
+ async function search(index:number){const r=value[index];setSearching(index);setError('');try{const result=await intake.relationOptions(r.kind||'author',r.name);change(index,{matches:result.items,entity_id:null});}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setSearching(null);}}
+ return <section><h3>Авторы и место</h3><p>Выберите существующие записи и отметьте проверенные связи. Только отмеченные привязки применятся при утверждении карточки.</p>{error&&<p role="alert">{error}</p>}
+ {value.map((r,i)=><fieldset key={i} disabled={disabled||searching!==null}><legend>{r.kind==='place'?'Место':'Автор'} · {r.name||'Выбор записи'}</legend>
+ <label>Вид привязки<select aria-label={'Вид привязки '+(i+1)} value={r.kind||'author'} onChange={e=>change(i,{kind:e.target.value as 'author'|'place',entity_id:null,role_id:null,matches:[]})}><option value="author">Автор</option><option value="place">Место</option></select></label>
+ <label>Имя или название<input aria-label={'Имя для поиска '+(i+1)} value={r.name} onChange={e=>change(i,{name:e.target.value})}/></label><button type="button" className="ghost" onClick={()=>void search(i)}>{searching===i?'Ищем…':'Найти в каталоге'}</button>
+ <label>Запись в БД<select aria-label={'Запись в БД '+(i+1)} value={r.entity_id||''} onChange={e=>{const id=Number(e.target.value)||null;const m=r.matches.find(x=>x.id===id);change(i,{entity_id:id,title:m?.title_ru,is_published:m?.is_published});}}><option value="">Не выбрана</option>{r.entity_id&&!r.matches.some(m=>m.id===r.entity_id)&&<option value={r.entity_id}>{r.title||'Выбранная запись'}</option>}{r.matches.map(m=><option key={m.id} value={m.id}>{m.title_ru}{m.is_published===false?' · черновик':''}</option>)}</select></label>
+ {r.entity_id&&<a href={'/entities/'+r.entity_id+'/edit'} target="_blank" rel="noreferrer">Проверить запись ↗</a>}
+ {r.kind!=='place'&&<label>Роль<select aria-label={'Роль '+(i+1)} value={r.role_id||''} onChange={e=>change(i,{role_id:e.target.value||null})}><option value="">Выберите роль</option>{roles.map(role=><option key={role.id} value={role.id}>{role.title_ru}</option>)}</select></label>}
+ <label>На каком основании<textarea aria-label={'Обоснование '+(i+1)} rows={2} value={r.reason||''} onChange={e=>change(i,{reason:e.target.value})}/></label>
+ <label>Источник<select aria-label={'Источник связи '+(i+1)} value={r.source_url||''} onChange={e=>change(i,{source_url:e.target.value})}><option value="">Выберите источник</option>{sources.map((s,j)=><option key={j} value={s.url}>{s.title||s.url}</option>)}</select></label>
+ <label><input type="checkbox" aria-label={'Подтвердить связь '+(i+1)} checked={!!r.confirmed} disabled={!r.entity_id||!r.reason?.trim()||!r.source_url||r.is_published===false||(r.kind!=='place'&&!r.role_id)} onChange={e=>change(i,{confirmed:e.target.checked})}/>Проверено — {r.kind==='place'?'указать это место':'создать связь с автором'}</label>
+ {r.is_published===false&&<p>Запись ещё не опубликована. Сначала проверьте её в каталоге.</p>}
+ <button type="button" className="ghost" onClick={()=>onChange(value.filter((_,n)=>n!==i))}>Убрать предложение</button></fieldset>)}
+ <div className="filters">{(['author','place'] as const).map(kind=><button key={kind} type="button" disabled={disabled||searching!==null} className="ghost" onClick={()=>onChange([...value,{kind,name:'',matches:[],confirmed:false,entity_id:null,role_id:null,reason:'',source_url:''}])}>+ {kind==='author'?'Автор':'Место'}</button>)}</div></section>;
+}

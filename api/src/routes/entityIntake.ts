@@ -7,6 +7,8 @@ import type { AppEnv } from "../lib/http.ts";
 import { auditIntake, prepareSketch, publishSketch, cleanText } from "../lib/intakeSketch.ts";
 import { callerOf } from "../lib/aiJournal.ts";
 import { log } from "../lib/http.ts";
+import { relationOptions, relationMatches, validateRelations } from "../lib/intakeRelations.ts";
+import catalogs from "../lib/intakeCatalogs.json" with { type: "json" };
 export const entityIntake = new Hono<AppEnv>();
 type Row = Record<string, any>;
 const statuses = new Set(["proposed", "reviewing", "needs_info", "ready", "done", "rejected"]);
@@ -111,6 +113,8 @@ entityIntake.put("/:id",c=>save(c,false));
 
 
 entityIntake.get("/options/types",async c=>c.json({items:await sql`select id,title_ru from app.entity_types order by title_ru`}));
+entityIntake.get("/options/relations",async c=>c.json({...await relationOptions(),items:await relationMatches(c.req.query('kind')||'author',text(c.req.query('q'),300))}));
+entityIntake.get("/options/catalogs",c=>c.json({items:catalogs}));
 entityIntake.post("/:id/prepare",async c=>{
  const actor=requirePermission(c.get('principal'),'edit'),caller=await callerOf(c);
  const input=await c.req.json();const id=uuid(c.req.param('id'));const job=crypto.randomUUID();
@@ -156,7 +160,8 @@ entityIntake.put('/:id/sketch',async c=>{
   const type=uuid(sk.type_id);if(!(await tx`select id from app.entity_types where id=${type}`).length)fail('Неизвестный тип');
   const target=uid(sk.target_entity_id);let revision=null;
   if(target){const rows=await tx<Row>`select working_revision_id from app.entities where id=${target} and status <> 'archived'`;if(!rows.length)fail('Запись не найдена');revision=rows[0].working_revision_id;}
-  const sketch={...d.sketch,title,description,type_id:type,target_entity_id:target,target_revision_id:target===d.sketch.target_entity_id?d.sketch.target_revision_id:revision};
+  const related=await validateRelations(tx,sk.related||[],d.sketch.related||[],d.sketch.sources,target);
+  const sketch={...d.sketch,related,title,description,type_id:type,target_entity_id:target,target_revision_id:target===d.sketch.target_entity_id?d.sketch.target_revision_id:revision};
   await auditIntake(tx,d,actor.contributorId);
   await tx`update app.entity_intake set sketch=${JSON.stringify(sketch)}::jsonb,version=version+1 where id=${d.id}`;
   return await loadIntake(tx,d.id);
@@ -169,7 +174,7 @@ entityIntake.post('/:id/approve',async c=>{
   const d=await loadIntake(tx,uuid(c.req.param('id')),true);
   if(d.status==='done'&&d.sketch?.state==='published')return d;
   if(d.version!==input.version)throw new ApiError('version_conflict','Эскиз изменился. Проверьте новую версию');
-  if(!d.sketch?.target_entity_id)requirePermission(actor,'create_delete');
+  if(!d.sketch?.target_entity_id || d.sketch.related?.some((r:Row)=>r.confirmed&&r.kind==='author'))requirePermission(actor,'create_delete');
   await auditIntake(tx,d,actor.contributorId);
   const id=await publishSketch(tx,d,actor.contributorId);
   await tx`update app.entity_intake set target_entity_id=${id},status='done',reason='Эскиз утверждён и опубликован',sketch=sketch||'{"state":"published"}'::jsonb,version=version+1 where id=${d.id}`;
