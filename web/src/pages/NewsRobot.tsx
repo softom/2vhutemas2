@@ -662,7 +662,7 @@ function News({ ov, run, act }: { ov: RobotOverview; run: RobotRunView; act: Act
                   <td>{!c.partial && (inStack.has(c.story_key) ? <span className="hint">в стеке</span>
                     : <button type="button" className="ghost" onClick={() => toStack(c)}>В стек</button>)}
                     {rowNote[c.story_key] && <div className="error">{rowNote[c.story_key]}</div>}</td>
-                  <td><Publication storyKey={c.story_key} ov={ov} /></td>
+                  <td><Publication storyKey={c.story_key} ov={ov} />{!c.partial && <Link to={`/entity-intake/new?story=${encodeURIComponent(c.story_key)}`}>В каталог</Link>}</td>
                 </tr></Fragment>
               );
             })}

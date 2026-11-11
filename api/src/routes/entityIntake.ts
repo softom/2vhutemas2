@@ -1,0 +1,105 @@
+import { Hono } from "hono";
+import { sql, transaction, type Tx } from "../lib/db.ts";
+import { require as requirePermission } from "../lib/auth.ts";
+import { ApiError } from "../lib/errors.ts";
+import type { AppEnv } from "../lib/http.ts";
+
+export const entityIntake = new Hono<AppEnv>();
+type Row = Record<string, any>;
+const statuses = new Set(["proposed", "reviewing", "needs_info", "ready", "done", "rejected"]);
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const fail = (message: string): never => { throw new ApiError("validation_failed", message); };
+function uuid(v: unknown): string { if (typeof v !== "string" || !uuidPattern.test(v)) fail("Некорректный UID"); return v as string; }
+function text(v: unknown, max = 20000): string { if (v == null) return ""; if (typeof v !== "string" || v.length > max) fail("Недопустимый текст или превышена длина"); return (v as string).trim(); }
+function uid(v: unknown): number | null { if (v == null || v === "") return null; const n = Number(v); if (!Number.isSafeInteger(n) || n <= 0) fail("Некорректный UID записи"); return n; }
+function url(v: unknown): string { const s = text(v, 4000); if (!s) return ""; try { const u = new URL(s); if (!["http:","https:"].includes(u.protocol) || u.username || u.password) fail("Нужна ссылка HTTP/HTTPS без пароля"); } catch { fail("Некорректная ссылка"); } return s; }
+function validate(v: Row): Row {
+ const status = text(v.status, 30) || "proposed"; if (!statuses.has(status)) fail("Неизвестный статус");
+ const title = text(v.title, 500); if (!title) fail("Укажите название досье");
+ const reason = text(v.reason); if (["needs_info","rejected"].includes(status) && !reason) fail("Укажите причину решения");
+ if (!Array.isArray(v.sources) || !v.sources.length || v.sources.length > 100) fail("Нужен хотя бы один источник с описанием или медиа (не более 100)");
+ const ids = new Set<string>();
+ const unique = (id: unknown) => { const s = uuid(id); if (ids.has(s)) fail("Повторяющийся UID в досье"); ids.add(s); return s; };
+ const sources = v.sources.map((s: Row) => {
+  if (!s || typeof s !== "object") fail("Некорректный источник");
+  if (!Array.isArray(s.media) || s.media.length > 100) fail("Некорректный список медиа");
+  const media = s.media.map((m: Row) => {
+   if (!m || typeof m !== "object") fail("Некорректное медиа");
+   const media_entity_id=uid(m.media_entity_id), address=url(m.url);
+   const status=media_entity_id ? "stored" : m.status === "error" ? "error" : "link";
+   if (!media_entity_id && !address) fail("Медиа требует ссылку или запись медиатеки");
+   const error=text(m.error,2000); if(status === "error" && !error) fail("Укажите ошибку получения медиа");
+   return {id:unique(m.id),url:address,media_entity_id,kind:text(m.kind,80)||"image",caption:text(m.caption,4000),author:text(m.author,1000),status,error};
+  });
+  const title=text(s.title,500),description=text(s.description,60000); if(!title || (!description && !media.length)) fail("У источника нужны название и описание или медиа");
+  const date=text(s.published_at,10); if(date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date)) fail("Некорректная дата источника");
+  return {id:unique(s.id),title,description,url:url(s.url),publisher:text(s.publisher,1000),author:text(s.author,1000),published_at:date||null,media};
+ });
+ return {id:uuid(v.id),title,description:text(v.description,60000),status,reason,target_entity_id:uid(v.target_entity_id),sources};
+}
+async function load(tx: Tx, id: string, lock=false): Promise<Row> {
+ const rows = lock ? await tx<Row>`select * from app.entity_intake where id=${id} for update` : await tx<Row>`select * from app.entity_intake where id=${id}`;
+ if(!rows.length) throw new ApiError("not_found","Досье не найдено");
+ const sources=await tx<Row>`select * from app.entity_intake_sources where intake_id=${id} order by created_at,id`;
+ const media=await tx<Row>`select m.* from app.entity_intake_media m join app.entity_intake_sources s on s.id=m.source_id where s.intake_id=${id} order by m.created_at,m.id`;
+ return {...rows[0],sources:sources.map(s=>({...s,media:media.filter(m=>m.source_id===s.id)}))};
+}
+entityIntake.use("*", async(c,next)=>{requirePermission(c.get("principal"),"edit");await next();});
+entityIntake.get("/", async c=>{
+ const q=text(c.req.query("q"),500), status=text(c.req.query("status"),30);
+ const page=Math.max(0,Math.min(100000,Number(c.req.query("page"))||0));
+ const items=await sql`select d.id,d.title,d.status,d.version,d.updated_at,d.target_entity_id,
+ (select count(*)::int from app.entity_intake_sources s where s.intake_id=d.id) as sources_count,
+ (select count(*)::int from app.entity_intake_media m join app.entity_intake_sources s on s.id=m.source_id where s.intake_id=d.id) as media_count
+ from app.entity_intake d where (${status}='' or d.status=${status}) and (${q}='' or d.title ilike '%'||${q}||'%') order by d.updated_at desc,d.id limit 30 offset ${Math.floor(page)*30}`;
+ const count=await sql<{total:number}>`select count(*)::int as total from app.entity_intake where (${status}='' or status=${status}) and (${q}='' or title ilike '%'||${q}||'%')`;
+ return c.json({items,total:count[0].total});
+});
+entityIntake.get("/:id",async c=>c.json(await load(sql,uuid(c.req.param("id")))));
+async function save(c: any, creating: boolean) {
+ const actor=requirePermission(c.get("principal"),"edit");
+ const raw=await c.req.text(); if(new TextEncoder().encode(raw).length>1000000) throw new ApiError("payload_too_large","Досье больше 1 МБ; разделите материалы");
+ let input: Row;try{input=JSON.parse(raw);}catch{fail("Некорректный JSON");}
+ if(!input! || typeof input!=="object") fail("Нужно досье");
+ const d=validate(input!);if(!creating && d.id!==uuid(c.req.param("id"))) fail("UID не совпадает с адресом");
+ const result=await transaction(actor.contributorId,async tx=>{
+  // Serializes same-UID POST retries and updates without a duplicate race.
+  await tx`select pg_advisory_xact_lock(hashtextextended('entity-intake-write',0))`;
+  const exists=await tx`select id from app.entity_intake where id=${d.id}`;
+  if(creating && exists.length) return await load(tx,d.id);
+  const old=creating?null:await load(tx,d.id,true);
+  if(old && input!.version!==old.version) throw new ApiError("version_conflict","Досье уже изменилось. Откройте сохранённую версию; ваши правки не перезаписаны.");
+  if(creating && d.status!=="proposed") fail("Новое досье начинается со статуса «Предложено»");
+  if(d.target_entity_id && !(await tx`select id from app.entities where id=${d.target_entity_id} and status <> 'archived'`).length) fail("Целевая запись не найдена или архивирована");
+  if(d.status==='done' && (!d.target_entity_id || !d.reason || input!.confirm_done!==true || !old || !['ready','done'].includes(old.status))) fail("Для завершения нужны готовое досье, запись каталога, описание внесённого и подтверждение проверки");
+  for(const s of d.sources){
+   const owner=await tx<Row>`select intake_id from app.entity_intake_sources where id=${s.id}`;
+   if(owner.length && owner[0].intake_id!==d.id) fail("Источник принадлежит другому досье");
+   for(const m of s.media){
+    const owner=await tx<Row>`select source_id from app.entity_intake_media where id=${m.id}`;
+    if(owner.length && owner[0].source_id!==s.id) fail("Медиа принадлежит другому источнику");
+    if(m.media_entity_id && !(await tx`select a.id from app.media_assets a join app.media_files f on f.asset_id=a.id where a.entity_id=${m.media_entity_id} and a.archived_at is null and f.variant='original' and f.status='ready' and f.is_current`).length) fail("Файл оригинала не найден в медиатеке");
+   }
+  }
+  if(creating) await tx`insert into app.entity_intake(id,title,description,status,reason,target_entity_id) values(${d.id},${d.title},${d.description},${d.status},${d.reason},${d.target_entity_id})`;
+  else {
+   const {history,...snapshot}=old!;
+   await tx`update app.entity_intake set title=${d.title},description=${d.description},status=${d.status},reason=${d.reason},target_entity_id=${d.target_entity_id},version=version+1,
+    history=history||${JSON.stringify([{at:new Date().toISOString(),by:actor.contributorId,snapshot}])}::jsonb where id=${d.id}`;
+  }
+  // Whole-dossier replacement is atomic; previous content is retained in history.
+  const sourceIds=d.sources.map((s:Row)=>s.id),mediaIds=d.sources.flatMap((s:Row)=>s.media.map((m:Row)=>m.id));
+  await tx`delete from app.entity_intake_media where source_id in(select id from app.entity_intake_sources where intake_id=${d.id}) and not(id=any(${mediaIds}::uuid[]))`;
+  await tx`delete from app.entity_intake_sources where intake_id=${d.id} and not(id=any(${sourceIds}::uuid[]))`;
+  for(const s of d.sources){
+   await tx`insert into app.entity_intake_sources(id,intake_id,url,title,description,publisher,author,published_at) values(${s.id},${d.id},${s.url},${s.title},${s.description},${s.publisher},${s.author},${s.published_at})
+    on conflict(id) do update set url=excluded.url,title=excluded.title,description=excluded.description,publisher=excluded.publisher,author=excluded.author,published_at=excluded.published_at`;
+   for(const m of s.media) await tx`insert into app.entity_intake_media(id,source_id,url,media_entity_id,kind,caption,author,status,error) values(${m.id},${s.id},${m.url},${m.media_entity_id},${m.kind},${m.caption},${m.author},${m.status},${m.error})
+    on conflict(id) do update set url=excluded.url,media_entity_id=excluded.media_entity_id,kind=excluded.kind,caption=excluded.caption,author=excluded.author,status=excluded.status,error=excluded.error`;
+  }
+  return await load(tx,d.id);
+ });
+ return c.json(result,creating?201:200);
+}
+entityIntake.post("/",c=>save(c,true));
+entityIntake.put("/:id",c=>save(c,false));

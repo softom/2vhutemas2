@@ -86,7 +86,7 @@ export interface MaterialsRefreshResult {
   files: number;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const accessToken = await token();
   if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
@@ -233,6 +233,7 @@ export interface EntitySource {
 }
 
 export interface MediaAsset {
+  entity_id?: number;
   id: string;
   asset_class: string;
   caption_ru: string | null;

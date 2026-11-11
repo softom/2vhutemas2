@@ -8,6 +8,7 @@ export function siteHeader(principal: Principal | null, path = "/"): string {
     ["/lectures", "Лекции", true], ["/media", "Медиатека", true],
     ["/parameters", "Параметры", can(principal, "edit")],
     ["/materials", "Материалы", can(principal, "su")],
+    ["/entity-intake", "Стек сущностей", can(principal, "edit")],
     ["/robot", "Робот", can(principal, "su")],
     ["/entities/new", "Создать запись", can(principal, "create_delete")],
     ["/about", "О проекте", true],

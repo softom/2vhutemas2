@@ -1179,6 +1179,7 @@ pages.get("/robots.txt", (c) => {
     "Disallow: /media",
     "Disallow: /parameters",
     "Disallow: /materials",
+    "Disallow: /entity-intake",
 
     // /old/ не закрываем здесь: запрет обхода помешал бы поисковику увидеть
     // noindex, который Caddy ставит прежнему сайту, и старые страницы
@@ -1243,8 +1244,9 @@ function appOnly(c: Context<AppEnv>, title: string) {
 const APP_ONLY_TITLES: Record<string, string> = {
   "/login": "Вход", "/parameters": "Параметры", "/robot": "Робот новостей",
   "/materials": "Материалы в работе",
+  "/entity-intake": "Стек сущностей",
 };
-for (const path of ["/login", "/media", "/media/*", "/parameters", "/materials", "/robot", "/robot/*"]) {
+for (const path of ["/login", "/media", "/media/*", "/parameters", "/materials", "/entity-intake", "/entity-intake/*", "/robot", "/robot/*"]) {
   const title = APP_ONLY_TITLES[path.replace("/*", "")] ?? "Медиатека";
   pages.get(path, (c) => appOnly(c, title));
 }
