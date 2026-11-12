@@ -12,6 +12,7 @@ import { ApiError } from "../lib/errors.ts";
 import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import type { AppEnv } from "../lib/http.ts";
 import { config } from "../lib/config.ts";
+import { uniqueBlockIds } from "../lib/blockIds.ts";
 
 export const documents = new Hono<AppEnv>();
 
@@ -63,7 +64,6 @@ export function validateDocument(body: unknown): Block[] {
   if (!Array.isArray(body)) {
     throw new ApiError("validation_failed", "Тело документа должно быть списком блоков");
   }
-  const seen = new Set<string>();
   const check = (blocks: Block[], depth: number) => {
     if (depth > 10) {
       throw new ApiError("validation_failed", "Слишком глубокая вложенность блоков");
@@ -72,19 +72,14 @@ export function validateDocument(body: unknown): Block[] {
       if (typeof block !== "object" || block === null) {
         throw new ApiError("validation_failed", "Блок должен быть объектом");
       }
-      if (block.id) {
-        if (seen.has(block.id)) {
-          throw new ApiError("validation_failed", "Повторяющийся идентификатор блока", {
-            block_id: block.id,
-          });
-        }
-        seen.add(block.id);
+      if (block.children !== undefined && !Array.isArray(block.children)) {
+        throw new ApiError("validation_failed", "Дочерние блоки должны быть списком");
       }
       if (block.children) check(block.children, depth + 1);
     }
   };
   check(body as Block[], 0);
-  return body as Block[];
+  return uniqueBlockIds(body as Block[]);
 }
 
 /**

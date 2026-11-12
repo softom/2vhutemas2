@@ -395,7 +395,7 @@ function EditorBody(props: any) {
       )}
       {/* Итог сохранения виден там же, где нажимали: у обеих кнопок. */}
       {status && <span className="save-mark ok">{status}</span>}
-      {error && <span className="save-mark fail">Ошибка</span>}
+      {error && <span className="save-mark fail" role="alert">{error}</span>}
     </div>
   );
 
