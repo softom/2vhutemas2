@@ -1121,6 +1121,11 @@ function Preview({ storyKey, ov }: { storyKey: string; ov: RobotOverview }) {
         {rec.ready_at && ` · подготовлено ${new Date(rec.ready_at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}`}
       </p>
       <h2>{n.title}</h2>
+      {rec.entity_id ? <div className="block">
+        <Link className="button" style={{ borderRadius: 0 }} to={`/entities/${rec.entity_id}/edit`}>Редактировать текст</Link>
+        <p className="hint">Откроется редактор записи: можно дописать абзац и сохранить правки без перегенерации. Ниже показана версия робота; актуальный текст — в редакторе записи.</p>
+      </div> : <p className="hint">Редактор текста станет доступен после создания черновика записи. <button type="button" className="ghost" onClick={() => api.robotPrepared(storyKey).then(setRec).catch(e => setErr(e.message))}>Проверить готовность черновика</button></p>}
+
       {rec.cover?.chosen && (
         <figure>
           <div style={{ maxWidth: 720 }}><CoverImage file={rec.cover.chosen} caption="Обложка новости" /></div>
