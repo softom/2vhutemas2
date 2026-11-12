@@ -21,6 +21,7 @@ import { notifyIndexNow } from "./pages.ts";
 import { validateDocument, saveRefs } from "./documents.ts";
 import { writeIndicators, writeText, type IndicatorInput } from "./indicators.ts";
 import { writeEntityTags } from "./tags.ts";
+import { saveRevision } from "../lib/records.ts";
 
 export const entities = new Hono<AppEnv>();
 
@@ -127,7 +128,8 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const drafts = canSeeDrafts(principal);
   // Архив в каталоге не показывается: он не «ещё не готово», а «убрано».
   // Найти убранное можно явным запросом ?archived=1 — для восстановления.
-  const archived = c.req.query("archived") === "1" && drafts;
+  const onlyArchived = c.req.query("archived") === "only" && drafts;
+  const archived = (c.req.query("archived") === "1" || onlyArchived) && drafts;
 
   const rows = await sql`
     select e.id, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
@@ -173,6 +175,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
       and (not ${objects} or (e.type_id in (select app.entity_type_subtree('what'))
            and e.type_id not in (select app.entity_type_subtree('news') union select app.entity_type_subtree('web_page'))))
       and (${archived} or e.status <> 'archived')
+      and (not ${onlyArchived} or e.status = 'archived')
       and (${type}::text is null
            -- Несколько ветвей через запятую — группа кнопок каталога.
            or e.type_id in (select s from unnest(string_to_array(${type}, ',')) x, app.entity_type_subtree(trim(x)) s))
@@ -528,6 +531,34 @@ entities.post("/:id/unpublish", async (c: Context<AppEnv>) => {
   if (rows.length > 0) notifyIndexNow(c.get("requestId"), [entityPath(rows[0].slug)]);
   return c.json({ entity_id: id, ...result });
 });
+
+// Reversible removal with optimistic locking; never deletes content or links.
+for (const action of ["archive", "restore"] as const) {
+  entities.post(`/:id/${action}`, async (c: Context<AppEnv>) => {
+    const principal = requirePermission(c.get("principal"), "create_delete");
+    const id = Number(c.req.param("id"));
+    if (!Number.isSafeInteger(id) || id <= 0) throw new ApiError("not_found", "Запись не найдена");
+    const input = await c.req.json<{base_revision_id?: string}>();
+    return c.json(await transaction(principal.contributorId, async tx => {
+      // Match the lock order used by the editor.
+      const material = await tx`select id from app.materials where entity_id=${id} for update`;
+      const rows = await tx`select status,working_revision_id from app.entities where id=${id} for update`;
+      if (!rows.length || !material.length) throw new ApiError("not_found", "Запись не найдена");
+      const current = rows[0];
+      if (!input.base_revision_id || input.base_revision_id !== current.working_revision_id)
+        throw new ApiError("version_conflict", "Запись изменилась. Откройте её заново перед удалением или восстановлением.");
+      if ((action === "restore") !== (current.status === "archived"))
+        throw new ApiError("duplicate", action === "restore" ? "Запись не в корзине" : "Запись уже в корзине");
+      const status = action === "archive" ? "archived" : "draft";
+      await tx`update app.entities set status=${status},published_revision_id=null where id=${id}`;
+      const revision_id = await saveRevision(tx,id,principal.contributorId,
+        action === "archive" ? "Удалено в корзину" : "Восстановлено из корзины в черновик",action);
+      const saved = await tx`select snapshot->'body_json' as body from app.revisions where id=${revision_id}`;
+      await saveRefs(tx,revision_id,saved[0].body);
+      return {id,status,revision_id};
+    }));
+  });
+}
 
 entities.get("/:id/versions", async (c: Context<AppEnv>) => {
   const principal=c.get("principal");

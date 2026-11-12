@@ -39,6 +39,10 @@ export async function ownedMaterial(tx: Tx, materialId: string) {
 }
 
 export async function publishOwned(tx: Tx, owner: {entity_id: number|null;link_id: number|null}, revisionId: string) {
+  const state = owner.entity_id
+    ? await tx`select status from app.entities where id=${owner.entity_id} for update`
+    : await tx`select status from app.links where id=${owner.link_id} for update`;
+  if (state[0]?.status === "archived") throw new ApiError("validation_failed", "Запись в корзине. Сначала восстановите её в черновик.");
   const revisions=await tx`select id from app.revisions where id=${revisionId}
     and ((${owner.entity_id}::bigint is not null and entity_id=${owner.entity_id})
       or (${owner.link_id}::bigint is not null and link_id=${owner.link_id})) and schema_version=2`;

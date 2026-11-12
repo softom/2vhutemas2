@@ -79,6 +79,7 @@ export function EntityEditor({ mode }: Props) {
   });
   const [slugTouched, setSlugTouched] = useState(mode === "edit");
   const [revisionId, setRevisionId] = useState<string | null>(null);
+  const [entityStatus, setEntityStatus] = useState("draft");
   const [materialId, setMaterialId] = useState<string | null>(null);
   const [publishedRevision, setPublishedRevision] = useState<string | null>(null);
   const [initialBlocks, setInitialBlocks] = useState<PartialBlock[] | null>(null);
@@ -125,6 +126,7 @@ export function EntityEditor({ mode }: Props) {
     }
     api.entity(entityKey).then(async (entity) => {
       setEntityId(entity.id);
+      setEntityStatus(entity.material_status ?? "draft");
       setForm({
         type: entity.type,
         slug: entity.slug,
@@ -154,6 +156,8 @@ export function EntityEditor({ mode }: Props) {
   if (editor === null) return <p className="notice">Загружаем…</p>;
   return (
     <EditorBody
+      entityStatus={entityStatus}
+      setEntityStatus={setEntityStatus}
       mode={mode}
       entityId={entityId}
       setEntityId={setEntityId}
@@ -201,7 +205,7 @@ export function EntityEditor({ mode }: Props) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function EditorBody(props: any) {
   const {
-    mode, entityId, setEntityId, form, setForm, slugTouched, setSlugTouched, types, editorViews,
+    entityStatus, setEntityStatus, mode, entityId, setEntityId, form, setForm, slugTouched, setSlugTouched, types, editorViews,
     indicators, setIndicators, suggested,
     media, tags, setTags, reloadAttachments, initialBlocks,
     revisionId, setRevisionId, materialId, setMaterialId,
@@ -227,7 +231,11 @@ function EditorBody(props: any) {
 
   const [versions, setVersions] = useState<Awaited<ReturnType<typeof api.entityVersions>>["items"]>([]);
   useEffect(() => { if (entityId) api.entityVersions(entityId).then(result => setVersions(result.items)).catch(() => {}); }, [entityId, revisionId, publishedRevision]);
+  const [canDelete, setCanDelete] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => { api.me().then(me => setCanDelete(me.permissions.includes("create_delete") || me.permissions.includes("su"))).catch(() => {}); }, []);
   const [canPublish, setCanPublish] = useState(false);
+  const [confirmPublishNow, setConfirmPublishNow] = useState(false);
   useEffect(() => { api.me().then(me => setCanPublish(me.permissions.includes("publish") || me.permissions.includes("su"))).catch(() => setCanPublish(false)); }, []);
   const [problems, setProblems] = props.problemsState;
   // Блок вставки и прикрепления раскрывается там, где его вызвали: над
@@ -252,6 +260,17 @@ function EditorBody(props: any) {
     />
   );
   const typeTitle = types.find((item: EntityType) => item.code === form.type)?.title_ru ?? "";
+  const isNews = (() => {
+    let code: string | null = form.type;
+    const seen = new Set<string>();
+    while (code && !seen.has(code)) {
+      if (code === "news") return true;
+      seen.add(code);
+      code = types.find((item: EntityType) => item.code === code)?.parent ?? null;
+    }
+    return false;
+  })();
+  useEffect(() => { setConfirmPublishNow(false); }, [form.type]);
 
   // Какие разделы у формы и в каком порядке, решает тип записи (настройка
   // editor таблицы отображений). Название есть всегда: без него запись не
@@ -295,7 +314,12 @@ function EditorBody(props: any) {
     </label>
   );
 
-  const save = async (publish = false) => {
+  const save = async (publish = false, confirmedNow = false) => {
+    if (publish && canPublish && isNews && !confirmedNow) {
+      setConfirmPublishNow(true);
+      return;
+    }
+    setConfirmPublishNow(false);
     setSaving(true);
     setError(null);
     setStatus(null);
@@ -355,6 +379,18 @@ function EditorBody(props: any) {
     }
   };
 
+  const changeArchive = async (action: "archive" | "restore") => {
+    if (!entityId || !revisionId) return;
+    setSaving(true); setError(null);
+    try {
+      const result = await api.changeEntityArchive(entityId, action, revisionId);
+      setEntityStatus(result.status); setRevisionId(result.revision_id);
+      setPublishedRevision(null); setConfirmDelete(false);
+      setStatus(action === "archive" ? "Запись в корзине" : "Восстановлено в черновик");
+    } catch (e) { setError((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
   const unpublish = async () => {
     if (!entityId) return;
     if (!confirm("Снять запись с публикации? Читатели перестанут её видеть; версии сохранятся.")) return;
@@ -379,7 +415,7 @@ function EditorBody(props: any) {
         {saving ? "Сохраняем…" : "Сохранить версию"}
       </button>
       <button type="button" onClick={() => save(true)} disabled={saving}>
-        {canPublish ? "Сохранить и опубликовать" : "Сохранить и отправить на рассмотрение"}
+        {canPublish ? (isNews ? "Опубликовать сейчас…" : "Сохранить и опубликовать") : "Сохранить и отправить на рассмотрение"}
       </button>
       {/* Снятие с публикации — обратно в черновик; версии и история целы,
           опубликовать снова можно той же кнопкой. */}
@@ -393,11 +429,35 @@ function EditorBody(props: any) {
           К карточке
         </button>
       )}
+      {entityId && canDelete && <button type="button" className="ghost" disabled={saving} onClick={() => setConfirmDelete(true)}>Удалить…</button>}
+      {confirmDelete && <div className="notice" style={{flexBasis:"100%"}}>
+        <p>Удалить запись в корзину? Она исчезнет из каталогов, в том числе у администратора. Текст, история, медиа и связи сохранятся. Несохранённые правки этой формы не записываются.</p>
+        <button type="button" disabled={saving} onClick={() => changeArchive("archive")}>Удалить в корзину</button>{" "}
+        <button type="button" className="ghost" onClick={() => setConfirmDelete(false)}>Отмена</button>
+      </div>}
       {/* Итог сохранения виден там же, где нажимали: у обеих кнопок. */}
       {status && <span className="save-mark ok">{status}</span>}
       {error && <span className="save-mark fail" role="alert">{error}</span>}
+      {isNews && <p className="hint" style={{ flexBasis: "100%" }}>
+        «Сохранить версию» сохраняет правки без публикации и не меняет очередь выпуска.
+        Если новость стоит в стеке, робот выпустит её по расписанию.
+      </p>}
+      {isNews && confirmPublishNow && <div className="notice" style={{ flexBasis: "100%" }}>
+        <p>Сохранить правки и открыть новость читателям прямо сейчас, не дожидаясь назначенного времени выпуска?</p>
+        <div className="row">
+          <button type="button" disabled={saving} onClick={() => save(true, true)}>Да, опубликовать сейчас</button>
+          <button type="button" className="ghost" disabled={saving} onClick={() => setConfirmPublishNow(false)}>Отмена</button>
+        </div>
+      </div>}
     </div>
   );
+
+  if (entityStatus === "archived") return <section>
+    <h1>{form.title_ru}</h1><p>Запись в корзине. Текст, медиа, связи и история сохранены.</p>
+    {error && <p className="error" role="alert">{error}</p>}
+    {canDelete && <button type="button" disabled={saving} onClick={() => changeArchive("restore")}>Восстановить в черновик</button>}
+    <p><a href="/objects?archived=only">Корзина проектов</a> · <a href="/objects">К проектам</a></p>
+  </section>;
 
   return (
     <section>

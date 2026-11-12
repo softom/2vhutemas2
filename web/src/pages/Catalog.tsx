@@ -88,6 +88,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   // Состояние фильтров — из адреса; правка фильтра правит адрес.
   const type = search.get("type") ?? branch ?? "";
   const group = search.get("g") ?? "";
+  const archived = search.get("archived") === "only" ? "only" : undefined;
   const query = search.get("q") ?? "";
   const parameter = search.get("by") ?? "";
   const min = search.get("min") ?? "";
@@ -197,6 +198,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       api.entities({
         type: apiType,
         scope: branch === "what" ? "objects" : undefined,
+        archived,
         q: query || undefined,
         parameter: parameter || undefined,
         min: min || undefined,
@@ -219,7 +221,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [branch, apiType, query, parameter, min, max, descending, optKey]);
+  }, [branch, apiType, query, parameter, min, max, descending, optKey, archived]);
 
   const loadMore = () => {
     if (!cursor) return;
@@ -227,6 +229,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
     api.entities({
       type: apiType,
         scope: branch === "what" ? "objects" : undefined,
+        archived,
       q: query || undefined,
       parameter: parameter || undefined,
       min: min || undefined,
@@ -328,6 +331,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
             </button>
           </>
         )}
+        {canCreate && <button type="button" className="ghost" onClick={() => update({archived: archived ? null : "only"})}>{archived ? "Вернуться из корзины" : "Корзина"}</button>}
         {canCreate && (
           <Link to={type ? `/entities/new?type=${type}` : "/entities/new"}>
             <button type="button">Создать запись</button>
@@ -387,7 +391,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         {items.map((item, index) => (
           <EntityTile
             key={item.id}
-            href={`/entities/${item.slug}`}
+            href={archived ? `/entities/${item.id}/edit` : `/entities/${item.slug}`}
             title={item.title_ru}
             kind={item.type_title ?? item.type}
             compact={item.compact}
@@ -403,7 +407,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
             {item.title_en && <div className="kind">{item.title_en}</div>}
             <div style={{ marginTop: 8 }}>
               <span className={item.material_status === "published" ? "badge status" : "badge status draft"}>
-                {item.material_status === "published" ? "опубликовано" : "черновик"}
+                {item.material_status === "archived" ? "в корзине — восстановить" : item.material_status === "published" ? "опубликовано" : "черновик"}
               </span>
             </div>
           </EntityTile>
