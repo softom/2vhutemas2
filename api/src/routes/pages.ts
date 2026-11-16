@@ -264,7 +264,7 @@ function plural(count: number, [one, few, many]: [string, string, string]): stri
 function listCountHtml(shown: number, hasMore: boolean): string {
   return `<div class="list-count"><span class="hint">Показано ${shown} ${plural(shown, ["запись", "записи", "записей"])}` +
     `${hasMore ? " — есть ещё" : ""}</span>` +
-    (hasMore ? `<button type="button" class="ghost">Показать ещё</button>` : "") + `</div>`;
+    (hasMore ? `<button type="button" class="ghost" data-catalog-more onclick="document.documentElement.dataset.catalogMore=location.pathname;document.querySelectorAll('button[data-catalog-more]').forEach(b=>{b.disabled=true;b.textContent='Подключаем каталог…'})">Показать ещё</button>` : "") + `</div>`;
 }
 
 interface TypeChip {

@@ -195,7 +195,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
     let cancelled = false;
     setLoading(true);
     const timer = setTimeout(() => {
-      api.entities({
+      const request = {
         type: apiType,
         scope: branch === "what" ? "objects" : undefined,
         archived,
@@ -206,8 +206,19 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         sort: parameter ? "parameter" : undefined,
         order: descending ? "desc" : "asc",
         opt,
-      })
-        .then((page) => {
+      };
+      api.entities(request)
+        .then(async (page) => {
+          // An SSR button can be clicked before the application has loaded.
+          // Consume it only after the authenticated first page, so it cannot
+          // be overwritten by the initial refresh or lose the viewer's cursor.
+          if (!cancelled && document.documentElement.dataset.catalogMore === location.pathname) {
+            delete document.documentElement.dataset.catalogMore;
+            if (page.next_cursor) {
+              const next = await api.entities({ ...request, cursor: page.next_cursor });
+              page = { items: [...page.items, ...next.items], next_cursor: next.next_cursor };
+            }
+          }
           if (!cancelled) {
             setItems(page.items);
             setCursor(page.next_cursor);
@@ -224,7 +235,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   }, [branch, apiType, query, parameter, min, max, descending, optKey, archived]);
 
   const loadMore = () => {
-    if (!cursor) return;
+    if (!cursor || loading || loadingMore) return;
     setLoadingMore(true);
     api.entities({
       type: apiType,
@@ -384,7 +395,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         word={["запись", "записи", "записей"]}
         hasMore={!!cursor}
         onMore={loadMore}
-        loading={loadingMore}
+        loading={loading || loadingMore}
       />
 
       <div className="grid catalog-grid">
@@ -420,7 +431,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
           word={["запись", "записи", "записей"]}
           hasMore={!!cursor}
           onMore={loadMore}
-          loading={loadingMore}
+          loading={loading || loadingMore}
         />
       )}
     </section>
