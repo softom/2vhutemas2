@@ -11,6 +11,8 @@ import { relationOptions, relationMatches, validateRelations } from "../lib/inta
 import { applyDeferredRelations } from "../lib/intakeDeferredRelations.ts";
 import { intakeMedia, mediaManifest } from "../lib/intakeMedia.ts";
 import catalogs from "../lib/intakeCatalogs.json" with { type: "json" };
+import { runResearch } from "../lib/intakeResearch.ts";
+import { researchRunning, selectResearch } from "../lib/intakeResearchSchema.ts";
 export const entityIntake = new Hono<AppEnv>();
 type Row = Record<string, any>;
 const statuses = new Set(["proposed", "reviewing", "needs_info", "ready", "done", "rejected"]);
@@ -164,7 +166,10 @@ entityIntake.put('/:id/sketch',async c=>{
   const target=uid(sk.target_entity_id);let revision=null;
   if(target){const rows=await tx<Row>`select working_revision_id from app.entities where id=${target} and status <> 'archived'`;if(!rows.length)fail('Запись не найдена');revision=rows[0].working_revision_id;}
   const related=await validateRelations(tx,sk.related||[],d.sketch.related||[],d.sketch.sources,target);
-  const sketch={...d.sketch,related,title,description,type_id:type,target_entity_id:target,target_revision_id:target===d.sketch.target_entity_id?d.sketch.target_revision_id:revision};
+  if(researchRunning(d.sketch.research))throw new ApiError('version_conflict','Дождитесь исследования или повторите после истечения пяти минут');
+  let research=selectResearch(d.sketch.research,sk.research_selected_ids);
+  if(research?.state==='ready'&&(title!==d.sketch.title||type!==d.sketch.type_id))research={...research,state:'stale',error:'Название или тип объекта изменились. Повторите исследование; прежние выводы сохранены в истории.'};
+  const sketch={...d.sketch,research,related,title,description,type_id:type,target_entity_id:target,target_revision_id:target===d.sketch.target_entity_id?d.sketch.target_revision_id:revision};
   await auditIntake(tx,d,actor.contributorId);
   await tx`update app.entity_intake set sketch=${JSON.stringify(sketch)}::jsonb,version=version+1 where id=${d.id}`;
   return await loadIntake(tx,d.id);
@@ -181,6 +186,7 @@ entityIntake.post('/:id/approve',async c=>{
    return await loadIntake(tx,d.id);
   }
   if(d.version!==input.version)throw new ApiError('version_conflict','Эскиз изменился. Проверьте новую версию');
+  if(researchRunning(d.sketch?.research))throw new ApiError('version_conflict','Сначала дождитесь исследования');
   if(d.sketch?.target_entity_id) await tx`select id from app.entities where id=${d.sketch.target_entity_id} for update`;
   await tx`select id from app.entities where id=any(${d.publication_media.map((m:Row)=>m.id)}::bigint[]) order by id for update`;
   const expected=mediaManifest(await intakeMedia(tx,d as any));
@@ -193,6 +199,38 @@ entityIntake.post('/:id/approve',async c=>{
   await applyDeferredRelations(tx,d.id,actor.contributorId,can(actor,'create_delete'));
   return await loadIntake(tx,d.id);
  }));
+});
+
+// Persisted job marker + optimistic completion: a stale worker never replaces edits.
+entityIntake.post('/:id/research',async c=>{
+ const actor=requirePermission(c.get('principal'),'edit'),caller=await callerOf(c);
+ const input=await c.req.json(),id=uuid(c.req.param('id')),job=crypto.randomUUID();
+ const d=await transaction(actor.contributorId,async tx=>{
+  await tx`select pg_advisory_xact_lock(hashtextextended('intake-research-start',0))`;
+  const d=await loadIntake(tx,id,true);
+  if(d.version!==input.version)throw new ApiError('version_conflict','Эскиз изменился; обновите карточку');
+  if(d.status==='done'||d.sketch?.state!=='ready')fail('Сначала подготовьте эскиз');
+  if(researchRunning(d.sketch.research))return d;
+  if(d.sketch.research?.state==='ready'&&input.replace!==true)fail('Подтвердите новое исследование; прежнее сохранится в истории');
+  const count=await tx<{n:number}>`select count(*)::int n from app.entity_intake where sketch->'research'->>'state'='running' and sketch->'research'->>'started_at'>${new Date(Date.now()-300000).toISOString()}`;
+  if(count[0].n>=2)throw new ApiError('rate_limited','Уже выполняются два исследования. Повторите позже');
+  await auditIntake(tx,d,actor.contributorId);
+  const research={state:'running',job,started_at:new Date().toISOString()};
+  await tx`update app.entity_intake set sketch=jsonb_set(sketch,'{research}',${JSON.stringify(research)}::jsonb),version=version+1 where id=${id}`;
+  return await loadIntake(tx,id);
+ });
+ if(d.sketch.research.job===job)void(async()=>{
+  let result:any;
+  try{result=await runResearch(d,caller,job);}catch(e){log('error',caller.requestId,'Ошибка исследования',{intake_id:id,error:String(e)});result={state:'error',job,error:'Исследование не завершено. Материалы и прежний результат в истории сохранены; можно повторить.'};}
+  await transaction(actor.contributorId,async tx=>{
+   const current=await loadIntake(tx,id,true);if(current.sketch?.research?.job!==job)return;
+   await auditIntake(tx,current,actor.contributorId);
+   if(current.version!==d.version||current.status==='done')result={state:'error',job,error:'Карточка изменилась во время исследования. Результат не применён; повторите исследование.'};
+   const sketch={...current.sketch,research:result};
+   await tx`update app.entity_intake set sketch=${JSON.stringify(sketch)}::jsonb,version=version+1 where id=${id}`;
+  });
+ })().catch(e=>log('error',caller.requestId,'Ошибка сохранения исследования',{intake_id:id,error:String(e)}));
+ return c.json(d,202);
 });
 
 // A proposal points to a dossier UID until its target entity has been published.

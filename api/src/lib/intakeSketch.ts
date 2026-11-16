@@ -6,6 +6,7 @@ import { writeText } from "../routes/indicators.ts";
 import { saveRefs } from "../routes/documents.ts";
 import { publishOwnerRevision } from "./ownedVersions.ts";
 import { attachIntakeMedia } from "./intakeMedia.ts";
+import { researchParagraphs } from "./intakeResearchSchema.ts";
 
 import { relationMatches, relationOptions, validateRelations, applyRelations } from "./intakeRelations.ts";
 import catalogs from "./intakeCatalogs.json" with { type: "json" };
@@ -77,6 +78,9 @@ export async function publishSketch(tx:Tx,d:Row,actor:string):Promise<number> {
  const sk=d.sketch;
  if(sk?.state!=='ready'||!sk.title?.trim()||!sk.description?.trim())throw new ApiError('validation_failed','Нужен подготовленный и проверенный эскиз');
  if(!(await tx`select id from app.entity_types where id=${sk.type_id}`).length)throw new ApiError('validation_failed','Выберите тип сущности');
+ for(const finding of sk.research?.state==='ready'?(sk.research.findings||[]).filter((f:Row)=>f.selected&&f.entity_id):[]){
+  if(!(await tx`select id from app.entities where id=${finding.entity_id} and status='published' and type_id in(select app.entity_type_subtree('art_styles') union select app.entity_type_subtree('art_epochs')) for share`).length)throw new ApiError('version_conflict','Запись стиля изменилась или снята с публикации; проверьте предложение исследования');
+ }
  if(String(d.description||'').startsWith('Разобрать сущности по материалам новости:') && (await tx`select id from app.entity_types where id=${sk.type_id} and id in
  (select app.entity_type_subtree('article') union select app.entity_type_subtree('news') union select app.entity_type_subtree('web_page'))`).length)
   throw new ApiError('validation_failed','Это досье из новости. Выберите сущность из её содержания, а не статью источника, и подготовьте эскиз заново.');
@@ -93,6 +97,7 @@ export async function publishSketch(tx:Tx,d:Row,actor:string):Promise<number> {
   await tx`insert into app.material_credits(material_id,contributor_id,credit_role) values(${materialId},${actor},'author')`;
  }
  body.push(...paragraphs(sk.description));
+ body.push(...researchParagraphs(sk.research));
  for(const s of sk.sources){body.push({id:crypto.randomUUID(),type:'paragraph',content:[{type:'link',href:externalUrl(s.url),content:[{type:'text',text:s.title||s.url,styles:{}}]}],children:[]});}
  const relations=await validateRelations(tx,sk.related||[],sk.related||[],sk.sources,id);
  const applied=await applyRelations(tx,id,relations,actor,d.id);
