@@ -19,7 +19,7 @@ Deno.test({name:'fixed-provider collection, UTF8, deduplication, schema and AI a
    return Promise.resolve(Response.json({usage:{prompt_tokens:10,completion_tokens:10},choices:[{message:{content:JSON.stringify({summary:'Уточнить фазу',consensus:'split',phases:[],findings:[{kind:'feature',title:'Подвесная конструкция',relation:'positive',level:'конструкция',phase:'1976',zone:'body',rationale:'Есть в корпусе',source_ids:[user.sources[0].id],entity_id:null}]})}}]}));
   }throw new Error('Unexpected destination '+url);
  };
- const d={id:crypto.randomUUID(),sketch:{title:'Torres',description:'Описание',sources:[{url:'https://example.org/article',title:'Авторский материал',description:'Human evidence'}]},sources:[]};
+ const d={id:crypto.randomUUID(),sketch:{title:'Torres',description:'Описание',sources:[{url:'https://example.org/article',title:'Авторский материал',description:'Human evidence'}]},sources:[{url:"https://example.org/russian",title:"Пустая ссылка",description:""}]};
  const {sources,warnings}=await collectResearch(d,caller);
  assert(sources.filter(s=>s.url==='https://example.org/article').length===1);
  assert(sources.some(s=>s.title==='Башни Колумба'&&s.excerpt==='Подвесная конструкция'));

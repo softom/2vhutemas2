@@ -48,7 +48,7 @@ export async function collectResearch(d:any,caller:Caller){
   }catch(e){recordAiRequest({caller,purpose:'search_answer',model:'yandex/search-api-v2',status:'error',durationMs:Date.now()-started,error:'Поиск не выполнен'});throw e;}
  }));else warnings.push('Yandex не настроен; использованы доступные источники');
  await Promise.all(tasks);
- const seen=new Set<string>();return {sources:sources.filter(s=>{const u=new URL(s.url);u.hash='';const key=u.href.replace(/\/$/,'');if(seen.has(key))return false;seen.add(key);return !!s.excerpt;}).slice(0,50),warnings};
+ const seen=new Set<string>();return {sources:sources.filter(s=>{if(!s.excerpt)return false;const u=new URL(s.url);u.hash='';const key=u.href.replace(/\/$/,'');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,50),warnings};
 }
 export async function runResearch(d:any,caller:Caller,job:string){
  if(!config.search.apiKey)throw new ApiError('unavailable','Поисковая модель не настроена');
