@@ -54,7 +54,8 @@ export async function runResearch(d:any,caller:Caller,job:string){
  if(!config.search.apiKey)throw new ApiError('unavailable','Поисковая модель не настроена');
  const {sources,warnings}=await collectResearch(d,caller);if(!sources.length)throw new ApiError('unavailable','Не удалось получить материалы для исследования');
  const catalog=await researchCatalog();
- return await analyzeResearch(d,caller,job,sources,catalog,warnings);
+ try{return await analyzeResearch(d,caller,job,sources,catalog,warnings);}
+ catch{return {state:'error',job,sources,warnings,prepared_at:new Date().toISOString(),error:'Анализ не завершён. Найденные источники сохранены; исследование можно повторить.'};}
 }
 export async function analyzeResearch(d:any,caller:Caller,job:string,sources:ResearchSource[],catalog:{id:number;title_ru:string}[],warnings:string[]){
  const model=Deno.env.get('INTAKE_RESEARCH_MODEL')||Deno.env.get('INTAKE_SEARCH_MODEL')||'perplexity/sonar-pro';

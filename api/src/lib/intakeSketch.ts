@@ -7,6 +7,7 @@ import { saveRefs } from "../routes/documents.ts";
 import { publishOwnerRevision } from "./ownedVersions.ts";
 import { attachIntakeMedia } from "./intakeMedia.ts";
 import { researchParagraphs } from "./intakeResearchSchema.ts";
+import { storeExternalDescriptions } from "./entityExternalDescriptions.ts";
 
 import { relationMatches, relationOptions, validateRelations, applyRelations } from "./intakeRelations.ts";
 import catalogs from "./intakeCatalogs.json" with { type: "json" };
@@ -97,6 +98,7 @@ export async function publishSketch(tx:Tx,d:Row,actor:string):Promise<number> {
   await tx`insert into app.material_credits(material_id,contributor_id,credit_role) values(${materialId},${actor},'author')`;
  }
  body.push(...paragraphs(sk.description));
+ await storeExternalDescriptions(tx,id,d.id,sk.research);
  body.push(...researchParagraphs(sk.research));
  for(const s of sk.sources){body.push({id:crypto.randomUUID(),type:'paragraph',content:[{type:'link',href:externalUrl(s.url),content:[{type:'text',text:s.title||s.url,styles:{}}]}],children:[]});}
  const relations=await validateRelations(tx,sk.related||[],sk.related||[],sk.sources,id);

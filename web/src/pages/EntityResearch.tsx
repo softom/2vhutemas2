@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { intake, type Dossier } from '../intake';
 import { SketchResearch } from './SketchResearch';
+import { ExternalDescriptions } from './ExternalDescriptions';
 
 export function EntityResearch({entityId,revision,onClose}:{entityId:number;revision:string;onClose:()=>void}) {
  const [d,setD]=useState<Dossier|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -31,6 +32,7 @@ export function EntityResearch({entityId,revision,onClose}:{entityId:number;revi
   {error&&<p role="alert" className="error">{error}</p>}
   <SketchResearch value={d?.sketch?.research} disabled={busy} onStart={again=>void start(again)} onSelect={ids=>void select(ids)} readOnly={d?.status==='done'}/>
   {d&&<p><a href={'/entity-intake/'+d.id} target="_blank" rel="noopener noreferrer">Открыть эскиз для проверки и утверждения ↗</a>. Выбор предложений сохраняется в эскизе; текст карточки изменится только после утверждения.</p>}
+  <ExternalDescriptions entityId={entityId} revision={d?.version}/>
   <button type="button" className="ghost" disabled={busy} onClick={onClose}>Скрыть исследование</button>
  </div>;
 }

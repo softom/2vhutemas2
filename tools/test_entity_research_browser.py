@@ -17,6 +17,7 @@ def route(r):
   elif p.endswith('/capabilities'):result={'entity_types':[{'id':uid,'code':'architecture_object','title_ru':'Здание','parent':None}],'presentations':{'architecture_object':{'editor':[{'component':'title'},{'component':'text'}]}}}
   elif p.endswith('/me'):result={'permissions':['su']}
   elif p.endswith('/entities/123'):result=entity
+  elif p.endswith('/external-descriptions/123'):result={'items':[{'id':'external','url':'https://example.org/source','title':'External source','excerpt':'Saved excerpt','provider':'Yandex','evidence':'snippet','observations_count':2}],'total':1}
   elif p.endswith('/from-entity/123'):
    seeds.append(r.request.post_data_json);assert seeds[-1]=={'base_revision_id':revision};result=d
   elif p.endswith('/research'):
@@ -39,6 +40,7 @@ with sync_playwright() as pw:
  title=page.get_by_label('Название по-русски',exact=True);title.wait_for();title.fill('Unsaved human title')
  page.locator('.bn-editor').click();page.keyboard.press('Control+End');page.keyboard.type(' Unsaved human paragraph')
  page.get_by_role('button',name='Исследование стиля…',exact=True).first.click()
+ page.get_by_role('link',name='External source',exact=True).wait_for()
  page.get_by_role('button',name='Исследовать стиль и морфологию',exact=True).click()
  page.get_by_role('alert').filter(has_text='Test unavailable').wait_for()
  assert title.input_value()=='Unsaved human title' and 'Unsaved human paragraph' in page.locator('.bn-editor').inner_text()

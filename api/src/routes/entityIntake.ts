@@ -13,6 +13,7 @@ import { intakeMedia, mediaManifest } from "../lib/intakeMedia.ts";
 import catalogs from "../lib/intakeCatalogs.json" with { type: "json" };
 import { runResearch } from "../lib/intakeResearch.ts";
 import { researchRunning, selectResearch } from "../lib/intakeResearchSchema.ts";
+import { storeExternalDescriptions } from "../lib/entityExternalDescriptions.ts";
 export const entityIntake = new Hono<AppEnv>();
 type Row = Record<string, any>;
 const statuses = new Set(["proposed", "reviewing", "needs_info", "ready", "done", "rejected"]);
@@ -142,6 +143,15 @@ entityIntake.post('/from-entity/:entityId',async c=>{
  }));
 });
 
+entityIntake.get('/external-descriptions/:entityId',async c=>{
+ const id=uid(c.req.param('entityId'));
+ if(!(await sql`select id from app.entities where id=${id} and status <> 'archived'`).length)throw new ApiError('not_found','Запись не найдена');
+ const page=Math.max(0,Math.min(100000,Math.floor(Number(c.req.query('page'))||0)));
+ const items=await sql`select id,entity_id,url,title,excerpt,provider,evidence,intake_id,created_at,updated_at,jsonb_array_length(observations) as observations_count from app.entity_external_descriptions where entity_id=${id} order by updated_at desc,id limit 50 offset ${page*50}`;
+ const [count]=await sql<{total:number}>`select count(*)::int total from app.entity_external_descriptions where entity_id=${id}`;
+ return c.json({items,total:count.total});
+});
+
 
 entityIntake.get("/options/types",async c=>c.json({items:await sql`select id,title_ru from app.entity_types order by title_ru`}));
 entityIntake.get("/options/relations",async c=>c.json({...await relationOptions(),items:await relationMatches(c.req.query('kind')||'author',text(c.req.query('q'),300))}));
@@ -251,7 +261,8 @@ entityIntake.post('/:id/research',async c=>{
   await transaction(actor.contributorId,async tx=>{
    const current=await loadIntake(tx,id,true);if(current.sketch?.research?.job!==job)return;
    await auditIntake(tx,current,actor.contributorId);
-   if(current.version!==d.version||current.status==='done')result={state:'error',job,error:'Карточка изменилась во время исследования. Результат не применён; повторите исследование.'};
+   if(current.version!==d.version||current.status==='done')result={...result,state:'error',job,error:'Карточка изменилась во время исследования. Результат не применён; повторите исследование.'};
+   if(d.sketch.target_entity_id)await storeExternalDescriptions(tx,Number(d.sketch.target_entity_id),id,result);
    const sketch={...current.sketch,research:result};
    await tx`update app.entity_intake set sketch=${JSON.stringify(sketch)}::jsonb,version=version+1 where id=${id}`;
   });

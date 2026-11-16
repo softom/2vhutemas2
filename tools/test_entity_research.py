@@ -26,7 +26,13 @@ assert new['id']!=d['id']
 assert ok(call('GET','/entity-intake/'+d['id']))['sketch']['title']=='Research fixture'
 assert call('POST','/entity-intake/'+d['id']+'/approve',{'version':d['version'],'confirm':True,'media_manifest':[]})[0]==409
 # Existing publication mechanism adds only reviewed supplement, preserving original.
+research={'state':'ready','job':str(uuid.uuid4()),'sources':[{'id':str(uuid.uuid4()),'url':'https://example.org/retained-description','title':'External description','excerpt':'Retained search excerpt','provider':'fixture','evidence':'snippet'}],'findings':[]}
+sql("update app.entity_intake set sketch=jsonb_set(sketch,'{research}','"+json.dumps(research)+"'::jsonb) where id='"+new['id']+"'")
 published=ok(call('POST','/entity-intake/'+new['id']+'/approve',{'version':new['version'],'confirm':True,'media_manifest':[]}))
+sources_path='/entity-intake/external-descriptions/'+str(eid)
+assert call('GET',sources_path,auth=False)[0]==401
+sources=ok(call('GET',sources_path));assert sources['total']==1 and sources['items'][0]['excerpt']=='Retained search excerpt'
+assert ok(call('GET',sources_path+'?page=1'))['items']==[]
 result=ok(call('GET','/entities/'+str(eid)))
 text=json.dumps(result['body_json'],ensure_ascii=False)
 assert text.count('Original human text')==1,text
@@ -39,4 +45,14 @@ print('PASS separate revision dossiers, stale approval refused, original text/ti
 ok(call('POST','/entities/'+str(eid)+'/archive',{'base_revision_id':current}))
 assert call('POST',path,{'base_revision_id':current})[0]==404
 print('PASS archived entity refused')
+assert call('GET',sources_path)[0]==404
+# A brand-new entity receives saved search results once approval assigns its ID.
+key=str(uuid.uuid4())
+fresh=ok(call('POST','/entity-intake',{'id':key,'title':'New researched fixture','status':'proposed','sources':[{'id':str(uuid.uuid4()),'url':'https://example.org/retained-description','title':'Source','description':'Evidence','media':[]}]}),201)
+sk={**new['sketch'],'title':'New researched fixture','target_entity_id':None,'target_revision_id':None,'research':research}
+sql("update app.entity_intake set status='ready',sketch='"+json.dumps(sk).replace("'","''")+"'::jsonb where id='"+key+"'")
+created=ok(call('POST','/entity-intake/'+key+'/approve',{'version':fresh['version'],'confirm':True,'media_manifest':[]}))
+assert created['target_entity_id']!=eid
+assert ok(call('GET','/entity-intake/external-descriptions/'+str(created['target_entity_id'])))['total']==1
+print('PASS source API permissions/pagination and association after creating a new entity')
 
