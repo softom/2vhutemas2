@@ -116,6 +116,32 @@ async function save(c: any, creating: boolean) {
 entityIntake.post("/",c=>save(c,true));
 entityIntake.put("/:id",c=>save(c,false));
 
+// Research of an existing saved revision. Never rewrites the entity or reuses
+// a published dossier; retries share the same pending dossier for this revision.
+entityIntake.post('/from-entity/:entityId',async c=>{
+ const actor=requirePermission(c.get('principal'),'edit');
+ const entityId=uid(c.req.param('entityId')),input=await c.req.json();
+ const revision=uuid(input.base_revision_id);
+ return c.json(await transaction(actor.contributorId,async tx=>{
+  await tx`select pg_advisory_xact_lock(hashtextextended(${'entity-research:'+entityId},0))`;
+  const rows=await tx<Row>`select e.id,e.title_ru,e.type_id,e.working_revision_id,r.snapshot from app.entities e join app.revisions r on r.id=e.working_revision_id where e.id=${entityId} and e.status <> 'archived' for share of e`;
+  if(!rows.length)throw new ApiError('not_found','Запись не найдена или архивирована');
+  const e=rows[0];
+  if(e.working_revision_id!==revision)throw new ApiError('version_conflict','Сохранённая версия изменилась. Обновите редактор, сохранив свои правки.');
+  const existing=await tx<Row>`select id from app.entity_intake where target_entity_id=${entityId} and status='ready' and sketch->>'origin'='entity_research' and sketch->>'target_revision_id'=${revision} and sketch->>'state'='ready' order by created_at desc limit 1`;
+  if(existing.length)return await loadIntake(tx,existing[0].id);
+  const id=crypto.randomUUID();
+  const context=(value:any):string=>Array.isArray(value)?value.map(context).join(' '):value&&typeof value==='object'?[typeof value.text==='string'?value.text:'',context(value.content),context(value.children)].filter(Boolean).join(' '):'';
+  const description=context(e.snapshot?.body_json).slice(0,60000);
+  const sketch={state:'ready',origin:'entity_research',title:e.title_ru,type_id:e.type_id,
+   description:'Исследование стиля и морфологии: '+e.title_ru,sources:[],questions:[],matches:[],related:[],
+   target_entity_id:Number(e.id),target_revision_id:revision};
+  await tx`insert into app.entity_intake(id,title,description,status,target_entity_id,sketch) values(${id},${e.title_ru},${description},'ready',${entityId},${JSON.stringify(sketch)}::jsonb)`;
+  await tx`insert into app.entity_intake_sources(id,intake_id,url,title,description) values(${crypto.randomUUID()},${id},${'https://2vhutemas.ru/entities/'+e.id},${e.title_ru},${description||e.title_ru})`;
+  return await loadIntake(tx,id);
+ }));
+});
+
 
 entityIntake.get("/options/types",async c=>c.json({items:await sql`select id,title_ru from app.entity_types order by title_ru`}));
 entityIntake.get("/options/relations",async c=>c.json({...await relationOptions(),items:await relationMatches(c.req.query('kind')||'author',text(c.req.query('q'),300))}));

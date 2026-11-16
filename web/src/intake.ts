@@ -8,6 +8,7 @@ export interface Sketch {research?:Research;research_selected_ids?:string[];stat
 export interface Dossier {publication_media?:{id:number;asset_id:string;title:string;revision_id:string;status:string}[];sketch?:Sketch|null;id:string;title:string;description:string;status:string;reason:string;target_entity_id:number|null;version:number;sources:IntakeSource[];history?:{at:string;by:string;snapshot:Dossier}[];confirm_done?:boolean}
 export interface IntakeRow {id:string;title:string;status:string;version:number;updated_at:string;target_entity_id:number|null;sources_count:number;media_count:number}
 export const intake = {
+ fromEntity:(id:number,revision:string)=>request<Dossier>(`/entity-intake/from-entity/${id}`,{method:'POST',body:JSON.stringify({base_revision_id:revision})}),
  research:(d:Dossier,replace=false)=>request<Dossier>(`/entity-intake/${d.id}/research`,{method:'POST',body:JSON.stringify({version:d.version,replace})}),
  list:(q="",status="",page=0)=>request<{items:IntakeRow[];total:number}>(`/entity-intake?${new URLSearchParams({q,status,page:String(page)})}`),
  candidate:(d:Dossier,index:number,resolve=false)=>request<Dossier>(`/entity-intake/${d.id}/relation-candidate`,{method:'POST',body:JSON.stringify({version:d.version,index,resolve})}),

@@ -30,6 +30,7 @@ import {
 } from "../editor/entityBlocks";
 import { InsertPicker, type PickerTab } from "../editor/InsertPicker";
 import { type Tag, TagsField } from "../editor/TagsField";
+import { EntityResearch } from "./EntityResearch";
 
 interface Props {
   mode: "create" | "edit";
@@ -230,6 +231,7 @@ function EditorBody(props: any) {
   });
 
   const [versions, setVersions] = useState<Awaited<ReturnType<typeof api.entityVersions>>["items"]>([]);
+  const [showResearch, setShowResearch] = useState(false);
   useEffect(() => { if (entityId) api.entityVersions(entityId).then(result => setVersions(result.items)).catch(() => {}); }, [entityId, revisionId, publishedRevision]);
   const [canDelete, setCanDelete] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -430,6 +432,7 @@ function EditorBody(props: any) {
         </button>
       )}
       {entityId && canDelete && <button type="button" className="ghost" disabled={saving} onClick={() => setConfirmDelete(true)}>Удалить…</button>}
+      {entityId && revisionId && entityStatus!=='archived' && <button type="button" className="ghost" disabled={saving} aria-expanded={showResearch} aria-controls="entity-research" onClick={() => {setShowResearch(true);setTimeout(()=>document.getElementById('entity-research')?.scrollIntoView({block:'nearest'}),0);}}>Исследование стиля…</button>}
       {confirmDelete && <div className="notice" style={{flexBasis:"100%"}}>
         <p>Удалить запись в корзину? Она исчезнет из каталогов, в том числе у администратора. Текст, история, медиа и связи сохранятся. Несохранённые правки этой формы не записываются.</p>
         <button type="button" disabled={saving} onClick={() => changeArchive("archive")}>Удалить в корзину</button>{" "}
@@ -471,6 +474,7 @@ function EditorBody(props: any) {
       <p className="sub">Свойства и описание сохраняются одной версией. {publishedRevision ? (publishedRevision === revisionId ? "Открыта опубликованная версия." : "Есть рабочие изменения; читатели видят прежнюю версию.") : "Запись ещё не опубликована."}</p>
 
       {actions}
+      {showResearch && entityId && revisionId && <EntityResearch key={entityId+':'+revisionId} entityId={entityId} revision={revisionId} onClose={()=>setShowResearch(false)}/>}
       {entityId && <details><summary>История версий</summary><ul>
         {versions.map(version => <li key={version.id}>
           {new Date(version.created_at).toLocaleString("ru-RU")} — {version.editor || "Редактор"}: {version.summary}
