@@ -9,6 +9,7 @@ import { callerOf } from "../lib/aiJournal.ts";
 import { log } from "../lib/http.ts";
 import { relationOptions, relationMatches, validateRelations } from "../lib/intakeRelations.ts";
 import { applyDeferredRelations } from "../lib/intakeDeferredRelations.ts";
+import { intakeMedia, mediaManifest } from "../lib/intakeMedia.ts";
 import catalogs from "../lib/intakeCatalogs.json" with { type: "json" };
 export const entityIntake = new Hono<AppEnv>();
 type Row = Record<string, any>;
@@ -48,7 +49,8 @@ export async function loadIntake(tx: Tx, id: string, lock=false): Promise<Row> {
  if(!rows.length) throw new ApiError("not_found","Досье не найдено");
  const sources=await tx<Row>`select * from app.entity_intake_sources where intake_id=${id} order by created_at,id`;
  const media=await tx<Row>`select m.* from app.entity_intake_media m join app.entity_intake_sources s on s.id=m.source_id where s.intake_id=${id} order by m.created_at,m.id`;
- return {...rows[0],sources:sources.map(s=>({...s,published_at:s.published_at ? new Date(s.published_at).toISOString().slice(0,10) : null,media:media.filter(m=>m.source_id===s.id)}))};
+ const result={...rows[0],sources:sources.map(s=>({...s,published_at:s.published_at ? new Date(s.published_at).toISOString().slice(0,10) : null,media:media.filter(m=>m.source_id===s.id)}))};
+ return {...result,publication_media:await intakeMedia(tx,result as any)};
 }
 entityIntake.use("*", async(c,next)=>{requirePermission(c.get("principal"),"edit");await next();});
 entityIntake.get("/", async c=>{
@@ -179,6 +181,11 @@ entityIntake.post('/:id/approve',async c=>{
    return await loadIntake(tx,d.id);
   }
   if(d.version!==input.version)throw new ApiError('version_conflict','Эскиз изменился. Проверьте новую версию');
+  if(d.sketch?.target_entity_id) await tx`select id from app.entities where id=${d.sketch.target_entity_id} for update`;
+  await tx`select id from app.entities where id=any(${d.publication_media.map((m:Row)=>m.id)}::bigint[]) order by id for update`;
+  const expected=mediaManifest(await intakeMedia(tx,d as any));
+  if(JSON.stringify(expected)!==JSON.stringify(input.media_manifest ?? []))
+   throw new ApiError('version_conflict','Иллюстрации изменились. Обновите эскиз и проверьте состав публикации.');
   if(!d.sketch?.target_entity_id || d.sketch.related?.some((r:Row)=>r.confirmed&&r.kind==='author'))requirePermission(actor,'create_delete');
   await auditIntake(tx,d,actor.contributorId);
   const id=await publishSketch(tx,d,actor.contributorId);

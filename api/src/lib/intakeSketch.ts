@@ -5,6 +5,7 @@ import { recordAiRequest, type Caller } from "./aiJournal.ts";
 import { writeText } from "../routes/indicators.ts";
 import { saveRefs } from "../routes/documents.ts";
 import { publishOwnerRevision } from "./ownedVersions.ts";
+import { attachIntakeMedia } from "./intakeMedia.ts";
 
 import { relationMatches, relationOptions, validateRelations, applyRelations } from "./intakeRelations.ts";
 import catalogs from "./intakeCatalogs.json" with { type: "json" };
@@ -101,6 +102,7 @@ export async function publishSketch(tx:Tx,d:Row,actor:string):Promise<number> {
  const data=(await tx<Row>`select app.entity_snapshot(${id}) as data`)[0].data;
  const rev=await tx<Row>`insert into app.revisions(material_id,base_revision_id,edited_by,operation,summary,snapshot) values(${materialId},${base},${actor},${base?'edit':'create'},'Утверждён эскиз из стека сущностей',${JSON.stringify(data)}::jsonb) returning id`;
  await saveRefs(tx,rev[0].id,data.body_json);
+ await attachIntakeMedia(tx,d as any,id,actor);
  await publishOwnerRevision(tx,{kind:'entity',id},rev[0].id,actor,'Утверждён эскиз '+d.id);
  return id;
 }

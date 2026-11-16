@@ -123,6 +123,8 @@ export async function publishOwnerRevision(
     throw new ApiError("duplicate", "Эта версия уже опубликована");
   }
 
+  if (owner.kind === "entity") await publishVisibleMedia(tx, owner.id, chosen, contributorId);
+
   // Проверку принадлежности и полноты версии делает publishOwned: он же
   // единственное место, где меняется указатель публикации.
   await publishOwned(tx, {
@@ -135,4 +137,56 @@ export async function publishOwnerRevision(
     values (${chosen}, ${contributorId}, 'published', ${note})
   `;
   return { published_revision_id: chosen, status: "published" };
+}
+
+/** Publish the exact working media shown with the card, never its author/related graph. */
+export async function publishMediaRecord(tx: Tx, id: number, actor: string, note: string) {
+  const rows = await tx<{status: string; working_revision_id: string | null; published_revision_id: string | null}>`
+    select e.status,e.working_revision_id,e.published_revision_id from app.entities e
+    join app.media_assets a on a.entity_id=e.id and a.archived_at is null
+    where e.id=${id} for update of e`;
+  const media = rows[0];
+  if (!media || media.status === 'archived' || !media.working_revision_id)
+    throw new ApiError('validation_failed','Иллюстрация недоступна. Проверьте состав публикации.');
+  const ready = await tx`select a.id from app.media_assets a where a.entity_id=${id}
+    and a.archived_at is null and exists(select 1 from app.media_files f where f.asset_id=a.id
+      and f.variant='original' and f.is_current and f.status='ready')`;
+  if (!ready.length) throw new ApiError('validation_failed','Файл иллюстрации не готов. Публикация отменена.');
+  if (media.status === 'published' && media.published_revision_id === media.working_revision_id) return;
+  await publishOwned(tx,{entity_id:id,link_id:null},media.working_revision_id);
+  await tx`insert into app.revision_reviews(revision_id,reviewer_id,decision,note)
+    values(${media.working_revision_id},${actor},'published',${note})`;
+}
+
+export async function publishVisibleMedia(tx: Tx, id: number, revision: string, actor: string) {
+  const links = await tx<{id: number; to_entity_id: number; working_revision_id: string; published_revision_id: string | null; status: string}>`
+    select l.id,l.to_entity_id,l.working_revision_id,l.published_revision_id,l.status
+    from app.links l join app.link_roles r on r.id=l.role_id
+    join app.entities image on image.id=l.to_entity_id and image.status<>'archived'
+    where l.from_entity_id=${id} and r.code in ('illustration','drawing') and l.status<>'archived'
+    order by l.id for update of l`;
+  const bodies = await tx<{snapshot: unknown}>`select snapshot from app.revisions
+    where id=${revision} and entity_id=${id}`;
+  const assets = new Set<string>();
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) { value.forEach(visit); return; }
+    const object = value as Record<string, unknown>;
+    if (typeof object.assetId === 'string' && object.assetId) assets.add(object.assetId);
+    Object.values(object).forEach(visit);
+  };
+  visit(bodies[0]?.snapshot);
+  const mediaIds = new Set(links.map(l => Number(l.to_entity_id)));
+  for (const asset of assets) {
+    const rows = await tx<{entity_id: number}>`select entity_id from app.media_assets
+      where id::text=${asset} and archived_at is null`;
+    if (!rows.length) throw new ApiError('validation_failed','Файл из текста недоступен. Проверьте публикацию.');
+    mediaIds.add(Number(rows[0].entity_id));
+  }
+  for (const mediaId of [...mediaIds].sort((a,b)=>a-b))
+    await publishMediaRecord(tx,mediaId,actor,`В составе публикации записи ${id}`);
+  for (const link of links) {
+    if (link.status==='published' && link.published_revision_id===link.working_revision_id) continue;
+    await publishOwnerRevision(tx,{kind:'link',id:Number(link.id)},link.working_revision_id,actor,`В составе публикации записи ${id}`);
+  }
 }

@@ -19,6 +19,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { sql, transaction, type Tx } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
+import { publishMediaRecord } from "../lib/ownedVersions.ts";
 import { config } from "../lib/config.ts";
 import { can, canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import { contributorFromCookie } from "./session.ts";
@@ -388,7 +389,7 @@ media.post("/attachments", async (c: Context<AppEnv>) => {
   }
 
   const result = await transaction(principal.contributorId, async (tx) => {
-    const owner = await tx<{ id: number }>`select id from app.entities where id = ${input.entity_id}`;
+    const owner = await tx<{ id: number; status: string }>`select id,status from app.entities where id = ${input.entity_id} for update`;
     if (owner.length === 0) throw new ApiError("not_found", "Сущность не найдена");
     const images = await tx<{ entity_id: number; title: string; asset_class: string }>`
       select a.entity_id, e.title_ru as title, a.asset_class from app.media_assets a
@@ -396,6 +397,10 @@ media.post("/attachments", async (c: Context<AppEnv>) => {
     `;
     if (images.length === 0) throw new ApiError("not_found", "Файл не найден");
     const imageId = Number(images[0].entity_id);
+    if (owner[0].status === 'published') {
+      requirePermission(principal, 'publish');
+      await publishMediaRecord(tx,imageId,principal.contributorId,`Прикрепление к опубликованной записи ${input.entity_id}`);
+    }
     // Чертёж прикрепляется своей связью — у него свой раздел страницы.
     const role = images[0].asset_class === "drawing" ? "drawing" : "illustration";
 
