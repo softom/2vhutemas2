@@ -51,7 +51,6 @@ export async function validateRelations(tx:Tx,input:unknown,old:Row[],sources:Ro
 }
 function blocks(text:string,url:string):Row[]{return [{id:crypto.randomUUID(),type:'paragraph',content:[{type:'text',text,styles:{}}],children:[]},{id:crypto.randomUUID(),type:'paragraph',content:[{type:'link',href:url,content:[{type:'text',text:'Источник',styles:{}}]}],children:[]}];}
 export async function applyRelations(tx:Tx,id:number,relations:Row[],actor:string,dossierId:string){
- if(relations.some(r=>r.candidate_intake_id&&!r.entity_id))fail('Сначала опубликуйте кандидата и обновите привязку, либо уберите предложение связи');
  const applied:Row[]=[];
  for(const r of relations.filter(r=>r.confirmed)){
   if(r.entity_id===id)fail('Нельзя связать сущность с самой собой');

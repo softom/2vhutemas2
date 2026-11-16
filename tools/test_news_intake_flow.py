@@ -69,14 +69,13 @@ assert child['sources'][0]['media'][0]['caption']=='Evidence photo'
 assert ok(call('POST',f"/entity-intake/{d['id']}/relation-candidate",{'version':d['version'],'index':0}))['sketch']['related'][0]['candidate_intake_id']==candidate_id
 assert call('POST',f"/entity-intake/{d['id']}/relation-candidate",{'version':old,'index':0})[0]==409
 assert call('POST',f"/entity-intake/{d['id']}/relation-candidate",{'version':d['version'],'index':0,'resolve':True})[0]==400
-assert approve(d)[0]==400
-assert sql("select count(*) from app.entities where slug='entity-"+d['id']+"'")=='0'
+d=ok(approve(d))
+assert d['sketch']['applied_relations']==[]
 child_sketch={'state':'ready','title':'SMOKE child '+candidate_id,'type_id':sql('select type_id from app.entities where id='+str(author['id'])),'description':'Child prepared fixture','sources':[{'url':source,'title':'Source'}],'questions':[],'matches':[],'related':[],'target_entity_id':None}
 sql("update app.entity_intake set status='ready',sketch='"+json.dumps(child_sketch).replace("'","''")+"'::jsonb where id='"+candidate_id+"'")
 child=ok(approve(ok(call('GET','/entity-intake/'+candidate_id))))
-d=ok(call('POST',f"/entity-intake/{d['id']}/relation-candidate",{'version':d['version'],'index':0,'resolve':True}))
-assert d['sketch']['related'][0]['entity_id']==child['target_entity_id'] and not d['sketch']['related'][0]['confirmed']
-d=ok(save(d,[{**d['sketch']['related'][0],'confirmed':True}]))
+d=ok(call('GET','/entity-intake/'+d['id']))
+assert d['sketch']['related'][0]['entity_id']==child['target_entity_id'] and d['sketch']['related'][0]['confirmed']
 assert ok(approve(d))['sketch']['applied_relations'][0]['entity_id']==child['target_entity_id']
 legacy=fixture();legacy=ok(save(legacy,[{'name':'Standard Bank Centre','matches':[]}]))
 assert not legacy['sketch']['related'][0].get('kind')
@@ -90,7 +89,7 @@ assert call('POST','/news-robot/queue',{'action':'add','story_key':story_key})[0
 pool={'candidates':[{'story_key':story_key,'title_ru':'Fixture Groupwork','sources':[]}],'scores':{'raw':{'story_key':story_key}},'items':{'raw':{'url':source,'title':'Fixture','summary':'Raw description','images':[{'url':'https://example.org/photo.jpg','caption':'Photo'}]}}}
 Path('/tmp/news-intake-fixtures/state/pool.json').write_text(json.dumps(pool))
 seed=ok(call('GET','/news-robot/intake-seed/'+story_key));assert seed['sources'][0]['media'][0]['caption']=='Photo'
-print('PASS pending candidate source/media cloning, retry/version protection, publish dependency, resolution and confirmed link; legacy mentions; underscore news queue/seed and traversal rejection')
+print('PASS pending candidate source/media cloning, retry/version protection, independent publication and automatic deferred link; legacy mentions; underscore news queue/seed and traversal rejection')
 
 assert seed['id']==str(uuid.uuid5(uuid.NAMESPACE_URL,'https://2vhutemas.ru/news-story/'+story_key))
 ok(call('POST','/entity-intake',seed),201)

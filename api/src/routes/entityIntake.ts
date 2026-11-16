@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { sql, transaction, type Tx } from "../lib/db.ts";
-import { require as requirePermission } from "../lib/auth.ts";
+import { require as requirePermission, can } from "../lib/auth.ts";
 import { ApiError } from "../lib/errors.ts";
 import type { AppEnv } from "../lib/http.ts";
 
@@ -8,6 +8,7 @@ import { auditIntake, prepareSketch, publishSketch, cleanText } from "../lib/int
 import { callerOf } from "../lib/aiJournal.ts";
 import { log } from "../lib/http.ts";
 import { relationOptions, relationMatches, validateRelations } from "../lib/intakeRelations.ts";
+import { applyDeferredRelations } from "../lib/intakeDeferredRelations.ts";
 import catalogs from "../lib/intakeCatalogs.json" with { type: "json" };
 export const entityIntake = new Hono<AppEnv>();
 type Row = Record<string, any>;
@@ -171,13 +172,18 @@ entityIntake.post('/:id/approve',async c=>{
  const actor=requirePermission(c.get('principal'),'publish');requirePermission(actor,'edit');
  const input=await c.req.json();if(input.confirm!==true)fail('Подтвердите публикацию просмотренной карточки');
  return c.json(await transaction(actor.contributorId,async tx=>{
+  await tx`select pg_advisory_xact_lock(hashtextextended('entity-intake-approval',0))`;
   const d=await loadIntake(tx,uuid(c.req.param('id')),true);
-  if(d.status==='done'&&d.sketch?.state==='published')return d;
+  if(d.status==='done'&&d.sketch?.state==='published'){
+   await applyDeferredRelations(tx,d.id,actor.contributorId,can(actor,'create_delete'));
+   return await loadIntake(tx,d.id);
+  }
   if(d.version!==input.version)throw new ApiError('version_conflict','Эскиз изменился. Проверьте новую версию');
   if(!d.sketch?.target_entity_id || d.sketch.related?.some((r:Row)=>r.confirmed&&r.kind==='author'))requirePermission(actor,'create_delete');
   await auditIntake(tx,d,actor.contributorId);
   const id=await publishSketch(tx,d,actor.contributorId);
   await tx`update app.entity_intake set target_entity_id=${id},status='done',reason='Эскиз утверждён и опубликован',sketch=sketch||'{"state":"published"}'::jsonb,version=version+1 where id=${d.id}`;
+  await applyDeferredRelations(tx,d.id,actor.contributorId,can(actor,'create_delete'));
   return await loadIntake(tx,d.id);
  }));
 });
