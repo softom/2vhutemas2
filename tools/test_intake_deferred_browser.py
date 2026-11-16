@@ -18,7 +18,7 @@ def route(r):
    elif p.endswith('/prepare'):
     data=db[key];data['version']+=1;data['status']='ready';data['sketch']={'state':'ready','title':data['title'],'type_id':type_id,'description':'Архитектурное описание проекта. [1]','sources':[{'url':'https://example.org/project','title':'Сайт автора','description':'Описание проекта'}],'questions':['Проверить дату завершения'],'matches':[],'target_entity_id':None,'related':[{'kind':'author','name':'Автор проекта','matches':[{'id':22,'title_ru':'Автор проекта','is_published':True}],'role_id':type_id,'reason':'Проект указан в портфолио автора','source_url':'https://example.org/project','confirmed':False},{'kind':'place','name':'Место объекта','matches':[{'id':33,'title_ru':'Место объекта','is_published':True}],'reason':'Адрес указан в источнике','source_url':'https://example.org/project','confirmed':False}],'catalog_checks':[{'name':'archINFORM','domain':'archinform.net','status':'unavailable','note':'Страница недоступна','urls':[]}]}
    elif p.endswith('/relation-candidate'):
-    
+
     if r.request.post_data_json.get('resolve'):
      r.fulfill(status=400,json={'error':{'code':'validation_failed','message':'Кандидат ещё не опубликован'}});return
     data=db[key];i=r.request.post_data_json['index'];row=data['sketch']['related'][i];row['candidate_intake_id']='11111111-1111-4111-8111-111111111111';data['version']+=1
