@@ -1,8 +1,13 @@
-import {parseResearch,selectResearch,researchParagraphs,researchUrl,researchRunning} from './intakeResearchSchema.ts';
+import {parseResearch,selectResearch,researchParagraphs,researchUrl,researchRunning,yandexDocuments} from './intakeResearchSchema.ts';
 const assert=(v:unknown)=>{if(!v)throw new Error('assertion failed');};
 const reject=(fn:()=>unknown)=>{let failed=false;try{fn();}catch{failed=true;}assert(failed);};
 const sources=[{id:'source-uid',url:'https://example.org/evidence',title:'Evidence',excerpt:'Evidence text',provider:'fixture',evidence:'snippet' as const}];
 const raw=()=>({summary:'Фазы различаются',consensus:'split',phases:[{period:'1976',description:'Оригинал',zones:['body']}],findings:[{kind:'style',title:'Брутализм',relation:'negative',level:'стиль',phase:'1976',zone:'body',rationale:'Источник отрицает атрибуцию',source_ids:['source-uid'],entity_id:null}]});
+Deno.test('Yandex XML accepts doc attributes and preserves Russian passages',()=>{
+ const docs=yandexDocuments('<group><doc id="42"><url>https://example.org</url><title>Башни</title><passages><passage>Подвесная конструкция</passage><passage relevance="1">Мадрид</passage></passages></doc></group>');
+ assert(docs.length===1&&docs[0].title==='Башни'&&docs[0].excerpt==='Подвесная конструкция … Мадрид');
+ assert(yandexDocuments('<doc><url>https://example.org</url></doc>').length===1);
+});
 Deno.test('research requires evidence, valid UID and structured fields',()=>{
  const result=parseResearch(raw(),sources,[],'job','model',[]);assert(!result.findings[0].selected);
  reject(()=>parseResearch({...raw(),consensus:'<img onerror=x>'},sources,[],'job','model',[]));

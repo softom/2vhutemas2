@@ -13,7 +13,7 @@ Deno.test({name:'fixed-provider collection, UTF8, deduplication, schema and AI a
   if(url.includes('wikipedia.org'))return Promise.resolve(Response.json({query:{search:[{title:'Башни',snippet:'Конструкция башен'}]}}));
   if(url.includes('openalex.org'))return Promise.resolve(Response.json({results:[{id:'https://example.org/article',title:'Article',abstract_inverted_index:{Evidence:[0]}}]}));
   if(url.includes('duckduckgo.com'))return Promise.resolve(new Response('Unavailable',{status:503}));
-  if(url.includes('searchapi.api.cloud.yandex.net')){const xml='<doc><url>https://example.org/russian</url><title>Башни Колумба</title><passage>Подвесная конструкция</passage></doc>';return Promise.resolve(Response.json({rawData:btoa(String.fromCharCode(...new TextEncoder().encode(xml)))}));}
+  if(url.includes('searchapi.api.cloud.yandex.net')){const xml='<doc id="search-result"><url>https://example.org/russian</url><title>Башни Колумба</title><passage>Подвесная конструкция</passage></doc>';return Promise.resolve(Response.json({rawData:btoa(String.fromCharCode(...new TextEncoder().encode(xml)))}));}
   if(url.endsWith('/chat/completions')){
    const body=JSON.parse(String(init?.body));const user=JSON.parse(body.messages[1].content);
    return Promise.resolve(Response.json({usage:{prompt_tokens:10,completion_tokens:10},choices:[{message:{content:JSON.stringify({summary:'Уточнить фазу',consensus:'split',phases:[],findings:[{kind:'feature',title:'Подвесная конструкция',relation:'positive',level:'конструкция',phase:'1976',zone:'body',rationale:'Есть в корпусе',source_ids:[user.sources[0].id],entity_id:null}]})}}]}));

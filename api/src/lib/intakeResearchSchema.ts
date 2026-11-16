@@ -1,6 +1,13 @@
 import { ApiError } from './errors.ts';
 
 export interface ResearchSource { id:string; url:string; title:string; excerpt:string; provider:string; evidence:'snippet'|'provided'; }
+export function yandexDocuments(xml:string):{url:string;title:string;excerpt:string}[]{
+ const out=[];
+ for(const match of xml.matchAll(/<doc\b[^>]*>([\s\S]*?)<\/doc>/g)){
+  const get=(tag:string)=>match[1].match(new RegExp('<'+tag+'(?:\\s[^>]*)?>([\\s\\S]*?)</'+tag+'>'))?.[1]||'';
+  if(get('url'))out.push({url:get('url'),title:get('title'),excerpt:[...match[1].matchAll(/<passage\b[^>]*>([\s\S]*?)<\/passage>/g)].map(m=>m[1]).join(' … ')});
+ }return out;
+}
 export interface ResearchFinding { id:string; kind:'style'|'feature'; title:string; relation:'positive'|'negative'|'metaphor'; level:string; phase:string; zone:string; rationale:string; source_ids:string[]; entity_id:number|null; selected:boolean; }
 export interface ResearchResult { state:'ready'; job:string; prepared_at:string; model:string; summary:string; consensus:'high'|'medium'|'split'|'unknown'; phases:{period:string;description:string;zones:string[]}[]; findings:ResearchFinding[]; sources:ResearchSource[]; warnings:string[]; }
 const fail=():never=>{throw new ApiError('validation_failed','Некорректный результат исследования: проверьте источники и предложения');};

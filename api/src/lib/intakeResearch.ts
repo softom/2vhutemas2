@@ -2,7 +2,7 @@ import { config } from './config.ts';
 import { sql } from './db.ts';
 import { ApiError } from './errors.ts';
 import { recordAiRequest, type Caller } from './aiJournal.ts';
-import { parseResearch, researchUrl, type ResearchSource } from './intakeResearchSchema.ts';
+import { parseResearch, researchUrl, yandexDocuments, type ResearchSource } from './intakeResearchSchema.ts';
 
 // All fetch destinations are fixed provider hosts. Returned source URLs are evidence
 // links only: never fetch arbitrary user/model URLs from the server network.
@@ -20,7 +20,7 @@ export async function collectResearch(d:any,caller:Caller){
  const sources:ResearchSource[]=[],warnings:string[]=[];
  for(const s of [...(d.sketch.sources||[]),...(d.sources||[])])if(s.url){try{sources.push(source(s.url,s.title||s.url,s.description||'','dossier','provided'));}catch{warnings.push('Пропущена некорректная ссылка досье');}}
  const title=d.sketch.title;const query=title+' architecture style structure';
- async function provider(name:string,fn:()=>Promise<ResearchSource[]>){try{sources.push(...await fn());}catch{warnings.push(name+': поиск не выполнен');}}
+ async function provider(name:string,fn:()=>Promise<ResearchSource[]>){try{const found=await fn();if(!found.length)warnings.push(name+': результатов нет');sources.push(...found);}catch{warnings.push(name+': поиск не выполнен');}}
  const tasks:Promise<void>[]=[];
  for(const lang of ['ru','en','es'])tasks.push(provider('Wikipedia '+lang,async()=>{
   const response=await fetch(`https://${lang}.wikipedia.org/w/api.php?`+new URLSearchParams({action:'query',list:'search',srsearch:title,srlimit:'10',format:'json'}),{redirect:'error',signal:AbortSignal.timeout(10000)});
@@ -42,8 +42,8 @@ export async function collectResearch(d:any,caller:Caller){
  if(key&&folder)tasks.push(provider('Yandex',async()=>{
   const started=Date.now();try{
    const data=JSON.parse(await bounded(await fetch('https://searchapi.api.cloud.yandex.net/v2/web/search',{method:'POST',redirect:'error',headers:{'Content-Type':'application/json',Authorization:'Api-Key '+key},body:JSON.stringify({query:{searchType:'SEARCH_TYPE_RU',queryText:title+' архитектура стиль конструкция'},folderId:folder,responseFormat:'FORMAT_XML',groupSpec:{groupMode:'GROUP_MODE_DEEP',groupsOnPage:25,docsInGroup:1},maxPassages:3}),signal:AbortSignal.timeout(15000)})));
-   const xml=new TextDecoder().decode(Uint8Array.from(atob(data.rawData||''),c=>c.charCodeAt(0)));const out:ResearchSource[]=[];
-   for(const match of xml.matchAll(/<doc>([\s\S]*?)<\/doc>/g)){const get=(tag:string)=>match[1].match(new RegExp('<'+tag+'>([\\s\\S]*?)</'+tag+'>'))?.[1]||'';if(get('url'))out.push(source(get('url'),get('title'),[...match[1].matchAll(/<passage>([\s\S]*?)<\/passage>/g)].map(m=>m[1]).join(' … '),'Yandex'));}
+   const xml=new TextDecoder().decode(Uint8Array.from(atob(data.rawData||''),c=>c.charCodeAt(0)));
+   const out=yandexDocuments(xml).map(d=>source(d.url,d.title,d.excerpt,'Yandex'));
    recordAiRequest({caller,purpose:'search_answer',model:'yandex/search-api-v2',status:'ok',durationMs:Date.now()-started,output:'[intake research] '+out.length+' results'});return out;
   }catch(e){recordAiRequest({caller,purpose:'search_answer',model:'yandex/search-api-v2',status:'error',durationMs:Date.now()-started,error:'Поиск не выполнен'});throw e;}
  }));else warnings.push('Yandex не настроен; использованы доступные источники');
