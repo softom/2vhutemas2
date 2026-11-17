@@ -1,3 +1,4 @@
+import {isOwnResearchSource} from './researchSourcePolicy.ts';
 import type { Tx } from './db.ts';
 import { researchUrl } from './intakeResearchSchema.ts';
 import {researchData,saveResearch} from './setResearch.ts';
@@ -8,7 +9,7 @@ export async function storeExternalDescriptions(tx:Tx,entityId:number,intakeId:s
  const data=await researchData(tx,entityId);
  for(const s of research.sources){
   let address:string;
-  try{const u=new URL(researchUrl(s.url));if(['2vhutemas.ru','www.2vhutemas.ru'].includes(u.hostname))continue;u.hash='';address=u.href.replace(/\/$/,'');}catch{continue;}
+  try{const u=new URL(researchUrl(s.url));if(isOwnResearchSource(u.href))continue;u.hash='';address=u.href.replace(/\/$/,'');}catch{continue;}
   let row=data.sources.find((r:any)=>r.source_url===address);
   if(!row){row={source_uid:crypto.randomUUID(),source_url:address,source_title:String(s.title||''),source_excerpt:String(s.excerpt||''),source_provider:String(s.provider||''),source_sets:'[]',source_queries:'[]',source_text:'',source_status:'Поисковая выдержка',source_fetched:new Date().toISOString(),source_observations:'[]'};data.sources.push(row);}
   const observations=JSON.parse(row.source_observations||'[]');

@@ -1,3 +1,4 @@
+import { isOwnResearchSource,isExcludedResearchRow,SELF_SOURCE_STATUS } from './researchSourcePolicy.ts';
 import { sql,type Tx } from './db.ts';
 import { saveRevision } from './records.ts';
 import { collectResearch } from './intakeResearch.ts';
@@ -7,7 +8,16 @@ import { ApiError } from './errors.ts';
 type Row=Record<string,any>;
 export async function researchData(tx:Tx,id:number){
  const rows=await tx<Row>`select p.code,v.text_value,case when v.table_value is not null then app.table_rows_json(p.id,v.table_value) end as rows from app.indicators i join app.indicator_values v on v.indicator_id=i.id join app.parameters p on p.id=v.parameter_id where i.entity_id=${id} and p.code in('research_sources','research_state')`;
- return {sources:rows.find(r=>r.code==='research_sources')?.rows||[],state:JSON.parse(rows.find(r=>r.code==='research_state')?.text_value||'{}')};
+ const sources=rows.find(r=>r.code==='research_sources')?.rows||[];
+ const state=JSON.parse(rows.find(r=>r.code==='research_state')?.text_value||'{}');
+ const excluded=sources.filter(isExcludedResearchRow);
+ for(const source of excluded)source.source_status=SELF_SOURCE_STATUS;
+ if(excluded.length){
+  state.warnings=[...new Set([...(state.warnings||[]),'Собственные страницы сохранены в истории, но исключены из анализа: '+excluded.length])];
+  // Old results may have used the entire contaminated corpus, even without citing it.
+  state.results=Object.fromEntries(Object.entries(state.results||{}).filter(([,result]:any)=>result.external_sources_only===true));
+ }
+ return {sources,state};
 }
 export async function saveResearch(tx:Tx,id:number,actor:string,data:{sources:Row[];state:Row},createVersion=true){
  let [group]=await tx<Row>`select i.id from app.indicators i join app.indicator_values v on v.indicator_id=i.id join app.parameters p on p.id=v.parameter_id where i.entity_id=${id} and p.code='research_state' limit 1`;
@@ -40,6 +50,7 @@ export async function gather(title:string,set:Row,previous:Row[],caller:Caller){
  const result=await collectResearch({sketch:{title,sources:[]},sources:[]},caller,topic);
  const rows=structuredClone(previous);const query=title+' '+topic;
  for(const s of result.sources){
+  if(isOwnResearchSource(s.url))continue;
   const url=new URL(s.url);url.hash='';const address=url.href.replace(/\/$/,'');
   let row=rows.find(r=>r.source_url===address);
   if(!row){row={source_uid:crypto.randomUUID(),source_url:address,source_title:s.title,source_excerpt:s.excerpt,source_provider:s.provider,source_sets:'[]',source_queries:'[]',source_status:'Ожидает получения',source_text:'',source_fetched:''};rows.push(row);}
@@ -48,12 +59,15 @@ export async function gather(title:string,set:Row,previous:Row[],caller:Caller){
   const observations=JSON.parse(row.source_observations||'[]');observations.push({id:crypto.randomUUID(),set_id:set.id,query:s.provider.startsWith('Wikipedia')?title:query,title:s.title,excerpt:s.excerpt,provider:s.provider,at:new Date().toISOString()});row.source_observations=JSON.stringify(observations);
   row.source_excerpt=s.excerpt||row.source_excerpt;row.source_title=s.title||row.source_title;
  }
- const pending=rows.filter(r=>!r.source_text);let cursor=0;
+ for(const row of rows)if(isExcludedResearchRow(row))row.source_status=SELF_SOURCE_STATUS;
+ const pending=rows.filter(r=>!r.source_text&&!isExcludedResearchRow(r));let cursor=0;
  await Promise.all(Array.from({length:4},async()=>{while(cursor<pending.length){const row=pending[cursor++];try{
   // A fixed public extraction service performs retrieval. Never fetch arbitrary
   // returned URLs from the application network or forward application credentials.
   const url=publicSourceUrl(row.source_url);
   row.source_text=await responseText(await fetch('https://r.jina.ai/'+url,{redirect:'error',signal:AbortSignal.timeout(20000),headers:{Accept:'text/plain'}}),240000);
+  const origin=row.source_text.match(/^URL Source:\s*(https?:\/\/\S+)/mi)?.[1];
+  if(origin&&isOwnResearchSource(origin)){row.source_status=SELF_SOURCE_STATUS;continue;}
   row.source_status='Текст получен';row.source_fetched=new Date().toISOString();
  }catch(e){row.source_status='Ошибка получения: '+String(e).slice(0,180);}}}));
  return {sources:rows,warnings:result.warnings};
@@ -80,11 +94,13 @@ export function validateProposal(raw:Row,parameters:Row[],sourceIds:Set<string>)
 }
 export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Caller){
  if(!config.search.apiKey)throw new ApiError('unavailable','LLM не настроена');
+ const excluded=sources.filter(isExcludedResearchRow).length;
+ sources=sources.filter(s=>!isExcludedResearchRow(s));
  const chunks:Row[][]=[];let batch:Row[]=[],size=0;
  for(const source of sources){const text=source.source_text||source.source_excerpt||'';
   for(let offset=0;offset<text.length;offset+=24000){const piece={id:source.source_uid,url:source.source_url,text:text.slice(offset,offset+24000),evidence:source.source_text?'page':'snippet'};if(size+piece.text.length>40000&&batch.length){chunks.push(batch);batch=[];size=0;}batch.push(piece);size+=piece.text.length;}
  }if(batch.length)chunks.push(batch);if(!chunks.length)throw new Error('Сначала соберите источники');
- const proposals:Row[]=[],warnings:string[]=[];
+ const proposals:Row[]=[],warnings:string[]=excluded?['Собственные страницы исключены из анализа: '+excluded]:[];
  for(const [index,sources] of chunks.entries()){
   const started=Date.now();const model=Deno.env.get('INTAKE_RESEARCH_MODEL')||'perplexity/sonar-pro';
   try{
@@ -96,5 +112,5 @@ export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Calle
    recordAiRequest({caller,purpose:'search_answer',model,status:'ok',usage:data.usage,durationMs:Date.now()-started});
   }catch{warnings.push('Часть '+(index+1)+' не обработана');recordAiRequest({caller,purpose:'search_answer',model,status:'error',durationMs:Date.now()-started,error:'Ошибка анализа набора'});}
  }
- return {proposals,warnings,parts:chunks.length};
+ return {proposals,warnings,parts:chunks.length,external_sources_only:true};
 }
