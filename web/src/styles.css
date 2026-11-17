@@ -938,3 +938,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .research-proposal dd { margin:0; overflow-wrap:anywhere; }
 @media(max-width:600px){.entity-editor .bn-editor{padding:18px 12px!important;}.entity-editor .bn-container{min-width:0;max-width:100%;}.entity-editor .value-row{flex-wrap:wrap;}.entity-editor input:not([type=checkbox]),.entity-editor select,.entity-editor textarea{max-width:100%;box-sizing:border-box;}}
 @media(max-width:600px){.research-set-card > summary span{float:none;display:block;margin-left:16px;}.set-research-panel{padding:0 12px 16px;}.set-research-panel > .row button{width:100%;}.entity-editor .parameter-add-panel label{min-width:0;}}
+
+/* Tables placed in the text column follow its width; mobile keeps readable cells. */
+.pc-parameter_sets .value-table { table-layout: fixed; }
+.pc-parameter_sets .value-table th, .pc-parameter_sets .value-table td { overflow-wrap: anywhere; }
+@media(max-width:600px) { .pc-parameter_sets .value-table { min-width:600px; } }

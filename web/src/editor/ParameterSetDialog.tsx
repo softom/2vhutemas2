@@ -50,6 +50,7 @@ export function ParameterSetDialog({ set, onSaved, onClose }: Props) {
   const [title, setTitle] = useState(set?.title_ru ?? "");
   const [code, setCode] = useState(set?.code ?? "");
   const [codeTouched, setCodeTouched] = useState(editing);
+  const [cardSide, setCardSide] = useState<"left"|"right">(set?.card_side ?? "right");
   const [note, setNote] = useState(set?.note ?? "");
   const [branches, setBranches] = useState<string[]>((set?.types ?? []).map((t) => t.code));
   const [items, setItems] = useState<Item[]>(
@@ -89,17 +90,18 @@ export function ParameterSetDialog({ set, onSaved, onClose }: Props) {
       if (!setCodeValue || !title.trim()) {
         throw new Error("Укажите название набора");
       }
-      if (branches.length === 0) {
+      if (!editing && branches.length === 0) {
         throw new Error("Выберите тип записи, для которого этот набор");
       }
 
       if (editing) {
-        await api.updateParameterSet(set!.code, { title_ru: title.trim(), note: note || null });
+        await api.updateParameterSet(set!.id, { title_ru: title.trim(), note: note || null, card_side: cardSide });
       } else {
         await api.createParameterSet({
           code: setCodeValue,
           title_ru: title.trim(),
           note: note || null,
+          card_side: cardSide,
         });
       }
 
@@ -128,7 +130,7 @@ export function ParameterSetDialog({ set, onSaved, onClose }: Props) {
   return (
     <Modal
       title={editing ? "Правка набора" : "Новый набор параметров"}
-      dirty={title.trim() !== (set?.title_ru ?? "") ||
+      dirty={cardSide !== (set?.card_side ?? "right") || title.trim() !== (set?.title_ru ?? "") ||
         items.length !== (set?.items.length ?? 0) ||
         branches.length !== (set?.types.length ?? 0)}
       onClose={onClose}
@@ -210,6 +212,14 @@ export function ParameterSetDialog({ set, onSaved, onClose }: Props) {
           </div>
         )}
 
+        <label>
+          Где отображать на карточке
+          <select value={cardSide} onChange={e=>setCardSide(e.target.value as "left"|"right")}>
+            <option value="left">Слева — в тексте</option>
+            <option value="right">Справа — в колонке атрибутов</option>
+          </select>
+          <span className="hint">Для всех карточек с этим набором параметров.</span>
+        </label>
         <label>
           Пояснение к набору
           <input

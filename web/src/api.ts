@@ -342,6 +342,7 @@ export interface ParameterRow {
 }
 
 export interface ParameterSetRow {
+  card_side: "left" | "right";
   id: string;
   code: string;
   title_ru: string;

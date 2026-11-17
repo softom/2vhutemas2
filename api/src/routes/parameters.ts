@@ -263,7 +263,7 @@ parameters.delete("/:id", async (c: Context<AppEnv>) => {
 /** Наборы вместе с составом и узлами дерева, к которым они привязаны. */
 parameterSets.get("/", async (c: Context<AppEnv>) => {
   const rows = await sql`
-    select s.id, s.code, s.title_ru, s.note, s.sort_order,
+    select s.id, s.code, s.title_ru, s.note, s.sort_order, s.card_side,
            coalesce((select jsonb_agg(jsonb_build_object(
                         'code', p.code, 'title_ru', p.title_ru, 'unit', p.unit,
                         'value_type', app.api_value_type(p.id), 'definition', p.definition,
@@ -285,17 +285,19 @@ parameterSets.get("/", async (c: Context<AppEnv>) => {
 
 parameterSets.post("/", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "su");
-  const input = await c.req.json<{ code: string; title_ru: string; note?: string | null }>();
+  const input = await c.req.json<{ code: string; title_ru: string; note?: string | null; card_side?: string }>();
   if (!input.code || !CODE.test(input.code)) {
     throw new ApiError("validation_failed", "Код набора: строчные латинские буквы и цифры");
   }
   if (!input.title_ru) throw new ApiError("validation_failed", "Не указано название набора");
 
+  if (input.card_side !== undefined && !["left", "right"].includes(input.card_side)) throw new ApiError("validation_failed", "Сторона карточки: left или right");
+
   const rows = await transaction(principal.contributorId, (tx) =>
     tx`
-      insert into app.parameter_sets (code, title_ru, note)
-      values (${input.code}, ${input.title_ru}, ${input.note ?? null})
-      returning id, code, title_ru
+      insert into app.parameter_sets (code, title_ru, note, card_side)
+      values (${input.code}, ${input.title_ru}, ${input.note ?? null}, ${input.card_side ?? "right"})
+      returning id, code, title_ru, card_side
     `);
   return c.json(rows[0], 201);
 });
@@ -304,16 +306,19 @@ parameterSets.post("/", async (c: Context<AppEnv>) => {
 parameterSets.patch("/:code", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "su");
   const code = c.req.param("code");
-  const input = await c.req.json<{ title_ru?: string; note?: string | null; sort_order?: number }>();
+  const input = await c.req.json<{ title_ru?: string; note?: string | null; sort_order?: number; card_side?: string }>();
+
+  if (input.card_side !== undefined && !["left", "right"].includes(input.card_side)) throw new ApiError("validation_failed", "Сторона карточки: left или right");
 
   const rows = await transaction(principal.contributorId, (tx) =>
     tx`
       update app.parameter_sets set
         title_ru   = coalesce(${input.title_ru ?? null}, title_ru),
         note       = coalesce(${input.note ?? null}, note),
-        sort_order = coalesce(${input.sort_order ?? null}, sort_order)
-      where code = ${code}
-      returning id, code, title_ru, note
+        sort_order = coalesce(${input.sort_order ?? null}, sort_order),
+        card_side = coalesce(${input.card_side ?? null}, card_side)
+      where code = ${code} or id::text = ${code}
+      returning id, code, title_ru, note, card_side
     `);
   if (rows.length === 0) throw new ApiError("not_found", "Набор не найден");
   return c.json(rows[0]);

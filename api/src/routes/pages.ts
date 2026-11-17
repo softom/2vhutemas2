@@ -933,32 +933,12 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   // Разделы карточки идут в порядке, который задаёт тип в таблице
   // отображений (схема данных, раздел 6). Код знает, как нарисовать каждый
   // раздел, но не решает, какие и в каком порядке.
-  const sections: Record<string, () => string> = {
-    indicators: () => {
-      // Новость: одни «Сведения» — выход днём и слотом, тема, первоисточник
-      // ссылкой, публикация в источнике. Значимость — оценка робота для
-      // редактора, читателю её не показываем.
-      if (news) {
-        const by = (code: string) => card.values.filter((v) => v.parameter === code);
-        const rows: [string, string][] = [];
-        const release = by("news_release")[0];
-        const time = by("news_release_time")[0]?.text_value;
-        if (release) rows.push(["Выход", e(valueText(release)) + (time ? `, ${e(time)}` : "")]);
-        const topics = by("news_topic").filter((v) => v.option_title).map((v) => topicHtml(v.option_code, v.option_title!));
-        if (topics.length) rows.push([topics.length > 1 ? "Темы" : "Тема", topics.join("")]);
-        const url = by("url")[0]?.text_value;
-        if (url && /^https?:/i.test(url)) {
-          const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } })();
-          rows.push(["Первоисточник", `<a href="${e(url)}" rel="noopener">${e(host)}</a>`]);
-        }
-        const published = by("publication")[0];
-        if (published) rows.push(["Опубликовано в источнике", e(valueText(published))]);
-        return rows.length ? `<h2>Сведения</h2><dl>${rows.map(([t, v]) => `<dt>${t}</dt><dd>${v}</dd>`).join("")}</dl>` : "";
-      }
+  const programSide = card.values.find(v=>v.parameter==='area_program')?.card_side ?? 'left';
+  function parameterValuesHtml(values: CardValue[]): string {
       const out: string[] = [];
       const groups = new Map<number, CardValue[]>();
       // Площадная программа и её свойства — в своём разделе (program).
-      for (const value of card.values.filter((v) => !PROGRAM_PARAMS.has(v.parameter))) {
+      for (const value of values.filter((v) => !PROGRAM_PARAMS.has(v.parameter))) {
         if (!groups.has(value.indicator_id)) groups.set(value.indicator_id, []);
         groups.get(value.indicator_id)!.push(value);
       }
@@ -978,6 +958,31 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         for (const v of values.filter((x) => x.value_type === "table")) out.push(tableValueHtml(v));
       }
       return out.join("");
+  }
+  const sections: Record<string, () => string> = {
+    indicators: () => {
+      // Новость: одни «Сведения» — выход днём и слотом, тема, первоисточник
+      // ссылкой, публикация в источнике. Значимость — оценка робота для
+      // редактора, читателю её не показываем.
+      if (news) {
+        const by = (code: string) => card.values.filter((v) => v.parameter === code && v.card_side !== "left");
+        const rows: [string, string][] = [];
+        const release = by("news_release")[0];
+        const time = by("news_release_time")[0]?.text_value;
+        if (release) rows.push(["Выход", e(valueText(release)) + (time ? `, ${e(time)}` : "")]);
+        const topics = by("news_topic").filter((v) => v.option_title).map((v) => topicHtml(v.option_code, v.option_title!));
+        if (topics.length) rows.push([topics.length > 1 ? "Темы" : "Тема", topics.join("")]);
+        const url = by("url")[0]?.text_value;
+        if (url && /^https?:/i.test(url)) {
+          const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } })();
+          rows.push(["Первоисточник", `<a href="${e(url)}" rel="noopener">${e(host)}</a>`]);
+        }
+        const published = by("publication")[0];
+        if (published) rows.push(["Опубликовано в источнике", e(valueText(published))]);
+        return rows.length ? `<h2>Сведения</h2><dl>${rows.map(([t, v]) => `<dt>${t}</dt><dd>${v}</dd>`).join("")}</dl>` : "";
+      }
+      return parameterValuesHtml(card.values.filter(v => v.card_side !== 'left')) +
+        (programSide === 'right' ? programHtml(card) : '');
     },
     // Обоснование связи — наш собственный текст, которого нет в энциклопедиях.
     // Выводим его открыто, рядом со ссылкой, а не прячем в интерфейсе.
@@ -1021,7 +1026,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     },
     // У новости текст идёт сразу за заголовком, без «Описания».
     // Площадная программа — под связями, по уровням классификатора.
-    program: () => programHtml(card),
+    program: () => programSide === 'left' ? programHtml(card) : '',
+    parameter_sets: () => parameterValuesHtml(card.values.filter(v=>v.card_side==='left')),
     text: () => descriptionHtml ? `${news ? "" : "<h2>Описание</h2>"}<div class="public-document">${descriptionHtml}</div>` : "",
     // Изображение — цитата (Р-68): под каждым автор и источник.
     gallery: () => card.media.length === 0 ? "" :
@@ -1072,7 +1078,12 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   const layout = card.layout.length > 0
     ? card.layout
     : ["indicators", "links", "program", "text", "gallery", "drawings", "sources", "mentions", "citation"];
-  for (const component of layout) {
+  const withParameterSets = [...layout];
+  if (!withParameterSets.includes('parameter_sets')) {
+    const textAt=withParameterSets.indexOf('text');
+    withParameterSets.splice(textAt<0?withParameterSets.length:textAt,0,'parameter_sets');
+  }
+  for (const component of withParameterSets) {
     const render = sections[component];
     // Раздел — свой блок: облик решает, где ему стоять (Р-91), порядок — тип.
     const html = render ? render() : "";

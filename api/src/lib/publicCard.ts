@@ -64,6 +64,7 @@ export interface PublicDrawing {
 }
 
 export interface CardValue {
+  card_side?: "left" | "right";
   indicator_id: number;
   indicator_title: string;
   measured_year: number | null;
@@ -182,6 +183,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   const values = await sql<CardValue>`
     select i.id as indicator_id, i.title as indicator_title, i.measured_year, i.is_current,
            p.code as parameter, p.title_ru as title, p.unit, app.api_value_type(p.id) as value_type,
+           coalesce(placement.card_side, 'right') as card_side,
            iv.num_value, iv.text_value, iv.bool_value,
            (select o.title_ru from app.parameter_options o where o.id = iv.option_id) as option_title,
            (select o.code from app.parameter_options o where o.id = iv.option_id) as option_code,
@@ -196,6 +198,16 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
       from app.read_indicators(${drafts}) i
       join app.read_values(${drafts}) iv on iv.indicator_id = i.id
       join app.parameters p on p.id = iv.parameter_id
+      left join lateral (
+        select ps.card_side from app.parameter_set_items psi
+        join app.parameter_sets ps on ps.id=psi.set_id
+        where psi.parameter_id=p.id
+        order by exists(select 1 from app.entity_parameter_sets eps where eps.entity_id=${id} and eps.set_id=ps.id) desc,
+          exists(select 1 from app.type_parameter_sets tps where tps.set_id=ps.id and tps.type_id in
+            (select app.entity_type_ancestors((select type_id from app.entities where id=${id})))) desc,
+          ps.sort_order, ps.id
+        limit 1
+      ) placement on true
      where i.entity_id = ${id} and p.value_type <> 'blocks'
      order by i.sort_order, i.id, p.sort_order, p.title_ru, iv.sort_order
   `;
