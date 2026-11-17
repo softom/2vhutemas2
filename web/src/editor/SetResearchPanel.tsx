@@ -1,7 +1,7 @@
 import {useEffect,useState,useRef} from 'react';
 import {request,type Indicator,type ParameterSetRow} from '../api';
 type Data={sources:Record<string,string>[];state:any;revision:string|null};
-export function SetResearchPanel({entityId,set,beforeStart,onRevision,onAccept}:{entityId:number;set:ParameterSetRow;beforeStart:()=>Promise<string|undefined>;onRevision:(revision:string)=>void;onAccept:(group:Indicator)=>void}){
+export function SetResearchPanel({entityId,set,sets,beforeStart,onRevision,onAccept}:{entityId:number;set:ParameterSetRow;sets:ParameterSetRow[];beforeStart:()=>Promise<string|undefined>;onRevision:(revision:string)=>void;onAccept:(group:Indicator)=>void}){
  const [data,setData]=useState<Data|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[chosen,setChosen]=useState<string[]>([]);
  const lastRevision=useRef<string|null>(null);
  const running=data?.state.status==='running';
@@ -16,6 +16,7 @@ export function SetResearchPanel({entityId,set,beforeStart,onRevision,onAccept}:
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  const result=data?.state.results?.[set.id];
+ function provenance(source:Record<string,string>){try{return JSON.parse(source.source_sets||'[]').map((id:string)=>sets.find(s=>s.id===id)?.title_ru||'Архивный набор').join(', ')||'Прежнее исследование';}catch{return 'Прежнее исследование';}}
  function accept(){
   const selected=(result?.proposals||[]).filter((p:any)=>chosen.includes(p.id));
   const values=selected.map((p:any)=>({parameter:p.parameter,title:p.title,value_type:p.type,note:p.rationale+'\n'+p.source_ids.map((id:string)=>data?.sources.find(s=>s.source_uid===id)?.source_url||id).join('\n'),
@@ -28,7 +29,7 @@ export function SetResearchPanel({entityId,set,beforeStart,onRevision,onAccept}:
   {(error||data?.state.error)&&<p role="alert">{error||data?.state.error}</p>}
   {running&&<p role="status">{data?.state.action==='collect'?'Ищем источники и получаем тексты…':'Анализируем материалы…'} Можно вернуться позднее.</p>}
   {data?.state.warnings?.map((w:string,i:number)=><p className="hint" key={i}>{w}</p>)}
-  {!!data?.sources.length&&<details><summary>Материалы исследования · {data.sources.length}</summary>{data.sources.map(s=><article key={s.source_uid}><a href={s.source_url} target="_blank" rel="noreferrer">{s.source_title||s.source_url}</a><p className="hint">{s.source_provider} · {s.source_status}</p><p className="hint">Запросы: {s.source_queries||"—"}</p><details><summary>Текст источника</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:300,overflow:'auto'}}>{s.source_text||s.source_excerpt}</pre></details></article>)}</details>}
+  {!!data?.sources.length&&<details><summary>Материалы исследования · {data.sources.length}</summary>{data.sources.map(s=><article key={s.source_uid}><a href={s.source_url} target="_blank" rel="noreferrer">{s.source_title||s.source_url}</a><p className="hint">{s.source_provider} · {s.source_status}</p><p className="hint">Собрано для: {provenance(s)}</p><p className="hint">Запросы: {s.source_queries||"—"}</p><details><summary>Текст источника</summary><pre style={{whiteSpace:'pre-wrap',maxHeight:300,overflow:'auto'}}>{s.source_text||s.source_excerpt}</pre></details></article>)}</details>}
   {result&&<details open><summary>Предложения для набора</summary>{result.proposals.map((p:any)=><label className="research-proposal" key={p.id}><input type="checkbox" checked={chosen.includes(p.id)} onChange={e=>setChosen(e.target.checked?[...chosen,p.id]:chosen.filter(id=>id!==p.id))}/><span><b>{p.title}</b>{Array.isArray(p.value)?p.value.map((row:Record<string,unknown>,index:number)=><dl key={index}>{Object.entries(row).map(([key,value])=><div key={key}><dt>{p.columns?.find((c:any)=>c.code===key)?.title||'Сведение'}</dt><dd>{String(value??'')}</dd></div>)}</dl>):<p>{p.type==='date'?String(p.value.date_start_year)+(p.value.date_end_year?'–'+p.value.date_end_year:''):p.type==='boolean'?(p.value?'Да':'Нет'):String(p.value)} {p.unit||''}</p>}<small>{p.rationale}</small></span></label>)}<button type="button" disabled={!chosen.length} onClick={accept}>Добавить выбранное в рабочую форму</button><p className="hint">Прежние значения сохраняются. Проверьте добавленную группу перед сохранением и публикацией.</p></details>}
  </div>;
 }
