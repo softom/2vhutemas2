@@ -72,7 +72,7 @@ function validate(input: ParameterInput, isCreate: boolean): void {
 parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
   const code = c.req.param("code");
   const rows = await sql`
-    select distinct on (p.id)
+    select
            p.code as parameter, p.title_ru as title, p.unit, app.api_value_type(p.id) as value_type, p.definition,
            p.is_repeatable, p.is_published,
            case when p.row_set_id is not null then app.table_columns(p.id) end as columns,
@@ -92,7 +92,7 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
      where ty.code = ${code}
        -- Текст записи правится своим редактором, среди величин ему не место.
        and p.value_type <> 'blocks'
-     order by p.id, ps.sort_order, i.sort_order
+     order by ps.sort_order, ps.id, i.sort_order, p.id
   `;
   // Порядок показа — по набору и месту в нём, а не по внутреннему ключу.
   rows.sort((a, b) =>

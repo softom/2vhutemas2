@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { api, request, type ParameterSetRow, type Indicator, type IndicatorValue, placeLabel, type SuggestedParameter } from "../api";
 import { PlacePicker } from "./PlacePicker";
 import { PlaceDialog } from "./PlaceDialog";
+import { ParameterSetPanel } from './ParameterSetPanel';
 import { ParameterTable } from './ParameterTable';
 import { SetResearchPanel } from './SetResearchPanel';
 
@@ -81,7 +82,7 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
       }
     }
   }
-  const fields = [...suggested, ...extra.values()].filter(f=>!['research_sources','research_state'].includes(f.parameter)).sort((a,b)=>a.set.localeCompare(b.set));
+  const fields = [...suggested, ...extra.values()].filter(f=>!['research_sources','research_state'].includes(f.parameter));
 
   const update = (index: number, next: Indicator) => {
     const items = [...indicators];
@@ -126,24 +127,16 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
     setCreating(null);
   };
 
-  if (false && fields.length === 0 && indicators.length === 0) {
-    return (
-      <div className="block">
-        <h3>Показатели</h3>
-        <p className="hint">
-          Для этого типа записи набор параметров ещё не задан. Параметры заводятся в справочнике.
-        </p>
-      </div>
-    );
-  }
-
   const valueInput = (
     group: number,
     field: SuggestedParameter,
     entry: { value: IndicatorValue; position: number },
   ) => {
     const { value, position } = entry;
-    const set = (patch: Partial<IndicatorValue>) => patchValue(group, position, patch);
+    const set = (patch: Partial<IndicatorValue>) => {
+      if(indicators[group].values[position])patchValue(group, position, patch);
+      else update(group,{...indicators[group],values:[...indicators[group].values,{parameter:field.parameter,...patch}]});
+    };
 
     if (field.value_type === "place") {
       return (
@@ -247,52 +240,8 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
     );
   };
 
-  return (
-    <div className="block">
-      <div className="parameter-section-heading"><div><span className="editor-eyebrow">Сведения об объекте</span><h3>Наборы параметров</h3></div><button type="button" className="ghost" disabled={!entityId||setBusy} onClick={()=>setAdding(!adding)}>＋ Добавить набор</button></div>
-      {!entityId&&<p className="hint">Сохраните запись, чтобы прикреплять дополнительные наборы.</p>}
-      {setError&&<p role="alert" className="error">{setError}</p>}
-      {entityId&&beforeResearch&&onRevision&&sets.filter(s=>suggested.some(p=>p.set===s.code)&&!['research_materials','research_source_row','style_solution_row','text_body','program_row'].includes(s.code)).map(s=><details className="research-set-card" key={s.id}><summary>{s.title_ru}<span>Поиск и заполнение</span></summary><SetResearchPanel entityId={entityId} set={s} sets={sets} beforeStart={beforeResearch} onRevision={onRevision} onAccept={group=>onChange([...indicators,group])}/></details>)}
-      {adding&&<div className="parameter-add-panel"><label>Набор параметров<select value={chosen} onChange={e=>setChosen(e.target.value)}><option value="">Выберите набор…</option>{sets.filter(s=>!suggested.some(p=>p.set===s.code)).map(s=><option key={s.id} value={s.id}>{s.title_ru}</option>)}</select></label><button type="button" disabled={!chosen||setBusy} onClick={()=>void attach()}>{setBusy?'Добавляем…':'Добавить'}</button></div>}
-      <p className="hint">
-        Величины подсказаны ветвью дерева типов. Даты и места — такие же величины;
-        пустое не заполняется.
-      </p>
-
-      {indicators.map((indicator, group) => (
-        <fieldset className="indicator" key={indicator.id ?? group}>
-          <div className="row">
-            <label>
-              Название измерения
-              <input
-                value={indicator.title}
-                placeholder="По проекту"
-                onChange={(e) => update(group, { ...indicator, title: e.target.value })}
-              />
-            </label>
-            <label>
-              Год сведений
-              <input
-                value={indicator.measured_year ?? ""}
-                inputMode="numeric"
-                onChange={(e) =>
-                  update(group, {
-                    ...indicator,
-                    measured_year: e.target.value ? Number(e.target.value) : null,
-                  })}
-              />
-            </label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={indicator.is_current}
-                onChange={(e) => update(group, { ...indicator, is_current: e.target.checked })}
-              />
-              Действующие
-            </label>
-          </div>
-
-          {fields.map((field,index) => {
+  const renderFields=(indicator:Indicator,group:number,panelFields:SuggestedParameter[]) => <div className="parameter-fields">
+          {panelFields.map((field) => {
             const entries = entriesOf(indicator, field.parameter);
             const many = repeatable(field);
 
@@ -300,7 +249,7 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
               const chosen = entries.map((entry) => entry.value.option);
               return (
                 <div className="value-field" key={field.parameter}>
-                  {(index===0||fields[index-1].set!==field.set)&&<h4 className="parameter-set-heading">{field.set_title}</h4>}<div className="value-label">{field.title}</div>
+                  <div className="value-label">{field.title}</div>
                   <div className="chips">
                     {field.options.map((option) => (
                       <label className="chip" key={option.code}>
@@ -330,16 +279,15 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
               );
             }
             if(field.value_type==='table')return <div className="value-field" key={field.parameter}>
-              {(index===0||fields[index-1].set!==field.set)&&<h4 className="parameter-set-heading">{field.set_title}</h4>}
               <div className="value-label">{field.title}</div><ParameterTable parameter={field.parameter} rows={entries[0]?.value.rows||[]} onChange={rows=>{
                 if(entries.length)patchValue(group,entries[0].position,{rows});
                 else update(group,{...indicator,values:[...indicator.values,{parameter:field.parameter,rows}]});
               }}/></div>;
+            if(entries.length===0&&!many&&['boolean','option'].includes(field.value_type))return <div className="value-field" key={field.parameter}><div className="value-label">{field.title}</div>{valueInput(group,field,{value:{parameter:field.parameter},position:indicator.values.length})}</div>;
             if (entries.length === 0 && !many) {
               // Единственный ответ заводится сразу, чтобы поле было видно.
               return (
                 <label key={field.parameter}>
-                  {(index===0||fields[index-1].set!==field.set)&&<span className="parameter-set-heading">{field.set_title}</span>}
                   {field.unit ? `${field.title}, ${field.unit}` : field.title}
                   <input
                     value=""
@@ -364,7 +312,6 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
             }
             return (
               <div className="value-field" key={field.parameter}>
-                {(index===0||fields[index-1].set!==field.set)&&<h4 className="parameter-set-heading">{field.set_title}</h4>}
                 <div className="value-label">
                   {field.unit ? `${field.title}, ${field.unit}` : field.title}
                 </div>
@@ -382,30 +329,47 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
               </div>
             );
           })}
+  </div>;
+  const panelCodes=[...new Set(fields.map(f=>f.set))];
+  const panels=panelCodes.map(code=>{
+    const set=sets.find(s=>s.code===code);
+    const members=fields.filter(f=>f.set===code);
+    const order=new Map((set?.items||[]).map((item,index)=>[item.code,index]));
+    members.sort((a,b)=>(order.get(a.parameter)??9999)-(order.get(b.parameter)??9999));
+    return {code,set,title:set?.title_ru||members[0]?.set_title||'Другие параметры',fields:members};
+  }).sort((a,b)=>{
+    const ai=sets.findIndex(s=>s.code===a.code),bi=sets.findIndex(s=>s.code===b.code);
+    return (ai<0?9999:ai)-(bi<0?9999:bi);
+  });
+  const panelForm=(panel:typeof panels[number])=>{
+    let groups=indicators.map((indicator,index)=>({indicator,index})).filter(({indicator})=>!indicator.values.length||indicator.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter)));
+    if(!groups.length&&indicators.length)groups=[{indicator:indicators[0],index:0}];
+    return <div className="parameter-set-form">{groups.map(({indicator,index})=><fieldset className="indicator" key={indicator.id??index}>
+      {groups.length>1&&<legend>{indicator.title}</legend>}
+      {renderFields(indicator,index,panel.fields)}
+      <details className="measurement-details"><summary>Сведения об измерении{indicator.title?' · '+indicator.title:''}</summary><div className="row">
+        <label>Название измерения<input value={indicator.title} onChange={e=>update(index,{...indicator,title:e.target.value})}/></label>
+        <label>Год сведений<input inputMode="numeric" value={indicator.measured_year??''} onChange={e=>update(index,{...indicator,measured_year:e.target.value?Number(e.target.value):null})}/></label>
+        <label className="checkbox"><input type="checkbox" checked={indicator.is_current} onChange={e=>update(index,{...indicator,is_current:e.target.checked})}/>Действующие</label>
+      </div><p className="hint">Сведения об измерении общие для значений этой группы.</p></details>
+      {groups.length>1&&<button type="button" className="ghost" onClick={()=>{
+        const remaining=indicator.values.filter(v=>!panel.fields.some(f=>f.parameter===v.parameter));
+        if(remaining.length)update(index,{...indicator,values:remaining});else onChange(indicators.filter((_,i)=>i!==index));
+      }}>Убрать значения набора в этом измерении</button>}
+    </fieldset>)}<button type="button" className="ghost" onClick={()=>onChange([...indicators,emptyIndicator('Новое измерение')])}>Добавить измерение</button></div>;
+  };
+  return (
+    <div className="block">
+      <div className="parameter-section-heading"><div><span className="editor-eyebrow">Сведения об объекте</span><h3>Наборы параметров</h3></div><button type="button" className="ghost" disabled={!entityId||setBusy} onClick={()=>setAdding(!adding)}>＋ Добавить набор</button></div>
+      {!entityId&&<p className="hint">Сохраните запись, чтобы прикреплять дополнительные наборы.</p>}
+      {setError&&<p role="alert" className="error">{setError}</p>}
 
-          {indicators.length > 1 && (
-            <button
-              type="button"
-              className="ghost"
-              onClick={() => onChange(indicators.filter((_, at) => at !== group))}
-            >
-              Убрать измерение
-            </button>
-          )}
-        </fieldset>
-      ))}
-
-      <button
-        type="button"
-        className="ghost"
-        onClick={() =>
-          onChange([
-            ...indicators,
-            emptyIndicator(indicators.length === 0 ? "Сведения" : "После реконструкции"),
-          ])}
-      >
-        {indicators.length === 0 ? "Заполнить показатели" : "Добавить измерение"}
-      </button>
+      {adding&&<div className="parameter-add-panel"><label>Набор параметров<select value={chosen} onChange={e=>setChosen(e.target.value)}><option value="">Выберите набор…</option>{sets.filter(s=>!suggested.some(p=>p.set===s.code)).map(s=><option key={s.id} value={s.id}>{s.title_ru}</option>)}</select></label><button type="button" disabled={!chosen||setBusy} onClick={()=>void attach()}>{setBusy?'Добавляем…':'Добавить'}</button></div>}
+      {panels.map(panel=><ParameterSetPanel key={panel.set?.id||panel.code||'extra'} title={panel.title}>
+        {entityId&&panel.set&&beforeResearch&&onRevision?<SetResearchPanel entityId={entityId} set={panel.set} sets={sets} beforeStart={beforeResearch} onRevision={onRevision} onAccept={group=>onChange([...indicators,group])}>
+          {panelForm(panel)}
+        </SetResearchPanel>:<div className="set-research-panel"><div className="row"><button type="button" className="ghost" disabled>Собрать источники</button><button type="button" className="ghost" disabled>Определить при помощи LLM</button></div>{panelForm(panel)}</div>}
+      </ParameterSetPanel>)}
 
       {picking && (
         <PlacePicker

@@ -343,9 +343,19 @@ entities.get("/:id/parameters", async (c: Context<AppEnv>) => {
                         order by o.sort_order)
                      from app.parameter_options o where o.parameter_id = ep.parameter_id),
                     '[]'::jsonb) as options
-      from app.entity_parameters(${id}) ep
+      from (
+        select p.id as parameter_id,p.code,p.title_ru,p.unit,p.value_type,p.definition,
+               ps.code as set_code,ps.title_ru as set_title,i.hint,i.sort_order,ps.sort_order as set_sort
+          from app.entities e
+          join app.parameter_sets ps on ps.id in (
+            select set_id from app.entity_parameter_sets where entity_id=e.id
+            union select set_id from app.type_parameter_sets where type_id in(select app.entity_type_ancestors(e.type_id)))
+          join app.parameter_set_items i on i.set_id=ps.id
+          join app.parameters p on p.id=i.parameter_id
+         where e.id=${id}
+      ) ep
      where ep.value_type <> 'blocks'
-     order by ep.sort_order, ep.title_ru
+     order by ep.set_sort,ep.set_code,ep.sort_order,ep.parameter_id
   `;
   return c.json({ items: rows });
 });

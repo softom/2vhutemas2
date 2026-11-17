@@ -922,6 +922,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .parameter-table td { padding:5px; vertical-align:top; }
 .parameter-table textarea { min-width:145px; width:100%; resize:vertical; }
 .parameter-table input { min-width:100px; }
+.parameter-set-panel .parameter-fields { display:grid; gap:18px; }
+.parameter-set-panel .parameter-set-form { border-top:1px solid #e4d8c7; margin:18px 0; padding-top:4px; }
+.parameter-set-panel .measurement-details { margin:18px 0 10px; padding-top:10px; border-top:1px solid #e4d8c7; color:#867868; font-size:12px; }
+.parameter-set-panel .measurement-details .row { display:flex; flex-wrap:wrap; gap:12px; align-items:end; }
+.parameter-set-panel .indicator legend { font-size:14px; font-weight:600; margin-bottom:16px; }
 .entity-editor .indicator { min-width:0; width:100%; box-sizing:border-box; }
 .entity-editor .indicator > .row { flex-wrap:wrap; }
 .entity-editor .indicator > .row > label { flex:1 1 140px; min-width:0; }
