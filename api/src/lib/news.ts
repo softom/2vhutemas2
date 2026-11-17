@@ -92,7 +92,7 @@ export async function loadNews(topic: string | null, limit: number, offset: numb
     select e.id, app.compact_json(e.id, false) as compact,
            coalesce((select jsonb_agg(jsonb_build_object('code', v.code, 'title', v.title_ru) order by v.sort_order)
                        from v where v.entity_id = e.id), '[]'::jsonb) as topics,
-           (select r.snapshot->'body_json' from app.revisions r where r.id = e.published_revision_id) as body,
+           (select app.public_body(r.snapshot) from app.revisions r where r.id = e.published_revision_id) as body,
            (select s->>'title' from jsonb_array_elements(app.sources_json(e.id, false)) s limit 1) as source_title
       from app.entities e
      where e.id = any(${ids}::bigint[])`;

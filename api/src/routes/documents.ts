@@ -236,9 +236,9 @@ documents.get("/:id", async (c: Context<AppEnv>) => {
   if (owners.length) {
     const owner=owners[0];const drafts=canSeeDrafts(principal);
     const content=owner.entity_id
-      ? await sql`select r.snapshot->'body_json' as body_json,e.status as material_status,r.id as latest_revision_id
+      ? await sql`select app.public_body(r.snapshot) as body_json,e.status as material_status,r.id as latest_revision_id
           from app.entities e join app.revisions r on r.id=case when ${drafts} then e.working_revision_id else e.published_revision_id end where e.id=${owner.entity_id}`
-      : await sql`select r.snapshot->'body_json' as body_json,l.status as material_status,r.id as latest_revision_id
+      : await sql`select app.public_body(r.snapshot) as body_json,l.status as material_status,r.id as latest_revision_id
           from app.links l join app.revisions r on r.id=case when ${drafts} then l.working_revision_id else l.published_revision_id end where l.id=${owner.link_id}`;
     if (!content.length) throw new ApiError("not_found","Текст не найден");
     return c.json({id,...content[0],...owner});

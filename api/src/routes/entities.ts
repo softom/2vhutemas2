@@ -10,7 +10,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { sql, transaction, type Tx } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
-import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
+import { can, canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import { type AppEnv, decodeCursor, encodeCursor, pageSize } from "../lib/http.ts";
 import { CATALOG_HIDDEN_ROOTS, resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../lib/entityTypes.ts";
 import { entityAuthors, resolveEntity } from "../lib/publicCard.ts";
@@ -19,7 +19,7 @@ import { publishOwnerRevision, unpublishOwner } from "../lib/ownedVersions.ts";
 import { notifyIndexNow } from "./pages.ts";
 
 import { validateDocument, saveRefs } from "./documents.ts";
-import { writeIndicators, writeText, type IndicatorInput } from "./indicators.ts";
+import { readAll, writeIndicators, writeText, type IndicatorInput } from "./indicators.ts";
 import { writeEntityTags } from "./tags.ts";
 import { saveRevision } from "../lib/records.ts";
 
@@ -234,7 +234,7 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
            greatest(e.updated_at, (select r.created_at from app.revisions r
                                     where r.id = case when ${drafts} then e.working_revision_id else e.published_revision_id end)) as modified_at,
            e.legacy_description_id as description_document_id,
-           (select r.snapshot->'body_json' from app.revisions r where r.id=
+           (select case when ${can(principal,'edit')} then r.snapshot->'body_json' else app.public_body(r.snapshot) end from app.revisions r where r.id=
              case when ${drafts} then e.working_revision_id else e.published_revision_id end) as body_json,
            app.illustrations_json(e.id, ${drafts}) as media,
            app.compact_json(e.id, ${drafts}) as compact,
@@ -317,6 +317,7 @@ entities.get("/:id", async (c: Context<AppEnv>) => {
   const slug = String(entity.slug);
   return c.json({
     ...entity,
+    ...(can(principal,'edit')?{indicators:await readAll(sql,id)}:{}),
     sources,
     authors,
     canonical_url: absolute(entityPath(slug)),

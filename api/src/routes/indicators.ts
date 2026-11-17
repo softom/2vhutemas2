@@ -115,7 +115,7 @@ export async function readAll(tx: Tx, entityId: number) {
      where i.entity_id = ${entityId}
        and not exists (select 1 from app.indicator_values tv
                          join app.parameters tp on tp.id = tv.parameter_id
-                        where tv.indicator_id = i.id and tp.value_type = 'blocks')
+                        where tv.indicator_id = i.id and (tp.value_type = 'blocks' or tp.code in ('research_sources','research_state')))
      order by i.sort_order, i.id
   `;
 }
@@ -125,12 +125,13 @@ export async function readAll(tx: Tx, entityId: number) {
  * не управляется: иначе сохранение величин стирало бы текст лекции.
  */
 export async function writeIndicators(tx: Tx, entityId: number, items: IndicatorInput[]) {
+  items=items.filter(item=>!(item.values?.length&&item.values.every(v=>['research_sources','research_state'].includes(v.parameter)))).map(item=>({...item,values:(item.values||[]).filter(v=>!['research_sources','research_state'].includes(v.parameter))}));
   await tx`
     delete from app.indicators i
      where i.entity_id = ${entityId}
        and not exists (select 1 from app.indicator_values tv
                          join app.parameters tp on tp.id = tv.parameter_id
-                        where tv.indicator_id = i.id and tp.value_type = 'blocks')
+                        where tv.indicator_id = i.id and (tp.value_type = 'blocks' or tp.code in ('research_sources','research_state')))
   `;
 
   for (const [index, item] of items.entries()) {
@@ -167,7 +168,7 @@ export async function writeIndicators(tx: Tx, entityId: number, items: Indicator
         await tx`
           insert into app.indicator_values (indicator_id, parameter_id, table_value, note, sort_order)
           values (${indicatorId}, ${parameter.id},
-                  app.table_rows_from_codes(${parameter.id}, ${JSON.stringify(value.rows)}::jsonb),
+                  app.table_rows_from_codes(${parameter.id}, ${JSON.stringify(value.rows.map(row=>Object.fromEntries(Object.entries(row).map(([key,cell])=>[key,cell&&typeof cell==='object'&&'code' in cell?(cell as {code:unknown}).code:cell]))))}::jsonb),
                   ${value.note ?? null}, ${position})
         `;
         continue;

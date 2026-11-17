@@ -24,7 +24,7 @@ export const parameterSets = new Hono<AppEnv>();
  * «entity» с назначенной ветвью (Р-85), в интерфейсе — «место». «blocks» —
  * текст записи (Р-86).
  */
-const VALUE_TYPES = ["number", "integer", "text", "boolean", "option", "date", "place", "blocks"];
+const VALUE_TYPES = ["number", "integer", "text", "boolean", "option", "date", "place", "blocks", "table"];
 
 /** Вид ответа для базы: «место» хранится ответом-записью из ветви «Где». */
 function storedType(type: string | undefined): string | null {
@@ -34,6 +34,7 @@ function storedType(type: string | undefined): string | null {
 const CODE = /^[a-z0-9]+(_[a-z0-9]+)*$/;
 
 interface ParameterInput {
+  is_published?: boolean;
   code?: string;
   is_repeatable?: boolean;
   title_ru?: string;
@@ -46,6 +47,7 @@ interface ParameterInput {
 }
 
 function validate(input: ParameterInput, isCreate: boolean): void {
+  if(input.is_published!==undefined&&typeof input.is_published!=='boolean')throw new ApiError('validation_failed','Опубликован: да или нет');
   const problems: Record<string, string> = {};
   if (isCreate) {
     if (!input.code) problems.code = "Не указан код";
@@ -72,7 +74,8 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
   const rows = await sql`
     select distinct on (p.id)
            p.code as parameter, p.title_ru as title, p.unit, app.api_value_type(p.id) as value_type, p.definition,
-           p.is_repeatable,
+           p.is_repeatable, p.is_published,
+           case when p.row_set_id is not null then app.table_columns(p.id) end as columns,
            ps.code as set, ps.title_ru as set_title, i.hint, i.sort_order,
            -- Варианты могут быть деревом (классификатор помещений): у узла — код родителя.
            coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru,
@@ -103,7 +106,8 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
 parameters.get("/", async (c: Context<AppEnv>) => {
   const rows = await sql`
     select p.id, p.code, p.title_ru, p.unit, app.api_value_type(p.id) as value_type, p.definition, p.sort_order,
-           p.is_repeatable,
+           p.is_repeatable, p.is_published,
+           case when p.row_set_id is not null then app.table_columns(p.id) end as columns,
            -- Варианты могут быть деревом (классификатор помещений): у узла — код родителя.
            coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru,
                                                          'parent', (select po.code from app.parameter_options po where po.id = o.parent_id))
@@ -125,10 +129,10 @@ parameters.post("/", async (c: Context<AppEnv>) => {
   const result = await transaction(principal.contributorId, async (tx) => {
     const rows = await tx<{ id: string }>`
       insert into app.parameters (code, title_ru, unit, value_type, definition, sort_order,
-                                  is_repeatable)
+                                  is_repeatable,is_published)
       values (${input.code}, ${input.title_ru}, ${input.unit ?? null}, ${storedType(input.value_type)},
               ${input.definition ?? null}, ${input.sort_order ?? 0},
-              ${input.is_repeatable ?? false})
+              ${input.is_repeatable ?? false},${input.is_published ?? true})
       returning id
     `;
     const id = rows[0].id;
@@ -220,6 +224,7 @@ parameters.patch("/:id", async (c: Context<AppEnv>) => {
 
     const rows = await tx`
       update app.parameters set
+        is_published = coalesce(${input.is_published ?? null}, is_published),
         title_ru   = coalesce(${input.title_ru ?? null}, title_ru),
         unit       = coalesce(${input.unit ?? null}, unit),
         value_type = coalesce(${storedType(input.value_type)}, value_type),
@@ -361,7 +366,7 @@ parameterSets.post("/:code/types", async (c: Context<AppEnv>) => {
   const input = await c.req.json<{ type: string }>();
 
   const result = await transaction(principal.contributorId, async (tx) => {
-    const sets = await tx<{ id: string }>`select id from app.parameter_sets where code = ${code}`;
+    const sets = await tx<{ id: string }>`select id from app.parameter_sets where code = ${code} or id::text = ${code}`;
     if (sets.length === 0) throw new ApiError("not_found", "Набор не найден");
     const types = await tx<{ id: string }>`
       select id from app.entity_types where code = ${input.type}
@@ -395,7 +400,7 @@ parameterSets.post("/:code/entities", async (c: Context<AppEnv>) => {
   }
 
   const result = await transaction(principal.contributorId, async (tx) => {
-    const sets = await tx<{ id: string }>`select id from app.parameter_sets where code = ${code}`;
+    const sets = await tx<{ id: string }>`select id from app.parameter_sets where code = ${code} or id::text = ${code}`;
     if (sets.length === 0) throw new ApiError("not_found", "Набор не найден");
     const found = await tx<{ id: number }>`
       select id from app.entities where id = ${input.entity_id}

@@ -98,7 +98,7 @@ export async function publishSketch(tx:Tx,d:Row,actor:string):Promise<number> {
   await tx`insert into app.material_credits(material_id,contributor_id,credit_role) values(${materialId},${actor},'author')`;
  }
  body.push(...paragraphs(sk.description));
- await storeExternalDescriptions(tx,id,d.id,sk.research);
+ await storeExternalDescriptions(tx,id,d.id,sk.research,false);
  body.push(...researchParagraphs(sk.research));
  for(const s of sk.sources){body.push({id:crypto.randomUUID(),type:'paragraph',content:[{type:'link',href:externalUrl(s.url),content:[{type:'text',text:s.title||s.url,styles:{}}]}],children:[]});}
  const relations=await validateRelations(tx,sk.related||[],sk.related||[],sk.sources,id);

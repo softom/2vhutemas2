@@ -33,6 +33,8 @@ const KINDS: { code: string; title: string; value_type: string; many: boolean }[
   { code: "boolean", title: "да или нет", value_type: "boolean", many: false },
   { code: "date", title: "дата", value_type: "date", many: false },
   { code: "place", title: "место", value_type: "place", many: false },
+  { code: "table", title: "таблица", value_type: "table", many: false },
+  { code: "blocks", title: "текст с блоками", value_type: "blocks", many: false },
 ];
 
 function kindOf(valueType: string, repeatable: boolean): string {
@@ -69,6 +71,7 @@ export function ParameterDialog({ parameter, onSaved, onClose }: Props) {
     kind: kindOf(parameter?.value_type ?? "number", parameter?.is_repeatable ?? false),
     definition: parameter?.definition ?? "",
     is_repeatable: parameter?.is_repeatable ?? false,
+    is_published: parameter?.is_published ?? true,
   });
   const [options, setOptions] = useState<{ code: string; title: string }[]>(
     parameter?.options ?? [],
@@ -99,6 +102,7 @@ export function ParameterDialog({ parameter, onSaved, onClose }: Props) {
         throw new Error("У списка должны быть значения");
       }
       const body = {
+        is_published: draft.is_published,
         code: draft.code.trim(),
         title_ru: draft.title_ru.trim(),
         unit: draft.unit.trim() || null,
@@ -137,6 +141,7 @@ export function ParameterDialog({ parameter, onSaved, onClose }: Props) {
     >
       <div className="form">
         {error && <p className="error">{error}</p>}
+        <label className="checkbox"><input type="checkbox" checked={draft.is_published} disabled={parameter?.code.startsWith('research_')||parameter?.code.startsWith('source_')} onChange={e=>set({is_published:e.target.checked})}/>Опубликован</label><p className="hint">Скрытые значения доступны только редакторам, даже после публикации записи.</p>
 
         <div className="row">
           <label style={{ flex: 2, minWidth: 220 }}>

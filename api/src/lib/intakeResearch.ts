@@ -16,10 +16,10 @@ async function bounded(response:Response,max=2000000):Promise<string>{
 const plain=(s:string)=>s.replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&(?:nbsp|lt|gt);/g,' ').replace(/\s+/g,' ').trim();
 const source=(url:string,title:string,excerpt:string,provider:string,evidence:'snippet'|'provided'='snippet'):ResearchSource=>({id:crypto.randomUUID(),url:researchUrl(url),title:plain(title).slice(0,500),excerpt:plain(excerpt).slice(0,5000),provider,evidence});
 export async function researchCatalog(){return await sql<{id:number;title_ru:string}>`select id,title_ru from app.entities where type_id in(select app.entity_type_subtree('art_styles') union select app.entity_type_subtree('art_epochs')) and status='published' order by id limit 400`;}
-export async function collectResearch(d:any,caller:Caller){
+export async function collectResearch(d:any,caller:Caller,topic='архитектура стиль конструкция'){
  const sources:ResearchSource[]=[],warnings:string[]=[];
  for(const s of [...(d.sketch.sources||[]),...(d.sources||[])])if(s.url){try{sources.push(source(s.url,s.title||s.url,s.description||'','dossier','provided'));}catch{warnings.push('Пропущена некорректная ссылка досье');}}
- const title=d.sketch.title;const query=title+' architecture style structure';
+ const title=d.sketch.title;const query=title+' '+topic;
  async function provider(name:string,fn:()=>Promise<ResearchSource[]>){try{const found=await fn();if(!found.length)warnings.push(name+': результатов нет');sources.push(...found);}catch{warnings.push(name+': поиск не выполнен');}}
  const tasks:Promise<void>[]=[];
  for(const lang of ['ru','en','es'])tasks.push(provider('Wikipedia '+lang,async()=>{
@@ -41,14 +41,14 @@ export async function collectResearch(d:any,caller:Caller){
  const key=Deno.env.get('YANDEX_API_KEY'),folder=Deno.env.get('YANDEX_FOLDER_ID');
  if(key&&folder)tasks.push(provider('Yandex',async()=>{
   const started=Date.now();try{
-   const data=JSON.parse(await bounded(await fetch('https://searchapi.api.cloud.yandex.net/v2/web/search',{method:'POST',redirect:'error',headers:{'Content-Type':'application/json',Authorization:'Api-Key '+key},body:JSON.stringify({query:{searchType:'SEARCH_TYPE_RU',queryText:title+' архитектура стиль конструкция'},folderId:folder,responseFormat:'FORMAT_XML',groupSpec:{groupMode:'GROUP_MODE_DEEP',groupsOnPage:25,docsInGroup:1},maxPassages:3}),signal:AbortSignal.timeout(15000)})));
+   const data=JSON.parse(await bounded(await fetch('https://searchapi.api.cloud.yandex.net/v2/web/search',{method:'POST',redirect:'error',headers:{'Content-Type':'application/json',Authorization:'Api-Key '+key},body:JSON.stringify({query:{searchType:'SEARCH_TYPE_RU',queryText:query},folderId:folder,responseFormat:'FORMAT_XML',groupSpec:{groupMode:'GROUP_MODE_DEEP',groupsOnPage:25,docsInGroup:1},maxPassages:3}),signal:AbortSignal.timeout(15000)})));
    const xml=new TextDecoder().decode(Uint8Array.from(atob(data.rawData||''),c=>c.charCodeAt(0)));
    const out=yandexDocuments(xml).map(d=>source(d.url,d.title,d.excerpt,'Yandex'));
    recordAiRequest({caller,purpose:'search_answer',model:'yandex/search-api-v2',status:'ok',durationMs:Date.now()-started,output:'[intake research] '+out.length+' results'});return out;
   }catch(e){recordAiRequest({caller,purpose:'search_answer',model:'yandex/search-api-v2',status:'error',durationMs:Date.now()-started,error:'Поиск не выполнен'});throw e;}
  }));else warnings.push('Yandex не настроен; использованы доступные источники');
  await Promise.all(tasks);
- const seen=new Set<string>();return {sources:sources.filter(s=>{if(!s.excerpt)return false;const u=new URL(s.url);u.hash='';const key=u.href.replace(/\/$/,'');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,50),warnings};
+ const seen=new Set<string>();return {sources:sources.sort((a,b)=>Number(b.provider==='Yandex')-Number(a.provider==='Yandex')).filter(s=>{if(!s.excerpt)return false;const u=new URL(s.url);u.hash='';const key=u.href.replace(/\/$/,'');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,50),warnings};
 }
 export async function runResearch(d:any,caller:Caller,job:string){
  if(!config.search.apiKey)throw new ApiError('unavailable','Поисковая модель не настроена');

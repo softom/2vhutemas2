@@ -275,6 +275,7 @@ export function placeLabel(place: Partial<Place>): string {
 
 /** Значение величины внутри показателей (Р-38). */
 export interface IndicatorValue {
+  rows?:Record<string,unknown>[];
   parameter: string;
   title?: string;
   unit?: string | null;
@@ -321,6 +322,8 @@ export interface SuggestedParameter {
 }
 
 export interface ParameterRow {
+  is_published: boolean;
+  columns?: {code:string;title:string;unit:string|null;value_type:string;options?:{code:string;title:string}[]}[];
   id: string;
   code: string;
   title_ru: string;

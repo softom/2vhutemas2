@@ -214,7 +214,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   const drawings = drawingRows[0]?.items ?? [];
 
   const documents = await sql<{body_json:unknown}>`
-    select r.snapshot->'body_json' as body_json from app.entities e
+    select app.public_body(r.snapshot) as body_json from app.entities e
     join app.revisions r on r.id=case when ${drafts} then e.working_revision_id else e.published_revision_id end
     where e.id=${id}`;
   const document = documents[0] ?? null;
@@ -224,7 +224,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
            (app.entity_type_path(other.type_id) -> 0 ->> 'code') as other_root,
            lr.code as role, lr.title_ru as role_title,
            case when l.from_entity_id = ${id} then 'outgoing' else 'incoming' end as direction,
-           (select r.snapshot->'body_json' from app.revisions r
+           (select app.public_body(r.snapshot) from app.revisions r
             where r.id=case when ${drafts} then l.working_revision_id else l.published_revision_id end) as justification_blocks
       from app.read_links(${drafts}) l
       join app.read_entities(${drafts}) other

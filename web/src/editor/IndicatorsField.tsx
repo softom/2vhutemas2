@@ -9,11 +9,17 @@
  * — две реконструкции, два адреса, — поэтому они заполняются списком.
  */
 import { useEffect, useState } from "react";
-import { type Indicator, type IndicatorValue, placeLabel, type SuggestedParameter } from "../api";
+import { api, request, type ParameterSetRow, type Indicator, type IndicatorValue, placeLabel, type SuggestedParameter } from "../api";
 import { PlacePicker } from "./PlacePicker";
 import { PlaceDialog } from "./PlaceDialog";
+import { ParameterTable } from './ParameterTable';
+import { SetResearchPanel } from './SetResearchPanel';
 
 interface Props {
+  beforeResearch?:()=>Promise<string|undefined>;
+  onRevision?:(revision:string)=>void;
+  entityId?: number | null;
+  onSuggested?: (fields: SuggestedParameter[]) => void;
   indicators: Indicator[];
   suggested: SuggestedParameter[];
   onChange: (next: Indicator[]) => void;
@@ -27,7 +33,21 @@ function repeatable(field: SuggestedParameter): boolean {
   return field.is_repeatable ?? (field.value_type === "date" || field.value_type === "place");
 }
 
-export function IndicatorsField({ indicators, suggested, onChange }: Props) {
+export function IndicatorsField({ indicators, suggested, onChange, entityId, onSuggested, beforeResearch, onRevision }: Props) {
+  const [sets,setSets]=useState<ParameterSetRow[]>([]);
+  const [adding,setAdding]=useState(false);
+  const [setError,setSetError]=useState('');
+  const [setBusy,setSetBusy]=useState(false);
+  const [chosen,setChosen]=useState('');
+  useEffect(()=>{api.parameterSets().then(r=>setSets(r.items.filter(s=>!['program_row','text_body','research_materials','research_source_row','style_solution_row'].includes(s.code)))).catch(e=>setSetError(e.message));},[]);
+  async function attach(){
+    if(!entityId||!chosen||setBusy)return;
+    setSetBusy(true);setSetError('');
+    try{
+      await request(`/parameter-sets/${chosen}/entities`,{method:'POST',body:JSON.stringify({entity_id:entityId})});
+      const result=await api.parametersForEntity(entityId);onSuggested?.(result.items);setAdding(false);setChosen('');
+    }catch(e){setSetError((e as Error).message);}finally{setSetBusy(false);}
+  }
   // Величины видно сразу: пустой список за кнопкой выглядел так, будто
   // показателей у типа нет вовсе.
   useEffect(() => {
@@ -61,7 +81,7 @@ export function IndicatorsField({ indicators, suggested, onChange }: Props) {
       }
     }
   }
-  const fields = [...suggested, ...extra.values()];
+  const fields = [...suggested, ...extra.values()].filter(f=>!['research_sources','research_state'].includes(f.parameter)).sort((a,b)=>a.set.localeCompare(b.set));
 
   const update = (index: number, next: Indicator) => {
     const items = [...indicators];
@@ -106,7 +126,7 @@ export function IndicatorsField({ indicators, suggested, onChange }: Props) {
     setCreating(null);
   };
 
-  if (fields.length === 0 && indicators.length === 0) {
+  if (false && fields.length === 0 && indicators.length === 0) {
     return (
       <div className="block">
         <h3>Показатели</h3>
@@ -229,7 +249,11 @@ export function IndicatorsField({ indicators, suggested, onChange }: Props) {
 
   return (
     <div className="block">
-      <h3>Показатели</h3>
+      <div className="parameter-section-heading"><div><span className="editor-eyebrow">Сведения об объекте</span><h3>Наборы параметров</h3></div><button type="button" className="ghost" disabled={!entityId||setBusy} onClick={()=>setAdding(!adding)}>＋ Добавить набор</button></div>
+      {!entityId&&<p className="hint">Сохраните запись, чтобы прикреплять дополнительные наборы.</p>}
+      {setError&&<p role="alert" className="error">{setError}</p>}
+      {entityId&&beforeResearch&&onRevision&&sets.filter(s=>suggested.some(p=>p.set===s.code)&&!['research_materials','research_source_row','style_solution_row','text_body','program_row'].includes(s.code)).map(s=><details className="research-set-card" key={s.id}><summary>{s.title_ru}<span>Поиск и заполнение</span></summary><SetResearchPanel entityId={entityId} set={s} beforeStart={beforeResearch} onRevision={onRevision} onAccept={group=>onChange([...indicators,group])}/></details>)}
+      {adding&&<div className="parameter-add-panel"><label>Набор параметров<select value={chosen} onChange={e=>setChosen(e.target.value)}><option value="">Выберите набор…</option>{sets.filter(s=>!suggested.some(p=>p.set===s.code)).map(s=><option key={s.id} value={s.id}>{s.title_ru}</option>)}</select></label><button type="button" disabled={!chosen||setBusy} onClick={()=>void attach()}>{setBusy?'Добавляем…':'Добавить'}</button></div>}
       <p className="hint">
         Величины подсказаны ветвью дерева типов. Даты и места — такие же величины;
         пустое не заполняется.
@@ -268,7 +292,7 @@ export function IndicatorsField({ indicators, suggested, onChange }: Props) {
             </label>
           </div>
 
-          {fields.map((field) => {
+          {fields.map((field,index) => {
             const entries = entriesOf(indicator, field.parameter);
             const many = repeatable(field);
 
@@ -276,7 +300,7 @@ export function IndicatorsField({ indicators, suggested, onChange }: Props) {
               const chosen = entries.map((entry) => entry.value.option);
               return (
                 <div className="value-field" key={field.parameter}>
-                  <div className="value-label">{field.title}</div>
+                  {(index===0||fields[index-1].set!==field.set)&&<h4 className="parameter-set-heading">{field.set_title}</h4>}<div className="value-label">{field.title}</div>
                   <div className="chips">
                     {field.options.map((option) => (
                       <label className="chip" key={option.code}>
@@ -305,10 +329,17 @@ export function IndicatorsField({ indicators, suggested, onChange }: Props) {
                 </div>
               );
             }
+            if(field.value_type==='table')return <div className="value-field" key={field.parameter}>
+              {(index===0||fields[index-1].set!==field.set)&&<h4 className="parameter-set-heading">{field.set_title}</h4>}
+              <div className="value-label">{field.title}</div><ParameterTable parameter={field.parameter} rows={entries[0]?.value.rows||[]} onChange={rows=>{
+                if(entries.length)patchValue(group,entries[0].position,{rows});
+                else update(group,{...indicator,values:[...indicator.values,{parameter:field.parameter,rows}]});
+              }}/></div>;
             if (entries.length === 0 && !many) {
               // Единственный ответ заводится сразу, чтобы поле было видно.
               return (
                 <label key={field.parameter}>
+                  {(index===0||fields[index-1].set!==field.set)&&<span className="parameter-set-heading">{field.set_title}</span>}
                   {field.unit ? `${field.title}, ${field.unit}` : field.title}
                   <input
                     value=""
@@ -333,6 +364,7 @@ export function IndicatorsField({ indicators, suggested, onChange }: Props) {
             }
             return (
               <div className="value-field" key={field.parameter}>
+                {(index===0||fields[index-1].set!==field.set)&&<h4 className="parameter-set-heading">{field.set_title}</h4>}
                 <div className="value-label">
                   {field.unit ? `${field.title}, ${field.unit}` : field.title}
                 </div>

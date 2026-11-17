@@ -1,3 +1,4 @@
+import {researchData} from '../lib/setResearch.ts';
 import { Hono } from "hono";
 import { sql, transaction, type Tx } from "../lib/db.ts";
 import { require as requirePermission, can } from "../lib/auth.ts";
@@ -147,9 +148,9 @@ entityIntake.get('/external-descriptions/:entityId',async c=>{
  const id=uid(c.req.param('entityId'));
  if(!(await sql`select id from app.entities where id=${id} and status <> 'archived'`).length)throw new ApiError('not_found','Запись не найдена');
  const page=Math.max(0,Math.min(100000,Math.floor(Number(c.req.query('page'))||0)));
- const items=await sql`select id,entity_id,url,title,excerpt,provider,evidence,intake_id,created_at,updated_at,jsonb_array_length(observations) as observations_count from app.entity_external_descriptions where entity_id=${id} order by updated_at desc,id limit 50 offset ${page*50}`;
- const [count]=await sql<{total:number}>`select count(*)::int total from app.entity_external_descriptions where entity_id=${id}`;
- return c.json({items,total:count.total});
+ const corpus=(await researchData(sql,id!)).sources;
+ const items=corpus.slice(page*50,(page+1)*50).map((r:any)=>({id:r.source_uid,entity_id:id,url:r.source_url,title:r.source_title,excerpt:r.source_excerpt,provider:r.source_provider,evidence:r.source_text?'provided':'snippet',updated_at:r.source_fetched,observations_count:JSON.parse(r.source_observations||'[]').length}));
+ return c.json({items,total:corpus.length,page});
 });
 
 
@@ -262,8 +263,13 @@ entityIntake.post('/:id/research',async c=>{
    const current=await loadIntake(tx,id,true);if(current.sketch?.research?.job!==job)return;
    await auditIntake(tx,current,actor.contributorId);
    if(current.version!==d.version||current.status==='done')result={...result,state:'error',job,error:'Карточка изменилась во время исследования. Результат не применён; повторите исследование.'};
-   if(d.sketch.target_entity_id)await storeExternalDescriptions(tx,Number(d.sketch.target_entity_id),id,result);
-   const sketch={...current.sketch,research:result};
+   let corpusRevision:string|undefined;
+   if(d.sketch.target_entity_id){
+    const [target]=await tx<Row>`select working_revision_id from app.entities where id=${Number(d.sketch.target_entity_id)} for update`;
+    const updated=await storeExternalDescriptions(tx,Number(d.sketch.target_entity_id),id,result);
+    if(target?.working_revision_id===current.sketch.target_revision_id)corpusRevision=updated;
+   }
+   const sketch={...current.sketch,research:result,...(corpusRevision?{target_revision_id:corpusRevision}:{})};
    await tx`update app.entity_intake set sketch=${JSON.stringify(sketch)}::jsonb,version=version+1 where id=${id}`;
   });
  })().catch(e=>log('error',caller.requestId,'Ошибка сохранения исследования',{intake_id:id,error:String(e)}));

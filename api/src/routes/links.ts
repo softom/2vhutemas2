@@ -113,7 +113,7 @@ links.get("/", async (c: Context<AppEnv>) => {
              as other_type_title,
            -- Обложка связанной записи — её первая иллюстрация (Р-36, Р-84).
            app.cover_asset(other.id, ${drafts}) as other_cover_media_id,
-           (select r.snapshot->'body_json' from app.revisions r where r.id=
+           (select app.public_body(r.snapshot) from app.revisions r where r.id=
             case when ${drafts} then l.working_revision_id else l.published_revision_id end) as justification_blocks
     from app.read_links(${drafts}) l
     join app.read_entities(${drafts}) other

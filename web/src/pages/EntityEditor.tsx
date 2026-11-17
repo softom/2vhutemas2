@@ -30,7 +30,7 @@ import {
 } from "../editor/entityBlocks";
 import { InsertPicker, type PickerTab } from "../editor/InsertPicker";
 import { type Tag, TagsField } from "../editor/TagsField";
-import { EntityResearch } from "./EntityResearch";
+
 
 interface Props {
   mode: "create" | "edit";
@@ -171,6 +171,7 @@ export function EntityEditor({ mode }: Props) {
       indicators={indicators}
       setIndicators={setIndicators}
       suggested={suggested}
+      setSuggested={setSuggested}
       media={media}
       tags={tags}
       setTags={setTags}
@@ -207,7 +208,7 @@ export function EntityEditor({ mode }: Props) {
 function EditorBody(props: any) {
   const {
     entityStatus, setEntityStatus, mode, entityId, setEntityId, form, setForm, slugTouched, setSlugTouched, types, editorViews,
-    indicators, setIndicators, suggested,
+    indicators, setIndicators, suggested, setSuggested,
     media, tags, setTags, reloadAttachments, initialBlocks,
     revisionId, setRevisionId, materialId, setMaterialId,
     publishedRevision, setPublishedRevision, status, setStatus,
@@ -231,7 +232,7 @@ function EditorBody(props: any) {
   });
 
   const [versions, setVersions] = useState<Awaited<ReturnType<typeof api.entityVersions>>["items"]>([]);
-  const [showResearch, setShowResearch] = useState(false);
+
   useEffect(() => { if (entityId) api.entityVersions(entityId).then(result => setVersions(result.items)).catch(() => {}); }, [entityId, revisionId, publishedRevision]);
   const [canDelete, setCanDelete] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -366,6 +367,7 @@ function EditorBody(props: any) {
       }
       setStatus(publish ? (canPublish ? "Опубликовано" : "Отправлено на рассмотрение") : "Рабочая версия сохранена");
       if (mode === "create") navigate(`/entities/${id}`);
+      return revision as string;
     } catch (e) {
       const apiError = e as ApiError;
       if (apiError.code === "validation_failed" && apiError.details) {
@@ -432,7 +434,6 @@ function EditorBody(props: any) {
         </button>
       )}
       {entityId && canDelete && <button type="button" className="ghost" disabled={saving} onClick={() => setConfirmDelete(true)}>Удалить…</button>}
-      {entityId && revisionId && entityStatus!=='archived' && <button type="button" className="ghost" disabled={saving} aria-expanded={showResearch} aria-controls="entity-research" onClick={() => {setShowResearch(true);setTimeout(()=>document.getElementById('entity-research')?.scrollIntoView({block:'nearest'}),0);}}>Исследование стиля…</button>}
       {confirmDelete && <div className="notice" style={{flexBasis:"100%"}}>
         <p>Удалить запись в корзину? Она исчезнет из каталогов, в том числе у администратора. Текст, история, медиа и связи сохранятся. Несохранённые правки этой формы не записываются.</p>
         <button type="button" disabled={saving} onClick={() => changeArchive("archive")}>Удалить в корзину</button>{" "}
@@ -463,7 +464,8 @@ function EditorBody(props: any) {
   </section>;
 
   return (
-    <section>
+    <section className="entity-editor">
+      <div className="editor-eyebrow">{mode==='create'?'Новая запись':'Редактор сущности'} · {typeTitle}</div>
       <h1>
         {mode === "create"
           ? typeTitle
@@ -479,7 +481,6 @@ function EditorBody(props: any) {
       <p className="sub">Свойства и описание сохраняются одной версией. {publishedRevision ? (publishedRevision === revisionId ? "Открыта опубликованная версия." : "Есть рабочие изменения; читатели видят прежнюю версию.") : "Запись ещё не опубликована."}</p>
 
       {actions}
-      {showResearch && entityId && revisionId && <EntityResearch key={entityId+':'+revisionId} entityId={entityId} revision={revisionId} onClose={()=>setShowResearch(false)}/>}
       {entityId && <details><summary>История версий</summary><ul>
         {versions.map(version => <li key={version.id}>
           {new Date(version.created_at).toLocaleString("ru-RU")} — {version.editor || "Редактор"}: {version.summary}
@@ -548,6 +549,10 @@ function EditorBody(props: any) {
             return (
               <div key="indicators">
                 <IndicatorsField
+                  entityId={entityId}
+                  onSuggested={setSuggested}
+                  beforeResearch={()=>save(false)}
+                  onRevision={setRevisionId}
                   indicators={indicators}
                   suggested={suggested}
                   onChange={setIndicators}

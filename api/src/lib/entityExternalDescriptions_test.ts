@@ -1,10 +1,12 @@
+import './json.ts';
+import {researchData} from './setResearch.ts';
 import { storeExternalDescriptions } from './entityExternalDescriptions.ts';
 import { runResearch } from './intakeResearch.ts';
 import { closePool,sql,transaction } from './db.ts';
 
 const assert=(v:unknown)=>{if(!v)throw new Error('assertion failed');};
 Deno.test({name:'external URLs retain observations; failed analysis retains search sources',sanitizeOps:false,sanitizeResources:false,fn:async()=>{
- assert(Deno.env.get('APP_API_DB_NAME')==='codex_entity_research_test');
+ assert(Deno.env.get('APP_API_DB_NAME')==='codex_set_research_0058');
  const originalFetch=globalThis.fetch;
  try{
   const [d]=await sql<any>`select id,target_entity_id from app.entity_intake where target_entity_id is not null order by created_at desc limit 1`;
@@ -13,14 +15,14 @@ Deno.test({name:'external URLs retain observations; failed analysis retains sear
   const research={job:crypto.randomUUID(),sources:[source]};
   await transaction(null,tx=>storeExternalDescriptions(tx,Number(d.target_entity_id),d.id,research));
   await transaction(null,tx=>storeExternalDescriptions(tx,Number(d.target_entity_id),d.id,research));
-  const rows=await sql<any>`select * from app.entity_external_descriptions where entity_id=${d.target_entity_id}`;
-  const row=rows.find((r:any)=>r.url===source.url.replace('/#fragment',''));
-  assert(row&&row.observations.length===1&&row.excerpt==='First evidence');
+  const rows=(await researchData(sql,Number(d.target_entity_id))).sources;
+  const row=rows.find((r:any)=>r.source_url===source.url.replace('/#fragment',''));
+  assert(row&&JSON.parse(row.source_observations).length===1&&row.source_excerpt==='First evidence');
   await transaction(null,tx=>storeExternalDescriptions(tx,Number(d.target_entity_id),d.id,{job:crypto.randomUUID(),sources:[{...source,excerpt:'Second evidence'}]}));
-  const [updated]=await sql<any>`select * from app.entity_external_descriptions where id=${row.id}`;
-  assert(updated.observations.length===2&&updated.observations[0].excerpt==='First evidence'&&updated.excerpt==='Second evidence');
+  const updated=(await researchData(sql,Number(d.target_entity_id))).sources.find((r:any)=>r.source_uid===row.source_uid);
+  assert(JSON.parse(updated.source_observations).length===2&&JSON.parse(updated.source_observations)[0].excerpt==='First evidence'&&updated.source_excerpt==='Second evidence');
   await transaction(null,tx=>storeExternalDescriptions(tx,Number(other.id),d.id,research));
-  const duplicates=await sql`select id from app.entity_external_descriptions where url=${row.url}`;assert(duplicates.length===2);
+  assert((await researchData(sql,Number(other.id))).sources.some((r:any)=>r.source_url===row.source_url));
   const grants=await sql<any>`select has_table_privilege('anon','app.entity_external_descriptions','select') as anon,has_table_privilege('authenticated','app.entity_external_descriptions','insert') as authenticated`;
   assert(!grants[0].anon&&!grants[0].authenticated);
 
