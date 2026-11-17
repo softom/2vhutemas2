@@ -1,0 +1,14 @@
+.parameter-row-forms{display:grid;gap:12px;min-width:0}
+.parameter-row-form{border:1px solid #dfcdb6;border-radius:5px;background:#fffdf9;min-width:0}
+.parameter-row-form>summary{padding:14px 16px;cursor:pointer;font-weight:600;overflow-wrap:anywhere}
+.parameter-row-fields{display:grid;gap:18px;padding:4px 16px 18px;min-width:0}
+.parameter-row-field{display:grid;gap:7px;min-width:0}
+.parameter-row-field input:not([type=checkbox]),.parameter-row-field select,.parameter-row-field textarea{box-sizing:border-box;width:100%;min-width:0;max-width:100%}
+.parameter-row-field textarea{resize:none;overflow:hidden;line-height:1.5;min-height:64px}
+.parameter-row-fields>button,.parameter-row-forms>button{justify-self:start}
+.parameter-source-field{overflow-wrap:anywhere}
+.parameter-source-field ul{margin:0 0 10px;padding-left:20px}
+.parameter-source-field li+li{margin-top:8px}
+.parameter-source-field details>summary{cursor:pointer}
+.parameter-source-field .checkbox{display:flex;align-items:flex-start;gap:8px;margin-top:10px}
+@media(max-width:600px){.parameter-row-form>summary{padding:12px}.parameter-row-fields{padding:0 12px 14px}}

@@ -289,7 +289,7 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
               );
             }
             if(field.value_type==='table')return <div className="value-field" key={field.parameter}>
-              <div className="value-label">{field.title}</div><ParameterTable parameter={field.parameter} rows={entries[0]?.value.rows||[]} onChange={rows=>{
+              <div className="value-label">{field.title}</div><ParameterTable parameter={field.parameter} entityId={entityId} rows={entries[0]?.value.rows||[]} onChange={rows=>{
                 if(entries.length)patchValue(group,entries[0].position,{rows});
                 else update(group,{...indicator,values:[...indicator.values,{parameter:field.parameter,rows}]});
               }}/></div>;
