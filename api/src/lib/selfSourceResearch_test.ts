@@ -10,7 +10,7 @@ Deno.test({name:'Own pages excluded from collection, retrieval, both LLM paths a
  const own={source_uid:'own',source_url:'https://2vhutemas.ru/entities/3121',source_text:'SELF_PRIVATE_MARKER',source_excerpt:'SELF_PRIVATE_MARKER'};
  const external={source_uid:'outside',source_url:'https://example.org/source',source_text:'Independent evidence'};
  const redirected={source_uid:'redirected',source_url:'https://example.org/redirect',source_text:''};
- const set={id:crypto.randomUUID(),code:'style_solutions',title_ru:'Styles',parameters:[]};
+ const set={id:crypto.randomUUID(),code:'style_solutions',title_ru:'Styles',parameters:[{id:crypto.randomUUID(),code:'summary',title_ru:'Summary',value_type:'text'}]};
  try{
  globalThis.fetch=async(input:any,init?:RequestInit)=>{
   const url=String(input);
