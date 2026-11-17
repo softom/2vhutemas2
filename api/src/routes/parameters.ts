@@ -76,7 +76,7 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
            p.code as parameter, p.title_ru as title, p.unit, app.api_value_type(p.id) as value_type, p.definition,
            p.is_repeatable, p.is_published,
            case when p.row_set_id is not null then app.table_columns(p.id) end as columns,
-           ps.code as set, ps.title_ru as set_title, i.hint, i.sort_order,
+           ps.code as set, ps.title_ru as set_title, i.hint, i.sort_order, ps.id as set_id, true as set_inherited, false as set_attached,
            -- Варианты могут быть деревом (классификатор помещений): у узла — код родителя.
            coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru,
                                                          'parent', (select po.code from app.parameter_options po where po.id = o.parent_id))
@@ -94,11 +94,6 @@ parameters.get("/for-type/:code", async (c: Context<AppEnv>) => {
        and p.value_type <> 'blocks'
      order by ps.sort_order, ps.id, i.sort_order, p.id
   `;
-  // Порядок показа — по набору и месту в нём, а не по внутреннему ключу.
-  rows.sort((a, b) =>
-    Number(a.sort_order) - Number(b.sort_order) ||
-    String(a.title).localeCompare(String(b.title))
-  );
   return c.json({ items: rows });
 });
 
@@ -423,12 +418,17 @@ parameterSets.delete("/:code/entities/:id", async (c: Context<AppEnv>) => {
   const code = c.req.param("code");
   const entityId = Number(c.req.param("id"));
 
-  await transaction(principal.contributorId, (tx) =>
-    tx`
-      delete from app.entity_parameter_sets eps
-       using app.parameter_sets s
-       where eps.set_id = s.id and s.code = ${code} and eps.entity_id = ${entityId}
-    `);
+  if (!Number.isInteger(entityId)) throw new ApiError("validation_failed", "Неверный идентификатор записи");
+  await transaction(principal.contributorId, async (tx) => {
+    const [set] = await tx<{id:string}>`select id from app.parameter_sets where id::text=${code} or code=${code}`;
+    if (!set) throw new ApiError("not_found", "Набор не найден");
+    const [entity] = await tx<{id:number}>`select id from app.entities where id=${entityId} for update`;
+    if (!entity) throw new ApiError("not_found", "Запись не найдена");
+    const inherited = await tx`select 1 from app.entities e join app.type_parameter_sets t on t.type_id in(select app.entity_type_ancestors(e.type_id)) where e.id=${entityId} and t.set_id=${set.id}`;
+    if (inherited.length) throw new ApiError("validation_failed", "Этот набор задан типом записи и не открепляется отдельно");
+    // Only the attachment is removed. Values, revisions and research remain intact.
+    await tx`delete from app.entity_parameter_sets where entity_id=${entityId} and set_id=${set.id}`;
+  });
   return c.body(null, 204);
 });
 

@@ -308,6 +308,10 @@ export interface Indicator {
 
 /** Параметр, подсказанный записи её ветвью дерева и наборами. */
 export interface SuggestedParameter {
+  set_id?: string;
+  set_inherited?: boolean;
+  set_attached?: boolean;
+  attached_at?: string | null;
   parameter: string;
   title: string;
   unit: string | null;

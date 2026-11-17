@@ -1,7 +1,7 @@
 import {useEffect,useState,useRef,type ReactNode} from 'react';
 import {request,type Indicator,type ParameterSetRow} from '../api';
 type Data={sources:Record<string,string>[];state:any;revision:string|null};
-export function SetResearchPanel({entityId,set,sets,beforeStart,onRevision,onAccept,children}:{children?:ReactNode;entityId:number;set:ParameterSetRow;sets:ParameterSetRow[];beforeStart:()=>Promise<string|undefined>;onRevision:(revision:string)=>void;onAccept:(group:Indicator)=>void}){
+export function SetResearchPanel({entityId,set,sets,beforeStart,onRevision,onAccept,children,actions}:{actions?:(disabled:boolean)=>ReactNode;children?:ReactNode;entityId:number;set:ParameterSetRow;sets:ParameterSetRow[];beforeStart:()=>Promise<string|undefined>;onRevision:(revision:string)=>void;onAccept:(group:Indicator)=>void}){
  const [data,setData]=useState<Data|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[chosen,setChosen]=useState<string[]>([]);
  const lastRevision=useRef<string|null>(null);
  const running=data?.state.status==='running';
@@ -24,7 +24,7 @@ export function SetResearchPanel({entityId,set,sets,beforeStart,onRevision,onAcc
   onAccept({title:set.title_ru+' — исследование',is_current:true,values});setChosen([]);
  }
  return <div className="set-research-panel">
-  <div className="row"><button type="button" className="ghost" disabled={busy||running} onClick={()=>void start('collect')}>Собрать источники</button><button type="button" className="ghost" disabled={busy||running||!data?.sources.length} onClick={()=>void start('analyze')}>Определить при помощи LLM</button></div>
+  <div className="row"><button type="button" className="ghost" disabled={busy||running} onClick={()=>void start('collect')}>Собрать источники</button><button type="button" className="ghost" disabled={busy||running||!data?.sources.length} onClick={()=>void start('analyze')}>Определить при помощи LLM</button>{actions?.(busy||running)}</div>
   {children}
   <p className="hint">Перед запуском сохраняется рабочая версия. Поиск учитывает тему набора; анализ использует общий корпус. Материалы доступны только редакторам.</p>
   {(error||data?.state.error)&&<p role="alert">{error||data?.state.error}</p>}

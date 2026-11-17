@@ -40,6 +40,7 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
   const [setError,setSetError]=useState('');
   const [setBusy,setSetBusy]=useState(false);
   const [chosen,setChosen]=useState('');
+  const [setNotice,setSetNotice]=useState('');
   useEffect(()=>{api.parameterSets().then(r=>setSets(r.items.filter(s=>!['program_row','text_body','research_materials','research_source_row','style_solution_row'].includes(s.code)))).catch(e=>setSetError(e.message));},[]);
   async function attach(){
     if(!entityId||!chosen||setBusy)return;
@@ -47,6 +48,15 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
     try{
       await request(`/parameter-sets/${chosen}/entities`,{method:'POST',body:JSON.stringify({entity_id:entityId})});
       const result=await api.parametersForEntity(entityId);onSuggested?.(result.items);setAdding(false);setChosen('');
+    }catch(e){setSetError((e as Error).message);}finally{setSetBusy(false);}
+  }
+  async function detach(set:ParameterSetRow){
+    if(!entityId||setBusy)return;
+    setSetBusy(true);setSetError('');setSetNotice('');
+    try{
+      await request(`/parameter-sets/${set.id}/entities/${entityId}`,{method:'DELETE'});
+      const result=await api.parametersForEntity(entityId);onSuggested?.(result.items);
+      setSetNotice(`Набор «${set.title_ru}» откреплён. Заполненные значения сохранены; значения вне других наборов доступны в панели «Сохранённые значения». Материалы исследования сохранены.`);
     }catch(e){setSetError((e as Error).message);}finally{setSetBusy(false);}
   }
   // Величины видно сразу: пустой список за кнопкой выглядел так, будто
@@ -75,7 +85,7 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
           value_type: value.value_type ?? "text",
           definition: null,
           set: "",
-          set_title: "вне набора",
+          set_title: "Сохранённые значения",
           hint: null,
           options: [],
         });
@@ -337,10 +347,8 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
     const order=new Map((set?.items||[]).map((item,index)=>[item.code,index]));
     members.sort((a,b)=>(order.get(a.parameter)??9999)-(order.get(b.parameter)??9999));
     return {code,set,title:set?.title_ru||members[0]?.set_title||'Другие параметры',fields:members};
-  }).sort((a,b)=>{
-    const ai=sets.findIndex(s=>s.code===a.code),bi=sets.findIndex(s=>s.code===b.code);
-    return (ai<0?9999:ai)-(bi<0?9999:bi);
-  });
+  }); // API orders inherited sets first, then attachments from oldest to newest.
+  const detachAction=(panel:typeof panels[number],disabled=false)=>panel.set&&entityId?<button type="button" className="ghost" disabled={disabled||setBusy||!panel.fields.some(f=>f.set_attached&&!f.set_inherited)} title={panel.fields.some(f=>f.set_inherited)?'Набор задан типом записи и не открепляется отдельно':'Заполненные значения и материалы исследования сохранятся'} onClick={()=>void detach(panel.set!)}>Открепить</button>:null;
   const panelForm=(panel:typeof panels[number])=>{
     let groups=indicators.map((indicator,index)=>({indicator,index})).filter(({indicator})=>!indicator.values.length||indicator.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter)));
     if(!groups.length&&indicators.length)groups=[{indicator:indicators[0],index:0}];
@@ -363,12 +371,13 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
       <div className="parameter-section-heading"><div><span className="editor-eyebrow">Сведения об объекте</span><h3>Наборы параметров</h3></div><button type="button" className="ghost" disabled={!entityId||setBusy} onClick={()=>setAdding(!adding)}>＋ Добавить набор</button></div>
       {!entityId&&<p className="hint">Сохраните запись, чтобы прикреплять дополнительные наборы.</p>}
       {setError&&<p role="alert" className="error">{setError}</p>}
+      {setNotice&&<p role="status" className="hint">{setNotice}</p>}
 
       {adding&&<div className="parameter-add-panel"><label>Набор параметров<select value={chosen} onChange={e=>setChosen(e.target.value)}><option value="">Выберите набор…</option>{sets.filter(s=>!suggested.some(p=>p.set===s.code)).map(s=><option key={s.id} value={s.id}>{s.title_ru}</option>)}</select></label><button type="button" disabled={!chosen||setBusy} onClick={()=>void attach()}>{setBusy?'Добавляем…':'Добавить'}</button></div>}
       {panels.map(panel=><ParameterSetPanel key={panel.set?.id||panel.code||'extra'} title={panel.title}>
-        {entityId&&panel.set&&beforeResearch&&onRevision?<SetResearchPanel entityId={entityId} set={panel.set} sets={sets} beforeStart={beforeResearch} onRevision={onRevision} onAccept={group=>onChange([...indicators,group])}>
+        {entityId&&panel.set&&beforeResearch&&onRevision?<SetResearchPanel entityId={entityId} set={panel.set} sets={sets} beforeStart={beforeResearch} onRevision={onRevision} onAccept={group=>onChange([...indicators,group])} actions={disabled=>detachAction(panel,disabled)}>
           {panelForm(panel)}
-        </SetResearchPanel>:<div className="set-research-panel"><div className="row"><button type="button" className="ghost" disabled>Собрать источники</button><button type="button" className="ghost" disabled>Определить при помощи LLM</button></div>{panelForm(panel)}</div>}
+        </SetResearchPanel>:<div className="set-research-panel"><div className="row"><button type="button" className="ghost" disabled>Собрать источники</button><button type="button" className="ghost" disabled>Определить при помощи LLM</button>{detachAction(panel)}</div>{panelForm(panel)}</div>}
       </ParameterSetPanel>)}
 
       {picking && (

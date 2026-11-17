@@ -336,7 +336,7 @@ entities.get("/:id/parameters", async (c: Context<AppEnv>) => {
   const rows = await sql`
     select ep.code as parameter, ep.title_ru as title, ep.unit,
            app.api_value_type(ep.parameter_id) as value_type, ep.definition,
-           ep.set_code as set, ep.set_title, ep.hint, ep.sort_order,
+           ep.set_code as set, ep.set_title, ep.hint, ep.sort_order, ep.set_id, ep.set_inherited, ep.set_attached, ep.attached_at,
            (select pr.is_repeatable from app.parameters pr where pr.id = ep.parameter_id)
              as is_repeatable,
            coalesce((select jsonb_agg(jsonb_build_object('code', o.code, 'title', o.title_ru)
@@ -345,7 +345,11 @@ entities.get("/:id/parameters", async (c: Context<AppEnv>) => {
                     '[]'::jsonb) as options
       from (
         select p.id as parameter_id,p.code,p.title_ru,p.unit,p.value_type,p.definition,
-               ps.code as set_code,ps.title_ru as set_title,i.hint,i.sort_order,ps.sort_order as set_sort
+               ps.code as set_code,ps.title_ru as set_title,i.hint,i.sort_order,ps.sort_order as set_sort,
+               ps.id as set_id,
+               exists(select 1 from app.type_parameter_sets where set_id=ps.id and type_id in(select app.entity_type_ancestors(e.type_id))) as set_inherited,
+               exists(select 1 from app.entity_parameter_sets where entity_id=e.id and set_id=ps.id) as set_attached,
+               (select attached_at from app.entity_parameter_sets where entity_id=e.id and set_id=ps.id) as attached_at
           from app.entities e
           join app.parameter_sets ps on ps.id in (
             select set_id from app.entity_parameter_sets where entity_id=e.id
@@ -355,7 +359,7 @@ entities.get("/:id/parameters", async (c: Context<AppEnv>) => {
          where e.id=${id}
       ) ep
      where ep.value_type <> 'blocks'
-     order by ep.set_sort,ep.set_code,ep.sort_order,ep.parameter_id
+     order by ep.set_inherited desc,ep.attached_at asc nulls first,ep.set_sort,ep.set_id,ep.sort_order,ep.parameter_id
   `;
   return c.json({ items: rows });
 });
