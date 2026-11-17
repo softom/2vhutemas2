@@ -469,8 +469,13 @@ function EditorBody(props: any) {
           ? typeTitle
             ? `Новая запись: ${typeTitle}`
             : "Новая запись"
-          : "Правка записи"}
+          : form.title_ru || "Правка записи"}
       </h1>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:16,alignItems:'start',marginBottom:20}}>
+        {field("title_en", "Название по-английски")}
+        {field("title_original", "Название на языке оригинала")}
+        {field("title_la", "Латинское наименование", "Научное латинское имя, если оно есть")}
+      </div>
       <p className="sub">Свойства и описание сохраняются одной версией. {publishedRevision ? (publishedRevision === revisionId ? "Открыта опубликованная версия." : "Есть рабочие изменения; читатели видят прежнюю версию.") : "Запись ещё не опубликована."}</p>
 
       {actions}
@@ -523,11 +528,6 @@ function EditorBody(props: any) {
                     "Часть ссылки на карточку, латиницей. Подставляется из названия, можно изменить.",
                     { placeholder: "muzey-terrakotovoy-armii" },
                   )}
-                  <div className="row">
-                    {field("title_en", "Название по-английски")}
-                    {field("title_original", "Название на языке оригинала")}
-                    {field("title_la", "Латинское наименование", "Научное латинское имя, если оно есть")}
-                  </div>
                 </div>
               </div>
             );
