@@ -1,0 +1,12 @@
+.research-acceptance>label{display:grid;gap:8px;margin:16px 0}
+.research-acceptance select,.research-acceptance input:not([type=checkbox]){width:100%;min-width:0;box-sizing:border-box}
+.research-acceptance .research-proposal{display:flex;align-items:flex-start;gap:12px}
+.research-proposal>span{flex:1;min-width:0}
+.research-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:10px 0;overflow-wrap:anywhere}
+.research-comparison>span{border:1px solid var(--line);padding:10px;min-width:0}
+.research-comparison ol{padding-left:20px}
+.research-comparison dl{display:block;margin:8px 0}
+.research-comparison dd{margin:0 0 8px}
+.parameter-group-heading{display:grid;gap:8px;margin-bottom:18px}
+.parameter-group-heading input{width:100%;box-sizing:border-box}
+@media(max-width:600px){.research-comparison{grid-template-columns:1fr}}

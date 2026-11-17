@@ -14,6 +14,7 @@ import { PlacePicker } from "./PlacePicker";
 import { PlaceDialog } from "./PlaceDialog";
 import { ParameterSetPanel } from './ParameterSetPanel';
 import { ParameterTable } from './ParameterTable';
+import {groupKey,groupLabel} from './researchMerge';
 import { SetResearchPanel } from './SetResearchPanel';
 
 interface Props {
@@ -353,10 +354,10 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
     let groups=indicators.map((indicator,index)=>({indicator,index})).filter(({indicator})=>!indicator.values.length||indicator.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter)));
     if(!groups.length&&indicators.length)groups=[{indicator:indicators[0],index:0}];
     return <div className="parameter-set-form">{groups.map(({indicator,index})=><fieldset className="indicator" key={indicator.id??index}>
-      {groups.length>1&&<legend>{indicator.title}</legend>}
+      <legend>{groupLabel(indicator,index)}</legend>
+      <label className="parameter-group-heading">Название группы<input value={indicator.title} onChange={e=>update(index,{...indicator,title:e.target.value})}/></label>
       {renderFields(indicator,index,panel.fields)}
       <details className="measurement-details"><summary>Сведения об измерении{indicator.title?' · '+indicator.title:''}</summary><div className="row">
-        <label>Название измерения<input value={indicator.title} onChange={e=>update(index,{...indicator,title:e.target.value})}/></label>
         <label>Год сведений<input inputMode="numeric" value={indicator.measured_year??''} onChange={e=>update(index,{...indicator,measured_year:e.target.value?Number(e.target.value):null})}/></label>
         <label className="checkbox"><input type="checkbox" checked={indicator.is_current} onChange={e=>update(index,{...indicator,is_current:e.target.checked})}/>Действующие</label>
       </div><p className="hint">Сведения об измерении общие для значений этой группы.</p></details>
@@ -374,8 +375,8 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
       {setNotice&&<p role="status" className="hint">{setNotice}</p>}
 
       {adding&&<div className="parameter-add-panel"><label>Набор параметров<select value={chosen} onChange={e=>setChosen(e.target.value)}><option value="">Выберите набор…</option>{sets.filter(s=>!suggested.some(p=>p.set===s.code)).map(s=><option key={s.id} value={s.id}>{s.title_ru}</option>)}</select></label><button type="button" disabled={!chosen||setBusy} onClick={()=>void attach()}>{setBusy?'Добавляем…':'Добавить'}</button></div>}
-      {panels.map(panel=><ParameterSetPanel key={panel.set?.id||panel.code||'extra'} title={panel.title}>
-        {entityId&&panel.set&&beforeResearch&&onRevision?<SetResearchPanel entityId={entityId} set={panel.set} sets={sets} beforeStart={beforeResearch} onRevision={onRevision} onAccept={group=>onChange([...indicators,group])} actions={disabled=>detachAction(panel,disabled)}>
+      {panels.map(panel=><ParameterSetPanel key={panel.set?.id||panel.code||'extra'} title={panel.title+(indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length>1?' · групп: '+indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length:'')}>
+        {entityId&&panel.set&&beforeResearch&&onRevision?<SetResearchPanel entityId={entityId} set={panel.set} sets={sets} beforeStart={beforeResearch} onRevision={onRevision} indicators={indicators} fields={panel.fields} onAccept={(group,target)=>{if(target===null)onChange([...indicators,group]);else if(indicators.some((g,i)=>groupKey(g,i)===target))onChange(indicators.map((g,i)=>groupKey(g,i)===target?group:g));}} actions={disabled=>detachAction(panel,disabled)}>
           {panelForm(panel)}
         </SetResearchPanel>:<div className="set-research-panel"><div className="row"><button type="button" className="ghost" disabled>Собрать источники</button><button type="button" className="ghost" disabled>Определить при помощи LLM</button>{detachAction(panel)}</div>{panelForm(panel)}</div>}
       </ParameterSetPanel>)}
