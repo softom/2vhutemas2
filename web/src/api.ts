@@ -342,6 +342,20 @@ export interface ParameterRow {
   used: number | string;
 }
 
+export interface SetMemberConfiguration {
+ parameter_id:string; hint:string|null; sort_order:number; label_override:string|null;
+ input_kind:string; is_required:boolean; repeatability:string; summary_order:number|null;
+ research_enabled:boolean; fill_instruction:string|null; merge_policy:string; dedup_policy:string;
+ source_required:boolean; quote_required:boolean; minimum_evidence:string; phase_required:boolean; zone_required:boolean; result_slot:string|null;
+}
+export interface SetResearchTask {id?:string;title:string;instruction:string;enabled:boolean;sort_order:number;model_name:string|null;max_calls:number;max_source_chars:number}
+export interface SetSearchProfile {id?:string;language_tag:string;title_source:string;query_template:string;enabled:boolean;sort_order:number;topic_terms:string[]}
+export interface SetConfiguration {
+ set:{id?:string;code:string;title_ru:string;note:string|null;card_side:'left'|'right';research_enabled:boolean;result_kind:'parameter_values'|'relations';config_version:number};
+ items:SetMemberConfiguration[];tasks:SetResearchTask[];profiles:SetSearchProfile[];types:string[];roles:string[];branches:string[];
+ choices:{types:{id:string;title_ru:string}[];roles:{id:string;title_ru:string}[]};
+}
+
 export interface ParameterSetRow {
   research_enabled:boolean;
   result_kind:"parameter_values"|"relations";
@@ -793,6 +807,9 @@ export const api = {
     request<ParameterRow>(`/parameters/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteParameter: (id: string) =>
     request<void>(`/parameters/${id}`, { method: "DELETE" }),
+  parameterSetConfigChoices: () => request<SetConfiguration['choices']>('/parameter-sets/config/options'),
+  parameterSetConfig: (id:string) => request<SetConfiguration>(`/parameter-sets/${id}/config`),
+  saveParameterSetConfig: (id:string|null, body:unknown) => request<SetConfiguration>(id ? `/parameter-sets/${id}/config` : '/parameter-sets/config', {method:id?'PATCH':'POST',body:JSON.stringify(body)}),
   parameterSets: () => request<{ items: ParameterSetRow[] }>("/parameter-sets"),
   materialFolders: () => request<{ items: MaterialFolderRow[] }>("/research-materials"),
   refreshMaterials: () =>

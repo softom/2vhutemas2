@@ -243,6 +243,7 @@ export function App() {
           <Route path="/lectures" element={<Lectures canCreate={can("create_delete")} />} />
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
+          <Route path="/parameters/registry" element={<Parameters canManage={can("su")} />} />
           <Route path="/materials" element={!viewer ? <p className="notice">Проверяем права…</p> : <Materials allowed={can("su")} />} />
           <Route path="/entity-intake" element={!viewer ? <p>Проверяем права…</p> : <EntityIntake allowed={can("edit")} canUpload={can("create_delete")} canPublish={can("publish")} />} />
           <Route path="/entity-intake/:id" element={!viewer ? <p>Проверяем права…</p> : <EntityIntake allowed={can("edit")} canUpload={can("create_delete")} canPublish={can("publish")} />} />

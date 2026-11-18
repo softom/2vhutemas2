@@ -467,3 +467,7 @@ parameterSets.delete("/:code", async (c: Context<AppEnv>) => {
 
 parameterSets.get('/:id/config',async c=>{requirePermission(c.get('principal'),'su');return c.json(await readSetConfiguration(c.req.param('id')));});
 parameterSets.patch('/:id/config',async c=>{const actor=requirePermission(c.get('principal'),'su');return c.json(await updateSetConfiguration(c.req.param('id'),await c.req.json(),actor.contributorId!));});
+
+parameterSets.post('/config',async c=>{const actor=requirePermission(c.get('principal'),'su');return c.json(await updateSetConfiguration(null,await c.req.json(),actor.contributorId!),201);});
+
+parameterSets.get('/config/options',async c=>{requirePermission(c.get('principal'),'su');const types=await sql`select id,title_ru from app.entity_types order by title_ru`;const roles=await sql`select id,title_ru from app.link_roles order by title_ru`;return c.json({types,roles});});

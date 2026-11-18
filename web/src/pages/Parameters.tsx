@@ -9,6 +9,7 @@
  * Ведёт справочник обладатель `su`: «вместимость зала» и «Вместимость (мест)»,
  * заведённые порознь, делают сравнение невозможным.
  */
+import { NavLink, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { api, type ParameterRow, type ParameterSetRow } from "../api";
 import { ParameterDialog, VALUE_TYPES } from "../editor/ParameterDialog";
@@ -20,6 +21,7 @@ type Dialog =
   | { kind: "parameter"; parameter: ParameterRow | null };
 
 export function Parameters({ canManage }: { canManage: boolean }) {
+  const registryPage = useLocation().pathname === "/parameters/registry";
   const [items, setItems] = useState<ParameterRow[]>([]);
   const [sets, setSets] = useState<ParameterSetRow[]>([]);
   const [dialog, setDialog] = useState<Dialog>({ kind: "none" });
@@ -29,7 +31,7 @@ export function Parameters({ canManage }: { canManage: boolean }) {
   const reload = () => {
     api.parameters().then((result) => setItems(result.items ?? []))
       .catch((e) => setError((e as Error).message));
-    api.parameterSets().then((result) => setSets(result.items ?? [])).catch(() => {});
+    api.parameterSets().then((result) => setSets(result.items ?? [])).catch(e=>setError(e.message));
   };
 
   useEffect(reload, []);
@@ -46,57 +48,22 @@ export function Parameters({ canManage }: { canManage: boolean }) {
       {error && <p className="error">{error}</p>}
       {status && <p className="notice">{status}</p>}
 
-      <div className="filters">
-        {canManage && (
-          <button type="button" onClick={() => setDialog({ kind: "set", set: null })}>
-            Создать набор
-          </button>
-        )}
-        {canManage && (
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => setDialog({ kind: "parameter", parameter: null })}
-          >
-            Завести параметр
-          </button>
-        )}
-      </div>
-
-      <h2>Наборы</h2>
-      {sets.length === 0 && <p className="notice">Наборов пока нет.</p>}
-      {sets.map((set) => (
-        <div className="block" key={set.id}>
-          <div className="row">
-            <h3 style={{ flex: 1 }}>{set.title_ru}</h3>
-            {canManage && (
-              <button type="button" className="ghost" onClick={() => setDialog({ kind: "set", set })}>
-                Править
-              </button>
-            )}
-          </div>
-          <p className="hint">
-            {set.types.length === 0
-              ? "Ни к одной ветви не привязан — подсказывать некому"
-              : `Ветви: ${set.types.map((type) => type.title).join(", ")}`}
-            {set.note ? ` · ${set.note}` : ""}
-          </p>
-          <ol className="set-items">
-            {set.items.map((item) => (
-              <li key={item.code}>
-                {item.title_ru}
-                {item.unit ? `, ${item.unit}` : ""}
-                <span className="hint">
-                  {typeTitle(item.value_type)}
-                  {item.is_repeatable ? " · несколько ответов" : ""}
-                  {item.hint ? ` · ${item.hint}` : item.definition ? ` · ${item.definition}` : ""}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      ))}
-
+      <nav className="robot-block-nav" aria-label="Разделы параметров">
+        <NavLink to="/parameters" end><span className="robot-block-number" aria-hidden="true">1</span><span>Наборы</span></NavLink>
+        <NavLink to="/parameters/registry"><span className="robot-block-number" aria-hidden="true">2</span><span>Параметры</span></NavLink>
+      </nav>
+      {canManage && <div className="filters"><button type="button" onClick={()=>setDialog(registryPage?{kind:'parameter',parameter:null}:{kind:'set',set:null})}>
+        {registryPage?'Завести параметр':'Создать набор'}
+      </button></div>}
+      {!registryPage && <>
+        <h2>Наборы</h2>
+        {sets.length===0 && <p className="notice">Наборов пока нет.</p>}
+        {sets.map(set=><div className="block row" key={set.id}>
+          <h3 style={{flex:1,margin:0}}>{set.title_ru}</h3>
+          {canManage&&<button type="button" className="ghost" aria-label={`Править набор «${set.title_ru}»`} onClick={()=>setDialog({kind:'set',set})}>Править</button>}
+        </div>)}
+      </>}
+      {registryPage && <>
       <h2>Справочник величин</h2>
       <table className="grid-table">
         <thead>
@@ -136,6 +103,7 @@ export function Parameters({ canManage }: { canManage: boolean }) {
           ))}
         </tbody>
       </table>
+      </>}
 
       {dialog.kind === "set" && (
         <ParameterSetDialog
