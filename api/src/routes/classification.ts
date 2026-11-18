@@ -33,15 +33,16 @@ classification.post('/initialize',async c=>{
   return items;
  });return c.json({items:result});
 });
-async function plans(tx:Tx,entityId:number,input:any){
- const [entity]=await tx<any>`select working_revision_id from app.entities where id=${entityId} and status<>'archived' for update`;
+async function plans(tx:Tx,entityId:number,input:any,context:any={}){
+ const [entity]=context.entity?[context.entity]:await tx<any>`select working_revision_id from app.entities where id=${entityId} and status<>'archived' for update`;
+ context.entity=entity;
  if(!entity)throw new ApiError('not_found','Сущность не найдена');
  if(entity.working_revision_id!==input.base_revision_id)throw new ApiError('version_conflict','Карточка изменилась; сохраните/перечитайте её');
- const data=await researchData(tx,entityId),result=data.state.results?.[input.set_id];
+ const data=context.data||(context.data=await researchData(tx,entityId)),result=data.state.results?.[input.set_id];
  if(!result||result.mode!=='attributions')fail('Нужно новое исследование классификации по ID');
- if(!Array.isArray(input.selections)||!input.selections.length||input.selections.length>100)fail('Выберите от 1 до 100 предложений');
+ if(!Array.isArray(input.selections)||!input.selections.length||input.selections.length>200)fail('Выберите от 1 до 200 предложений');
  if(data.state.status==='running')fail('Дождитесь окончания исследования');
- const catalog=await classificationCatalog(tx,true),out:any[]=[];const seen=new Set<string>();
+ const catalog=context.catalog||(context.catalog=await classificationCatalog(tx,true)),out:any[]=[];const seen=new Set<string>();
  for(const choice of input.selections){
   const raw=result.proposals.find((p:any)=>p.id===choice.id);if(!raw)fail('Предложение отсутствует в сохранённом результате');
   if(raw.concept_id&&choice.concept_id&&Number(choice.concept_id)!==Number(raw.concept_id))fail('Нельзя подменить установленное понятие');
@@ -50,8 +51,8 @@ async function plans(tx:Tx,entityId:number,input:any){
   if(p.evidence!=='page')fail('Нельзя принять цитату только из поисковой выдержки. Нужен сохранённый текст страницы');
   const source=data.sources.find((s:any)=>s.source_uid===p.source_id);
   const url=checked(()=>address(source.source_url));
-  const candidates=await tx<any>`select distinct e.id,e.title_ru,e.working_revision_id,v.text_value from app.entities e join app.entity_types t on t.id=e.type_id join app.indicators i on i.entity_id=e.id join app.indicator_values v on v.indicator_id=i.id join app.parameters q on q.id=v.parameter_id where e.status<>'archived' and t.code in('book','article','web_page') and q.code='url'`;
-  const matches=candidates.filter(s=>{try{return address(s.text_value)===url;}catch{return false;}});
+  const candidates=context.candidates||(context.candidates=await tx<any>`select distinct e.id,e.title_ru,e.working_revision_id,v.text_value from app.entities e join app.entity_types t on t.id=e.type_id join app.indicators i on i.entity_id=e.id join app.indicator_values v on v.indicator_id=i.id join app.parameters q on q.id=v.parameter_id where e.status<>'archived' and t.code in('book','article','web_page') and q.code='url'`);
+  const matches=candidates.filter((s:any)=>{try{return address(s.text_value)===url;}catch{return false;}});
   if(matches.length>1)fail('Для URL найдено несколько сущностей источника; устраните неоднозначность');
   const sourceEntity=matches[0];
   const links=sourceEntity?await tx<any>`select l.id,l.working_revision_id,m.id as material_id,r.snapshot->'body_json' as body from app.links l join app.materials m on m.link_id=l.id join app.revisions r on r.id=l.working_revision_id join app.link_roles role on role.id=l.role_id where l.from_entity_id=${entityId} and l.to_entity_id=${p.concept_id} and role.code=${p.relation} and l.status<>'archived' order by l.id`:[];
@@ -64,11 +65,24 @@ async function plans(tx:Tx,entityId:number,input:any){
  }
  return {data,out};
 }
+function planView(x:any){return {proposal_id:x.proposal_id,action:x.batchAppend&&x.action!=='repeat'?'append_batch':x.action,link_id:x.current?.id||null,base_link_revision_id:x.current?.working_revision_id||null,source_entity_id:x.sourceEntity?.id||null,source_title:x.source.source_title,url:x.url,before:x.current?extractText(x.current.body):'',after:x.p.rationale,quote:x.p.quote};}
+classification.post('/:id/check',async c=>{
+ const actor=permit(c.get('principal'),'edit'),id=Number(c.req.param('id')),input=await c.req.json();
+ if(!Number.isSafeInteger(id)||id<1)fail('Некорректный ID');
+ if(!Array.isArray(input.selections)||!input.selections.length||input.selections.length>200)fail('Выберите от 1 до 200 предложений');
+ return c.json(await transaction(actor.contributorId,async tx=>{
+  const [entity]=await tx<any>`select working_revision_id from app.entities where id=${id} and status<>'archived' for update`;
+  if(!entity)throw new ApiError('not_found','Сущность не найдена');
+  const context:any={entity},items=[];const seen=new Map<string,string>();
+  for(const choice of input.selections){try{const result=await plans(tx,id,{...input,base_revision_id:entity.working_revision_id,selections:[choice]},context);const x=result.out[0],signature=JSON.stringify([x.key,x.p.quote,x.p.rationale]);const item=planView(x);if(seen.has(signature)&&seen.get(signature)!==x.proposal_id)item.action='duplicate';else seen.set(signature,x.proposal_id);items.push(item);}catch(e){if(!(e instanceof ApiError)||e.status!==400)throw e;items.push({proposal_id:choice.id,action:'blocked',error:e.message});}}
+  return {items};
+ }));
+});
 classification.post('/:id/preview',async c=>{
  const actor=permit(c.get('principal'),'edit'),id=Number(c.req.param('id')),input=await c.req.json();
  if(!Number.isSafeInteger(id)||id<1)fail('Некорректный ID');
  const result=await transaction(actor.contributorId,tx=>plans(tx,id,input));
- return c.json({items:result.out.map(x=>({proposal_id:x.proposal_id,action:x.batchAppend&&x.action!=='repeat'?'append_batch':x.action,link_id:x.current?.id||null,base_link_revision_id:x.current?.working_revision_id||null,source_entity_id:x.sourceEntity?.id||null,source_title:x.source.source_title,url:x.url,before:x.current?extractText(x.current.body):'',after:x.p.rationale,quote:x.p.quote}))});
+ return c.json({items:result.out.map(planView)});
 });
 classification.post('/:id/accept',async c=>{
  const actor=permit(c.get('principal'),'create_delete'),id=Number(c.req.param('id')),input=await c.req.json();permit(actor,'edit');
@@ -79,11 +93,11 @@ classification.post('/:id/accept',async c=>{
   const {data,out}=await plans(tx,id,input);const applied=[];const sourceCache=new Map<string,any>();const linkCache=new Map<string,any>();
   for(const x of out){
    const expected=input.expected?.find((e:any)=>e.proposal_id===x.proposal_id);
-   if(!expected||String(expected.link_id||'')!==String(x.current?.id||'')||expected.base_link_revision_id!==(x.current?.working_revision_id||null)||String(expected.source_entity_id||'')!==String(x.sourceEntity?.id||''))throw new ApiError('version_conflict','Связи изменились после предпросмотра; проверьте изменения заново');
+   if(!expected||String(expected.link_id||'')!==String(x.current?.id||'')||expected.base_link_revision_id!==(x.current?.working_revision_id||null)||String(expected.source_entity_id||'')!==String(x.sourceEntity?.id||''))throw new ApiError('version_conflict','Эта связь изменилась другим редактором. Её статус обновлён.',{proposal_id:x.proposal_id});
    const prior=linkCache.get(x.key);if(prior){x.current=prior;x.action=sourceMarks(prior.body).some(m=>normalized(extractText([m.block]))===x.p.quote)&&prior.body.some((b:any)=>b.type==='paragraph'&&normalized(extractText([b]))===x.p.rationale)?'repeat':'append';}
    if(x.current)await tx`select id from app.links where id=${x.current.id} for update`;
    // Recheck under the lock: ordinary PATCH uses the same row lock.
-   if(x.current){const [v]=await tx<any>`select working_revision_id from app.links where id=${x.current.id}`;if(v.working_revision_id!==x.current.working_revision_id)throw new ApiError('version_conflict','Обоснование изменилось');}
+   if(x.current){const [v]=await tx<any>`select working_revision_id from app.links where id=${x.current.id}`;if(v.working_revision_id!==x.current.working_revision_id)throw new ApiError('version_conflict','Обоснование изменилось другим редактором',{proposal_id:x.proposal_id});}
    let source=x.sourceEntity||sourceCache.get(x.url);
    if(!source){const created=await createRecord(tx,{type:'web_page',title:x.source.source_title||x.url,contributorId:actor.contributorId});await setAnswers(tx,created.id,[{code:'url',text:x.url}]);const revision=await saveRevision(tx,created.id,actor.contributorId,'Источник принятой цитаты','create');source={id:created.id,working_revision_id:revision};sourceCache.set(x.url,source);}
    if(x.action==='repeat'){applied.push({proposal_id:x.proposal_id,link_id:Number(x.current.id),action:'repeat'});continue;}
