@@ -238,13 +238,11 @@ function EntitiesTab({ entityId, types, onInsertCard, onInsertMention, done, mar
                 <button type="button" className="ghost" onClick={() => { onInsertMention(entity); mark(key, "вставлена в строку"); }}>
                   В строку
                 </button>
-                {entityId && (linked.has(item.id)
-                  ? <span className="hint">связана</span>
-                  : (
+                {entityId && (
                     <button type="button" className="ghost" onClick={() => setLinking({ id: item.id, title: item.title_ru })}>
-                      Связать
+                      {linked.has(item.id) ? "Ещё обоснование" : "Связать"}
                     </button>
-                  ))}
+                  )}
               </div>
               {done[key] && <div className="save-mark ok">{done[key]}</div>}
             </EntityTile>

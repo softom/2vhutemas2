@@ -12,7 +12,7 @@ import { sql, transaction } from "../lib/db.ts";
 import { ApiError } from "../lib/errors.ts";
 import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import type { AppEnv } from "../lib/http.ts";
-import { extractText } from "./documents.ts";
+import { validateLinkBody, indexLinkBody, presentLinkBodies } from "../lib/linkCitations.ts";
 import { publishOwnerRevision, unpublishOwner } from "../lib/ownedVersions.ts";
 
 export const links = new Hono<AppEnv>();
@@ -28,7 +28,7 @@ interface LinkInput {
   justification: { title?: string; body?: unknown; text?: string };
 }
 
-function justificationBlocks(input: LinkInput): unknown[] {
+function justificationBlocks(input: Pick<LinkInput,"justification">): unknown[] {
   const body = input.justification?.body;
   if (Array.isArray(body) && body.length > 0) return body;
 
@@ -56,9 +56,10 @@ links.post("/", async (c: Context<AppEnv>) => {
   if (input.from_entity_id === input.to_entity_id) {
     throw new ApiError("validation_failed", "Нельзя связать сущность с самой собой");
   }
-  const blocks = justificationBlocks(input);
+  const rawBlocks = justificationBlocks(input);
 
   const result = await transaction(principal.contributorId, async (tx) => {
+    const blocks = await validateLinkBody(tx, rawBlocks, canSeeDrafts(principal));
     const existing = await tx<{ id: number }>`
       select id from app.entities where id in (${input.from_entity_id}, ${input.to_entity_id})
     `;
@@ -87,6 +88,7 @@ links.post("/", async (c: Context<AppEnv>) => {
               ${JSON.stringify({ body_json: blocks })}::jsonb) returning id
     `;
 
+    await indexLinkBody(tx, String(revisions[0].id), blocks);
     return { id: linkId, revision_id: revisions[0].id, material_id: materials[0].id };
   });
 
@@ -103,6 +105,7 @@ links.get("/", async (c: Context<AppEnv>) => {
 
   const rows = await sql<Record<string, unknown>>`
     select l.id, l.from_entity_id, l.to_entity_id, l.note, l.is_primary, l.confidence,
+           case when ${drafts} then l.working_revision_id else l.published_revision_id end as revision_id,
            (select code from app.link_roles lr where lr.id = l.role_id) as role,
            case when l.from_entity_id = ${entityId} then 'outgoing' else 'incoming' end as direction,
            other.id   as other_id,
@@ -123,12 +126,14 @@ links.get("/", async (c: Context<AppEnv>) => {
       -- Гость не видит черновиков — и связей с ними тоже: иначе название
       -- неопубликованной записи утекало через соседнюю карточку.
       and (${drafts} or other.is_published)
+      and exists(select 1 from app.read_entities(${drafts}) own where own.id=${entityId} and (${drafts} or own.is_published))
       -- Иллюстрации — тоже связи (Р-84), но у них своё место: галерея
       -- карточки. В окружении записи они только заслоняли бы отношения.
       and coalesce((select code from app.link_roles lr where lr.id = l.role_id), '') not in ('illustration', 'drawing')
     order by l.is_primary desc, l.sort_order, l.id
   `;
-  return c.json({ items: rows.map(row => ({...row, justification:extractText(row.justification_blocks)})) });
+  const bodies = await presentLinkBodies(rows.map(row => row.justification_blocks), drafts);
+  return c.json({ items: rows.map((row, i) => ({...row, justification_blocks:bodies[i].body, justification:bodies[i].justification, citations:bodies[i].citations})) });
 });
 
 /** Упоминания сущности в опубликованных материалах. */
@@ -154,6 +159,27 @@ links.get("/mentions", async (c: Context<AppEnv>) => {
  * Публикация связи вместе с её обоснованием: у обоснования нет собственной
  * публикации, оно часть редакции связи (Р-78).
  */
+links.patch("/:id", async (c: Context<AppEnv>) => {
+  const principal = requirePermission(c.get("principal"), "edit");
+  const id = Number(c.req.param("id"));
+  if (!Number.isSafeInteger(id) || id <= 0) throw new ApiError("validation_failed", "Неверный идентификатор связи");
+  const input = await c.req.json<Pick<LinkInput,"justification"> & {base_revision_id:string}>();
+  if (!input.base_revision_id) throw new ApiError("validation_failed", "Укажите base_revision_id");
+  return c.json(await transaction(principal.contributorId, async tx => {
+    const rows = await tx`select l.working_revision_id,l.status,m.id as material_id
+      from app.links l join app.materials m on m.link_id=l.id where l.id=${id} for update of l,m`;
+    if (!rows.length) throw new ApiError("not_found", "Связь не найдена");
+    const current=rows[0];
+    if (current.status==='archived') throw new ApiError("validation_failed", "Связь находится в корзине");
+    if(current.working_revision_id!==input.base_revision_id)throw new ApiError("version_conflict", "Обоснование изменено другим редактором", {latest_revision_id:current.working_revision_id});
+    const blocks=await validateLinkBody(tx,justificationBlocks(input),canSeeDrafts(principal));
+    const revisions=await tx`insert into app.revisions(material_id,base_revision_id,edited_by,operation,summary,snapshot)
+      values(${current.material_id},${current.working_revision_id},${principal.contributorId},'edit','Правка обоснования связи',${JSON.stringify({body_json:blocks})}::jsonb) returning id`;
+    await indexLinkBody(tx,String(revisions[0].id),blocks);
+    return {id,material_id:current.material_id,revision_id:revisions[0].id};
+  }));
+});
+
 links.post("/:id/publish", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "publish");
   const id = Number(c.req.param("id"));

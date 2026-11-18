@@ -10,6 +10,7 @@ import { sql } from "./db.ts";
 import { canSeeDrafts, type Principal } from "./auth.ts";
 import { extractRefs, extractText } from "../routes/documents.ts";
 import type { CompactItem, RefTarget } from "./blocksHtml.ts";
+import {presentLinkBodies, type LinkCitation} from "./linkCitations.ts";
 
 export interface Resolved {
   id: number;
@@ -120,6 +121,7 @@ export interface PublicCard {
     role_title: string | null;
     direction: "incoming" | "outgoing";
     justification: string | null;
+    citations: LinkCitation[];
   }[];
   /** Связи соседей между собой и с остальными записями — для графа (Р-112). */
   neighbor_links: { a_slug: string; a_title: string; b_slug: string; b_title: string }[];
@@ -249,7 +251,8 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
      order by l.is_primary desc, l.sort_order, l.id
   `;
 
-  const links = linkRows.map(row => ({...row, justification:extractText(row.justification_blocks)}));
+  const linkBodies = await presentLinkBodies(linkRows.map(row => row.justification_blocks), drafts);
+  const links = linkRows.map(({justification_blocks: _body,...row},i) => ({...row, justification:linkBodies[i].justification,citations:linkBodies[i].citations}));
 
   // Связи соседей: по паре записей одна черта; связи самой записи не повторяем.
   const neighborIds = [...new Set(links.map(l => l.other_id))];

@@ -834,7 +834,7 @@ export const api = {
   links: (entityId: number) =>
     request<{ items: Record<string, unknown>[] }>(`/links?entity_id=${entityId}`),
   createLink: (body: unknown) =>
-    request<{ id: number; document_id: number }>("/links", {
+    request<{ id: number; revision_id: string; material_id: string }>("/links", {
       method: "POST",
       body: JSON.stringify(body),
     }),

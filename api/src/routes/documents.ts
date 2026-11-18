@@ -241,6 +241,17 @@ documents.get("/:id", async (c: Context<AppEnv>) => {
       : await sql`select app.public_body(r.snapshot) as body_json,l.status as material_status,r.id as latest_revision_id
           from app.links l join app.revisions r on r.id=case when ${drafts} then l.working_revision_id else l.published_revision_id end where l.id=${owner.link_id}`;
     if (!content.length) throw new ApiError("not_found","Текст не найден");
+    if (owner.link_id) {
+      // Старый адрес документа не должен обходить доступ к цитатам связи.
+      const visible=await sql`select l.id from app.read_links(${drafts}) l
+        join app.read_entities(${drafts}) a on a.id=l.from_entity_id
+        join app.read_entities(${drafts}) b on b.id=l.to_entity_id
+        where l.id=${owner.link_id} and (${drafts} or (a.is_published and b.is_published))`;
+      if(!visible.length)throw new ApiError("not_found","Текст не найден");
+      const {presentLinkBodies}=await import("../lib/linkCitations.ts");
+      const [shown]=await presentLinkBodies([content[0].body_json],drafts);
+      content[0].body_json=shown.body;
+    }
     return c.json({id,...content[0],...owner});
   }
   const rows = await sql<Record<string, unknown>>`

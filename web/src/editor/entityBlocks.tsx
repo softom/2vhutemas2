@@ -254,6 +254,8 @@ export const SourceRef = createInlineContentSpec(
       occurrenceId: { default: "" },
       title: { default: "" },
       note: { default: "" },
+      accessedAt: { default: "" },
+      sourceRevisionId: { default: "" },
     },
     content: "none",
   },
