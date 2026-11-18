@@ -1,3 +1,8 @@
 .classification-proposals .research-proposal label { display: block; margin-bottom: 12px; }
 .classification-proposals input[type="checkbox"] { margin-right: 8px; }
 .classification-proposals blockquote { margin: 12px 0; padding-left: 14px; border-left: 2px solid var(--line, #d8cab1); }
+
+.classification-proposals .research-proposal > input[type="checkbox"] { appearance:auto; width:18px; height:18px; min-width:18px; max-width:18px; flex:0 0 18px; margin:3px 0 0; padding:0; align-self:flex-start; }
+.classification-proposals .research-proposal > div { flex:1; min-width:0; overflow-wrap:anywhere; }
+.classification-proposals .classification-title { margin-top:0; }
+.classification-selection { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:16px 0; }

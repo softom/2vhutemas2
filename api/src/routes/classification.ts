@@ -59,8 +59,8 @@ async function plans(tx:Tx,entityId:number,input:any){
   if(matching.length>1)fail('Есть несколько связей этого источника и контекста; требуется ручное сопоставление');
   const current=matching[0];
   const repeated=current&&sourceMarks(current.body).some(m=>normalized(extractText([m.block]))===p.quote)&&current.body.some((b:any)=>b.type==='paragraph'&&normalized(extractText([b]))===p.rationale);
-  const key=JSON.stringify([p.concept_id,url,p.relation,p.phase,p.zone]);if(seen.has(key))fail('Выбраны несколько предложений одного контекста. Принимайте их последовательно');seen.add(key);
-  out.push({proposal_id:raw.id,p,source,url,sourceEntity,current,action:repeated?'repeat':current?'append':'create'});
+  const key=JSON.stringify([p.concept_id,url,p.relation,p.phase,p.zone]);const batchAppend=seen.has(key);seen.add(key);
+  out.push({batchAppend,key,proposal_id:raw.id,p,source,url,sourceEntity,current,action:repeated?'repeat':current?'append':'create'});
  }
  return {data,out};
 }
@@ -68,7 +68,7 @@ classification.post('/:id/preview',async c=>{
  const actor=permit(c.get('principal'),'edit'),id=Number(c.req.param('id')),input=await c.req.json();
  if(!Number.isSafeInteger(id)||id<1)fail('Некорректный ID');
  const result=await transaction(actor.contributorId,tx=>plans(tx,id,input));
- return c.json({items:result.out.map(x=>({proposal_id:x.proposal_id,action:x.action,link_id:x.current?.id||null,base_link_revision_id:x.current?.working_revision_id||null,source_entity_id:x.sourceEntity?.id||null,source_title:x.source.source_title,url:x.url,before:x.current?extractText(x.current.body):'',after:x.p.rationale,quote:x.p.quote}))});
+ return c.json({items:result.out.map(x=>({proposal_id:x.proposal_id,action:x.batchAppend&&x.action!=='repeat'?'append_batch':x.action,link_id:x.current?.id||null,base_link_revision_id:x.current?.working_revision_id||null,source_entity_id:x.sourceEntity?.id||null,source_title:x.source.source_title,url:x.url,before:x.current?extractText(x.current.body):'',after:x.p.rationale,quote:x.p.quote}))});
 });
 classification.post('/:id/accept',async c=>{
  const actor=permit(c.get('principal'),'create_delete'),id=Number(c.req.param('id')),input=await c.req.json();permit(actor,'edit');
@@ -76,10 +76,11 @@ classification.post('/:id/accept',async c=>{
  return c.json(await transaction(actor.contributorId,async tx=>{
   // Serialize URL resolution and attribution creation, including across objects.
   await tx`select pg_advisory_xact_lock(20620002)`;
-  const {data,out}=await plans(tx,id,input);const applied=[];const sourceCache=new Map<string,any>();
+  const {data,out}=await plans(tx,id,input);const applied=[];const sourceCache=new Map<string,any>();const linkCache=new Map<string,any>();
   for(const x of out){
    const expected=input.expected?.find((e:any)=>e.proposal_id===x.proposal_id);
    if(!expected||String(expected.link_id||'')!==String(x.current?.id||'')||expected.base_link_revision_id!==(x.current?.working_revision_id||null)||String(expected.source_entity_id||'')!==String(x.sourceEntity?.id||''))throw new ApiError('version_conflict','Связи изменились после предпросмотра; проверьте изменения заново');
+   const prior=linkCache.get(x.key);if(prior){x.current=prior;x.action=sourceMarks(prior.body).some(m=>normalized(extractText([m.block]))===x.p.quote)&&prior.body.some((b:any)=>b.type==='paragraph'&&normalized(extractText([b]))===x.p.rationale)?'repeat':'append';}
    if(x.current)await tx`select id from app.links where id=${x.current.id} for update`;
    // Recheck under the lock: ordinary PATCH uses the same row lock.
    if(x.current){const [v]=await tx<any>`select working_revision_id from app.links where id=${x.current.id}`;if(v.working_revision_id!==x.current.working_revision_id)throw new ApiError('version_conflict','Обоснование изменилось');}
@@ -92,6 +93,7 @@ classification.post('/:id/accept',async c=>{
    if(!linkId)linkId=await createLink(tx,{from:id,to:x.p.concept_id,role:x.p.relation,justification:x.p.rationale,contributorId:actor.contributorId});
    const [revision]=await tx<any>`insert into app.revisions(material_id,base_revision_id,edited_by,operation,summary,snapshot) select m.id,l.working_revision_id,${actor.contributorId},'edit','Принята атрибуция из исследования',${JSON.stringify({body_json:blocks})}::jsonb from app.links l join app.materials m on m.link_id=l.id where l.id=${linkId} returning id`;
    await indexLinkBody(tx,revision.id,blocks);
+   linkCache.set(x.key,{id:linkId,working_revision_id:revision.id,body:blocks});
    applied.push({proposal_id:x.proposal_id,link_id:Number(linkId),revision_id:revision.id,action:x.action});
   }
   data.state.accepted_attributions=[...(data.state.accepted_attributions||[]),...applied.map(x=>({...x,at:new Date().toISOString(),actor_id:actor.contributorId}))];

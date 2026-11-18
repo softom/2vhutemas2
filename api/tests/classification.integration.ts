@@ -70,7 +70,7 @@ base=await transaction(actor.id,tx=>saveResearch(tx,obj.id,actor.id,data));
 await req('/classification/'+obj.id+'/preview','POST',{...payload(),selections:[selections[0]]},false,400);
 // Exercise the real analysis request builder/validator with a local response; no paid request.
 const originalFetch=globalThis.fetch;let prompt:any;
-globalThis.fetch=async(_url:any,init:any)=>{prompt=JSON.parse(init.body);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({proposals:[raw,{...raw,quote:'Invented unsupported quotation.'}]})}}]}),{status:200});};
+globalThis.fetch=async(_url:any,init:any)=>{prompt=JSON.parse(init.body);return new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({proposals:[{...raw,fragment_id:JSON.parse(prompt.messages[1].content).sources[0].fragment_id},{...raw,fragment_id:-1}]})}}]}),{status:200});};
 const analysis=await analyzeSet('Fixture',await researchSet(set.id),[source],{contributorId:actor.id,visitorKey:null,requestId:crypto.randomUUID()});globalThis.fetch=originalFetch;
 ok(analysis.mode==='attributions'&&analysis.proposals.length===1&&analysis.rejected===1,'Real analysis schema and quote validator');ok(prompt.response_format.json_schema.name==='classification_attributions'&&JSON.parse(prompt.messages[1].content).catalog.some((c:any)=>c.title_en),'Multilingual catalog reaches model');
 ok(JSON.stringify(await sql`select id,snapshot from app.revisions where id=any(${old.map((r:any)=>r.id)}::uuid[]) order by id`)===baseline,'All pre-existing snapshots preserved');

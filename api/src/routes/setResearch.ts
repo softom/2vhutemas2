@@ -1,3 +1,4 @@
+import {analysisPlan} from '../lib/researchBudget.ts';
 import {Hono} from 'hono';
 import type {AppEnv} from '../lib/http.ts';
 import {log} from '../lib/http.ts';
@@ -33,6 +34,7 @@ setResearch.get('/:id',async c=>{
  if(data.state.status==='running'&&!active.has(id))data.state={...data.state,status:'error',error:'Задание прервано перезапуском сервиса. Повторите запуск.'};
  return c.json({...data,revision:chain.safe?e.working_revision_id:null});
 });
+setResearch.get('/:id/plan',async c=>{const data=await researchData(sql,entityId(c.req.param('id'))),set=await researchSet(String(c.req.query('set_id')));const [e]=await sql<any>`select title_ru,title_en,title_original from app.entities where id=${entityId(c.req.param('id'))}`;return c.json(analysisPlan(data.sources,set,[e?.title_ru,e?.title_en,e?.title_original]).summary);});
 setResearch.post('/:id/:action',async c=>{
  const actor=permit(c.get('principal'),'edit'),caller=await callerOf(c),id=entityId(c.req.param('id')),action=c.req.param('action');
  if(!['collect','analyze'].includes(action))throw new ApiError('not_found','Действие не найдено');
@@ -55,7 +57,7 @@ setResearch.post('/:id/:action',async c=>{
    active.set(id,value);
    addLog(id,caller.requestId,value.phase+(value.total!=null?`: ${value.done} из ${value.total}`:'')+(value.accepted!=null?`; принято ${value.accepted}, отклонено ${value.rejected||0}`:''));
   };
-  try{result=action==='collect'?await gather(prepared.identity,set,prepared.sources,caller,progress):await analyzeSet(prepared.title,set,prepared.sources,caller,progress);}
+  try{result=action==='collect'?await gather(prepared.identity,set,prepared.sources,caller,progress):await analyzeSet(prepared.title,set,prepared.sources,caller,progress,[prepared.identity.title_ru,prepared.identity.title_en,prepared.identity.title_original]);}
   catch(e){result={error:String(e).slice(0,500)};log('error',caller.requestId,'Исследование набора не завершено',{entity_id:id,error:String(e)});}
   for(const warning of result.warnings||[])addLog(id,caller.requestId,warning,'warning');
   addLog(id,caller.requestId,result.error?'Задание завершилось ошибкой: '+result.error:action==='analyze'?`Анализ завершён: получено ${result.received||0}, принято ${result.proposals?.length||0}, отклонено ${result.rejected||0}, ошибок частей ${result.failed_parts||0}`:`Сбор завершён: источников ${result.sources?.length||0}, полученных текстов ${result.sources?.filter((s:any)=>s.source_text).length||0}`,result.error?'error':'info');
