@@ -1,0 +1,101 @@
+import {isExcludedResearchRow} from '../lib/researchSourcePolicy.ts';
+import {Hono} from 'hono';
+import {sql,transaction,type Tx} from '../lib/db.ts';
+import {require as permit,canSeeDrafts} from '../lib/auth.ts';
+import type {AppEnv} from '../lib/http.ts';
+import {ApiError} from '../lib/errors.ts';
+import {AXES,RELATIONS,classificationCatalog,attributionProposal,normalized} from '../lib/classification.ts';
+import {researchData,saveResearch,publicSourceUrl} from '../lib/setResearch.ts';
+import {createRecord,setAnswers,saveRevision,createLink} from '../lib/records.ts';
+import {validateLinkBody,indexLinkBody,sourceMarks} from '../lib/linkCitations.ts';
+import {extractText} from './documents.ts';
+import {CLASSIFICATION_SEEDS} from '../lib/classificationSeeds.ts';
+export const classification=new Hono<AppEnv>();
+const fail=(s:string):never=>{throw new ApiError('validation_failed',s);};
+function checked<T>(fn:()=>T):T{try{return fn();}catch(e){throw new ApiError('validation_failed',(e as Error).message);}}
+function address(raw:string){const u=new URL(publicSourceUrl(raw));u.hash='';return u.href.replace(/\/$/,'');}
+classification.get('/library',async c=>c.json({axes:AXES,relations:RELATIONS,items:await classificationCatalog(sql,canSeeDrafts(c.get('principal')))}));
+classification.post('/initialize',async c=>{
+ const actor=permit(c.get('principal'),'su');
+ const result=await transaction(actor.contributorId,async tx=>{
+  await tx`select pg_advisory_xact_lock(20620001)`;
+  const items=[];
+  for(const s of CLASSIFICATION_SEEDS){
+   const [existing]=await tx<any>`select e.id,t.code as axis from app.entities e join app.entity_types t on t.id=e.type_id where ((${s.slug}='modernizm' and e.id=1769) or (${s.slug}<>'modernizm' and e.slug=${s.slug}))`;
+   if(existing&&existing.axis!==s.axis)fail('Стартовое понятие найдено в другой оси; нужна ручная проверка');
+   if(existing){items.push({id:Number(existing.id),created:false});continue;}
+   const record=await createRecord(tx,{type:s.axis,title:s.ru,slugBase:s.slug,contributorId:actor.contributorId});
+   await tx`update app.entities set title_en=${s.en} where id=${record.id}`;
+   await setAnswers(tx,record.id,[{code:'concept_definition',text:s.definition}]);
+   await saveRevision(tx,record.id,actor.contributorId,'Стартовый каталог: определение требует редакторской проверки','create');
+   items.push({id:record.id,created:true});
+  }
+  return items;
+ });return c.json({items:result});
+});
+async function plans(tx:Tx,entityId:number,input:any){
+ const [entity]=await tx<any>`select working_revision_id from app.entities where id=${entityId} and status<>'archived' for update`;
+ if(!entity)throw new ApiError('not_found','Сущность не найдена');
+ if(entity.working_revision_id!==input.base_revision_id)throw new ApiError('version_conflict','Карточка изменилась; сохраните/перечитайте её');
+ const data=await researchData(tx,entityId),result=data.state.results?.[input.set_id];
+ if(!result||result.mode!=='attributions')fail('Нужно новое исследование классификации по ID');
+ if(!Array.isArray(input.selections)||!input.selections.length||input.selections.length>100)fail('Выберите от 1 до 100 предложений');
+ if(data.state.status==='running')fail('Дождитесь окончания исследования');
+ const catalog=await classificationCatalog(tx,true),out:any[]=[];const seen=new Set<string>();
+ for(const choice of input.selections){
+  const raw=result.proposals.find((p:any)=>p.id===choice.id);if(!raw)fail('Предложение отсутствует в сохранённом результате');
+  if(raw.concept_id&&choice.concept_id&&Number(choice.concept_id)!==Number(raw.concept_id))fail('Нельзя подменить установленное понятие');
+  const p=checked(()=>attributionProposal({...raw,concept_id:raw.concept_id||choice.concept_id||null},catalog,data.sources.filter((s:any)=>!isExcludedResearchRow(s))));
+  if(!p.concept_id)fail('Сначала сопоставьте кандидата с понятием библиотеки');
+  if(p.evidence!=='page')fail('Нельзя принять цитату только из поисковой выдержки. Нужен сохранённый текст страницы');
+  const source=data.sources.find((s:any)=>s.source_uid===p.source_id);
+  const url=checked(()=>address(source.source_url));
+  const candidates=await tx<any>`select distinct e.id,e.title_ru,e.working_revision_id,v.text_value from app.entities e join app.entity_types t on t.id=e.type_id join app.indicators i on i.entity_id=e.id join app.indicator_values v on v.indicator_id=i.id join app.parameters q on q.id=v.parameter_id where e.status<>'archived' and t.code in('book','article','web_page') and q.code='url'`;
+  const matches=candidates.filter(s=>{try{return address(s.text_value)===url;}catch{return false;}});
+  if(matches.length>1)fail('Для URL найдено несколько сущностей источника; устраните неоднозначность');
+  const sourceEntity=matches[0];
+  const links=sourceEntity?await tx<any>`select l.id,l.working_revision_id,m.id as material_id,r.snapshot->'body_json' as body from app.links l join app.materials m on m.link_id=l.id join app.revisions r on r.id=l.working_revision_id join app.link_roles role on role.id=l.role_id where l.from_entity_id=${entityId} and l.to_entity_id=${p.concept_id} and role.code=${p.relation} and l.status<>'archived' order by l.id`:[];
+  const matching=links.filter(l=>sourceMarks(l.body).some(m=>Number(m.props.entityId)===Number(sourceEntity.id)&&normalized(m.props.phase)===p.phase&&normalized(m.props.zone)===p.zone));
+  if(matching.length>1)fail('Есть несколько связей этого источника и контекста; требуется ручное сопоставление');
+  const current=matching[0];
+  const repeated=current&&sourceMarks(current.body).some(m=>normalized(extractText([m.block]))===p.quote)&&current.body.some((b:any)=>b.type==='paragraph'&&normalized(extractText([b]))===p.rationale);
+  const key=JSON.stringify([p.concept_id,url,p.relation,p.phase,p.zone]);if(seen.has(key))fail('Выбраны несколько предложений одного контекста. Принимайте их последовательно');seen.add(key);
+  out.push({proposal_id:raw.id,p,source,url,sourceEntity,current,action:repeated?'repeat':current?'append':'create'});
+ }
+ return {data,out};
+}
+classification.post('/:id/preview',async c=>{
+ const actor=permit(c.get('principal'),'edit'),id=Number(c.req.param('id')),input=await c.req.json();
+ if(!Number.isSafeInteger(id)||id<1)fail('Некорректный ID');
+ const result=await transaction(actor.contributorId,tx=>plans(tx,id,input));
+ return c.json({items:result.out.map(x=>({proposal_id:x.proposal_id,action:x.action,link_id:x.current?.id||null,base_link_revision_id:x.current?.working_revision_id||null,source_entity_id:x.sourceEntity?.id||null,source_title:x.source.source_title,url:x.url,before:x.current?extractText(x.current.body):'',after:x.p.rationale,quote:x.p.quote}))});
+});
+classification.post('/:id/accept',async c=>{
+ const actor=permit(c.get('principal'),'create_delete'),id=Number(c.req.param('id')),input=await c.req.json();permit(actor,'edit');
+ if(!Number.isSafeInteger(id)||id<1)fail('Некорректный ID');
+ return c.json(await transaction(actor.contributorId,async tx=>{
+  // Serialize URL resolution and attribution creation, including across objects.
+  await tx`select pg_advisory_xact_lock(20620002)`;
+  const {data,out}=await plans(tx,id,input);const applied=[];const sourceCache=new Map<string,any>();
+  for(const x of out){
+   const expected=input.expected?.find((e:any)=>e.proposal_id===x.proposal_id);
+   if(!expected||String(expected.link_id||'')!==String(x.current?.id||'')||expected.base_link_revision_id!==(x.current?.working_revision_id||null)||String(expected.source_entity_id||'')!==String(x.sourceEntity?.id||''))throw new ApiError('version_conflict','Связи изменились после предпросмотра; проверьте изменения заново');
+   if(x.current)await tx`select id from app.links where id=${x.current.id} for update`;
+   // Recheck under the lock: ordinary PATCH uses the same row lock.
+   if(x.current){const [v]=await tx<any>`select working_revision_id from app.links where id=${x.current.id}`;if(v.working_revision_id!==x.current.working_revision_id)throw new ApiError('version_conflict','Обоснование изменилось');}
+   let source=x.sourceEntity||sourceCache.get(x.url);
+   if(!source){const created=await createRecord(tx,{type:'web_page',title:x.source.source_title||x.url,contributorId:actor.contributorId});await setAnswers(tx,created.id,[{code:'url',text:x.url}]);const revision=await saveRevision(tx,created.id,actor.contributorId,'Источник принятой цитаты','create');source={id:created.id,working_revision_id:revision};sourceCache.set(x.url,source);}
+   if(x.action==='repeat'){applied.push({proposal_id:x.proposal_id,link_id:Number(x.current.id),action:'repeat'});continue;}
+   const addition=[{id:crypto.randomUUID(),type:'paragraph',content:[{type:'text',text:x.p.rationale,styles:{}}]},{id:crypto.randomUUID(),type:'quote',content:[{type:'text',text:x.p.quote,styles:{}},{type:'sourceRef',props:{entityId:String(source.id),sourceRevisionId:String(source.working_revision_id),occurrenceId:crypto.randomUUID(),note:x.p.locator,accessedAt:(x.source.source_fetched||'').slice(0,10),phase:x.p.phase,zone:x.p.zone,evidenceRevisionId:input.base_revision_id}}]}];
+   const blocks=await validateLinkBody(tx,[...(x.current?.body||[]),...addition],true);
+   let linkId=x.current?.id;
+   if(!linkId)linkId=await createLink(tx,{from:id,to:x.p.concept_id,role:x.p.relation,justification:x.p.rationale,contributorId:actor.contributorId});
+   const [revision]=await tx<any>`insert into app.revisions(material_id,base_revision_id,edited_by,operation,summary,snapshot) select m.id,l.working_revision_id,${actor.contributorId},'edit','Принята атрибуция из исследования',${JSON.stringify({body_json:blocks})}::jsonb from app.links l join app.materials m on m.link_id=l.id where l.id=${linkId} returning id`;
+   await indexLinkBody(tx,revision.id,blocks);
+   applied.push({proposal_id:x.proposal_id,link_id:Number(linkId),revision_id:revision.id,action:x.action});
+  }
+  data.state.accepted_attributions=[...(data.state.accepted_attributions||[]),...applied.map(x=>({...x,at:new Date().toISOString(),actor_id:actor.contributorId}))];
+  const revision=await saveResearch(tx,id,actor.contributorId,data);
+  return {items:applied,revision};
+ }));
+});

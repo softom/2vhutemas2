@@ -1,3 +1,4 @@
+import {classificationCatalog} from './classification.ts';
 import { isOwnResearchSource } from './researchSourcePolicy.ts';
 import { config } from './config.ts';
 import { sql } from './db.ts';
@@ -16,7 +17,7 @@ async function bounded(response:Response,max=2000000):Promise<string>{
 }
 const plain=(s:string)=>s.replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&(?:nbsp|lt|gt);/g,' ').replace(/\s+/g,' ').trim();
 const source=(url:string,title:string,excerpt:string,provider:string,evidence:'snippet'|'provided'='snippet'):ResearchSource=>({id:crypto.randomUUID(),url:researchUrl(url),title:plain(title).slice(0,500),excerpt:plain(excerpt).slice(0,5000),provider,evidence});
-export async function researchCatalog(){return await sql<{id:number;title_ru:string}>`select id,title_ru from app.entities where type_id in(select app.entity_type_subtree('art_styles') union select app.entity_type_subtree('art_epochs')) and status='published' order by id limit 400`;}
+export async function researchCatalog(){return await classificationCatalog(sql,false);}
 export async function collectResearch(d:any,caller:Caller,topic='архитектура стиль конструкция'){
  const sources:ResearchSource[]=[],warnings:string[]=[];
  for(const s of [...(d.sketch.sources||[]),...(d.sources||[])])if(s.url){try{sources.push(source(s.url,s.title||s.url,s.description||'','dossier','provided'));}catch{warnings.push('Пропущена некорректная ссылка досье');}}

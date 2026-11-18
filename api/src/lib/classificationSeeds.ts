@@ -1,0 +1,23 @@
+/** Editorial seed definitions. Drafts only: not assertions about any building. */
+export const CLASSIFICATION_SEEDS=[
+ ['art_epochs','modernizm','Модернизм','Modernism','Широкая архитектурная парадигма; не синоним отдельного направления или конструктивного метода.'],
+ ['art_epochs','classification-postmodernism','Постмодернизм','Postmodernism','Парадигма обращения к множественности архитектурных языков и переосмыслению исторических форм. Требует уточнения границ редактором.'],
+ ['form_method','classification-tectonic','Тектонический / инженерный метод','Tectonic / engineering method','Форма рассматривается через определяющую роль конструкции и передачи усилий.'],
+ ['form_method','classification-functional','Функционально-планировочный метод','Functional planning method','Форма рассматривается через функцию, организацию плана и пространственных связей.'],
+ ['form_method','classification-plastic','Пластический / скульптурный метод','Plastic / sculptural method','Форма рассматривается через выразительность массы, объёма и пластики.'],
+ ['form_method','classification-symbolic','Знаковый / декоративно-исторический метод','Symbolic / historical decorative method','Форма рассматривается через знаки, декор и интерпретацию исторических мотивов.'],
+ ['art_styles','classification-art-nouveau','Модерн','Art Nouveau','Направление архитектуры и искусства; не смешивать с модернизмом. Региональные обозначения проверять отдельно.'],
+ ['art_styles','classification-functionalism','Функционализм','Functionalism','Архитектурное направление; принадлежность к нему не следует автоматически из функциональной организации здания.'],
+ ['art_styles','classification-bauhaus','Баухаус','Bauhaus','Школа и связанная с ней традиция; институциональную принадлежность отличать от стилистического сходства.'],
+ ['art_styles','classification-constructivism','Конструктивизм','Constructivism','Архитектурное направление; не синоним любого инженерного формообразования.'],
+ ['art_styles','classification-art-deco','Ар-деко','Art Deco','Направление декоративного и архитектурного формообразования; поздние цитаты отличать от принадлежности направлению.'],
+ ['art_styles','classification-international-style','Интернациональный стиль','International Style','Направление внутри архитектуры модернизма; не тождественно всей парадигме модернизма.'],
+ ['art_styles','classification-brutalism','Брутализм','Brutalism','Архитектурное направление; наличие открытого бетона само по себе недостаточно для атрибуции.'],
+ ['art_styles','classification-high-tech','Хай-тек','High-tech architecture','Архитектурное направление, связанное с выражением технологических и конструктивных элементов.'],
+ ['art_styles','classification-deconstructivism','Деконструктивизм','Deconstructivism','Архитектурное направление; сложная геометрия сама по себе не доказывает принадлежность.'],
+ ['art_styles','classification-parametricism','Параметрицизм','Parametricism','Направление архитектурного формообразования; отличать от применения параметрического инструмента проектирования.'],
+ ['morphological_trait','classification-suspended-floors','Подвесные перекрытия','Suspended floors','Перекрытия, передающие нагрузку через подвесные элементы к вышележащей несущей конструкции. Проверять по конструктивным источникам.'],
+ ['morphological_trait','classification-concrete-core','Железобетонное ядро','Reinforced concrete core','Пространственно выделенное железобетонное ядро; назначение и несущую работу уточнять по источнику.'],
+ ['morphological_trait','classification-exposed-concrete','Открытый бетон','Exposed concrete','Бетонная поверхность остаётся видимой в рассматриваемой зоне объекта. Не является самостоятельной стилевой атрибуцией.'],
+ ['morphological_trait','classification-ribbon-windows','Ленточное остекление','Ribbon windows','Протяжённая горизонтальная полоса остекления в рассматриваемой части фасада.'],
+].map(([axis,slug,ru,en,definition])=>({axis,slug,ru,en,definition}));

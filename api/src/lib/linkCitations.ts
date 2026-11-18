@@ -33,7 +33,7 @@ export async function validateLinkBody(db:Query,body:unknown,drafts:boolean){
  return blocks;
 }
 
-export type LinkCitation={source_entity_id:number;source_title:string;source_slug:string;quote:string;locator:string;accessed_at:string|null;source_revision_id:string|null};
+export type LinkCitation={source_entity_id:number;source_title:string;source_slug:string;quote:string;locator:string;accessed_at:string|null;source_revision_id:string|null;phase?:string;zone?:string};
 
 /** One existing revision index for entity texts and link justifications. */
 export async function indexLinkBody(db:Query,revision:string,body:unknown){
@@ -52,7 +52,7 @@ export async function presentLinkBodies(bodies:unknown[],drafts:boolean){
    return {...b,...(b.children?{children:clean(b.children)}:{})};
   }):[];
   const safe=clean(body);
-  const citations=sourceMarks(safe).map(({block,props})=>{const s=byId.get(Number(props.entityId))!;return {source_entity_id:Number(s.id),source_title:s.title_ru,source_slug:s.slug,quote:block.type==='quote'?extractText([block]):'',locator:String(props.note||''),accessed_at:props.accessedAt||null,source_revision_id:props.sourceRevisionId||null};});
+  const citations=sourceMarks(safe).map(({block,props})=>{const s=byId.get(Number(props.entityId))!;return {source_entity_id:Number(s.id),source_title:s.title_ru,source_slug:s.slug,quote:block.type==='quote'?extractText([block]):'',locator:String(props.note||''),accessed_at:props.accessedAt||null,source_revision_id:props.sourceRevisionId||null,phase:String(props.phase||''),zone:String(props.zone||'')};});
   return {body:safe,citations,justification:extractText(safe.filter(b=>!(b.type==='quote'&&sourceMarks([b]).length)))};
  });
 }

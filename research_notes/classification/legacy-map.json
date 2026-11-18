@@ -1,0 +1,149 @@
+{
+  "applied": false,
+  "note": "Карта кандидатов, не автоматический перенос или объявление синонимов. Старые справочники сохранены.",
+  "items": [
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 1,
+      "legacy_title": "Модерн",
+      "candidate_entity_ids": [
+        3348
+      ],
+      "status": "requires_editor_review",
+      "note": "Проверить региональные названия; не смешивать с модернизмом"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 2,
+      "legacy_title": "Ранний функционализм",
+      "candidate_entity_ids": [
+        3349
+      ],
+      "status": "requires_editor_review",
+      "note": "Уточнить границу раннего течения относительно общего функционализма"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 3,
+      "legacy_title": "Антиорнамент / рационализм (Лоос)",
+      "candidate_entity_ids": [],
+      "status": "requires_editor_review",
+      "note": "Смешаны позиция по орнаменту, направление и авторская атрибуция; требуется разделение"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 4,
+      "legacy_title": "Баухаус",
+      "candidate_entity_ids": [
+        3350
+      ],
+      "status": "requires_editor_review",
+      "note": "Различить институцию, школу и стилистическую атрибуцию"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 5,
+      "legacy_title": "Конструктивизм (СССР)",
+      "candidate_entity_ids": [
+        3351
+      ],
+      "status": "requires_editor_review",
+      "note": "Проверить региональную конкретизацию"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 6,
+      "legacy_title": "Ар-деко",
+      "candidate_entity_ids": [
+        3352
+      ],
+      "status": "requires_editor_review",
+      "note": "Кандидат на сопоставление"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 7,
+      "legacy_title": "Интернациональный стиль / модернизм (канон)",
+      "candidate_entity_ids": [
+        3353,
+        1769
+      ],
+      "status": "requires_editor_review",
+      "note": "Разделить направление и парадигму; не считать синонимами"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 8,
+      "legacy_title": "Брутализм",
+      "candidate_entity_ids": [
+        3354
+      ],
+      "status": "requires_editor_review",
+      "note": "Проверить отдельное значение New Brutalism в английском имени"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 9,
+      "legacy_title": "Хай-тек",
+      "candidate_entity_ids": [
+        3355
+      ],
+      "status": "requires_editor_review",
+      "note": "Кандидат на сопоставление"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 10,
+      "legacy_title": "Постмодернизм (архитектура)",
+      "candidate_entity_ids": [
+        3343
+      ],
+      "status": "requires_editor_review",
+      "note": "На уровне парадигмы; не переносить автоматически как узкое течение"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 11,
+      "legacy_title": "Деконструктивизм",
+      "candidate_entity_ids": [
+        3356
+      ],
+      "status": "requires_editor_review",
+      "note": "Кандидат на сопоставление"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 12,
+      "legacy_title": "Неомодернизм / минимализм",
+      "candidate_entity_ids": [],
+      "status": "requires_editor_review",
+      "note": "Два разных понятия; не заводить общий синоним"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 13,
+      "legacy_title": "Параметрицизм",
+      "candidate_entity_ids": [
+        3357
+      ],
+      "status": "requires_editor_review",
+      "note": "Не смешивать с параметрическими инструментами"
+    },
+    {
+      "legacy_table": "public.styles",
+      "legacy_id": 14,
+      "legacy_title": "Пост-постмодерн / нео-постмодерн (поле)",
+      "candidate_entity_ids": [],
+      "status": "requires_editor_review",
+      "note": "Неоднозначное поле терминов; нужна редакторская спецификация"
+    },
+    {
+      "legacy_table": "public.features",
+      "legacy_id": 1,
+      "legacy_title": "Параметрические элементы",
+      "candidate_entity_ids": [],
+      "status": "requires_editor_review",
+      "note": "Общее название не определяет атомарный признак; требуется конкретизация"
+    }
+  ]
+}

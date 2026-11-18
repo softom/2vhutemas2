@@ -998,7 +998,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         `<li><a href="${e(entityPath(l.other_slug))}">${e(l.other_title)}</a>` +
         (l.role_title ? `<span class="rel-role">${e(l.role_title)}</span>` : "") +
         (l.justification ? `<p>${e(l.justification)}</p>` : "") +
-        l.citations.map(q=>`<blockquote>${q.quote?`<p>${e(q.quote)}</p>`:""}<footer><a href="${e(entityPath(q.source_slug))}">${e(q.source_title)}</a>${q.locator?` · ${e(q.locator)}`:""}${q.accessed_at?` · Дата обращения: ${e(q.accessed_at)}`:""}</footer></blockquote>`).join("") + `</li>`
+        l.citations.map(q=>`<blockquote>${q.quote?`<p>${e(q.quote)}</p>`:""}<footer><a href="${e(entityPath(q.source_slug))}">${e(q.source_title)}</a>${q.locator?` · ${e(q.locator)}`:""}${q.phase?` · Фаза: ${e(q.phase)}`:""}${q.zone?` · Зона: ${e(q.zone)}`:""}${q.accessed_at?` · Дата обращения: ${e(q.accessed_at)}`:""}</footer></blockquote>`).join("") + `</li>`
       ).join("");
       // Связей много: раздел свёрнут, внутри граф (по умолчанию) или компактный список.
       return `<details class="rel-box"><summary>Связи <span class="rel-count">${card.links.length}</span></summary>` +
