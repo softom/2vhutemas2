@@ -362,7 +362,7 @@ function EditorBody(props: any) {
       setMaterialId(material);
 
       if (publish && material && revision) {
-        if (canPublish) { await api.publishMaterial(material, revision); setPublishedRevision(revision); }
+        if (canPublish) { await api.publishMaterial(material, revision); setPublishedRevision(revision); window.dispatchEvent(new CustomEvent("research-publication-updated")); }
         else await api.submitMaterial(material);
       }
       setStatus(publish ? (canPublish ? "Опубликовано" : "Отправлено на рассмотрение") : "Рабочая версия сохранена");

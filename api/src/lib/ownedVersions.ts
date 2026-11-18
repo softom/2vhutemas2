@@ -9,6 +9,7 @@
  */
 import { type Tx } from "./db.ts";
 import { ApiError } from "./errors.ts";
+import {sourceMarks} from "./linkCitations.ts";
 
 /** Строка реестра сохраняет старые ID и подписи. Публикацией управляет владелец. */
 export async function ownedMaterial(tx: Tx, materialId: string) {
@@ -132,7 +133,10 @@ export async function publishOwnerRevision(
     throw new ApiError("duplicate", "Эта версия уже опубликована");
   }
 
-  if (owner.kind === "entity") await publishVisibleMedia(tx, owner.id, chosen, contributorId);
+  if (owner.kind === "entity") {
+    await publishVisibleMedia(tx, owner.id, chosen, contributorId);
+    await publishAcceptedAttributions(tx, owner.id, chosen, contributorId);
+  }
 
   // Проверку принадлежности и полноты версии делает publishOwned: он же
   // единственное место, где меняется указатель публикации.
@@ -198,4 +202,31 @@ export async function publishVisibleMedia(tx: Tx, id: number, revision: string, 
     if (link.status==='published' && link.published_revision_id===link.working_revision_id) continue;
     await publishOwnerRevision(tx,{kind:'link',id:Number(link.id)},link.working_revision_id,actor,`В составе публикации записи ${id}`);
   }
+}
+
+/** Only links accepted into this exact entity revision, never all graph neighbours. */
+export async function publishAcceptedAttributions(tx:Tx,id:number,revision:string,actor:string){
+ const rows=await tx<any>`select (v->>'text_value')::jsonb as state from app.revisions r
+ cross join lateral jsonb_array_elements(coalesce(r.snapshot->'values','[]')) v
+ join app.parameters p on p.id::text=v->>'parameter_id'
+ where r.id=${revision} and r.entity_id=${id} and p.code='research_state'`;
+ const accepted=new Map<number,string>();
+ for(const row of rows)for(const item of row.state.accepted_attributions||[]){
+  if(item.revision_id&&Number.isSafeInteger(Number(item.link_id)))accepted.set(Number(item.link_id),item.revision_id);
+ }
+ for(const [linkId,version] of [...accepted].sort((a,b)=>a[0]-b[0])){
+  const [link]=await tx<any>`select l.*,r.snapshot->'body_json' as body from app.links l
+   join app.revisions r on r.link_id=l.id and r.id=${version}
+   where l.id=${linkId} and l.from_entity_id=${id} for update of l`;
+  if(!link||link.status==='archived')throw new ApiError('validation_failed',`Принятая связь №${linkId} удалена или недоступна. Публикация отменена.`);
+  if(link.working_revision_id!==version)throw new ApiError('version_conflict',`Связь №${linkId} изменилась после принятия исследования. Публикация отменена.`);
+  const [concept]=await tx<any>`select status from app.entities where id=${link.to_entity_id}`;
+  if(concept?.status!=='published')throw new ApiError('validation_failed',`Понятие связи №${linkId} ещё не опубликовано. Публикация карточки отменена.`);
+  for(const {props} of sourceMarks(link.body)){
+   const [source]=await tx<any>`select status,published_revision_id from app.entities where id=${Number(props.entityId)}`;
+   if(source?.status!=='published'||props.sourceRevisionId&&source.published_revision_id!==props.sourceRevisionId)throw new ApiError('validation_failed',`Источник связи №${linkId} ещё не опубликован в принятой версии. Публикация карточки отменена.`);
+  }
+  if(link.status==='published'&&link.published_revision_id===version)continue;
+  await publishOwnerRevision(tx,{kind:'link',id:linkId},version,actor,`Принятая атрибуция в составе записи ${id}`);
+ }
 }

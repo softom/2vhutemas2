@@ -58,21 +58,21 @@ async function plans(tx:Tx,entityId:number,input:any,context:any={}){
   if(p.evidence!=='page')fail('Нельзя принять цитату только из поисковой выдержки. Нужен сохранённый текст страницы');
   const source=data.sources.find((s:any)=>s.source_uid===p.source_id);
   const url=checked(()=>address(source.source_url));
-  const candidates=context.candidates||(context.candidates=await tx<any>`select distinct e.id,e.title_ru,e.working_revision_id,v.text_value from app.entities e join app.entity_types t on t.id=e.type_id join app.indicators i on i.entity_id=e.id join app.indicator_values v on v.indicator_id=i.id join app.parameters q on q.id=v.parameter_id where e.status<>'archived' and t.code in('book','article','web_page') and q.code='url'`);
+  const candidates=context.candidates||(context.candidates=await tx<any>`select distinct e.id,e.title_ru,e.status,e.published_revision_id,e.working_revision_id,v.text_value from app.entities e join app.entity_types t on t.id=e.type_id join app.indicators i on i.entity_id=e.id join app.indicator_values v on v.indicator_id=i.id join app.parameters q on q.id=v.parameter_id where e.status<>'archived' and t.code in('book','article','web_page') and q.code='url'`);
   const matches=candidates.filter((s:any)=>{try{return address(s.text_value)===url;}catch{return false;}});
   if(matches.length>1)fail('Для URL найдено несколько сущностей источника; устраните неоднозначность');
   const sourceEntity=matches[0];
-  const links=sourceEntity?await tx<any>`select l.id,l.working_revision_id,m.id as material_id,r.snapshot->'body_json' as body from app.links l join app.materials m on m.link_id=l.id join app.revisions r on r.id=l.working_revision_id join app.link_roles role on role.id=l.role_id where l.from_entity_id=${entityId} and l.to_entity_id=${p.concept_id} and role.code=${p.relation} and l.status<>'archived' order by l.id`:[];
+  const links=sourceEntity?await tx<any>`select l.id,l.status,l.published_revision_id,l.working_revision_id,m.id as material_id,r.snapshot->'body_json' as body from app.links l join app.materials m on m.link_id=l.id join app.revisions r on r.id=l.working_revision_id join app.link_roles role on role.id=l.role_id where l.from_entity_id=${entityId} and l.to_entity_id=${p.concept_id} and role.code=${p.relation} and l.status<>'archived' order by l.id`:[];
   const matching=links.filter(l=>sourceMarks(l.body).some(m=>Number(m.props.entityId)===Number(sourceEntity.id)&&normalized(m.props.phase)===p.phase&&normalized(m.props.zone)===p.zone));
   if(matching.length>1)fail('Есть несколько связей этого источника и контекста; требуется ручное сопоставление');
   const current=matching[0];
   const repeated=current&&sourceMarks(current.body).some(m=>normalized(extractText([m.block]))===p.quote)&&current.body.some((b:any)=>b.type==='paragraph'&&normalized(extractText([b]))===p.rationale);
   const key=JSON.stringify([p.concept_id,url,p.relation,p.phase,p.zone]);const batchAppend=seen.has(key);seen.add(key);
-  out.push({batchAppend,key,proposal_id:raw.id,p,source,url,sourceEntity,current,action:repeated?'repeat':current?'append':'create'});
+  out.push({batchAppend,key,proposal_id:raw.id,p,source,url,sourceEntity,current,conceptPublished:catalog.find((c:any)=>Number(c.id)===Number(p.concept_id))?.is_published===true,action:repeated?'repeat':current?'append':'create'});
  }
  return {data,out};
 }
-function planView(x:any){return {proposal_id:x.proposal_id,action:x.batchAppend&&x.action!=='repeat'?'append_batch':x.action,link_id:x.current?.id||null,base_link_revision_id:x.current?.working_revision_id||null,source_entity_id:x.sourceEntity?.id||null,source_title:x.source.source_title,url:x.url,before:x.current?extractText(x.current.body):'',after:x.p.rationale,quote:x.p.quote};}
+function planView(x:any){return {proposal_id:x.proposal_id,action:x.batchAppend&&x.action!=='repeat'?'append_batch':x.action,link_id:x.current?.id||null,base_link_revision_id:x.current?.working_revision_id||null,concept_published:x.conceptPublished,source_published:x.sourceEntity?.status==='published',link_status:x.current?.status||null,published_revision_id:x.current?.published_revision_id||null,source_entity_id:x.sourceEntity?.id||null,source_title:x.source.source_title,url:x.url,before:x.current?extractText(x.current.body):'',after:x.p.rationale,quote:x.p.quote};}
 classification.post('/:id/check',async c=>{
  const actor=permit(c.get('principal'),'edit'),id=Number(c.req.param('id')),input=await c.req.json();
  if(!Number.isSafeInteger(id)||id<1)fail('Некорректный ID');

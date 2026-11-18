@@ -17,7 +17,7 @@ import { type AppEnv, log } from "../lib/http.ts";
 import { entityPath } from "../lib/site.ts";
 import { notifyIndexNow } from "./pages.ts";
 
-import { ownedMaterial, publishOwned } from "../lib/ownedVersions.ts";
+import { ownedMaterial, publishOwnerRevision } from "../lib/ownedVersions.ts";
 
 export const materials = new Hono<AppEnv>();
 
@@ -119,7 +119,8 @@ materials.post("/:id/publish", async (c: Context<AppEnv>) => {
     }
 
     if (material.entity_id || material.link_id) {
-      await publishOwned(tx,{entity_id:material.entity_id??null,link_id:material.link_id??null},String(revisionId));
+      const publication=await publishOwnerRevision(tx,{kind:material.entity_id?'entity':'link',id:Number(material.entity_id??material.link_id)},String(revisionId),principal.contributorId!,input.note??null);
+      return {material_id:materialId,...publication};
     } else {
     await tx`
       update app.materials
@@ -184,7 +185,7 @@ materials.post("/:id/review", async (c: Context<AppEnv>) => {
 
     if (input.decision === "approved") {
       if (material.entity_id || material.link_id) {
-        await publishOwned(tx,{entity_id:material.entity_id??null,link_id:material.link_id??null},String(revisionId));
+        await publishOwnerRevision(tx,{kind:material.entity_id?"entity":"link",id:Number(material.entity_id??material.link_id)},String(revisionId),principal.contributorId!,"Принято при рассмотрении");
       } else {
       await tx`
         update app.materials
@@ -192,7 +193,7 @@ materials.post("/:id/review", async (c: Context<AppEnv>) => {
          where id = ${materialId}
       `;
       }
-      await tx`
+      if(!material.entity_id&&!material.link_id)await tx`
         insert into app.revision_reviews (revision_id, reviewer_id, decision, note)
         values (${revisionId}, ${principal.contributorId}, 'published', 'Принято при рассмотрении')
       `;
