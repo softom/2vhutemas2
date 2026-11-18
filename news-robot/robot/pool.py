@@ -372,7 +372,7 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
         # Даже без LLM-калибровки пересчитываем статистические поправки с новым потолком MAX_ADJUST
         items_j = learn.judgments(state)
         if items_j:
-            learned["adjustments"] = learn.adjustments(items_j)
+            learned["adjustments"] = learn.adjustments(items_j, state)
 
     state.save()
     if req.get("prompt_only"):
@@ -386,6 +386,12 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
     bootstrap_from_runs(root, pdata, sources=sources, days=WINDOW_DAYS)
     pruned = prune(pdata, sources=sources, days=WINDOW_DAYS)
     log("info", "retriage", "промежуточная БД подготовлена", items=len(pdata["items"]), pruned_30d=pruned)
+
+    if req.get("rerank_only"):
+        rerank_pool(root, state, pipeline_mod, pdata=pdata)
+        write_prompt_snapshot(root, state, pipeline_mod)
+        _write(status_path(root), {"running": False, "stage": "готово", "done": 0, "total": 0, "candidates": len(pdata.get("candidates") or []), "finished_at": now()})
+        return True
 
     if not llm.live:
         save(root, pdata)
@@ -486,6 +492,37 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
     similar.unify(new_scores, to_items(pdata, sources), root, pipeline_mod.load_config(), llm, log)
 
     # 6. Пересчитываем склейку и ранжирование по всей промежуточной БД за 30 дней
+    ranked = rerank_pool(root, state, pipeline_mod, pdata=pdata, sources=sources)
+    pdata["last_retriage_at"] = now()
+    save(root, pdata)
+    state.save()
+    write_prompt_snapshot(root, state, pipeline_mod)
+    status = {
+        "running": False,
+        "stage": "прервано" if aborted else "готово",
+        "done": done_n,
+        "total": total,
+        "candidates": len(ranked),
+        "started_at": started,
+        "finished_at": now(),
+    }
+    if aborted:
+        status["error"] = aborted
+    _write(status_path(root), status)
+    log("warn" if aborted else "info", "retriage",
+        "переоценка базы прервана" if aborted else "переоценка базы завершена",
+        evaluated=done_n, total=total, candidates=len(ranked), reason=aborted)
+    return True
+
+
+def rerank_pool(root: Path, state, pipeline_mod, pdata: dict | None = None, sources: dict[str, dict] | None = None) -> list[dict]:
+    """Пересчитывает склейку, доводы (claims), векторный штраф насыщения и ранжирование по 30-дневному пулу."""
+    if sources is None:
+        sources = {s["id"]: s for s in pipeline_mod.all_sources(state)}
+    if pdata is None:
+        pdata = load(root)
+    all_items_dict = pdata.get("items") or {}
+    new_scores = pdata.get("scores") or {}
     cfg = pipeline_mod.load_config()
     weights = {k: (cfg.get(f"news.rank.{k}") if cfg.get(f"news.rank.{k}") is not None else v)
                for k, v in pipeline_mod.RANK_DEFAULTS.items()}
@@ -497,7 +534,6 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
     holder = pipeline_mod.Run(id="retriage", dir=root / "out" / "prepare", since=datetime.now(timezone.utc) - timedelta(days=WINDOW_DAYS))
     holder.items = pool_items
 
-    # Подтягиваем известные сопоставления с сайтом из .state/similar.json
     sim_data = _read(root / ".state" / "similar.json", {}) or {}
     site_map = sim_data.get("site") or {}
     aliases = sim_data.get("aliases") or {}
@@ -522,23 +558,5 @@ def run_retriage(root: Path, llm: LLM, log, pipeline_mod, beat=None, force_reque
 
     ranked.sort(key=lambda c: c["final"], reverse=True)
     pdata["candidates"] = ranked
-    pdata["last_retriage_at"] = now()
     save(root, pdata)
-    state.save()
-    write_prompt_snapshot(root, state, pipeline_mod)
-    status = {
-        "running": False,
-        "stage": "прервано" if aborted else "готово",
-        "done": done_n,
-        "total": total,
-        "candidates": len(ranked),
-        "started_at": started,
-        "finished_at": now(),
-    }
-    if aborted:
-        status["error"] = aborted
-    _write(status_path(root), status)
-    log("warn" if aborted else "info", "retriage",
-        "переоценка базы прервана" if aborted else "переоценка базы завершена",
-        evaluated=done_n, total=total, candidates=len(ranked), reason=aborted)
-    return True
+    return ranked

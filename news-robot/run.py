@@ -124,8 +124,16 @@ def prepare_command(args) -> int:
         if msg in ("перевод начат", "перегенерация начата"):
             beat(f"{msg}: {extra.get('story')}")
 
-    # Переоценка промежуточной базы (30 дней) по запросу со страницы или обновление снимка промпта
+    # Переоценка промежуточной базы (30 дней) по запросу со страницы, применение свежих оценок ДА/НЕТ и обновление снимка промпта
     try:
+        inbox_file = ROOT / "inbox" / "inbox.jsonl"
+        if inbox_file.exists():
+            st = State(ROOT / ".state" / "state.json")
+            applied = discover.apply_inbox(st, inbox_file, logged)
+            if applied:
+                st.save()
+                pool.rerank_pool(ROOT, st, pipeline)
+                pool.write_prompt_snapshot(ROOT, st, pipeline)
         pool.run_retriage(ROOT, llm, logged, pipeline, beat=beat)
         if not pool.prompt_snapshot_path(ROOT).exists():
             st = State(ROOT / ".state" / "state.json")
