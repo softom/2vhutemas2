@@ -18,6 +18,7 @@ import {groupKey,groupLabel} from './researchMerge';
 import { SetResearchPanel } from './SetResearchPanel';
 
 interface Props {
+  saveResearchValues?:(next:Indicator[])=>Promise<boolean>;
   beforeResearch?:()=>Promise<string|undefined>;
   onRevision?:(revision:string)=>void;
   entityId?: number | null;
@@ -35,7 +36,7 @@ function repeatable(field: SuggestedParameter): boolean {
   return field.is_repeatable ?? (field.value_type === "date" || field.value_type === "place");
 }
 
-export function IndicatorsField({ indicators, suggested, onChange, entityId, onSuggested, beforeResearch, onRevision }: Props) {
+export function IndicatorsField({ indicators, suggested, onChange, entityId, onSuggested, beforeResearch, onRevision, saveResearchValues }: Props) {
   const [sets,setSets]=useState<ParameterSetRow[]>([]);
   const [adding,setAdding]=useState(false);
   const [setError,setSetError]=useState('');
@@ -238,6 +239,7 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
     }
 
 
+    if(field.input_kind==='textarea'&&field.value_type==='text')return <textarea value={value.text_value??''} placeholder={field.hint??''} onChange={e=>set({text_value:e.target.value})}/>;
     const numeric = field.value_type === "number" || field.value_type === "integer";
     return (
       <input
@@ -344,7 +346,7 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
   const panelCodes=[...new Set(fields.map(f=>f.set))];
   const panels=panelCodes.map(code=>{
     const set=sets.find(s=>s.code===code);
-    const members=fields.filter(f=>f.set===code);
+    const members=fields.filter(f=>f.set===code).map(f=>{const item=set?.items.find(i=>i.code===f.parameter);return item?{...f,...item,parameter:f.parameter,title:item.label_override||f.title,hint:item.hint??f.hint,is_repeatable:item.repeatability==='single'?false:f.is_repeatable}:f;});
     const order=new Map((set?.items||[]).map((item,index)=>[item.code,index]));
     members.sort((a,b)=>(order.get(a.parameter)??9999)-(order.get(b.parameter)??9999));
     return {code,set,title:set?.title_ru||members[0]?.set_title||'Другие параметры',fields:members};
@@ -352,7 +354,7 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
   const detachAction=(panel:typeof panels[number],disabled=false)=>panel.set&&entityId?<button type="button" className="ghost" disabled={disabled||setBusy||!panel.fields.some(f=>f.set_attached&&!f.set_inherited)} title={panel.fields.some(f=>f.set_inherited)?'Набор задан типом записи и не открепляется отдельно':'Заполненные значения и материалы исследования сохранятся'} onClick={()=>void detach(panel.set!)}>Открепить</button>:null;
   const panelForm=(panel:typeof panels[number])=>{
     // Retired style tables remain in indicators and save payloads, but have no editing surface.
-    if(panel.code==='style_solutions')return null;
+    if(panel.set?.result_kind==='relations')return null;
     let groups=indicators.map((indicator,index)=>({indicator,index})).filter(({indicator})=>!indicator.values.length||indicator.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter)));
     if(!groups.length&&indicators.length)groups=[{indicator:indicators[0],index:0}];
     return <div className="parameter-set-form">{groups.map(({indicator,index})=><fieldset className="indicator" key={indicator.id??index}>
@@ -377,8 +379,8 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
       {setNotice&&<p role="status" className="hint">{setNotice}</p>}
 
       {adding&&<div className="parameter-add-panel"><label>Набор параметров<select value={chosen} onChange={e=>setChosen(e.target.value)}><option value="">Выберите набор…</option>{sets.filter(s=>!suggested.some(p=>p.set===s.code)).map(s=><option key={s.id} value={s.id}>{s.title_ru}</option>)}</select></label><button type="button" disabled={!chosen||setBusy} onClick={()=>void attach()}>{setBusy?'Добавляем…':'Добавить'}</button></div>}
-      {panels.map(panel=><ParameterSetPanel key={panel.set?.id||panel.code||'extra'} title={panel.title+(panel.code!=='style_solutions'&&indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length>1?' · групп: '+indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length:'')}>
-        {entityId&&panel.set&&beforeResearch&&onRevision?<SetResearchPanel entityId={entityId} set={panel.set} sets={sets} beforeStart={beforeResearch} onRevision={onRevision} indicators={indicators} fields={panel.fields} onAccept={(group,target)=>{if(target===null)onChange([...indicators,group]);else if(indicators.some((g,i)=>groupKey(g,i)===target))onChange(indicators.map((g,i)=>groupKey(g,i)===target?group:g));}} actions={disabled=>detachAction(panel,disabled)}>
+      {panels.map(panel=><ParameterSetPanel key={panel.set?.id||panel.code||'extra'} title={panel.title+(panel.set?.result_kind!=='relations'&&indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length>1?' · групп: '+indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length:'')}>
+        {entityId&&panel.set&&beforeResearch&&onRevision?<SetResearchPanel entityId={entityId} set={panel.set} sets={sets} beforeStart={beforeResearch} onRevision={onRevision} indicators={indicators} fields={panel.fields} onAccept={async(group,target)=>{const next=target===null?[...indicators,group]:indicators.map((g,i)=>groupKey(g,i)===target?group:g);return saveResearchValues?await saveResearchValues(next):false;}} actions={disabled=>detachAction(panel,disabled)}>
           {panelForm(panel)}
         </SetResearchPanel>:<div className="set-research-panel"><div className="row"><button type="button" className="ghost" disabled>Собрать источники</button><button type="button" className="ghost" disabled>Определить при помощи LLM</button>{detachAction(panel)}</div>{panelForm(panel)}</div>}
       </ParameterSetPanel>)}

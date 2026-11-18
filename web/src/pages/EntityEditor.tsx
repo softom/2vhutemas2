@@ -317,7 +317,7 @@ function EditorBody(props: any) {
     </label>
   );
 
-  const save = async (publish = false, confirmedNow = false) => {
+  const save = async (publish = false, confirmedNow = false, nextIndicators?: Indicator[]) => {
     if (publish && canPublish && isNews && !confirmedNow) {
       setConfirmPublishNow(true);
       return;
@@ -337,7 +337,7 @@ function EditorBody(props: any) {
         title_la: form.title_la || null,
         // Без раздела текста форма текст не трогает: прежний сохраняется.
         ...(hasText ? { body_json: editor.document } : {}),
-        indicators,
+        indicators: nextIndicators ?? indicators,
         tags: tags.map((tag: Tag) => tag.title),
       };
 
@@ -552,6 +552,7 @@ function EditorBody(props: any) {
                   entityId={entityId}
                   onSuggested={setSuggested}
                   beforeResearch={()=>save(false)}
+                  saveResearchValues={async (next:Indicator[])=>{const revision=await save(false,false,next);if(revision)setIndicators(next);return !!revision;}}
                   onRevision={setRevisionId}
                   indicators={indicators}
                   suggested={suggested}

@@ -47,6 +47,15 @@ export async function publishOwned(tx: Tx, owner: {entity_id: number|null;link_i
     and ((${owner.entity_id}::bigint is not null and entity_id=${owner.entity_id})
       or (${owner.link_id}::bigint is not null and link_id=${owner.link_id})) and schema_version=2`;
   if (!revisions.length) throw new ApiError("validation_failed","Нужна полная версия этого владельца");
+  if(owner.entity_id){
+    const missing=await tx<any>`select coalesce(i.label_override,p.title_ru) as title from app.entities e
+     join app.parameter_sets s on s.id in(select set_id from app.entity_parameter_sets where entity_id=e.id union select set_id from app.type_parameter_sets where type_id in(select app.entity_type_ancestors(e.type_id)))
+     join app.parameter_set_items i on i.set_id=s.id and i.is_required join app.parameters p on p.id=i.parameter_id
+     where e.id=${owner.entity_id} and s.result_kind='parameter_values' and not exists(
+      select 1 from app.revisions r cross join lateral jsonb_array_elements(coalesce(r.snapshot->'values','[]')) v
+      where r.id=${revisionId} and v->>'parameter_id'=p.id::text and (v->>'text_value' is null or length(btrim(v->>'text_value'))>0))`;
+    if(missing.length)throw new ApiError('validation_failed','Не заполнены обязательные параметры: '+missing.map((r:any)=>r.title).join(', '));
+  }
   if (owner.entity_id) await tx`update app.entities set status='published',published_revision_id=${revisionId} where id=${owner.entity_id}`;
   else await tx`update app.links set status='published',published_revision_id=${revisionId} where id=${owner.link_id}`;
 }

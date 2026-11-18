@@ -1,3 +1,4 @@
+import {readSetConfiguration,updateSetConfiguration} from '../lib/setConfiguration.ts';
 /**
  * Справочник параметров и наборы (решение Р-38).
  *
@@ -263,11 +264,11 @@ parameters.delete("/:id", async (c: Context<AppEnv>) => {
 /** Наборы вместе с составом и узлами дерева, к которым они привязаны. */
 parameterSets.get("/", async (c: Context<AppEnv>) => {
   const rows = await sql`
-    select s.id, s.code, s.title_ru, s.note, s.sort_order, s.card_side,
+    select s.id, s.code, s.title_ru, s.note, s.sort_order, s.card_side,s.research_enabled,s.result_kind,s.config_version,(select coalesce(jsonb_agg(jsonb_build_object('id',t.id,'title',t.title) order by t.sort_order,t.id),'[]') from app.parameter_set_research_tasks t where t.set_id=s.id and t.enabled) as research_tasks,
            coalesce((select jsonb_agg(jsonb_build_object(
                         'code', p.code, 'title_ru', p.title_ru, 'unit', p.unit,
                         'value_type', app.api_value_type(p.id), 'definition', p.definition,
-                        'is_repeatable', p.is_repeatable, 'hint', i.hint)
+                        'is_repeatable', p.is_repeatable, 'hint', i.hint)||to_jsonb(i)
                         order by i.sort_order)
                      from app.parameter_set_items i
                      join app.parameters p on p.id = i.parameter_id
@@ -297,7 +298,7 @@ parameterSets.post("/", async (c: Context<AppEnv>) => {
     tx`
       insert into app.parameter_sets (code, title_ru, note, card_side)
       values (${input.code}, ${input.title_ru}, ${input.note ?? null}, ${input.card_side ?? "right"})
-      returning id, code, title_ru, card_side
+      returning id, code, title_ru, card_side, config_version
     `);
   return c.json(rows[0], 201);
 });
@@ -306,7 +307,7 @@ parameterSets.post("/", async (c: Context<AppEnv>) => {
 parameterSets.patch("/:code", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "su");
   const code = c.req.param("code");
-  const input = await c.req.json<{ title_ru?: string; note?: string | null; sort_order?: number; card_side?: string }>();
+  const input = await c.req.json<{ title_ru?: string; note?: string | null; sort_order?: number; card_side?: string; config_version?:number }>();
 
   if (input.card_side !== undefined && !["left", "right"].includes(input.card_side)) throw new ApiError("validation_failed", "Сторона карточки: left или right");
 
@@ -317,31 +318,32 @@ parameterSets.patch("/:code", async (c: Context<AppEnv>) => {
         note       = coalesce(${input.note ?? null}, note),
         sort_order = coalesce(${input.sort_order ?? null}, sort_order),
         card_side = coalesce(${input.card_side ?? null}, card_side)
-      where code = ${code} or id::text = ${code}
-      returning id, code, title_ru, note, card_side
+      where (code = ${code} or id::text = ${code}) and (${input.config_version??null}::bigint is null or config_version=${input.config_version??null})
+      returning id, code, title_ru, note, card_side, config_version
     `);
-  if (rows.length === 0) throw new ApiError("not_found", "Набор не найден");
+  if (rows.length === 0) throw new ApiError("version_conflict", "Набор изменился или удалён. Перечитайте настройки.");
   return c.json(rows[0]);
 });
 
-/** Состав набора задаётся целиком: что прислали, то и осталось. */
+/** Обновление вхождений сохраняет настройки. Удаление только по явным UID. */
 parameterSets.put("/:code/items", async (c: Context<AppEnv>) => {
   const principal = requirePermission(c.get("principal"), "su");
   const code = c.req.param("code");
-  const input = await c.req.json<{ items: { parameter: string; hint?: string | null }[] }>();
+  const input = await c.req.json<{ items: { parameter: string; hint?: string | null }[];remove_ids?:string[];config_version?:number }>();
   const items = input.items ?? [];
 
   const result = await transaction(principal.contributorId, async (tx) => {
-    const sets = await tx<{ id: string }>`
-      select id from app.parameter_sets where code = ${code}
+    const sets = await tx<{ id: string;config_version:number }>`
+      select id,config_version from app.parameter_sets where code = ${code} or id::text=${code} for update
     `;
     if (sets.length === 0) throw new ApiError("not_found", "Набор не найден");
     const setId = sets[0].id;
+    if(input.config_version!=null&&String(input.config_version)!==String(sets[0].config_version))throw new ApiError('version_conflict','Настройки набора изменились');
 
-    await tx`delete from app.parameter_set_items where set_id = ${setId}`;
+    if ((input as any).remove_ids?.length) await tx`delete from app.parameter_set_items where set_id=${setId} and parameter_id=any(${(input as any).remove_ids}::uuid[])`;
     for (const [index, item] of items.entries()) {
       const found = await tx<{ id: string }>`
-        select id from app.parameters where code = ${item.parameter}
+        select id from app.parameters where code = ${item.parameter} or id::text=${item.parameter}
       `;
       if (found.length === 0) {
         throw new ApiError("validation_failed", "Неизвестный параметр", {
@@ -351,6 +353,7 @@ parameterSets.put("/:code/items", async (c: Context<AppEnv>) => {
       await tx`
         insert into app.parameter_set_items (set_id, parameter_id, sort_order, hint)
         values (${setId}, ${found[0].id}, ${index}, ${item.hint ?? null})
+        on conflict(set_id,parameter_id) do update set sort_order=excluded.sort_order,hint=case when ${Object.hasOwn(item,'hint')} then excluded.hint else app.parameter_set_items.hint end
       `;
     }
     return { set: code, items: items.length };
@@ -461,3 +464,6 @@ parameterSets.delete("/:code", async (c: Context<AppEnv>) => {
     tx`delete from app.parameter_sets where code = ${code}`);
   return c.body(null, 204);
 });
+
+parameterSets.get('/:id/config',async c=>{requirePermission(c.get('principal'),'su');return c.json(await readSetConfiguration(c.req.param('id')));});
+parameterSets.patch('/:id/config',async c=>{const actor=requirePermission(c.get('principal'),'su');return c.json(await updateSetConfiguration(c.req.param('id'),await c.req.json(),actor.contributorId!));});

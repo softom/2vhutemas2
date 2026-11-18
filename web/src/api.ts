@@ -308,6 +308,7 @@ export interface Indicator {
 
 /** Параметр, подсказанный записи её ветвью дерева и наборами. */
 export interface SuggestedParameter {
+  input_kind?:string; merge_policy?:string; repeatability?:string; is_required?:boolean;
   set_id?: string;
   set_inherited?: boolean;
   set_attached?: boolean;
@@ -327,7 +328,7 @@ export interface SuggestedParameter {
 
 export interface ParameterRow {
   is_published: boolean;
-  columns?: {code:string;title:string;unit:string|null;value_type:string;options?:{code:string;title:string}[]}[];
+  columns?: {code:string;title:string;unit:string|null;value_type:string;summary_order?:number|null;input_kind?:string;hint?:string;result_slot?:string;options?:{code:string;title:string}[]}[];
   id: string;
   code: string;
   title_ru: string;
@@ -342,12 +343,17 @@ export interface ParameterRow {
 }
 
 export interface ParameterSetRow {
+  research_enabled:boolean;
+  result_kind:"parameter_values"|"relations";
+  config_version:number;
+  research_tasks:{id:string;title:string}[];
   card_side: "left" | "right";
   id: string;
   code: string;
   title_ru: string;
   note: string | null;
   items: {
+    parameter_id?:string;label_override?:string; repeatability?:string; input_kind?:string; merge_policy?:string; source_required?:boolean; quote_required?:boolean;
     code: string;
     title_ru: string;
     unit: string | null;
@@ -792,21 +798,22 @@ export const api = {
   refreshMaterials: () =>
     request<MaterialsRefreshResult>("/research-materials/refresh", { method: "POST", body: JSON.stringify({}) }),
   updateParameterSet: (code: string, body: unknown) =>
-    request<{ code: string; title_ru: string }>(`/parameter-sets/${code}`, {
+    request<{ code: string; title_ru: string;config_version:number }>(`/parameter-sets/${code}`, {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
   deleteParameterSet: (code: string) =>
     request<void>(`/parameter-sets/${code}`, { method: "DELETE" }),
   createParameterSet: (body: unknown) =>
-    request<{ id: string }>("/parameter-sets", { method: "POST", body: JSON.stringify(body) }),
+    request<{ id: string;config_version:number }>("/parameter-sets", { method: "POST", body: JSON.stringify(body) }),
   setParameterSetItems: (
     code: string,
     items: { parameter: string; hint?: string | null }[],
+    options?:{remove_ids?:string[];config_version?:number},
   ) =>
     request<{ set: string; items: number }>(`/parameter-sets/${code}/items`, {
       method: "PUT",
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ items,...options }),
     }),
   attachParameterSet: (code: string, type: string) =>
     request<{ set: string; type: string }>(`/parameter-sets/${code}/types`, {

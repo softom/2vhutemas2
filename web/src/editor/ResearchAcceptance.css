@@ -10,3 +10,10 @@
 .parameter-group-heading{display:grid;gap:8px;margin-bottom:18px}
 .parameter-group-heading input{width:100%;box-sizing:border-box}
 @media(max-width:600px){.research-comparison{grid-template-columns:1fr}}
+
+.research-proposal{padding:16px;background:var(--panel,#f4eee2);margin:14px 0;overflow-wrap:anywhere}
+.research-proposal>input[type=checkbox]{flex:0 0 16px;width:16px;height:16px;margin:3px 0 0;padding:0}
+.research-proposal-body{flex:1;min-width:0}
+.research-proposal-body label,.research-controls label{display:grid;gap:6px;margin:12px 0}
+.research-comparison>span>div{white-space:pre-wrap;margin-top:8px}
+.research-selection{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:16px 0}

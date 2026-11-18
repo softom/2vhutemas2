@@ -42,11 +42,18 @@ async function plans(tx:Tx,entityId:number,input:any,context:any={}){
  if(!result||result.mode!=='attributions')fail('Нужно новое исследование классификации по ID');
  if(!Array.isArray(input.selections)||!input.selections.length||input.selections.length>200)fail('Выберите от 1 до 200 предложений');
  if(data.state.status==='running')fail('Дождитесь окончания исследования');
- const catalog=context.catalog||(context.catalog=await classificationCatalog(tx,true)),out:any[]=[];const seen=new Set<string>();
+ const config=context.config||(context.config=(await tx<any>`select app.parameter_set_config_snapshot(id) as config from app.parameter_sets where id::text=${input.set_id}`)[0]?.config);
+ if(!config||config.set.result_kind!=='relations')fail('Набор не предназначен для связей');
+ const allowedTypes=await tx<any>`select code from app.entity_types where id=any(${config.types}::uuid[])`;
+ const allowedRoles=await tx<any>`select code from app.link_roles where id=any(${config.roles}::uuid[])`;
+ const catalog=context.catalog||(context.catalog=(await classificationCatalog(tx,true)).filter(c=>allowedTypes.some((t:any)=>t.code===c.axis))),out:any[]=[];const seen=new Set<string>();
  for(const choice of input.selections){
   const raw=result.proposals.find((p:any)=>p.id===choice.id);if(!raw)fail('Предложение отсутствует в сохранённом результате');
   if(raw.concept_id&&choice.concept_id&&Number(choice.concept_id)!==Number(raw.concept_id))fail('Нельзя подменить установленное понятие');
   const p=checked(()=>attributionProposal({...raw,concept_id:raw.concept_id||choice.concept_id||null},catalog,data.sources.filter((s:any)=>!isExcludedResearchRow(s))));
+  if(!allowedRoles.some((r:any)=>r.code===p.relation))fail('Отношение не разрешено набором');
+  if(config.items.some((i:any)=>i.research_enabled&&i.phase_required)&&!p.phase)fail('Нужна строительная фаза');
+  if(config.items.some((i:any)=>i.research_enabled&&i.zone_required)&&!p.zone)fail('Нужна зона объекта');
   if(!p.concept_id)fail('Сначала сопоставьте кандидата с понятием библиотеки');
   if(p.evidence!=='page')fail('Нельзя принять цитату только из поисковой выдержки. Нужен сохранённый текст страницы');
   const source=data.sources.find((s:any)=>s.source_uid===p.source_id);

@@ -94,20 +94,22 @@ export function ParameterSetDialog({ set, onSaved, onClose }: Props) {
         throw new Error("Выберите тип записи, для которого этот набор");
       }
 
+      let configVersion:number;
       if (editing) {
-        await api.updateParameterSet(set!.id, { title_ru: title.trim(), note: note || null, card_side: cardSide });
+        configVersion=(await api.updateParameterSet(set!.id, { title_ru: title.trim(), note: note || null, card_side: cardSide,config_version:set!.config_version })).config_version;
       } else {
-        await api.createParameterSet({
+        configVersion=(await api.createParameterSet({
           code: setCodeValue,
           title_ru: title.trim(),
           note: note || null,
           card_side: cardSide,
-        });
+        })).config_version;
       }
 
       await api.setParameterSetItems(
         editing ? set!.code : setCodeValue,
         items.map((item) => ({ parameter: item.parameter, hint: item.hint || null })),
+        {config_version:configVersion,remove_ids:(set?.items||[]).filter(old=>!items.some(i=>i.parameter===old.code)).map(i=>i.parameter_id!).filter(Boolean)},
       );
 
       const was = (set?.types ?? []).map((t) => t.code);

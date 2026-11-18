@@ -18,13 +18,14 @@ export function mergeResearchValues(current:IndicatorValue[],incoming:IndicatorV
  let values=[...current];
  for(const next of incoming){
   const matches=values.filter(v=>v.parameter===next.parameter);
-  if(next.rows){
+  const field=fields.find(f=>f.parameter===next.parameter);
+  if(next.rows&&field?.merge_policy!=='replace'){
    const old=matches[0];
    const known=new Set(matches.flatMap(v=>v.rows||[]).map(canonical));
    const added=next.rows.filter(row=>{const key=canonical(row);if(known.has(key))return false;known.add(key);return true;});
    if(old){if(added.length)values=values.map(v=>v===old?{...old,rows:[...(old.rows||[]),...added],note:[old.note,next.note].filter(Boolean).join('\n')}:v);}
    else values.push({...next,rows:added});
-  }else if(isMany(fields.find(f=>f.parameter===next.parameter))){
+  }else if(field?.merge_policy!=='replace'&&isMany(field)){
    if(!matches.some(v=>valueIdentity(v)===valueIdentity(next)))values.push(next);
   }else{
    const at=values.findIndex(v=>v.parameter===next.parameter);

@@ -1,38 +1,22 @@
 import {useState} from 'react';
 import type {Indicator,IndicatorValue,SuggestedParameter} from '../api';
 import {groupKey,groupLabel,isMany,mergeResearchValues,proposalValue} from './researchMerge';
-import './ResearchAcceptance.css';
-
-export function ResearchAcceptance({title,proposals,sources,indicators,fields,onAccept,disabled}:{title:string;proposals:any[];sources:Record<string,string>[];indicators:Indicator[];fields:SuggestedParameter[];onAccept:(group:Indicator,target:string|null)=>void;disabled:boolean}){
+import {ResearchProposalForm,type ProposalRow} from './ResearchProposalForm';
+// Parameter adapter: prepares the shared view; owns no proposal markup.
+export function ResearchAcceptance({title,proposals,sources,indicators,fields,onAccept,disabled}:{title:string;proposals:any[];sources:Record<string,string>[];indicators:Indicator[];fields:SuggestedParameter[];onAccept:(group:Indicator,target:string|null)=>Promise<boolean>;disabled:boolean}){
  const groups=indicators.map((group,index)=>({group,index,key:groupKey(group,index)})).filter(({group})=>!group.values.length||group.values.some(v=>fields.some(f=>f.parameter===v.parameter)));
- const [target,setTarget]=useState(groups.length===1?groups[0].key:groups.length?'':'new');
- const [chosen,setChosen]=useState<string[]>([]),[notice,setNotice]=useState('');
+ const [target,setTarget]=useState(groups.length===1?groups[0].key:groups.length?'':'new'),[chosen,setChosen]=useState<string[]>([]),[notice,setNotice]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [newTitle,setNewTitle]=useState(()=>{let n=1;while(indicators.some(g=>g.title===`${title} — исследование №${n}`))n++;return `${title} — исследование №${n}`;});
- const existing=groups.find(g=>g.key===target)?.group;
- const valid=target==='new'?!!newTitle.trim()&&!indicators.some(g=>g.title===newTitle.trim()):!!existing;
- const before=existing?.values||[];
- function display(v:IndicatorValue,p:any){
-  if(v.rows)return <ol>{v.rows.map((row,i)=><li key={i}><dl>{Object.entries(row).map(([key,value])=><div key={key}><dt>{p.columns?.find((c:any)=>c.code===key)?.title||key}</dt><dd>{typeof value==='object'&&value?String((value as any).title??JSON.stringify(value)):String(value??'—')}</dd></div>)}</dl></li>)}</ol>;
-  const field=fields.find(f=>f.parameter===v.parameter);
-  return <span>{v.text_value??(v.bool_value!=null?(v.bool_value?'Да':'Нет'):v.option?(v.option_title||field?.options?.find(o=>o.code===v.option)?.title||v.option):v.date_start_year!=null?`${v.is_approximate?'около ':''}${v.date_start_year}${v.date_end_year!=null?'–'+v.date_end_year:''}`:v.num_value??'Не заполнено')}</span>;
+ const existing=groups.find(g=>g.key===target)?.group,valid=target==='new'?!!newTitle.trim()&&!indicators.some(g=>g.title===newTitle.trim()):!!existing,before=existing?.values||[];
+ function display(v:IndicatorValue,p:any):string{
+  if(v.rows)return v.rows.map(row=>Object.entries(row).map(([k,x])=>`${p.columns?.find((c:any)=>c.code===k)?.title||k}: ${typeof x==='object'?JSON.stringify(x):x}`).join('; ')).join('\n');
+  const f=fields.find(f=>f.parameter===v.parameter);return String(v.text_value??(v.bool_value!=null?(v.bool_value?'Да':'Нет'):v.option?(v.option_title||f?.options?.find(o=>o.code===v.option)?.title||v.option):v.date_start_year!=null?`${v.date_start_year}${v.date_end_year!=null?'–'+v.date_end_year:''}`:v.num_value??'Не заполнено'));
  }
- function accept(){
-  if(!valid||!chosen.length||disabled)return;
-  const incoming=proposals.filter(p=>chosen.includes(p.id)).map(p=>proposalValue(p,sources));
-  onAccept(existing?{...existing,values:mergeResearchValues(before,incoming,fields)}:{title:newTitle.trim(),is_current:true,values:mergeResearchValues([],incoming,fields)},existing?target:null);
-  setChosen([]);setNotice(existing?'Выбранные изменения добавлены в группу. Сохраните версию карточки.':'Новая группа добавлена в форму. Сохраните версию карточки.');
- }
- return <details open className="research-acceptance"><summary>Предложения для набора</summary>
-  <label>Куда добавить результаты<select value={target} disabled={disabled} onChange={e=>{setTarget(e.target.value);setChosen([]);setNotice('');}}><option value="">Выберите группу…</option>{groups.map(g=><option key={g.key} value={g.key}>Дополнить: {groupLabel(g.group,g.index)}</option>)}<option value="new">Создать новую группу</option></select></label>
-  {target==='new'&&<label>Название новой группы<input value={newTitle} onChange={e=>setNewTitle(e.target.value)}/>{!valid&&<span className="hint">Укажите новое, отличающееся название.</span>}</label>}
-  <p className="hint">Одиночное значение заменится только при выборе предложения. Строки таблиц и повторяемые значения добавятся к прежним. Остальные поля и группы сохранятся.</p>
-  {proposals.map(p=>{
-   const old=before.filter(v=>v.parameter===p.parameter);
-   const incoming=proposals.filter(q=>q.id===p.id||(p.type==='table'||isMany(fields.find(f=>f.parameter===p.parameter)))&&chosen.includes(q.id)&&q.parameter===p.parameter).map(q=>proposalValue(q,sources));
-   const after=mergeResearchValues(before,incoming,fields).filter(v=>v.parameter===p.parameter);
-   return <label className="research-proposal" key={p.id}><input type="checkbox" disabled={!valid||disabled} checked={chosen.includes(p.id)} onChange={e=>setChosen(e.target.checked?[...chosen.filter(id=>p.type==='table'||isMany(fields.find(f=>f.parameter===p.parameter))||proposals.find(q=>q.id===id)?.parameter!==p.parameter),p.id]:chosen.filter(id=>id!==p.id))}/><span><b>{p.title}</b><span className="research-comparison"><span><strong>Было</strong>{target?'':<p>Сначала выберите группу.</p>}{target&&(old.length?old.map((v,i)=><div key={i}>{display(v,p)}</div>):<p>Не заполнено</p>)}</span><span><strong>Будет</strong>{after.map((v,i)=><div key={i}>{display(v,p)}</div>)}</span></span><small>{p.rationale}</small></span></label>;
-  })}
-  <button type="button" disabled={!valid||!chosen.length||disabled} onClick={accept}>Добавить выбранное в рабочую форму</button>
-  {notice&&<p role="status">{notice}</p>}
- </details>;
+ const rows:ProposalRow[]=proposals.map(p=>{const old=before.filter(v=>v.parameter===p.parameter),after=mergeResearchValues(before,[proposalValue(p,sources)],fields).filter(v=>v.parameter===p.parameter),a=old.map(v=>display(v,p)).join('\n'),b=after.map(v=>display(v,p)).join('\n'),repeat=valid&&a===b;
+  const field=fields.find(f=>f.parameter===p.parameter) as any,linked=(p.source_ids||[]).map((id:string)=>sources.find(s=>s.source_uid===id)).filter(Boolean);
+  const blocked=field?.source_required&& !linked.length?'Нужен источник':field?.quote_required&&!p.quote?'Для этого поля требуется подтверждённая цитата':!valid?'Выберите группу':'';
+  return {id:p.id,title:p.title,before:a||'Не заполнено',after:b,status:blocked|| (repeat?'Уже сохранено':old.length?'Изменит существующее значение':'Новое значение'),eligible:!blocked&&!repeat,rationale:p.rationale,quote:p.quote,sources:linked.map((s:any)=>({title:`№${sources.indexOf(s)+1} · ${s.source_title||s.source_url}`,url:s.source_url}))};});
+ function select(ids:string[]){const eligible=ids.filter(id=>rows.some(r=>r.id===id&&r.eligible)),out:string[]=[];for(const id of eligible){const p=proposals.find(p=>p.id===id);if(p.type!=='table'&&!isMany(fields.find(f=>f.parameter===p.parameter))){const at=out.findIndex(x=>proposals.find(p=>p.id===x)?.parameter===p.parameter);if(at>=0)out.splice(at,1);}out.push(id);}setChosen(out);}
+ async function save(){if(!valid||busy||disabled)return;setBusy(true);setError('');try{const incoming=proposals.filter(p=>chosen.includes(p.id)&&rows.some(r=>r.id===p.id&&r.eligible)).map(p=>proposalValue(p,sources));if(!incoming.length)return;const group=existing?{...existing,values:mergeResearchValues(before,incoming,fields)}:{title:newTitle.trim(),is_current:true,values:mergeResearchValues([],incoming,fields)};if(await onAccept(group,existing?target:null)){setChosen([]);setNotice('Выбранные изменения сохранены в рабочую версию.');}else setError('Изменения не сохранены. Проверьте сообщение редактора.');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ return <ResearchProposalForm view={{rows,selected:chosen,select,save,busy:busy||disabled,notice,error,controls:[{label:'Куда сохранить',value:target,options:[{value:'',label:'Выберите группу…'},...groups.map(g=>({value:g.key,label:'Дополнить: '+groupLabel(g.group,g.index)})),{value:'new',label:'Создать новую группу'}],onChange:v=>{setTarget(v);setChosen([]);}},...(target==='new'?[{label:'Название группы',value:newTitle,onChange:setNewTitle}]:[])]}}/>;
 }
