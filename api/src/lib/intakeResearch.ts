@@ -18,13 +18,13 @@ async function bounded(response:Response,max=2000000):Promise<string>{
 const plain=(s:string)=>s.replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&(?:nbsp|lt|gt);/g,' ').replace(/\s+/g,' ').trim();
 const source=(url:string,title:string,excerpt:string,provider:string,evidence:'snippet'|'provided'='snippet'):ResearchSource=>({id:crypto.randomUUID(),url:researchUrl(url),title:plain(title).slice(0,500),excerpt:plain(excerpt).slice(0,5000),provider,evidence});
 export async function researchCatalog(){return await classificationCatalog(sql,false);}
-export async function collectResearch(d:any,caller:Caller,topic='архитектура стиль конструкция'){
+export async function collectResearch(d:any,caller:Caller,topic='архитектура стиль конструкция',options?:{query:string;language:string;searchType:string}){
  const sources:ResearchSource[]=[],warnings:string[]=[];
  for(const s of [...(d.sketch.sources||[]),...(d.sources||[])])if(s.url){try{sources.push(source(s.url,s.title||s.url,s.description||'','dossier','provided'));}catch{warnings.push('Пропущена некорректная ссылка досье');}}
- const title=d.sketch.title;const query=title+' '+topic;
+ const title=d.sketch.title;const query=options?.query||title+' '+topic;
  async function provider(name:string,fn:()=>Promise<ResearchSource[]>){try{const found=await fn();if(!found.length)warnings.push(name+': результатов нет');sources.push(...found);}catch{warnings.push(name+': поиск не выполнен');}}
  const tasks:Promise<void>[]=[];
- for(const lang of ['ru','en','es'])tasks.push(provider('Wikipedia '+lang,async()=>{
+ for(const lang of options?[...new Set([/^[a-z]{2,3}$/.test(options.language)&&options.language!=='und'?options.language:'en','en'])]:['ru','en','es'])tasks.push(provider('Wikipedia '+lang,async()=>{
   const response=await fetch(`https://${lang}.wikipedia.org/w/api.php?`+new URLSearchParams({action:'query',list:'search',srsearch:title,srlimit:'10',format:'json'}),{redirect:'error',signal:AbortSignal.timeout(10000)});
   const data=JSON.parse(await bounded(response));return (data.query?.search||[]).map((s:any)=>source(`https://${lang}.wikipedia.org/wiki/`+encodeURIComponent(s.title.replace(/ /g,'_')),s.title,s.snippet,'Wikipedia '+lang));
  }));
@@ -43,7 +43,7 @@ export async function collectResearch(d:any,caller:Caller,topic='архитек�
  const key=Deno.env.get('YANDEX_API_KEY'),folder=Deno.env.get('YANDEX_FOLDER_ID');
  if(key&&folder)tasks.push(provider('Yandex',async()=>{
   const started=Date.now();try{
-   const data=JSON.parse(await bounded(await fetch('https://searchapi.api.cloud.yandex.net/v2/web/search',{method:'POST',redirect:'error',headers:{'Content-Type':'application/json',Authorization:'Api-Key '+key},body:JSON.stringify({query:{searchType:'SEARCH_TYPE_RU',queryText:query},folderId:folder,responseFormat:'FORMAT_XML',groupSpec:{groupMode:'GROUP_MODE_DEEP',groupsOnPage:25,docsInGroup:1},maxPassages:3}),signal:AbortSignal.timeout(15000)})));
+   const data=JSON.parse(await bounded(await fetch('https://searchapi.api.cloud.yandex.net/v2/web/search',{method:'POST',redirect:'error',headers:{'Content-Type':'application/json',Authorization:'Api-Key '+key},body:JSON.stringify({query:{searchType:options?.searchType||'SEARCH_TYPE_RU',queryText:query},folderId:folder,responseFormat:'FORMAT_XML',groupSpec:{groupMode:'GROUP_MODE_DEEP',groupsOnPage:25,docsInGroup:1},maxPassages:3}),signal:AbortSignal.timeout(15000)})));
    const xml=new TextDecoder().decode(Uint8Array.from(atob(data.rawData||''),c=>c.charCodeAt(0)));
    const out=yandexDocuments(xml).map(d=>source(d.url,d.title,d.excerpt,'Yandex'));
    recordAiRequest({caller,purpose:'search_answer',model:'yandex/search-api-v2',status:'ok',durationMs:Date.now()-started,output:'[intake research] '+out.length+' results'});return out;
@@ -52,7 +52,14 @@ export async function collectResearch(d:any,caller:Caller,topic='архитек�
  await Promise.all(tasks);
  const excluded=sources.filter(s=>isOwnResearchSource(s.url)).length;
  if(excluded)warnings.push('Собственный сайт исключён из внешних источников: '+excluded);
- const seen=new Set<string>();return {sources:sources.sort((a,b)=>Number(b.provider==='Yandex')-Number(a.provider==='Yandex')).filter(s=>{if(isOwnResearchSource(s.url)||!s.excerpt)return false;const u=new URL(s.url);u.hash='';const key=u.href.replace(/\/$/,'');if(seen.has(key))return false;seen.add(key);return true;}).slice(0,50),warnings};
+ const unique=new Map<string,ResearchSource>();
+ for(const s of sources.sort((a,b)=>Number(b.provider==='Yandex')-Number(a.provider==='Yandex'))){
+  if(isOwnResearchSource(s.url))continue;
+  const u=new URL(s.url);u.hash='';const key=u.href.replace(/\/$/,'');
+  s.observations=[{query:s.provider.startsWith('Wikipedia')?title:query,language:s.provider.startsWith('Wikipedia')?s.provider.split(' ').at(-1)!:options?.language||'ru',provider:s.provider}];
+  const existing=unique.get(key);if(existing)existing.observations!.push(...s.observations);else unique.set(key,s);
+ }
+ return {sources:[...unique.values()].slice(0,50),warnings};
 }
 export async function runResearch(d:any,caller:Caller,job:string){
  if(!config.search.apiKey)throw new ApiError('unavailable','Поисковая модель не настроена');

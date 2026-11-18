@@ -1,3 +1,6 @@
+import {sourceQuality} from './sourceEvidence.ts';
+import {retrieveText} from './sourceText.ts';
+import {researchQueries,type SearchIdentity} from './researchQueries.ts';
 import {classificationCatalog,attributionFormat,attributionProposal} from './classification.ts';
 import { isOwnResearchSource,isExcludedResearchRow,SELF_SOURCE_STATUS } from './researchSourcePolicy.ts';
 import {researchOutputFormat} from './researchOutputSchema.ts';
@@ -52,34 +55,37 @@ export function publicSourceUrl(raw:string){
  if(!/^[a-z0-9.-]+$/i.test(u.hostname)||!u.hostname.includes('.')||/^(?:\d+\.){3}\d+$/.test(u.hostname)||/\.(localhost|local|internal|lan|test|invalid)$/i.test(u.hostname))throw new Error('Непубличный адрес');
  return u.href;
 }
-export async function gather(title:string,set:Row,previous:Row[],caller:Caller,onProgress:Progress=noProgress){
- const topic=set.code==='style_solutions'?'архитектура стиль конструкция морфология история':/tep|technical/.test(set.code)||/экономич/.test(set.title_ru)?'технико экономические показатели площадь высота этажность объём здания':set.title_ru+' '+set.parameters.map((p:Row)=>p.title_ru).join(' ');
- onProgress({phase:'Поиск источников',done:0,total:null});
- const result=await collectResearch({sketch:{title,sources:[]},sources:[]},caller,topic);
- const rows=structuredClone(previous);const query=title+' '+topic;
- for(const s of result.sources){
-  if(isOwnResearchSource(s.url))continue;
-  const url=new URL(s.url);url.hash='';const address=url.href.replace(/\/$/,'');
-  let row=rows.find(r=>r.source_url===address);
-  if(!row){row={source_uid:crypto.randomUUID(),source_url:address,source_title:s.title,source_excerpt:s.excerpt,source_provider:s.provider,source_sets:'[]',source_queries:'[]',source_status:'Ожидает получения',source_text:'',source_fetched:''};rows.push(row);}
-  row.source_sets=JSON.stringify([...new Set([...JSON.parse(row.source_sets||'[]'),set.id])]);
-  row.source_queries=JSON.stringify([...new Set([...JSON.parse(row.source_queries||'[]'),s.provider.startsWith('Wikipedia')?title:query])]);
-  const observations=JSON.parse(row.source_observations||'[]');observations.push({id:crypto.randomUUID(),set_id:set.id,query:s.provider.startsWith('Wikipedia')?title:query,title:s.title,excerpt:s.excerpt,provider:s.provider,at:new Date().toISOString()});row.source_observations=JSON.stringify(observations);
-  row.source_excerpt=s.excerpt||row.source_excerpt;row.source_title=s.title||row.source_title;
+export async function gather(identity:SearchIdentity|string,set:Row,previous:Row[],caller:Caller,onProgress:Progress=noProgress){
+ const name=typeof identity==='string'?{title_ru:identity}:identity;
+ const queries=researchQueries(name,{code:set.code,title_ru:set.title_ru});
+ const rows=structuredClone(previous),warnings:string[]=[];
+ for(const [index,plan] of queries.entries()){
+  onProgress({phase:`Поиск (${plan.language}): ${plan.query}`,done:index,total:queries.length});
+  const result=await collectResearch({sketch:{title:plan.title,sources:[]},sources:[]},caller,'',plan);warnings.push(...result.warnings);
+  for(const s of result.sources){
+   if(isOwnResearchSource(s.url))continue;
+   const url=new URL(s.url);url.hash='';const address=url.href.replace(/\/$/,'');
+   let row=rows.find(r=>r.source_url===address);
+   if(!row){if(rows.filter(r=>!isExcludedResearchRow(r)).length>=100)continue;row={source_uid:crypto.randomUUID(),source_url:address,source_title:s.title,source_excerpt:s.excerpt,source_provider:s.provider,source_sets:'[]',source_queries:'[]',source_status:'Ожидает получения',source_text:'',source_fetched:''};rows.push(row);}
+   row.source_sets=JSON.stringify([...new Set([...JSON.parse(row.source_sets||'[]'),set.id])]);
+   row.source_queries=JSON.stringify([...new Set([...JSON.parse(row.source_queries||'[]'),plan.query])]);
+   const observations=JSON.parse(row.source_observations||'[]');for(const item of s.observations||[{query:plan.query,language:plan.language,provider:s.provider}])observations.push({id:crypto.randomUUID(),set_id:set.id,...item,title:s.title,excerpt:s.excerpt,at:new Date().toISOString()});row.source_observations=JSON.stringify(observations);
+   row.source_excerpt=s.excerpt||row.source_excerpt;row.source_title=s.title||row.source_title;
+  }
  }
  for(const row of rows)if(isExcludedResearchRow(row))row.source_status=SELF_SOURCE_STATUS;
- const pending=rows.filter(r=>!r.source_text&&!isExcludedResearchRow(r));let cursor=0,completed=0;
- onProgress({phase:'Получение текстов',done:0,total:pending.length});
- await Promise.all(Array.from({length:4},async()=>{while(cursor<pending.length){const row=pending[cursor++];try{
-  // A fixed public extraction service performs retrieval. Never fetch arbitrary
-  // returned URLs from the application network or forward application credentials.
-  const url=publicSourceUrl(row.source_url);
-  row.source_text=await responseText(await fetch('https://r.jina.ai/'+url,{redirect:'error',signal:AbortSignal.timeout(20000),headers:{Accept:'text/plain'}}),240000);
-  const origin=row.source_text.match(/^URL Source:\s*(https?:\/\/\S+)/mi)?.[1];
-  if(origin&&isOwnResearchSource(origin)){row.source_status=SELF_SOURCE_STATUS;continue;}
-  row.source_status='Текст получен';row.source_fetched=new Date().toISOString();
- }catch(e){row.source_status='Ошибка получения: '+String(e).slice(0,180);}finally{completed++;onProgress({phase:'Получение текстов',done:completed,total:pending.length});}}}));
- return {sources:rows,warnings:result.warnings};
+ const pending=rows.filter(r=>!r.source_text&&!isExcludedResearchRow(r)).slice(0,100);let cursor=0,completed=0;
+ onProgress({phase:'Получение текстов страниц',done:0,total:pending.length});
+ await Promise.all(Array.from({length:4},async()=>{while(cursor<pending.length){const row=pending[cursor++];const at=new Date().toISOString();let observation:any;
+  try{const result=await retrieveText(row.source_url);row.source_text=result.text;row.source_status=result.quality==='partial'?'Получен частичный текст (лимит длины)':'Текст страницы получен';row.source_fetched=at;
+   observation={kind:'retrieval',at,...result,text:undefined,chars:result.text.length,sha256:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(result.text)))).map(b=>b.toString(16).padStart(2,'0')).join('')};
+  }catch(e){row.source_status='Ошибка получения: '+reason(e);observation={kind:'retrieval',at,quality:'snippet',error:reason(e)};}
+  const observations=JSON.parse(row.source_observations||'[]');observations.push(observation);row.source_observations=JSON.stringify(observations);
+  completed++;onProgress({phase:'Получение текстов страниц',done:completed,total:pending.length});
+ }}));
+ const downloaded=rows.filter(r=>r.source_text&&!isExcludedResearchRow(r)).length;
+ warnings.push(`Текст страницы доступен: ${downloaded}; только поисковые выдержки или ошибки: ${rows.filter(r=>!r.source_text&&!isExcludedResearchRow(r)).length}.`);
+ return {sources:rows,warnings:[...new Set(warnings)]};
 }
 export function validateProposal(raw:Row,parameters:Row[],sourceIds:Set<string>){
  if(!raw||typeof raw!=='object')throw new Error('Предложение должно быть объектом');
@@ -108,15 +114,15 @@ export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Calle
  sources=sources.filter(s=>!isExcludedResearchRow(s));
  const chunks:Row[][]=[];let batch:Row[]=[],size=0;
  for(const source of sources){const text=source.source_text||source.source_excerpt||'';
-  for(let offset=0;offset<text.length;offset+=24000){const piece={id:source.source_uid,url:source.source_url,text:text.slice(offset,offset+24000),evidence:source.source_text?'page':'snippet'};if(size+piece.text.length>40000&&batch.length){chunks.push(batch);batch=[];size=0;}batch.push(piece);size+=piece.text.length;}
+  for(let offset=0;offset<text.length;offset+=24000){const piece={id:source.source_uid,url:source.source_url,text:text.slice(offset,offset+24000),evidence:sourceQuality(source)};if(size+piece.text.length>40000&&batch.length){chunks.push(batch);batch=[];size=0;}batch.push(piece);size+=piece.text.length;}
  }if(batch.length)chunks.push(batch);if(!chunks.length)throw new Error('Сначала соберите источники');
  const attribution=set.code==='style_solutions';
  const catalog=attribution?await classificationCatalog():[];
  const proposals:Row[]=[],warnings:string[]=excluded?['Собственные страницы исключены из анализа: '+excluded]:[];
  let received=0,rejected=0,failedParts=0;
- const fullTexts=sources.filter(s=>s.source_text).length;
- if(fullTexts<sources.length)warnings.push(`Полный текст получен для ${fullTexts} из ${sources.length} внешних источников; для остальных используются поисковые выдержки.`);
- if(sources.some(s=>String(s.source_status).includes('HTTP 451')))warnings.push('Сервис извлечения текста отвечает HTTP 451. Поисковые выдержки не заменяют проверку полного текста.');
+ const fullTexts=sources.filter(s=>sourceQuality(s)==='page').length;
+ if(fullTexts<sources.length)warnings.push(`Полный текст получен для ${fullTexts} из ${sources.length} внешних источников; для остальных доступны частичный текст или поисковые выдержки.`);
+ if(sources.some(s=>!s.source_text&&String(s.source_status).includes('HTTP 451')))warnings.push('Некоторые источники вернули HTTP 451. Ошибка сохранена; поисковые выдержки не заменяют текст страницы.');
  for(const [index,sources] of chunks.entries()){
   onProgress({phase:'Анализ текста',done:index,total:chunks.length,accepted:proposals.length,rejected});
   const started=Date.now();const model=Deno.env.get('INTAKE_RESEARCH_MODEL')||'perplexity/sonar-pro';

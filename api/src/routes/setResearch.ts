@@ -40,7 +40,7 @@ setResearch.post('/:id/:action',async c=>{
  if(active.has(id)||active.size>=2)throw new ApiError('rate_limited','Уже выполняется исследование. Дождитесь завершения');
  active.set(id,{phase:action==='collect'?'Поиск источников':'Подготовка анализа',done:0,total:null});journals.set(id,[]);addLog(id,caller.requestId,action==='collect'?'Начат сбор источников':'Начат анализ источников');let prepared:any;
  try{prepared=await transaction(actor.contributorId,async tx=>{
-  const [entity]=await tx<any>`select id,title_ru,working_revision_id from app.entities where id=${id} and status<>'archived' for update`;
+  const [entity]=await tx<any>`select id,title_ru,title_en,title_original,original_language,working_revision_id from app.entities where id=${id} and status<>'archived' for update`;
   if(!entity)throw new ApiError('not_found','Запись не найдена');
   if(entity.working_revision_id!==input.base_revision_id)throw new ApiError('version_conflict','Сохранённая версия изменилась. Обновите редактор');
   const attached=await tx`select set_id from app.entity_parameter_sets where entity_id=${id} and set_id=${set.id} union select t.set_id from app.type_parameter_sets t join app.entities e on e.id=${id} where t.set_id=${set.id} and t.type_id in(select app.entity_type_ancestors(e.type_id))`;
@@ -48,17 +48,17 @@ setResearch.post('/:id/:action',async c=>{
   const data=await researchData(tx,id),job=crypto.randomUUID();
   const state={...data.state,job,action,set_id:set.id,status:'running',progress:active.get(id),log:journals.get(id),request_id:caller.requestId,warnings:[],started_at:new Date().toISOString(),error:null};
   const revision=await saveResearch(tx,id,actor.contributorId,{sources:data.sources,state});
-  return {title:entity.title_ru,sources:data.sources,state,revision};
+  return {title:entity.title_ru,identity:{title_ru:entity.title_ru,title_en:entity.title_en,title_original:entity.title_original,original_language:entity.original_language},sources:data.sources,state,revision};
  });}catch(e){active.delete(id);journals.delete(id);throw e;}
  void(async()=>{
   let result:any;const progress=(value:ResearchProgress)=>{
    active.set(id,value);
    addLog(id,caller.requestId,value.phase+(value.total!=null?`: ${value.done} из ${value.total}`:'')+(value.accepted!=null?`; принято ${value.accepted}, отклонено ${value.rejected||0}`:''));
   };
-  try{result=action==='collect'?await gather(prepared.title,set,prepared.sources,caller,progress):await analyzeSet(prepared.title,set,prepared.sources,caller,progress);}
+  try{result=action==='collect'?await gather(prepared.identity,set,prepared.sources,caller,progress):await analyzeSet(prepared.title,set,prepared.sources,caller,progress);}
   catch(e){result={error:String(e).slice(0,500)};log('error',caller.requestId,'Исследование набора не завершено',{entity_id:id,error:String(e)});}
   for(const warning of result.warnings||[])addLog(id,caller.requestId,warning,'warning');
-  addLog(id,caller.requestId,result.error?'Задание завершилось ошибкой: '+result.error:action==='analyze'?`Анализ завершён: получено ${result.received||0}, принято ${result.proposals?.length||0}, отклонено ${result.rejected||0}, ошибок частей ${result.failed_parts||0}`:`Сбор завершён: источников ${result.sources?.length||0}, полных текстов ${result.sources?.filter((s:any)=>s.source_text).length||0}`,result.error?'error':'info');
+  addLog(id,caller.requestId,result.error?'Задание завершилось ошибкой: '+result.error:action==='analyze'?`Анализ завершён: получено ${result.received||0}, принято ${result.proposals?.length||0}, отклонено ${result.rejected||0}, ошибок частей ${result.failed_parts||0}`:`Сбор завершён: источников ${result.sources?.length||0}, полученных текстов ${result.sources?.filter((s:any)=>s.source_text).length||0}`,result.error?'error':'info');
   await transaction(actor.contributorId,async tx=>{
    await tx`select id from app.entities where id=${id} for update`;
    const current=await researchData(tx,id);if(current.state.job!==prepared.state.job)return;

@@ -1,6 +1,6 @@
 import { ApiError } from './errors.ts';
 
-export interface ResearchSource { id:string; url:string; title:string; excerpt:string; provider:string; evidence:'snippet'|'provided'; }
+export interface ResearchSource { id:string; url:string; title:string; excerpt:string; provider:string; evidence:'snippet'|'provided'; observations?:{query:string;language:string;provider:string}[]; }
 export function yandexDocuments(xml:string):{url:string;title:string;excerpt:string}[]{
  const out=[];
  for(const match of xml.matchAll(/<doc\b[^>]*>([\s\S]*?)<\/doc>/g)){
