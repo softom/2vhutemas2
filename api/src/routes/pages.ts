@@ -938,7 +938,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       const out: string[] = [];
       const groups = new Map<number, CardValue[]>();
       // Площадная программа и её свойства — в своём разделе (program).
-      for (const value of values.filter((v) => !PROGRAM_PARAMS.has(v.parameter))) {
+      for (const value of values.filter((v) => !PROGRAM_PARAMS.has(v.parameter)&&v.parameter!=='style_solutions')) {
         if (!groups.has(value.indicator_id)) groups.set(value.indicator_id, []);
         groups.get(value.indicator_id)!.push(value);
       }

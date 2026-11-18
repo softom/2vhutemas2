@@ -351,6 +351,8 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
   }); // API orders inherited sets first, then attachments from oldest to newest.
   const detachAction=(panel:typeof panels[number],disabled=false)=>panel.set&&entityId?<button type="button" className="ghost" disabled={disabled||setBusy||!panel.fields.some(f=>f.set_attached&&!f.set_inherited)} title={panel.fields.some(f=>f.set_inherited)?'Набор задан типом записи и не открепляется отдельно':'Заполненные значения и материалы исследования сохранятся'} onClick={()=>void detach(panel.set!)}>Открепить</button>:null;
   const panelForm=(panel:typeof panels[number])=>{
+    // Retired style tables remain in indicators and save payloads, but have no editing surface.
+    if(panel.code==='style_solutions')return null;
     let groups=indicators.map((indicator,index)=>({indicator,index})).filter(({indicator})=>!indicator.values.length||indicator.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter)));
     if(!groups.length&&indicators.length)groups=[{indicator:indicators[0],index:0}];
     return <div className="parameter-set-form">{groups.map(({indicator,index})=><fieldset className="indicator" key={indicator.id??index}>
@@ -375,7 +377,7 @@ export function IndicatorsField({ indicators, suggested, onChange, entityId, onS
       {setNotice&&<p role="status" className="hint">{setNotice}</p>}
 
       {adding&&<div className="parameter-add-panel"><label>Набор параметров<select value={chosen} onChange={e=>setChosen(e.target.value)}><option value="">Выберите набор…</option>{sets.filter(s=>!suggested.some(p=>p.set===s.code)).map(s=><option key={s.id} value={s.id}>{s.title_ru}</option>)}</select></label><button type="button" disabled={!chosen||setBusy} onClick={()=>void attach()}>{setBusy?'Добавляем…':'Добавить'}</button></div>}
-      {panels.map(panel=><ParameterSetPanel key={panel.set?.id||panel.code||'extra'} title={panel.title+(indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length>1?' · групп: '+indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length:'')}>
+      {panels.map(panel=><ParameterSetPanel key={panel.set?.id||panel.code||'extra'} title={panel.title+(panel.code!=='style_solutions'&&indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length>1?' · групп: '+indicators.filter(g=>g.values.some(v=>panel.fields.some(f=>f.parameter===v.parameter))).length:'')}>
         {entityId&&panel.set&&beforeResearch&&onRevision?<SetResearchPanel entityId={entityId} set={panel.set} sets={sets} beforeStart={beforeResearch} onRevision={onRevision} indicators={indicators} fields={panel.fields} onAccept={(group,target)=>{if(target===null)onChange([...indicators,group]);else if(indicators.some((g,i)=>groupKey(g,i)===target))onChange(indicators.map((g,i)=>groupKey(g,i)===target?group:g));}} actions={disabled=>detachAction(panel,disabled)}>
           {panelForm(panel)}
         </SetResearchPanel>:<div className="set-research-panel"><div className="row"><button type="button" className="ghost" disabled>Собрать источники</button><button type="button" className="ghost" disabled>Определить при помощи LLM</button>{detachAction(panel)}</div>{panelForm(panel)}</div>}
