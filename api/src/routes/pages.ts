@@ -12,6 +12,7 @@
  * как для гостя. Черновик отвечает 404, а вошедший редактор получает тот же HTML-рендер
  * через защищённый API со своим токеном.
  */
+import { cardWidgetSections } from "../lib/cardWidgets.ts";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import {relationSetsHtml} from "../lib/publicRelationSets.ts";
@@ -1085,12 +1086,16 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     const textAt=withParameterSets.indexOf('text');
     withParameterSets.splice(textAt<0?withParameterSets.length:textAt,0,'parameter_sets');
   }
+  const widgets = cardWidgetSections(card, withParameterSets);
   for (const component of withParameterSets) {
     const render = sections[component];
     // Раздел — свой блок: облик решает, где ему стоять (Р-91), порядок — тип.
     const html = render ? render() : "";
     if (html) parts.push(`<section class="pc-${component}">${html}</section>`);
+    parts.push(...(widgets.get(component) ?? []));
+    widgets.delete(component);
   }
+  parts.push(...(widgets.get("") ?? []));
   if (news) {
     // Листать ленту: «Раньше / Позже» в конце, «Ещё за этот день» — на полях.
     parts.push(`<section class="pc-news-nav">${newsNavHtml(news.nav)}</section>`);

@@ -143,6 +143,7 @@ export interface PublicCard {
   }[];
   /** Компоненты карточки по порядку — из таблицы отображений типа. */
   layout: string[];
+  card_widgets?: unknown;
   /** Кадр-превью ролика по его адресу (тип «Видео»); пусто у прочих записей. */
   video_cover: string | null;
   authors: string[];
@@ -291,13 +292,14 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
 
   // Порядок разделов карточки задаёт тип (таблица отображений): ближайшая
   // настройка вверх по дереву.
-  const layoutRows = await sql<{ component: string }>`
-    select i.component
-      from app.type_presentation_items i
-     where i.presentation_id = app.presentation_for((select type_id from app.entities where id = ${id}), 'card')
-     order by i.sort_order
+  const layoutRows = await sql<{ component: string | null; widgets: unknown }>`
+    select i.component, p.settings->'card_widgets' as widgets
+      from app.type_presentations p
+      left join app.type_presentation_items i on i.presentation_id = p.id
+     where p.id = app.presentation_for((select type_id from app.entities where id = ${id}), 'card')
+     order by i.sort_order, i.id
   `;
-  const layout = layoutRows.map((row) => row.component);
+  const layout = layoutRows.flatMap(row => row.component ? [row.component] : []);
   const videoRows = await sql<{ cover: string | null }>`select app.video_cover(${id}, ${drafts}) as cover`;
   const video_cover = videoRows[0]?.cover ?? null;
 
@@ -364,6 +366,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     mentions,
     sources,
     layout,
+    card_widgets: layoutRows[0]?.widgets,
     video_cover,
     authors,
     refs,

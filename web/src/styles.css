@@ -943,3 +943,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .pc-parameter_sets .value-table { table-layout: fixed; }
 .pc-parameter_sets .value-table th, .pc-parameter_sets .value-table td { overflow-wrap: anywhere; }
 @media(max-width:600px) { .pc-parameter_sets .value-table { min-width:600px; } }
+
+@media (min-width: 1001px) {
+  .public-card > .pc-widget[data-cell="side"] { grid-column: 3; }
+  .public-card > .pc-widget[data-cell="full"] { grid-column: 1 / -1; }
+}
