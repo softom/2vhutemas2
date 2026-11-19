@@ -961,6 +961,9 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       }
       return out.join("");
   }
+  const renderedWidgets = new Set<string>();
+  const panelSets = () => (card.relation_sets ?? []).filter(set =>
+    set.code !== "style_solutions" || !renderedWidgets.has("style_analysis"));
   const sections: Record<string, () => string> = {
     indicators: () => {
       // Новость: одни «Сведения» — выход днём и слотом, тема, первоисточник
@@ -983,7 +986,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         if (published) rows.push(["Опубликовано в источнике", e(valueText(published))]);
         return rows.length ? `<h2>Сведения</h2><dl>${rows.map(([t, v]) => `<dt>${t}</dt><dd>${v}</dd>`).join("")}</dl>` : "";
       }
-      return parameterValuesHtml(card.values.filter(v => v.card_side !== 'left')) + relationSetsHtml(card.relation_sets ?? [], 'right') +
+      return parameterValuesHtml(card.values.filter(v => v.card_side !== 'left')) + relationSetsHtml(panelSets(), 'right') +
         (programSide === 'right' ? programHtml(card) : '');
     },
     // Обоснование связи — наш собственный текст, которого нет в энциклопедиях.
@@ -1030,7 +1033,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     // У новости текст идёт сразу за заголовком, без «Описания».
     // Площадная программа — под связями, по уровням классификатора.
     program: () => programSide === 'left' ? programHtml(card) : '',
-    parameter_sets: () => parameterValuesHtml(card.values.filter(v=>v.card_side==='left')) + relationSetsHtml(card.relation_sets ?? [], 'left'),
+    parameter_sets: () => parameterValuesHtml(card.values.filter(v=>v.card_side==='left')) + relationSetsHtml(panelSets(), 'left'),
     text: () => descriptionHtml ? `${news ? "" : "<h2>Описание</h2>"}<div class="public-document">${descriptionHtml}</div>` : "",
     // Изображение — цитата (Р-68): под каждым автор и источник.
     gallery: () => card.media.length === 0 ? "" :
@@ -1086,7 +1089,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     const textAt=withParameterSets.indexOf('text');
     withParameterSets.splice(textAt<0?withParameterSets.length:textAt,0,'parameter_sets');
   }
-  const widgets = cardWidgetSections(card, withParameterSets);
+  const widgets = cardWidgetSections(card, withParameterSets, undefined, renderedWidgets);
   for (const component of withParameterSets) {
     const render = sections[component];
     // Раздел — свой блок: облик решает, где ему стоять (Р-91), порядок — тип.

@@ -20,3 +20,17 @@ Deno.test("style_analysis preserves each citation's own context and attached emp
       !/first.*Цитата А.*1930.*Фасад/.test(rows[0]) || !/second.*Цитата Б.*1960/.test(rows[1]) ||
       rows[1].includes("Фасад") || rows[1].includes("<dt>zone")) throw Error(html);
 });
+
+Deno.test("style_analysis takes over the attached panel only for a visible placement", async () => {
+  const { cardWidgetSections } = await import("./cardWidgets.ts");
+  const card = {
+    card_widgets: [{kind: "style_analysis", cell: "main", after: "links"}],
+    relation_sets: [{id: "set-1", code: "style_solutions", title: "Стили", links: [], fields: []}],
+  } as unknown as PublicCard;
+  const shown = new Set<string>();
+  const sections = cardWidgetSections(card, ["links"], undefined, shown);
+  if (!shown.has("style_analysis") || sections.get("links")?.length !== 1) throw Error("Missing placement");
+  shown.clear();
+  card.card_widgets = [{kind: "style_analysis", cell: "invalid"}];
+  if (cardWidgetSections(card, [], undefined, shown).size || shown.size) throw Error("Invalid placement consumed panel");
+});
