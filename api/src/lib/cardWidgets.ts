@@ -1,13 +1,15 @@
+import { styleAnalysis } from "./styleAttributionWidget.ts";
 import type { PublicCard } from "./publicCard.ts";
 
 type Renderer = (card: Readonly<PublicCard>) => string;
-export const cardWidgetRenderers = new Map<string, Renderer>();
+export const cardWidgetRenderers = new Map<string, Renderer>([["style_analysis", styleAnalysis]]);
 
 /** Group visible widgets by insertion point in the existing reading order. */
 export function cardWidgetSections(
   card: PublicCard,
   layout: readonly string[],
   renderers = cardWidgetRenderers,
+  renderedKinds?: Set<string>,
 ): Map<string, string[]> {
   const groups = new Map<string, string[]>();
   const seen = new Set<string>();
@@ -22,6 +24,7 @@ export function cardWidgetSections(
     seen.add(kind);
     const html = render(card);
     if (!html) continue;
+    renderedKinds?.add(kind);
     const anchor = layout.includes(after) ? after : "";
     const group = groups.get(anchor) ?? [];
     group.push(`<section class="pc-widget" data-cell="${cell}">${html}</section>`);
