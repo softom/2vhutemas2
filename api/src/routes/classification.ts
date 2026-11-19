@@ -72,7 +72,7 @@ async function plans(tx:Tx,entityId:number,input:any,context:any={}){
  }
  return {data,out};
 }
-function planView(x:any){return {proposal_id:x.proposal_id,action:x.batchAppend&&x.action!=='repeat'?'append_batch':x.action,link_id:x.current?.id||null,base_link_revision_id:x.current?.working_revision_id||null,concept_published:x.conceptPublished,source_published:x.sourceEntity?.status==='published',link_status:x.current?.status||null,published_revision_id:x.current?.published_revision_id||null,source_entity_id:x.sourceEntity?.id||null,source_title:x.source.source_title,url:x.url,before:x.current?extractText(x.current.body):'',after:x.p.rationale,quote:x.p.quote};}
+function planView(x:any){return {proposal_id:x.proposal_id,action:x.batchAppend&&x.action!=='repeat'?'append_batch':x.action,link_id:x.current?.id||null,base_link_revision_id:x.current?.working_revision_id||null,concept_published:x.conceptPublished,source_published:x.sourceEntity?.status==='published'&&sourceMarks(x.current?.body||[]).every(m=>!m.props.sourceRevisionId||m.props.sourceRevisionId===x.sourceEntity.published_revision_id),link_status:x.current?.status||null,published_revision_id:x.current?.published_revision_id||null,source_entity_id:x.sourceEntity?.id||null,source_title:x.source.source_title,url:x.url,before:x.current?extractText(x.current.body):'',after:x.p.rationale,quote:x.p.quote};}
 classification.post('/:id/check',async c=>{
  const actor=permit(c.get('principal'),'edit'),id=Number(c.req.param('id')),input=await c.req.json();
  if(!Number.isSafeInteger(id)||id<1)fail('Некорректный ID');

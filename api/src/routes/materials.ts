@@ -114,7 +114,7 @@ materials.post("/:id/publish", async (c: Context<AppEnv>) => {
     if (belongs.length === 0) {
       throw new ApiError("validation_failed", "Версия принадлежит другому материалу");
     }
-    if (material.published_revision_id === revisionId && material.status === "published") {
+    if (!material.entity_id && material.published_revision_id === revisionId && material.status === "published") {
       throw new ApiError("duplicate", "Эта версия уже опубликована");
     }
 

@@ -129,13 +129,14 @@ export async function publishOwnerRevision(
   // и опубликовал». Явно указанная версия позволяет вернуть прежнюю редакцию.
   const chosen = revisionId ?? current.working_revision_id;
   if (!chosen) throw new ApiError("validation_failed", `У этой записи нет ни одной версии`);
-  if (current.status === "published" && current.published_revision_id === chosen) {
+  if (owner.kind !== "entity" && current.status === "published" && current.published_revision_id === chosen) {
     throw new ApiError("duplicate", "Эта версия уже опубликована");
   }
 
   if (owner.kind === "entity") {
     await publishVisibleMedia(tx, owner.id, chosen, contributorId);
-    await publishAcceptedAttributions(tx, owner.id, chosen, contributorId);
+    const changed=await publishAcceptedAttributions(tx, owner.id, chosen, contributorId);
+    if(current.status==="published"&&current.published_revision_id===chosen&&!changed)throw new ApiError("duplicate","Эта версия и её принятый состав уже опубликованы");
   }
 
   // Проверку принадлежности и полноты версии делает publishOwned: он же
@@ -210,6 +211,7 @@ export async function publishAcceptedAttributions(tx:Tx,id:number,revision:strin
  cross join lateral jsonb_array_elements(coalesce(r.snapshot->'values','[]')) v
  join app.parameters p on p.id::text=v->>'parameter_id'
  where r.id=${revision} and r.entity_id=${id} and p.code='research_state'`;
+ let changed=0;
  const accepted=new Map<number,string>();
  for(const row of rows)for(const item of row.state.accepted_attributions||[]){
   if(item.revision_id&&Number.isSafeInteger(Number(item.link_id)))accepted.set(Number(item.link_id),item.revision_id);
@@ -220,13 +222,26 @@ export async function publishAcceptedAttributions(tx:Tx,id:number,revision:strin
    where l.id=${linkId} and l.from_entity_id=${id} for update of l`;
   if(!link||link.status==='archived')throw new ApiError('validation_failed',`Принятая связь №${linkId} удалена или недоступна. Публикация отменена.`);
   if(link.working_revision_id!==version)throw new ApiError('version_conflict',`Связь №${linkId} изменилась после принятия исследования. Публикация отменена.`);
-  const [concept]=await tx<any>`select status from app.entities where id=${link.to_entity_id}`;
-  if(concept?.status!=='published')throw new ApiError('validation_failed',`Понятие связи №${linkId} ещё не опубликовано. Публикация карточки отменена.`);
+  changed+=await publishAttributionDependency(tx,Number(link.to_entity_id),null,actor,id);
   for(const {props} of sourceMarks(link.body)){
-   const [source]=await tx<any>`select status,published_revision_id from app.entities where id=${Number(props.entityId)}`;
-   if(source?.status!=='published'||props.sourceRevisionId&&source.published_revision_id!==props.sourceRevisionId)throw new ApiError('validation_failed',`Источник связи №${linkId} ещё не опубликован в принятой версии. Публикация карточки отменена.`);
+   changed+=await publishAttributionDependency(tx,Number(props.entityId),props.sourceRevisionId||null,actor,id);
   }
   if(link.status==='published'&&link.published_revision_id===version)continue;
   await publishOwnerRevision(tx,{kind:'link',id:linkId},version,actor,`Принятая атрибуция в составе записи ${id}`);
+  changed++;
  }
+ return changed;
+}
+
+/** Publish only the directly accepted dependency; never traverse its own graph. */
+async function publishAttributionDependency(tx:Tx,id:number,pinned:string|null,actor:string,parent:number){
+ const [e]=await tx<any>`select status,working_revision_id,published_revision_id from app.entities where id=${id} for update`;
+ if(!e||e.status==='archived')throw new ApiError('validation_failed',`Понятие или источник №${id} недоступны. Публикация отменена.`);
+ // Published concepts are already visible: do not publish unrelated later edits.
+ if(e.status==='published'&&(!pinned||e.published_revision_id===pinned))return 0;
+ const version=pinned||e.working_revision_id;
+ if(!version||pinned&&e.working_revision_id!==pinned)throw new ApiError('version_conflict',`Источник №${id} изменился после принятия цитаты. Публикация отменена.`);
+ await publishOwned(tx,{entity_id:id,link_id:null},version);
+ await tx`insert into app.revision_reviews(revision_id,reviewer_id,decision,note) values(${version},${actor},'published',${'Понятие или источник принятой атрибуции записи '+parent})`;
+ return 1;
 }
