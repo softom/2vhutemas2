@@ -6,6 +6,7 @@
  * редактору и рецензенту доступны черновики по canSeeDrafts. Проверяются — сама запись, связанные с ней записи, текст, файлы
  * и источники.
  */
+import {loadPublicRelationSets, type PublicRelationSet} from "./publicRelationSets.ts";
 import { sql } from "./db.ts";
 import { canSeeDrafts, type Principal } from "./auth.ts";
 import { extractRefs, extractText } from "../routes/documents.ts";
@@ -112,7 +113,11 @@ export interface PublicCard {
   /** Чертежи DXF: просмотр с замерами; подпись — как у цитаты (Р-68). */
   drawings: PublicDrawing[];
   document: { body_json: unknown } | null;
+  relation_sets?: PublicRelationSet[];
   links: {
+    id: number;
+    other_type_id: string;
+    role_id: string | null;
     other_id: number;
     other_slug: string;
     other_title: string;
@@ -234,7 +239,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   const document = documents[0] ?? null;
 
   const linkRows = await sql<PublicCard["links"][number] & {justification_blocks:unknown}>`
-    select other.id as other_id, other.slug as other_slug, other.title_ru as other_title,
+    select l.id, other.type_id as other_type_id, l.role_id, other.id as other_id, other.slug as other_slug, other.title_ru as other_title,
            (app.entity_type_path(other.type_id) -> 0 ->> 'code') as other_root,
            lr.code as role, lr.title_ru as role_title,
            case when l.from_entity_id = ${id} then 'outgoing' else 'incoming' end as direction,
@@ -354,6 +359,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     drawings,
     document,
     links,
+    relation_sets: await loadPublicRelationSets(id, links),
     neighbor_links,
     mentions,
     sources,

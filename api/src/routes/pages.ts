@@ -14,6 +14,7 @@
  */
 import { Hono } from "hono";
 import type { Context } from "hono";
+import {relationSetsHtml} from "../lib/publicRelationSets.ts";
 import { sql } from "../lib/db.ts";
 import { entities } from "./entities.ts";
 import { siteFooter, siteHeader } from "../lib/siteHeader.ts";
@@ -981,7 +982,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         if (published) rows.push(["Опубликовано в источнике", e(valueText(published))]);
         return rows.length ? `<h2>Сведения</h2><dl>${rows.map(([t, v]) => `<dt>${t}</dt><dd>${v}</dd>`).join("")}</dl>` : "";
       }
-      return parameterValuesHtml(card.values.filter(v => v.card_side !== 'left')) +
+      return parameterValuesHtml(card.values.filter(v => v.card_side !== 'left')) + relationSetsHtml(card.relation_sets ?? [], 'right') +
         (programSide === 'right' ? programHtml(card) : '');
     },
     // Обоснование связи — наш собственный текст, которого нет в энциклопедиях.
@@ -1028,7 +1029,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     // У новости текст идёт сразу за заголовком, без «Описания».
     // Площадная программа — под связями, по уровням классификатора.
     program: () => programSide === 'left' ? programHtml(card) : '',
-    parameter_sets: () => parameterValuesHtml(card.values.filter(v=>v.card_side==='left')),
+    parameter_sets: () => parameterValuesHtml(card.values.filter(v=>v.card_side==='left')) + relationSetsHtml(card.relation_sets ?? [], 'left'),
     text: () => descriptionHtml ? `${news ? "" : "<h2>Описание</h2>"}<div class="public-document">${descriptionHtml}</div>` : "",
     // Изображение — цитата (Р-68): под каждым автор и источник.
     gallery: () => card.media.length === 0 ? "" :
