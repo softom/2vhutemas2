@@ -109,3 +109,6 @@
 ### 19.11.2026 — публикация принятого состава
 
 Перед выпуском создан /opt/2vhutemas-services/backups/publication-release-20261119/code.tar.gz (API, web/src, web/dist); SHA-256 проверен после выпуска. Для согласованной публикации Махорки сохранены mahorka-before.json и mahorka-after.json в том же закрытом каталоге. Контрольные суммы: before 7cf3ca3e931f58842705164410ca145bc2d317594656792c74db0f7b1aecb204; after 3758c49f2f60150c797ca87f286a95516d624e7fe06b51d2351dafc4885cb84f. Новый полный дамп не создавался, миграций нет; ранее проверенный полный backup seteditor-20261119 остаётся на сервере. Снимки данных не помещались в Git/Dropbox.
+
+
+**19.11.2026, остальные принятые связи и панель.** В publication-release-20261119 сохранены remaining-before.json (SHA-256 2f2ce28e31501f3da1702f19bb6e16a5ce6d0cc9c0cff4f030ee0ae4d26285db) и remaining-after.json (03bc4077db22efa7e22f7670bb8dfa9e738caab153ee990976480dca2e4f52fa). Перед исправлением панели создан серверный backups/relation-panel-20261119/code.tar.gz для API; SHA-256 проверен. Нового полного дампа нет; миграций нет.
