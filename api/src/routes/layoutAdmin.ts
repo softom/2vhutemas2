@@ -1,9 +1,10 @@
+import { sectionCapabilities } from "../lib/cardSections.ts";
 import { type Context, Hono } from "hono";
 import { require as requirePermission } from "../lib/auth.ts";
 import { type Query, sql, transaction } from "../lib/db.ts";
 import { ApiError, pgFields } from "../lib/errors.ts";
 import type { AppEnv } from "../lib/http.ts";
-import { getCardLayout, getPageLayout, readLayout } from "../lib/layouts.ts";
+import { CARD_PAGE_ID, getCardLayout, getPageLayout, readLayout } from "../lib/layouts.ts";
 import { getWidget, widgetImplementations } from "../lib/widgetRegistry.ts";
 
 export const layoutAdmin = new Hono<AppEnv>();
@@ -78,7 +79,7 @@ layoutAdmin.get(
 layoutAdmin.post("/widgets", (c) =>
   write(c, async (q, b) => {
     const key = name(b.renderer_key);
-    if (!widgetImplementations.has(key)) invalid("Неизвестная реализация виджета");
+    if (!widgetImplementations.has(key) && !sectionCapabilities(key)) invalid("Неизвестная реализация виджета");
     return (await q`insert into app.widgets(name,renderer_key) values(${
       name(b.name)
     },${key}) returning *`)[0];
@@ -196,3 +197,14 @@ layoutAdmin.post("/type_presentations/:typeId/layout", (c) =>
     values(${id},'card',${next},true) on conflict(type_id,mode)
     do update set layout_id=excluded.layout_id returning layout_id`)[0];
   }));
+
+layoutAdmin.get("/card-layout-editor", async c => {
+  const [pages,types,layouts,widgets] = await Promise.all([
+    sql`select current_layout_id from app.pages where id=${CARD_PAGE_ID}`,
+    sql`select t.id,t.title_ru as name,p.layout_id from app.entity_types t
+      left join app.type_presentations p on p.type_id=t.id and p.mode='card' order by t.title_ru,t.id`,
+    sql`select id,name from app.layouts where page_id=${CARD_PAGE_ID} order by name,id`,
+    sql`select id,name from app.widgets order by name,id`,
+  ]);
+  return c.json({page_id:CARD_PAGE_ID,current_layout_id:pages[0]?.current_layout_id,types,layouts,widgets});
+});

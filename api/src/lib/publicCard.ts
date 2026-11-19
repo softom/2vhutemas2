@@ -1,3 +1,5 @@
+import { config } from "./config.ts";
+import { getCardLayout, type CardLayout } from "./layouts.ts";
 /**
  * Единая загрузка карточки (Р-74). По умолчанию — только публичные данные.
  *
@@ -66,6 +68,7 @@ export interface PublicDrawing {
 }
 
 export interface CardValue {
+  set_id?: string | null;
   card_side?: "left" | "right";
   indicator_id: number;
   indicator_title: string;
@@ -143,6 +146,8 @@ export interface PublicCard {
   }[];
   /** Компоненты карточки по порядку — из таблицы отображений типа. */
   layout: string[];
+  parameterSetOrder?: string[];
+  widgetLayout?: CardLayout | null;
   card_widgets?: unknown;
   /** Кадр-превью ролика по его адресу (тип «Видео»); пусто у прочих записей. */
   video_cover: string | null;
@@ -173,7 +178,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   const drafts = canSeeDrafts(principal);
   const rows = await sql<Record<string, unknown>>`
     select e.id, e.is_published, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
-           ty.code as type, ty.title_ru as type_title,
+           ty.id as type_id, ty.code as type, ty.title_ru as type_title,
            app.entity_type_path(e.type_id) as type_path,
            (select r.created_at from app.revisions r where r.id = e.published_revision_id)
              as published_at,
@@ -191,7 +196,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   const values = await sql<CardValue>`
     select i.id as indicator_id, i.title as indicator_title, i.measured_year, i.is_current,
            p.code as parameter, p.title_ru as title, p.unit, app.api_value_type(p.id) as value_type,
-           coalesce(placement.card_side, 'right') as card_side,
+           placement.id as set_id, coalesce(placement.card_side, 'right') as card_side,
            iv.num_value, iv.text_value, iv.bool_value,
            (select o.title_ru from app.parameter_options o where o.id = iv.option_id) as option_title,
            (select o.code from app.parameter_options o where o.id = iv.option_id) as option_code,
@@ -207,7 +212,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
       join app.read_values(${drafts}) iv on iv.indicator_id = i.id
       join app.parameters p on p.id = iv.parameter_id
       left join lateral (
-        select ps.card_side from app.parameter_set_items psi
+        select ps.id, ps.card_side from app.parameter_set_items psi
         join app.parameter_sets ps on ps.id=psi.set_id
         where psi.parameter_id=p.id
         order by exists(select 1 from app.entity_parameter_sets eps where eps.entity_id=${id} and eps.set_id=ps.id) desc,
@@ -292,8 +297,8 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
 
   // Порядок разделов карточки задаёт тип (таблица отображений): ближайшая
   // настройка вверх по дереву.
-  const layoutRows = await sql<{ component: string | null; widgets: unknown }>`
-    select i.component, p.settings->'card_widgets' as widgets
+  const layoutRows = await sql<{ component: string | null; widgets: unknown; set_ids: string[] | null }>`
+    select i.component, p.settings->'card_widgets' as widgets, i.settings->'parameter_set_ids' as set_ids
       from app.type_presentations p
       left join app.type_presentation_items i on i.presentation_id = p.id
      where p.id = app.presentation_for((select type_id from app.entities where id = ${id}), 'card')
@@ -366,6 +371,8 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     mentions,
     sources,
     layout,
+    parameterSetOrder: layoutRows.find(r=>r.component==="indicators")?.set_ids ?? undefined,
+    widgetLayout: config.useWidgetLayouts ? await getCardLayout(String(e.type_id)) : null,
     card_widgets: layoutRows[0]?.widgets,
     video_cover,
     authors,

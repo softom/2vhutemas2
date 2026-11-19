@@ -20,6 +20,7 @@ function optional(name: string, fallback: string): string {
 }
 
 export const config = {
+  useWidgetLayouts: optional("USE_WIDGET_LAYOUTS", "false") === "true",
   port: Number(optional("PORT", "8000")),
   db: {
     host: optional("APP_API_DB_HOST", "supa_db"),

@@ -52,7 +52,7 @@ Deno.test("layouts: routes, permissions, inheritance, versions and concurrent ed
       widgets.find((item: { renderer_key: string }) => item.renderer_key === "style_analysis").id,
     );
     check(
-      w?.renderer_key === "style_analysis" && typeof w.render === "function",
+      w?.renderer_key === "style_analysis" && "render" in w && typeof w.render === "function",
       "registered renderer",
     );
     await req("/widgets", { renderer_key: "params", name: "bad" }, 400);

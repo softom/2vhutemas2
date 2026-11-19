@@ -1,9 +1,15 @@
 import { type Query, sql } from "./db.ts";
 
+import type { CardSlot } from "./cardGrid.ts";
+
+export interface CardLayout {
+  id: string; page_id: string; revision: number; assigned: boolean; name: string; slots: CardSlot[];
+}
+
 export const CARD_PAGE_ID = "39ee9267-1a0e-4928-b608-24bf91f68101";
 
 export async function readLayout(id: string, query: Query = sql) {
-  const [row] = await query<{ layout: Record<string, unknown> }>`
+  const [row] = await query<{ layout: CardLayout }>`
     select to_jsonb(l) || jsonb_build_object('slots',coalesce((
       select jsonb_agg(to_jsonb(s) || jsonb_build_object('renderer_key',w.renderer_key)
                        order by s.sort_order)

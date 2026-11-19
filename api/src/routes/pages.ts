@@ -12,7 +12,8 @@
  * как для гостя. Черновик отвечает 404, а вошедший редактор получает тот же HTML-рендер
  * через защищённый API со своим токеном.
  */
-import { cardWidgetSections } from "../lib/cardWidgets.ts";
+import { renderCardGrid } from "../lib/cardGrid.ts";
+import { cardWidgetSections, widgetRenderers } from "../lib/cardWidgets.ts";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import {relationSetsHtml} from "../lib/publicRelationSets.ts";
@@ -21,7 +22,9 @@ import { entities } from "./entities.ts";
 import { siteFooter, siteHeader } from "../lib/siteHeader.ts";
 import { CATALOG_GROUPS, CATALOG_HIDDEN_ROOTS } from "../lib/entityTypes.ts";
 import { dayTitle, loadNews, newsDay, newsFeedHtml, newsNavHtml, newsNeighbours, newsOrder, newsTopics, sameDayHtml, topicHtml } from "../lib/news.ts";
-import { canSeeDrafts } from "../lib/auth.ts";
+import { CARD_PAGE_ID, readLayout } from "../lib/layouts.ts";
+import { config } from "../lib/config.ts";
+import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import { materialsOf } from "./researchMaterials.ts";
 import { ApiError } from "../lib/errors.ts";
 import { type AppEnv, log } from "../lib/http.ts";
@@ -970,7 +973,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       // ссылкой, публикация в источнике. Значимость — оценка робота для
       // редактора, читателю её не показываем.
       if (news) {
-        const by = (code: string) => card.values.filter((v) => v.parameter === code && v.card_side !== "left");
+        const by = (code: string) => card.values.filter(v => v.parameter === code && v.card_side !== "left" &&
+          (!card.widgetLayout || !card.parameterSetOrder || !v.set_id || card.parameterSetOrder.includes(v.set_id)));
         const rows: [string, string][] = [];
         const release = by("news_release")[0];
         const time = by("news_release_time")[0]?.text_value;
@@ -991,6 +995,30 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     },
     // Обоснование связи — наш собственный текст, которого нет в энциклопедиях.
     // Выводим его открыто, рядом со ссылкой, а не прячем в интерфейсе.
+    parameters: () => {
+      const sets = panelSets();
+      const order = card.parameterSetOrder ?? [...new Set([
+        ...card.values.flatMap(v => v.set_id ? [v.set_id] : []), ...sets.map(s => s.id),
+      ])];
+      const sides: Record<"left" | "right", string[]> = {left: [], right: []};
+      for (const id of [...order, null]) {
+        const values = card.values.filter(v => (v.set_id ?? null) === id);
+        for (const side of ["left", "right"] as const) {
+          const group = values.filter(v => (v.card_side ?? "right") === side);
+          // News uses a dedicated published-field list; keep its right-hand metadata below.
+          if (!news || side === "left") {
+            sides[side].push(parameterValuesHtml(group));
+            if (group.some(v => v.parameter === "area_program")) sides[side].push(programHtml(card));
+            sides[side].push(relationSetsHtml(sets.filter(s => s.id === id), side));
+          }
+        }
+      }
+      if (news) sides.right.push(sections.indicators());
+      return (["left", "right"] as const).map(side => {
+        const html = sides[side].join("");
+        return html ? `<div class="parameter-groups-${side}">${html}</div>` : "";
+      }).join("");
+    },
     links: () => {
       if (card.links.length === 0) return "";
       const graph = {
@@ -1080,25 +1108,43 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       `</details>`,
     ].join(""),
   };
-  // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
-  const layout = card.layout.length > 0
-    ? card.layout
-    : ["indicators", "links", "program", "text", "gallery", "drawings", "sources", "mentions", "citation"];
-  const withParameterSets = [...layout];
-  if (!withParameterSets.includes('parameter_sets')) {
-    const textAt=withParameterSets.indexOf('text');
-    withParameterSets.splice(textAt<0?withParameterSets.length:textAt,0,'parameter_sets');
+  if (card.widgetLayout) {
+    const slots = card.widgetLayout.slots;
+    const registry = widgetRenderers(card, sections);
+    const extras = new Map<string, string>();
+    for (const slot of slots) {
+      if (Object.hasOwn(sections, slot.renderer_key)) continue;
+      const render = registry.get(slot.renderer_key);
+      if (!render) continue;
+      const html = render(card.id, slot.design);
+      extras.set(slot.id, html);
+      if (html) renderedWidgets.add(slot.renderer_key);
+    }
+    parts.push(renderCardGrid(slots, slot => {
+      if (extras.has(slot.id)) return extras.get(slot.id)!;
+      return registry.get(slot.renderer_key)?.(card.id, slot.design) ?? "";
+    }, materials !== undefined));
+  } else {
+    // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
+    const layout = card.layout.length > 0
+      ? card.layout
+      : ["indicators", "links", "program", "text", "gallery", "drawings", "sources", "mentions", "citation"];
+    const withParameterSets = [...layout];
+    if (!withParameterSets.includes('parameter_sets')) {
+      const textAt=withParameterSets.indexOf('text');
+      withParameterSets.splice(textAt<0?withParameterSets.length:textAt,0,'parameter_sets');
+    }
+    const widgets = cardWidgetSections(card, withParameterSets, undefined, renderedWidgets);
+    for (const component of withParameterSets) {
+      const render = sections[component];
+      // Раздел — свой блок: облик решает, где ему стоять (Р-91), порядок — тип.
+      const html = render ? render() : "";
+      if (html) parts.push(`<section class="pc-${component}">${html}</section>`);
+      parts.push(...(widgets.get(component) ?? []));
+      widgets.delete(component);
+    }
+    parts.push(...(widgets.get("") ?? []));
   }
-  const widgets = cardWidgetSections(card, withParameterSets, undefined, renderedWidgets);
-  for (const component of withParameterSets) {
-    const render = sections[component];
-    // Раздел — свой блок: облик решает, где ему стоять (Р-91), порядок — тип.
-    const html = render ? render() : "";
-    if (html) parts.push(`<section class="pc-${component}">${html}</section>`);
-    parts.push(...(widgets.get(component) ?? []));
-    widgets.delete(component);
-  }
-  parts.push(...(widgets.get("") ?? []));
   if (news) {
     // Листать ленту: «Раньше / Позже» в конце, «Ещё за этот день» — на полях.
     parts.push(`<section class="pc-news-nav">${newsNavHtml(news.nav)}</section>`);
@@ -1169,8 +1215,21 @@ pages.get("/api/v1/entities/:key/card", async (c) => {
   if (!found || (!found.isPublished && !canSeeDrafts(principal))) {
     throw new ApiError("not_found", "Сущность не найдена");
   }
+  const previewId = c.req.query("preview_layout_id");
+  if (previewId !== undefined) {
+    requirePermission(principal, "su");
+    if (!config.useWidgetLayouts) throw new ApiError("unavailable", "Превью макетов выключено");
+    if (!/^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(previewId)) {
+      throw new ApiError("validation_failed", "Некорректный UID макета");
+    }
+  }
   const card = await loadPublicCard(found.id, principal);
   if (!card) throw new ApiError("not_found", "Сущность не найдена");
+  if (previewId !== undefined) {
+    const preview = await readLayout(previewId);
+    if (preview?.page_id !== CARD_PAGE_ID) throw new ApiError("not_found", "Макет карточки не найден");
+    card.widgetLayout = preview;
+  }
   const description = card.document ? blocksHtml(card.document.body_json, {
     entities: card.refs, publicAssets: card.publicAssets,
   }) : "";

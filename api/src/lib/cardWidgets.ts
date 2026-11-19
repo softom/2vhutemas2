@@ -2,15 +2,27 @@ import { widgetImplementations } from "./widgetRegistry.ts";
 import type { PublicCard } from "./publicCard.ts";
 
 type Renderer = (card: Readonly<PublicCard>) => string;
-export const cardWidgetRenderers = new Map<string, Renderer>(
+const additionalRenderers = new Map<string, Renderer>(
   Array.from(widgetImplementations, ([key, implementation]) => [key, implementation.render]),
 );
+
+/** Bind a single authorized card projection once; rendering a slot does not reload the entity. */
+export function widgetRenderers(card: Readonly<PublicCard>, sections: Record<string, () => string>) {
+  const registry = new Map<string, (entityId: number, design?: string | null) => string>();
+  function bind(key: string, draw: () => string) {
+    registry.set(key, (entityId, design) =>
+      entityId === card.id && (!design || design === "default") ? draw() : "");
+  }
+  for (const [key, draw] of Object.entries(sections)) bind(key, draw);
+  for (const [key, render] of additionalRenderers) bind(key, () => render(card));
+  return registry;
+}
 
 /** Group visible widgets by insertion point in the existing reading order. */
 export function cardWidgetSections(
   card: PublicCard,
   layout: readonly string[],
-  renderers = cardWidgetRenderers,
+  renderers = additionalRenderers,
   renderedKinds?: Set<string>,
 ): Map<string, string[]> {
   const groups = new Map<string, string[]>();
