@@ -1,0 +1,1187 @@
+{
+  "cards": [
+    {
+      "id": "8c34e54b-146f-476f-b421-ba93de1afdac",
+      "mode": "card",
+      "type": "article",
+      "items": [
+        {
+          "id": "79f41a86-ea12-49b2-9def-c1ee92b5a5a2",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "8c34e54b-146f-476f-b421-ba93de1afdac"
+        },
+        {
+          "id": "159d556e-12cf-4b42-bbbb-7b7d2b31a342",
+          "settings": {},
+          "component": "links",
+          "sort_order": 15,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "8c34e54b-146f-476f-b421-ba93de1afdac"
+        },
+        {
+          "id": "12e879ee-bea7-49c9-b27d-9177098d4dcb",
+          "settings": {},
+          "component": "program",
+          "sort_order": 17,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "8c34e54b-146f-476f-b421-ba93de1afdac"
+        },
+        {
+          "id": "8f7fbec5-9f0c-4787-bb40-05772945bf54",
+          "settings": {},
+          "component": "text",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "8c34e54b-146f-476f-b421-ba93de1afdac"
+        },
+        {
+          "id": "54be84b7-1c74-4c1b-8404-270a0ff718e2",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 25,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "8c34e54b-146f-476f-b421-ba93de1afdac"
+        },
+        {
+          "id": "1ef43703-01f3-4a90-a2ca-54288bbebfc8",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 27,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "8c34e54b-146f-476f-b421-ba93de1afdac"
+        },
+        {
+          "id": "ee5a5974-d278-41c3-b8b3-c68833d6ef43",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "8c34e54b-146f-476f-b421-ba93de1afdac"
+        },
+        {
+          "id": "c86d49ee-74c0-47a8-8872-3a280992ddd0",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 40,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "8c34e54b-146f-476f-b421-ba93de1afdac"
+        }
+      ],
+      "type_id": "9710ea73-3d80-4c83-b59f-f9d4f8c2dbc7",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "0632d8c5-89e4-4639-9f7d-b92a68d63afd",
+      "mode": "card",
+      "type": "book",
+      "items": [
+        {
+          "id": "a4569330-cae5-4383-aa24-019d9ca063e8",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "0632d8c5-89e4-4639-9f7d-b92a68d63afd"
+        },
+        {
+          "id": "9781f519-b3d8-4f5e-9104-f9c1c665c501",
+          "settings": {},
+          "component": "links",
+          "sort_order": 15,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "0632d8c5-89e4-4639-9f7d-b92a68d63afd"
+        },
+        {
+          "id": "b77a0687-8c60-453e-b986-1d4161856f51",
+          "settings": {},
+          "component": "program",
+          "sort_order": 17,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "0632d8c5-89e4-4639-9f7d-b92a68d63afd"
+        },
+        {
+          "id": "2d49ff17-d85b-4208-a100-12838ea35162",
+          "settings": {},
+          "component": "text",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "0632d8c5-89e4-4639-9f7d-b92a68d63afd"
+        },
+        {
+          "id": "60927879-3347-43a4-b93a-f766f7270497",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 25,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "0632d8c5-89e4-4639-9f7d-b92a68d63afd"
+        },
+        {
+          "id": "9e9516b9-6a78-415a-8f6d-f67dcb39d214",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 27,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "0632d8c5-89e4-4639-9f7d-b92a68d63afd"
+        },
+        {
+          "id": "b38d1845-5650-4a8c-8af6-d2a648160738",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "0632d8c5-89e4-4639-9f7d-b92a68d63afd"
+        },
+        {
+          "id": "3d637c04-bc8a-4f32-bc97-118a044ce495",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 40,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "0632d8c5-89e4-4639-9f7d-b92a68d63afd"
+        }
+      ],
+      "type_id": "d2e18f6c-9fa7-432d-8d1b-a50b41a015aa",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "06de44e6-9a4a-4b60-84fa-2c8ab5245b90",
+      "mode": "card",
+      "type": "image",
+      "items": [
+        {
+          "id": "659a579a-0d32-4b61-8879-bb4e8da0e0ae",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "06de44e6-9a4a-4b60-84fa-2c8ab5245b90"
+        },
+        {
+          "id": "4f023435-b9d0-4636-8de5-90c91532a446",
+          "settings": {},
+          "component": "text",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "06de44e6-9a4a-4b60-84fa-2c8ab5245b90"
+        },
+        {
+          "id": "5ef78423-d265-4f28-84b1-a90be710b139",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "06de44e6-9a4a-4b60-84fa-2c8ab5245b90"
+        },
+        {
+          "id": "2ccc437c-74a7-4117-81ce-cc11af7fc84d",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 40,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "06de44e6-9a4a-4b60-84fa-2c8ab5245b90"
+        }
+      ],
+      "type_id": "1b14adec-eec5-4e24-8aaa-024bcdedce46",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "788e6b7e-e807-4d21-9802-654d5167893f",
+      "mode": "card",
+      "type": "materials",
+      "items": [
+        {
+          "id": "f0d310cb-89ee-468f-b4a8-cb394fdc36b0",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "788e6b7e-e807-4d21-9802-654d5167893f"
+        },
+        {
+          "id": "da2ad492-90f1-412a-bb66-39e928b400ba",
+          "settings": {},
+          "component": "links",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "788e6b7e-e807-4d21-9802-654d5167893f"
+        },
+        {
+          "id": "39154f19-c090-452e-b72e-d933f524fc3c",
+          "settings": {},
+          "component": "program",
+          "sort_order": 22,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "788e6b7e-e807-4d21-9802-654d5167893f"
+        },
+        {
+          "id": "22353806-4c6b-4f05-b304-00322d7cf53f",
+          "settings": {},
+          "component": "text",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "788e6b7e-e807-4d21-9802-654d5167893f"
+        },
+        {
+          "id": "a6390d8d-a3dd-46b1-b794-547cc87901fc",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 40,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "788e6b7e-e807-4d21-9802-654d5167893f"
+        },
+        {
+          "id": "594ebea0-8f36-4ea3-864f-7aedb43804e8",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 42,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "788e6b7e-e807-4d21-9802-654d5167893f"
+        },
+        {
+          "id": "f9407056-21cc-49bb-bced-feb73dfa04b5",
+          "settings": {},
+          "component": "sources",
+          "sort_order": 50,
+          "link_role_id": "506a9f93-18be-485b-978b-bc0184f993d6",
+          "parameter_id": null,
+          "presentation_id": "788e6b7e-e807-4d21-9802-654d5167893f"
+        },
+        {
+          "id": "61483168-7f10-46b3-8833-61c64e1caf7e",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 60,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "788e6b7e-e807-4d21-9802-654d5167893f"
+        },
+        {
+          "id": "7b01c673-ac88-4d7b-96e7-641378cae702",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 70,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "788e6b7e-e807-4d21-9802-654d5167893f"
+        }
+      ],
+      "type_id": "0feb89df-7336-49fc-8e54-566a04ee684f",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "2e23f77a-338e-4205-beba-0e0d375392ac",
+      "mode": "card",
+      "type": "project_pages",
+      "items": [
+        {
+          "id": "5aaa0af1-ac81-4f84-810f-242a4a08c717",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "2e23f77a-338e-4205-beba-0e0d375392ac"
+        },
+        {
+          "id": "5e98dec2-2942-4865-b8ce-81edd566cb9b",
+          "settings": {},
+          "component": "links",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "2e23f77a-338e-4205-beba-0e0d375392ac"
+        },
+        {
+          "id": "597ed6c5-10f7-4367-b59c-6a318032656a",
+          "settings": {},
+          "component": "program",
+          "sort_order": 22,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "2e23f77a-338e-4205-beba-0e0d375392ac"
+        },
+        {
+          "id": "b8fa42fd-e80a-4e3d-8b73-67f4acae043b",
+          "settings": {},
+          "component": "text",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "2e23f77a-338e-4205-beba-0e0d375392ac"
+        },
+        {
+          "id": "10172665-5301-47aa-943a-69cf04a3d7b9",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 40,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "2e23f77a-338e-4205-beba-0e0d375392ac"
+        },
+        {
+          "id": "d79dac14-f696-4dcb-9447-1e4e3901c156",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 42,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "2e23f77a-338e-4205-beba-0e0d375392ac"
+        },
+        {
+          "id": "391c8377-edd8-4d14-9265-e88c14c66cb1",
+          "settings": {},
+          "component": "sources",
+          "sort_order": 50,
+          "link_role_id": "506a9f93-18be-485b-978b-bc0184f993d6",
+          "parameter_id": null,
+          "presentation_id": "2e23f77a-338e-4205-beba-0e0d375392ac"
+        },
+        {
+          "id": "74cded98-bff5-4645-9354-80abea260b46",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 60,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "2e23f77a-338e-4205-beba-0e0d375392ac"
+        },
+        {
+          "id": "23eba238-65fe-4584-b835-f9170441db35",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 70,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "2e23f77a-338e-4205-beba-0e0d375392ac"
+        }
+      ],
+      "type_id": "00000000-0000-4000-a000-0000000000e5",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "423f41d0-7f69-4ccb-a2bb-419303b33f84",
+      "mode": "card",
+      "type": "service",
+      "items": [
+        {
+          "id": "158c4527-f589-4b2b-8e13-bf335705f203",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "423f41d0-7f69-4ccb-a2bb-419303b33f84"
+        },
+        {
+          "id": "e41e194a-13e4-4b7e-8234-fb6f7f64a6e0",
+          "settings": {},
+          "component": "links",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "423f41d0-7f69-4ccb-a2bb-419303b33f84"
+        },
+        {
+          "id": "17a20e4b-45a2-4295-8fbe-06070c2956c8",
+          "settings": {},
+          "component": "program",
+          "sort_order": 22,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "423f41d0-7f69-4ccb-a2bb-419303b33f84"
+        },
+        {
+          "id": "5dba1442-9e61-4b56-821d-473ed7134c43",
+          "settings": {},
+          "component": "text",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "423f41d0-7f69-4ccb-a2bb-419303b33f84"
+        },
+        {
+          "id": "010c32df-862d-49bf-b909-a0d1c5d6cd86",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 40,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "423f41d0-7f69-4ccb-a2bb-419303b33f84"
+        },
+        {
+          "id": "ff811ab4-f2a6-41b8-a830-e00aa9cf74b9",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 42,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "423f41d0-7f69-4ccb-a2bb-419303b33f84"
+        },
+        {
+          "id": "8ad980d7-c7d2-422b-9985-a30f539cace8",
+          "settings": {},
+          "component": "sources",
+          "sort_order": 50,
+          "link_role_id": "506a9f93-18be-485b-978b-bc0184f993d6",
+          "parameter_id": null,
+          "presentation_id": "423f41d0-7f69-4ccb-a2bb-419303b33f84"
+        },
+        {
+          "id": "47a06658-6679-417b-887c-8925ac3047ff",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 60,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "423f41d0-7f69-4ccb-a2bb-419303b33f84"
+        },
+        {
+          "id": "38d2264f-af9a-4928-aef1-fcd501775a29",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 70,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "423f41d0-7f69-4ccb-a2bb-419303b33f84"
+        }
+      ],
+      "type_id": "00000000-0000-4000-a000-0000000000e4",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5",
+      "mode": "card",
+      "type": "video",
+      "items": [
+        {
+          "id": "49083b1a-6e70-41a7-ace9-ecb19e1a1f0d",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5"
+        },
+        {
+          "id": "55848da0-d547-4bb3-adde-4e4f2cb45282",
+          "settings": {},
+          "component": "video",
+          "sort_order": 15,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5"
+        },
+        {
+          "id": "24e1fa56-a53f-404c-8bcd-e0f366c42b0c",
+          "settings": {},
+          "component": "links",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5"
+        },
+        {
+          "id": "d106417b-d1ee-4623-b0fb-75e876af0242",
+          "settings": {},
+          "component": "program",
+          "sort_order": 22,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5"
+        },
+        {
+          "id": "8e12a532-4dd7-4a0c-ab1f-aec1e46a44a4",
+          "settings": {},
+          "component": "text",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5"
+        },
+        {
+          "id": "da49b2b9-70fb-4ff8-8578-d4d132184e76",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 40,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5"
+        },
+        {
+          "id": "f0841dcd-2a05-4138-9ed7-58da2f7a4ef5",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 42,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5"
+        },
+        {
+          "id": "2e441703-e476-4c21-99d0-73b261df1c67",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 60,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5"
+        },
+        {
+          "id": "bfe13f2b-3d58-4e75-85fe-34b844c23914",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 70,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7f0102df-9781-4d10-bb17-ebd2a92d43c5"
+        }
+      ],
+      "type_id": "30d5d587-4c98-4e9c-8c7a-034783a35db7",
+      "settings": {},
+      "created_at": "2026-10-01T15:10:30.7132+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T15:10:30.7132+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "7449fafa-da07-4749-a17c-f7b653cadbdb",
+      "mode": "card",
+      "type": "web_page",
+      "items": [
+        {
+          "id": "024bb250-0bb7-4345-a2b3-5baea143ef67",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7449fafa-da07-4749-a17c-f7b653cadbdb"
+        },
+        {
+          "id": "8a59b1b8-d50e-4883-a8a7-fb3c3270ecb4",
+          "settings": {},
+          "component": "links",
+          "sort_order": 15,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7449fafa-da07-4749-a17c-f7b653cadbdb"
+        },
+        {
+          "id": "d93d9c0d-9991-4894-a687-1b586da4a4bd",
+          "settings": {},
+          "component": "program",
+          "sort_order": 17,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7449fafa-da07-4749-a17c-f7b653cadbdb"
+        },
+        {
+          "id": "37756701-f8fd-4587-8f58-9d19a2835fff",
+          "settings": {},
+          "component": "text",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7449fafa-da07-4749-a17c-f7b653cadbdb"
+        },
+        {
+          "id": "b8d5b1e6-3664-4aba-aa32-47be5e10b258",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 25,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "7449fafa-da07-4749-a17c-f7b653cadbdb"
+        },
+        {
+          "id": "ed647fed-fd9e-415c-be07-c6fe62fd96a1",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 27,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7449fafa-da07-4749-a17c-f7b653cadbdb"
+        },
+        {
+          "id": "ba3db0d5-5ca3-4ad3-a29d-79bf32514664",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7449fafa-da07-4749-a17c-f7b653cadbdb"
+        },
+        {
+          "id": "3b691e8e-95c4-4554-9a0c-f6d321b2e616",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 40,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "7449fafa-da07-4749-a17c-f7b653cadbdb"
+        }
+      ],
+      "type_id": "7cd7b77b-bdc1-41ed-85d0-a5103a9b601b",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0",
+      "mode": "card",
+      "type": "what",
+      "items": [
+        {
+          "id": "f060f5a3-b297-4069-ac69-91b02d46725c",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0"
+        },
+        {
+          "id": "b797baf8-9b4e-44e0-80ba-ca1eeba07974",
+          "settings": {},
+          "component": "links",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0"
+        },
+        {
+          "id": "7e3c8255-56f5-4c66-93ed-7e0656ff3a26",
+          "settings": {},
+          "component": "program",
+          "sort_order": 22,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0"
+        },
+        {
+          "id": "c0fa0f3b-8cd6-4c77-b92d-ef70813acb57",
+          "settings": {},
+          "component": "text",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0"
+        },
+        {
+          "id": "201c39ee-b87d-48c8-97f1-a38b9a4caed8",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 40,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0"
+        },
+        {
+          "id": "47ffd764-27de-40b3-b82c-90b9567c86a5",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 42,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0"
+        },
+        {
+          "id": "acc20e3b-d1bc-49af-820b-eca3d6565221",
+          "settings": {},
+          "component": "sources",
+          "sort_order": 50,
+          "link_role_id": "506a9f93-18be-485b-978b-bc0184f993d6",
+          "parameter_id": null,
+          "presentation_id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0"
+        },
+        {
+          "id": "9b525de0-77d9-4746-88e1-12d8e7a28539",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 60,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0"
+        },
+        {
+          "id": "396305a2-f7ae-4fb6-b5dd-fd42f3326e04",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 70,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "4ce41c1d-3c20-449c-afc4-f1884aede6b0"
+        }
+      ],
+      "type_id": "00000000-0000-4000-a000-0000000000e2",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "30a191b4-976c-47be-b4db-104f407f9783",
+      "mode": "card",
+      "type": "when",
+      "items": [
+        {
+          "id": "4c388da4-3871-4476-9f10-88a256e73df9",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "30a191b4-976c-47be-b4db-104f407f9783"
+        },
+        {
+          "id": "1956172a-1e92-46da-ab6d-42cea293c9a3",
+          "settings": {},
+          "component": "links",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "30a191b4-976c-47be-b4db-104f407f9783"
+        },
+        {
+          "id": "7e381b80-6ab4-4fc1-bf39-63a1824ac169",
+          "settings": {},
+          "component": "program",
+          "sort_order": 22,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "30a191b4-976c-47be-b4db-104f407f9783"
+        },
+        {
+          "id": "4f44de0d-0655-488a-a938-92d6c5477691",
+          "settings": {},
+          "component": "text",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "30a191b4-976c-47be-b4db-104f407f9783"
+        },
+        {
+          "id": "ff462927-9af6-47ce-93e1-38878a351a42",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 40,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "30a191b4-976c-47be-b4db-104f407f9783"
+        },
+        {
+          "id": "890270de-f5ba-4aa4-b2cb-2b3d93ea2d73",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 42,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "30a191b4-976c-47be-b4db-104f407f9783"
+        },
+        {
+          "id": "fe84881a-dc31-472d-8645-4dba0d747d0b",
+          "settings": {},
+          "component": "sources",
+          "sort_order": 50,
+          "link_role_id": "506a9f93-18be-485b-978b-bc0184f993d6",
+          "parameter_id": null,
+          "presentation_id": "30a191b4-976c-47be-b4db-104f407f9783"
+        },
+        {
+          "id": "e9921310-8dbe-4e4c-8f47-c03207bb7695",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 60,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "30a191b4-976c-47be-b4db-104f407f9783"
+        },
+        {
+          "id": "2c7b9967-f405-40fe-af23-2a6c6685e052",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 70,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "30a191b4-976c-47be-b4db-104f407f9783"
+        }
+      ],
+      "type_id": "00000000-0000-4000-a000-0000000000e3",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "94830189-639a-46de-b9c2-8f637911319e",
+      "mode": "card",
+      "type": "where",
+      "items": [
+        {
+          "id": "34699c77-6809-44c0-9c6f-5fdd382834e8",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "94830189-639a-46de-b9c2-8f637911319e"
+        },
+        {
+          "id": "84b5afcb-996e-42ff-b51f-9f4dffb6a88d",
+          "settings": {},
+          "component": "links",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "94830189-639a-46de-b9c2-8f637911319e"
+        },
+        {
+          "id": "d326c846-6a83-42f8-b8ff-8863cb78f66a",
+          "settings": {},
+          "component": "program",
+          "sort_order": 22,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "94830189-639a-46de-b9c2-8f637911319e"
+        },
+        {
+          "id": "c3716fb4-1a5b-42bd-ba67-8973f1c21a37",
+          "settings": {},
+          "component": "text",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "94830189-639a-46de-b9c2-8f637911319e"
+        },
+        {
+          "id": "bdc6000d-3189-4467-8756-21c6d2f2626c",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 40,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "94830189-639a-46de-b9c2-8f637911319e"
+        },
+        {
+          "id": "35a607a5-8263-45a1-b5d7-729e7400c237",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 42,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "94830189-639a-46de-b9c2-8f637911319e"
+        },
+        {
+          "id": "17c6d413-e02f-452b-8df3-808cb90d8e87",
+          "settings": {},
+          "component": "sources",
+          "sort_order": 50,
+          "link_role_id": "506a9f93-18be-485b-978b-bc0184f993d6",
+          "parameter_id": null,
+          "presentation_id": "94830189-639a-46de-b9c2-8f637911319e"
+        },
+        {
+          "id": "bb4de2f4-9c84-4dc2-b5c1-f0924616bd84",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 60,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "94830189-639a-46de-b9c2-8f637911319e"
+        },
+        {
+          "id": "d5141c6e-3460-4fc6-bc02-76058b82894d",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 70,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "94830189-639a-46de-b9c2-8f637911319e"
+        }
+      ],
+      "type_id": "8e830665-cd82-4ff6-b50d-aaac65d25196",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    },
+    {
+      "id": "b6b8b311-2177-4502-b2bc-1804471334a0",
+      "mode": "card",
+      "type": "who",
+      "items": [
+        {
+          "id": "c2631c98-8409-4e05-b68d-01afcfe5dbc7",
+          "settings": {},
+          "component": "indicators",
+          "sort_order": 10,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "b6b8b311-2177-4502-b2bc-1804471334a0"
+        },
+        {
+          "id": "ddf5db67-cc01-4270-bb2a-405b6027e049",
+          "settings": {},
+          "component": "links",
+          "sort_order": 20,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "b6b8b311-2177-4502-b2bc-1804471334a0"
+        },
+        {
+          "id": "89216f3c-a3a0-49cc-957d-466992c3fed1",
+          "settings": {},
+          "component": "program",
+          "sort_order": 22,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "b6b8b311-2177-4502-b2bc-1804471334a0"
+        },
+        {
+          "id": "2cd31a0e-3224-4253-88c6-0d6c535b2785",
+          "settings": {},
+          "component": "text",
+          "sort_order": 30,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "b6b8b311-2177-4502-b2bc-1804471334a0"
+        },
+        {
+          "id": "de917c5e-76ed-4e3a-bd20-7cc46afc604f",
+          "settings": {},
+          "component": "gallery",
+          "sort_order": 40,
+          "link_role_id": "61d2a5d9-a73c-40ef-84ab-40133e063005",
+          "parameter_id": null,
+          "presentation_id": "b6b8b311-2177-4502-b2bc-1804471334a0"
+        },
+        {
+          "id": "313f1318-0fcc-411a-902c-7878b06117f9",
+          "settings": {},
+          "component": "drawings",
+          "sort_order": 42,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "b6b8b311-2177-4502-b2bc-1804471334a0"
+        },
+        {
+          "id": "ef70bcec-0dfa-48c0-b664-25983962c545",
+          "settings": {},
+          "component": "sources",
+          "sort_order": 50,
+          "link_role_id": "506a9f93-18be-485b-978b-bc0184f993d6",
+          "parameter_id": null,
+          "presentation_id": "b6b8b311-2177-4502-b2bc-1804471334a0"
+        },
+        {
+          "id": "72a98220-0b3b-4c07-a7c3-a509eb8f87c2",
+          "settings": {},
+          "component": "mentions",
+          "sort_order": 60,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "b6b8b311-2177-4502-b2bc-1804471334a0"
+        },
+        {
+          "id": "06ddb525-ba80-41f7-a5db-109e07c0e261",
+          "settings": {},
+          "component": "citation",
+          "sort_order": 70,
+          "link_role_id": null,
+          "parameter_id": null,
+          "presentation_id": "b6b8b311-2177-4502-b2bc-1804471334a0"
+        }
+      ],
+      "type_id": "00000000-0000-4000-a000-0000000000e1",
+      "settings": {},
+      "created_at": "2026-10-01T05:32:30.357665+03:00",
+      "created_by": null,
+      "updated_at": "2026-10-01T05:32:30.357665+03:00",
+      "updated_by": null
+    }
+  ],
+  "sets": [
+    {
+      "id": "0771326c-261e-4d01-afe4-c79c32cf6e92",
+      "code": "what_basic",
+      "card_side": "right"
+    },
+    {
+      "id": "0784a3ac-70e9-4f03-8703-8805dcf10e18",
+      "code": "place_basic",
+      "card_side": "right"
+    },
+    {
+      "id": "08aab941-6f58-4a2f-b533-ccd021008828",
+      "code": "lecture_basic",
+      "card_side": "right"
+    },
+    {
+      "id": "0aab2434-ee1c-4c70-8db7-60b3dddf2ff8",
+      "code": "classification_names",
+      "card_side": "right"
+    },
+    {
+      "id": "0c6b65ae-2d73-4208-bc68-14384a58aa61",
+      "code": "competition_entry_result",
+      "card_side": "right"
+    },
+    {
+      "id": "1f5baa70-dded-4871-9f28-77985bdb58da",
+      "code": "research_source_row",
+      "card_side": "right"
+    },
+    {
+      "id": "269ea1c8-509f-421a-8784-bdb598cf0743",
+      "code": "spectacle_building",
+      "card_side": "right"
+    },
+    {
+      "id": "2b81f36c-7c3f-48b4-a849-545763a33c18",
+      "code": "who_basic",
+      "card_side": "right"
+    },
+    {
+      "id": "307ae311-3b96-4a0c-a87b-bf5e434bcb3c",
+      "code": "research_materials",
+      "card_side": "right"
+    },
+    {
+      "id": "4af79e82-376e-43e0-8959-8bf0434e1c40",
+      "code": "style_solution_row",
+      "card_side": "right"
+    },
+    {
+      "id": "56eb7084-7281-4070-8f39-1fa9153a68f4",
+      "code": "program_row",
+      "card_side": "right"
+    },
+    {
+      "id": "67009c1c-bf81-4b3d-a319-427d0e39b889",
+      "code": "when_basic",
+      "card_side": "right"
+    },
+    {
+      "id": "a1a1fbdf-cc0e-4d52-a6eb-014009ce0741",
+      "code": "news_basic",
+      "card_side": "right"
+    },
+    {
+      "id": "ad753dbc-3d1a-4ecb-9913-77a511a9647d",
+      "code": "text_body",
+      "card_side": "right"
+    },
+    {
+      "id": "b9470f0e-2349-457c-863c-af4f7289e763",
+      "code": "area_program",
+      "card_side": "left"
+    },
+    {
+      "id": "bff5282e-207b-4cec-929a-fa0f428632a7",
+      "code": "style_solutions",
+      "card_side": "left"
+    },
+    {
+      "id": "c0ec1427-a0c1-4097-ae1b-dbc12760e21b",
+      "code": "tep",
+      "card_side": "right"
+    },
+    {
+      "id": "c5c29313-44c7-4d17-963a-36571c03ad7e",
+      "code": "competition_basic",
+      "card_side": "right"
+    },
+    {
+      "id": "c631af29-d13b-4c51-9637-19be94fbffba",
+      "code": "source_page",
+      "card_side": "right"
+    },
+    {
+      "id": "cbcc8e3b-00de-4a7d-842c-96999be876f5",
+      "code": "image_basic",
+      "card_side": "right"
+    },
+    {
+      "id": "cc48d743-eb44-4683-8d0d-afcd5aca0e71",
+      "code": "video_basic",
+      "card_side": "right"
+    },
+    {
+      "id": "db0243c2-549e-4457-8b92-2c69bd0342bf",
+      "code": "large_span_roof",
+      "card_side": "right"
+    },
+    {
+      "id": "ed19a5c5-a011-47ca-9722-e3ea4ea838ab",
+      "code": "classification_name_row",
+      "card_side": "right"
+    },
+    {
+      "id": "fb1c282e-f925-4d2b-b717-773205af006e",
+      "code": "slogan",
+      "card_side": "right"
+    },
+    {
+      "id": "fb5d55f0-cbd4-4329-8705-093544f90c79",
+      "code": "drawing_scale",
+      "card_side": "right"
+    }
+  ]
+}
