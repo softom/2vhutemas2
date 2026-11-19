@@ -1,8 +1,10 @@
-import { styleAnalysis } from "./styleAttributionWidget.ts";
+import { widgetImplementations } from "./widgetRegistry.ts";
 import type { PublicCard } from "./publicCard.ts";
 
 type Renderer = (card: Readonly<PublicCard>) => string;
-export const cardWidgetRenderers = new Map<string, Renderer>([["style_analysis", styleAnalysis]]);
+export const cardWidgetRenderers = new Map<string, Renderer>(
+  Array.from(widgetImplementations, ([key, implementation]) => [key, implementation.render]),
+);
 
 /** Group visible widgets by insertion point in the existing reading order. */
 export function cardWidgetSections(

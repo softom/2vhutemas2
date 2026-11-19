@@ -6,6 +6,7 @@
  * (решение Р-02). Работает от роли app_api, схема app.
  */
 import "./lib/json.ts";
+import { layoutAdmin } from "./routes/layoutAdmin.ts";
 import { Hono } from "hono";
 import type { Context, Next } from "hono";
 import { config } from "./lib/config.ts";
@@ -117,7 +118,7 @@ app.get("/api/v1/capabilities", async (c: Context<AppEnv>) => {
                         'settings', i.settings) order by i.sort_order)
                        from app.type_presentation_items i where i.presentation_id = tp.id),
                     '[]'::jsonb) as items
-      from up join app.type_presentations tp on tp.type_id = up.ancestor_id
+      from up join app.type_presentations tp on tp.type_id = up.ancestor_id and not tp.layout_only
      order by up.type, tp.mode, up.distance
   `;
   const presentations: Record<string, Record<string, unknown[]>> = {};
@@ -154,6 +155,7 @@ app.get("/api/v1/me", (c: Context<AppEnv>) => {
   });
 });
 
+app.route("/api/v1/admin", layoutAdmin);
 app.route("/api/v1/entities", entities);
 app.route("/api/v1/media", media);
 app.route("/api/v1/documents", documents);
