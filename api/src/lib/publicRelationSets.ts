@@ -1,11 +1,12 @@
+import {styleAttributionWidgetHtml} from './styleAttributionWidget.ts';
 import {sql} from './db.ts';
 import {escapeHtml,entityPath} from './site.ts';
 import type {PublicCard} from './publicCard.ts';
 type Link=PublicCard['links'][number];
-export interface PublicRelationSet {id:string;title:string;side:'left'|'right';fields:{slot:string;title:string}[];links:Link[]}
+export interface PublicRelationSet {id:string;code:string;title:string;side:'left'|'right';fields:{slot:string;title:string}[];links:Link[]}
 /** Definitions select existing visible links by UID; no research corpus or proposals enter the public card. */
 export async function loadPublicRelationSets(entityId:number,links:Link[]):Promise<PublicRelationSet[]>{
- const sets=await sql<any>`select ps.id,ps.title_ru as title,ps.card_side as side,
+ const sets=await sql<any>`select ps.id,ps.code,ps.title_ru as title,ps.card_side as side,
   (select jsonb_agg(jsonb_build_object('slot',i.result_slot,'title',coalesce(i.label_override,p.title_ru)) order by i.sort_order,p.sort_order,p.id)
    from app.parameter_set_items i join app.parameters p on p.id=i.parameter_id where i.set_id=ps.id and i.result_slot is not null) as fields,
   (select jsonb_agg(type_id) from app.parameter_set_allowed_types where set_id=ps.id) as types,
@@ -20,7 +21,7 @@ export async function loadPublicRelationSets(entityId:number,links:Link[]):Promi
 /** Same presentation for every relation-valued parameter set; labels/order/side come from its definition. */
 export function relationSetsHtml(sets:PublicRelationSet[],side:'left'|'right'):string{
  const e=escapeHtml;
- return sets.filter(s=>s.side===side).map(s=>`<section class="parameter-set-relations" data-parameter-set="${e(s.id)}"><h2>${e(s.title)}</h2>${s.links.length?'':'<p class="hint">Опубликованных связей пока нет.</p>'}${s.links.map(l=>{
+ return sets.filter(s=>s.side===side).map(s=>s.code==='style_solutions'?styleAttributionWidgetHtml(s):`<section class="parameter-set-relations" data-parameter-set="${e(s.id)}"><h2>${e(s.title)}</h2>${s.links.length?'':'<p class="hint">Опубликованных связей пока нет.</p>'}${s.links.map(l=>{
   const values:Record<string,string>={concept:`<a href="${e(entityPath(l.other_slug))}">${e(l.other_title)}</a>`,relation:e(l.role_title||''),rationale:e(l.justification||''),
    quote:l.citations.map(q=>q.quote?`<blockquote><p>${e(q.quote)}</p><footer><a href="${e(entityPath(q.source_slug))}">${e(q.source_title)}</a></footer></blockquote>`:'').join(''),
    source:[...new Map(l.citations.map(q=>[q.source_entity_id,`<a href="${e(entityPath(q.source_slug))}">${e(q.source_title)}</a>`])).values()].join('<br>'),
