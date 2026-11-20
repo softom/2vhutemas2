@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { api, type SearchHit } from "../api";
 
-type WidgetProps = { widget_id: string; entity_id: string; design: string };
+type WidgetProps = { widget_id: string; entity_id: string; design: string; title:string; caption:string; height:string };
 type Definition = Awaited<ReturnType<typeof api.documentWidgets>>["items"][number];
 
 function previewDocument(html: string) {
@@ -65,7 +65,7 @@ function WidgetEditor({ value, change }: {value: WidgetProps; change: (next: Par
   }, [query]);
   const chosen = catalog.find(widget => widget.id === value.widget_id);
   return <div className="document-widget-editor" contentEditable={false}>
-    <label>Виджет <select aria-label="Виджет" value={value.widget_id} onChange={e => change({widget_id: e.target.value, design: ""})}>
+    <label>Виджет <select aria-label="Виджет" value={value.widget_id} onChange={e => change({widget_id: e.target.value, design: "", entity_id: catalog.find(w => w.id === e.target.value)?.model_path ? "" : value.entity_id, title:"", caption:"", height:""})}>
       <option value="">Выберите виджет</option>
       {value.widget_id && !chosen && <option value={value.widget_id}>Виджет вне каталога</option>}
       {catalog.map(widget => <option key={widget.id} value={widget.id}>{widget.name}</option>)}
@@ -75,19 +75,26 @@ function WidgetEditor({ value, change }: {value: WidgetProps; change: (next: Par
       <option value="">По умолчанию</option>
       {chosen.designs.map(design => <option key={design}>{design}</option>)}
     </select></label>}
-    <label>Запись <input type="search" value={query} placeholder="Поиск по названию" onChange={e => setQuery(e.target.value)} /></label>
+    {chosen?.model_path ? <div>
+      <label>Заголовок модели <input value={value.title} onChange={e => change({title:e.target.value})} /></label>
+      <label>Подпись <textarea value={value.caption} onChange={e => change({caption:e.target.value})} /></label>
+      <label>Высота, px <input type="number" min={320} max={900} value={value.height} onChange={e => change({height:e.target.value})} /></label>
+      <figure><iframe loading="lazy" title={value.title || chosen.name} src={chosen.model_path+"?embed=1"}
+        style={{height:Math.min(900, Math.max(320, Number(value.height) || 560))}} />
+        <figcaption>{value.caption}</figcaption></figure>
+    </div> : <><label>Запись <input type="search" value={query} placeholder="Поиск по названию" onChange={e => setQuery(e.target.value)} /></label>
     {searchStatus && <p role="status">{searchStatus}</p>}
     {hits.length > 0 && <ul>{hits.map(hit => <li key={hit.id}><button type="button" onClick={() => {
       change({entity_id: String(hit.id)}); setQuery("");
     }}>{hit.title_ru} · {hit.type_title ?? hit.type} · UID {hit.id}</button></li>)}</ul>}
     {value.entity_id && <p>UID {value.entity_id} <button type="button" onClick={() => change({entity_id: ""})}>Снять выбор</button></p>}
-    {chosen && value.entity_id && <WidgetPreview key={JSON.stringify(value)} {...value} />}
+    {chosen && value.entity_id && <WidgetPreview key={JSON.stringify(value)} {...value} />}</>}
   </div>;
 }
 
 export const WidgetBlock = createReactBlockSpec({
   type: "widget",
-  propSchema: {widget_id: {default: ""}, entity_id: {default: ""}, design: {default: ""}},
+  propSchema: {widget_id: {default: ""}, entity_id: {default: ""}, design: {default: ""}, title:{default:""}, caption:{default:""}, height:{default:""}},
   content: "none",
 }, {
   render: ({block, editor}) => <WidgetEditor value={block.props}

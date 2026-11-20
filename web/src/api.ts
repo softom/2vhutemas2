@@ -639,7 +639,7 @@ export interface RobotLearned {
 }
 
 export const api = {
-  documentWidgets: () => request<{items: {id: string; name: string; designs: string[]}[]}>("/document-widgets"),
+  documentWidgets: () => request<{items: {id: string; name: string; designs: string[]; model_path?: string | null}[]}>("/document-widgets"),
   documentWidgetPreview: (widget: string, entity: string, design: string) => {
     const query = new URLSearchParams({entity_id: entity});
     if (design) query.set("design", design);

@@ -157,7 +157,7 @@ export function modelSrc(src: unknown): string | null {
 /** Выделенная рамка модели: во фрейме — модель без обвязки страницы
  *  (`?embed=1`), рядом ссылка на полную страницу; без скриптов рамка
  *  работает как ссылка. */
-function modelHtml(props: Record<string, unknown>): string {
+export function modelHtml(props: Record<string, unknown>): string {
   const src = modelSrc(props.src);
   if (!src) return "";
   const title = escapeHtml(String(props.title ?? "") || "Интерактивная модель");
@@ -316,7 +316,7 @@ export async function documentBlocks(list: unknown, ctx: RenderContext,
     for (const item of items) {
       if (item?.type === "widget") {
         const props = item.props ?? {};
-        const key = JSON.stringify([props.widget_id, props.entity_id, props.design]);
+        const key = JSON.stringify([props.widget_id, props.entity_id, props.design, props.title, props.caption, props.height]);
         let html = rendered.get(key);
         if (html === undefined) {
           html = await renderWidget(props);

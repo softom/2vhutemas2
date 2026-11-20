@@ -16,6 +16,7 @@ import { sectionCells, sectionLayout } from "../lib/sectionLayouts.ts";
 import type { CardLayout } from "../lib/layouts.ts";
 import { renderCardGrid } from "../lib/cardGrid.ts";
 import { getWidget, widgetImplementations } from "../lib/widgetRegistry.ts";
+import { modelPath } from "../lib/modelWidgets.ts";
 import { sectionCapabilities } from "../lib/cardSections.ts";
 import { cardWidgetSections, widgetRenderers } from "../lib/cardWidgets.ts";
 import { Hono } from "hono";
@@ -49,7 +50,7 @@ import {
   resolveEntity,
 } from "../lib/publicCard.ts";
 import {
-  documentBlocks,
+  documentBlocks, modelHtml,
   type CompactItem,
   compactLine,
   compactParts,
@@ -1284,7 +1285,7 @@ pages.get("/api/v1/document-widgets", async c => {
   const rows = await sql<{id: string; name: string; renderer_key: string}>`select id,name,renderer_key from app.widgets order by name,id`;
   const items = rows.flatMap(row => {
     const spec = widgetImplementations.get(row.renderer_key) ?? sectionCapabilities(row.renderer_key);
-    return spec ? [{id: row.id, name: row.name, designs: spec.designs}] : [];
+    return spec ? [{id: row.id, name: row.name, designs: spec.designs, model_path: modelPath(row.renderer_key)}] : [];
   });
   return c.json({items});
 });
@@ -1298,10 +1299,13 @@ async function documentHtml(card: PublicCard, principal: Principal | null, ances
   return await documentBlocks(card.document.body_json, {entities: card.refs, publicAssets: card.publicAssets}, async props => {
     if (typeof props.widget_id !== "string" || !widgetUid.test(props.widget_id)) return "";
     const entityId = Number(props.entity_id);
-    if (!Number.isSafeInteger(entityId) || entityId <= 0) return "";
+
     const widget = await getWidget(props.widget_id);
     const design = props.design || null;
     if (!widget || (design !== null && (typeof design !== "string" || !widget.designs.includes(design)))) return "";
+    const src = modelPath(widget.renderer_key);
+    if (src) return modelHtml({...props, src});
+    if (!Number.isSafeInteger(entityId) || entityId <= 0) return "";
     const output = await drawDocumentWidget(widget.renderer_key, entityId, design as string | null, principal, chain);
     return (output.reason && canSeeDrafts(principal) ? `<p class="hint">${escapeHtml(output.reason)}</p>` : "") + output.html;
   });
@@ -1341,6 +1345,11 @@ pages.get("/api/v1/document-widgets/:id/preview", async c => {
   if (!widget) throw new ApiError("not_found", "Виджет недоступен");
   const design = c.req.query("design") || null;
   if (design && !widget.designs.includes(design)) throw new ApiError("validation_failed", "Неизвестное оформление");
+  const src = modelPath(widget.renderer_key);
+  if (src) {
+    c.header("cache-control", "private, no-store");
+    return c.json({html: modelHtml({...c.req.query(), src}), title: widget.name});
+  }
   const entityId = Number(c.req.query("entity_id"));
   if (!Number.isSafeInteger(entityId) || entityId <= 0) throw new ApiError("validation_failed", "Выберите запись");
   c.header("cache-control", "private, no-store");

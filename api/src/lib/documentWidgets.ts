@@ -1,5 +1,6 @@
 import type { Tx } from "./db.ts";
 import { ApiError } from "./errors.ts";
+import { modelPath } from "./modelWidgets.ts";
 import { sectionCapabilities } from "./cardSections.ts";
 import { widgetImplementations } from "./widgetRegistry.ts";
 
@@ -13,6 +14,8 @@ function invalid(message: string): never {
 export async function validateDocumentWidgets(tx: Tx, body: unknown, publicTargetsOnly = false, ownerId?: number) {
   const definitions = new Map<string, Set<string>>();
   const targets = new Set<number>();
+  const modelFields = new Set<string>();
+  const withTarget = new Set<string>();
   function visit(list: unknown) {
     if (!Array.isArray(list)) return;
     for (const block of list) {
@@ -20,6 +23,15 @@ export async function validateDocumentWidgets(tx: Tx, body: unknown, publicTarge
         const {widget_id, entity_id, design} = block.props ?? {};
         if (typeof widget_id !== "string" || !uuid.test(widget_id)) invalid("Некорректный UID виджета");
         const id = widget_id.toLowerCase();
+        for (const field of ["title", "caption", "height"]) {
+          const value = block.props[field];
+          if (value == null || value === "") continue;
+          if (typeof value !== "string") invalid("Некорректное свойство вставки модели");
+          if (field === "height" && (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)))) {
+            invalid("Высота модели должна быть целым числом");
+          }
+          modelFields.add(id);
+        }
         const designs = definitions.get(id) ?? new Set<string>();
         if (design != null && design !== "") {
           if (typeof design !== "string") invalid("Некорректное оформление виджета");
@@ -31,6 +43,7 @@ export async function validateDocumentWidgets(tx: Tx, body: unknown, publicTarge
               !/^[1-9]\d*$/.test(String(entity_id)) || !Number.isSafeInteger(Number(entity_id))) {
             invalid("Некорректный UID записи виджета");
           }
+          withTarget.add(id);
           targets.add(Number(entity_id));
         }
       }
@@ -43,6 +56,7 @@ export async function validateDocumentWidgets(tx: Tx, body: unknown, publicTarge
     where id=any(${[...definitions.keys()]}::uuid[])`;
   if (rows.length !== definitions.size) invalid("Виджет отсутствует в каталоге");
   for (const row of rows) {
+    if (modelPath(row.renderer_key) ? withTarget.has(row.id) : modelFields.has(row.id)) invalid("Свойства вставки несовместимы с виджетом");
     const spec = widgetImplementations.get(row.renderer_key) ?? sectionCapabilities(row.renderer_key);
     if (!spec) invalid("Реализация виджета недоступна");
     for (const design of definitions.get(row.id)!) {
