@@ -1,4 +1,6 @@
-import { widgetImplementations } from "./widgetRegistry.ts";
+import { modelHtml } from "./blocksHtml.ts";
+import { modelPages, modelPath } from "./modelWidgets.ts";
+import { widgetImplementations } from "./widgetImplementations.ts";
 import type { PublicCard } from "./publicCard.ts";
 
 type Renderer = (card: Readonly<PublicCard>) => string;
@@ -15,6 +17,9 @@ export function widgetRenderers(card: Readonly<PublicCard>, sections: Record<str
   }
   for (const [key, draw] of Object.entries(sections)) bind(key, draw);
   for (const [key, render] of additionalRenderers) bind(key, () => render(card));
+  for (const [key, title] of Object.entries(modelPages)) {
+    bind(key, () => modelHtml({src: modelPath(key), title}));
+  }
   return registry;
 }
 

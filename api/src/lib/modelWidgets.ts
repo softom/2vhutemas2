@@ -8,6 +8,7 @@ export const modelPages: Readonly<Record<string, string>> = {
   model_grid: "Прямая и поле",
   model_casteljau: "Алгоритм де Кастельжо",
   model_nurbs: "От прямой к NURBS",
+  model_zones: "Профили площадей",
   model_cologne: "Кёльнский собор",
 };
 export function modelPath(key: string) {
