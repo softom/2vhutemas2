@@ -2,6 +2,7 @@ import type { Tx } from "./db.ts";
 import { ApiError } from "./errors.ts";
 import { modelPath } from "./modelWidgets.ts";
 import { sectionCapabilities } from "./cardSections.ts";
+import { styleQuizKey } from "./styleQuizWidget.ts";
 import { widgetImplementations } from "./widgetRegistry.ts";
 
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -56,6 +57,7 @@ export async function validateDocumentWidgets(tx: Tx, body: unknown, publicTarge
     where id=any(${[...definitions.keys()]}::uuid[])`;
   if (rows.length !== definitions.size) invalid("Виджет отсутствует в каталоге");
   for (const row of rows) {
+    if (row.renderer_key === styleQuizKey && withTarget.has(row.id)) invalid("Для этой игры запись не требуется");
     if (modelPath(row.renderer_key) ? withTarget.has(row.id) : modelFields.has(row.id)) invalid("Свойства вставки несовместимы с виджетом");
     const spec = widgetImplementations.get(row.renderer_key) ?? sectionCapabilities(row.renderer_key);
     if (!spec) invalid("Реализация виджета недоступна");

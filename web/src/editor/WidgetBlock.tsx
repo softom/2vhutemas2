@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { createReactBlockSpec } from "@blocknote/react";
 import { api, type SearchHit } from "../api";
+
+import { clientWidgets } from "../clientWidgetRegistry";
 
 type WidgetProps = { widget_id: string; entity_id: string; design: string; title:string; caption:string; height:string };
 type Definition = Awaited<ReturnType<typeof api.documentWidgets>>["items"][number];
@@ -64,8 +66,9 @@ function WidgetEditor({ value, change }: {value: WidgetProps; change: (next: Par
     return () => { active = false; clearTimeout(timer); };
   }, [query]);
   const chosen = catalog.find(widget => widget.id === value.widget_id);
+  const Preview = chosen?.standalone ? clientWidgets.get(chosen.renderer_key) : undefined;
   return <div className="document-widget-editor" contentEditable={false}>
-    <label>Виджет <select aria-label="Виджет" value={value.widget_id} onChange={e => change({widget_id: e.target.value, design: "", entity_id: catalog.find(w => w.id === e.target.value)?.model_path ? "" : value.entity_id, title:"", caption:"", height:""})}>
+    <label>Виджет <select aria-label="Виджет" value={value.widget_id} onChange={e => change({widget_id: e.target.value, design: "", entity_id: catalog.some(w => w.id === e.target.value && (w.model_path || w.standalone)) ? "" : value.entity_id, title:"", caption:"", height:""})}>
       <option value="">Выберите виджет</option>
       {value.widget_id && !chosen && <option value={value.widget_id}>Виджет вне каталога</option>}
       {catalog.map(widget => <option key={widget.id} value={widget.id}>{widget.name}</option>)}
@@ -82,7 +85,7 @@ function WidgetEditor({ value, change }: {value: WidgetProps; change: (next: Par
       <figure><iframe loading="lazy" title={value.title || chosen.name} src={chosen.model_path+"?embed=1"}
         style={{height:Math.min(900, Math.max(320, Number(value.height) || 560))}} />
         <figcaption>{value.caption}</figcaption></figure>
-    </div> : <><label>Запись <input type="search" value={query} placeholder="Поиск по названию" onChange={e => setQuery(e.target.value)} /></label>
+    </div> : Preview ? <Suspense fallback={<p>Загрузка превью…</p>}><Preview entity_id={null} design={value.design || "default"} /></Suspense> : <><label>Запись <input type="search" value={query} placeholder="Поиск по названию" onChange={e => setQuery(e.target.value)} /></label>
     {searchStatus && <p role="status">{searchStatus}</p>}
     {hits.length > 0 && <ul>{hits.map(hit => <li key={hit.id}><button type="button" onClick={() => {
       change({entity_id: String(hit.id)}); setQuery("");

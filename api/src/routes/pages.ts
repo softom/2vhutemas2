@@ -16,6 +16,7 @@ import { sectionCells, sectionLayout } from "../lib/sectionLayouts.ts";
 import type { CardLayout } from "../lib/layouts.ts";
 import { renderCardGrid } from "../lib/cardGrid.ts";
 import { getWidget, widgetImplementations } from "../lib/widgetRegistry.ts";
+import { styleQuizKey, styleQuizHtml } from "../lib/styleQuizWidget.ts";
 import { modelPath } from "../lib/modelWidgets.ts";
 import { sectionCapabilities } from "../lib/cardSections.ts";
 import { cardWidgetSections, widgetRenderers } from "../lib/cardWidgets.ts";
@@ -1285,7 +1286,7 @@ pages.get("/api/v1/document-widgets", async c => {
   const rows = await sql<{id: string; name: string; renderer_key: string}>`select id,name,renderer_key from app.widgets order by name,id`;
   const items = rows.flatMap(row => {
     const spec = widgetImplementations.get(row.renderer_key) ?? sectionCapabilities(row.renderer_key);
-    return spec ? [{id: row.id, name: row.name, designs: spec.designs, model_path: modelPath(row.renderer_key)}] : [];
+    return spec ? [{id: row.id, name: row.name, renderer_key: row.renderer_key, designs: spec.designs, standalone: row.renderer_key === styleQuizKey, model_path: modelPath(row.renderer_key)}] : [];
   });
   return c.json({items});
 });
@@ -1303,6 +1304,7 @@ async function documentHtml(card: PublicCard, principal: Principal | null, ances
     const widget = await getWidget(props.widget_id);
     const design = props.design || null;
     if (!widget || (design !== null && (typeof design !== "string" || !widget.designs.includes(design)))) return "";
+    if (widget.renderer_key === styleQuizKey) return props.entity_id ? "" : styleQuizHtml();
     const src = modelPath(widget.renderer_key);
     if (src) return modelHtml({...props, src});
     if (!Number.isSafeInteger(entityId) || entityId <= 0) return "";
@@ -1352,6 +1354,7 @@ pages.get("/api/v1/document-widgets/:id/preview", async c => {
     c.header("cache-control", "private, no-store");
     return c.json({html: modelHtml({...c.req.query(), src}), title: widget.name});
   }
+  if (widget.renderer_key === styleQuizKey) return c.json({html: styleQuizHtml(), title: widget.name});
   const entityId = Number(c.req.query("entity_id"));
   if (!Number.isSafeInteger(entityId) || entityId <= 0) throw new ApiError("validation_failed", "Выберите запись");
   c.header("cache-control", "private, no-store");

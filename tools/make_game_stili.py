@@ -48,6 +48,7 @@ fav = re.search(r'    <link rel="icon".*?\n    <link rel="apple-touch-icon"[^\n]
 page = (ROOT / 'tools/game_stili.tpl.html').read_text(encoding='utf-8')
 page = page.replace('/*DATA*/', json.dumps({"styles": styles, "buildings": buildings}, ensure_ascii=False)) \
            .replace('<!--METRIKA-->', tpl[a:b]).replace('<!--FAV-->', fav)
+(ROOT / 'web/src/styleQuiz.json').write_bytes((json.dumps({"styles": styles, "buildings": buildings}, ensure_ascii=False, indent=2) + '\n').encode('utf-8'))
 OUT.mkdir(parents=True, exist_ok=True)
 (OUT / 'stili.html').write_text(page, encoding='utf-8')
 print(len(buildings), 'зданий,', len(styles), 'стилей')

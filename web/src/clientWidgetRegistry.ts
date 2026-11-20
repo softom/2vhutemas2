@@ -1,5 +1,6 @@
-import type { ComponentType } from "react";
+import { lazy, type ComponentType } from "react";
 import type { ClientWidgetProps } from "./clientWidgets";
 
-// Keys come from the server's widget catalogue. Implementations are added on migration.
-export const clientWidgets = new Map<string, ComponentType<ClientWidgetProps>>();
+export const clientWidgets = new Map<string, ComponentType<ClientWidgetProps>>([
+  ["style_quiz", lazy(() => import("./StyleQuiz"))],
+]);

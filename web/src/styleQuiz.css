@@ -1,0 +1,5 @@
+.style-quiz { max-width: 48rem; margin-inline: auto; }
+.style-quiz img { width: 100%; max-height: 26rem; object-fit: contain; }
+.style-quiz .quiz-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); gap: .5rem; margin-block: 1rem; }
+.style-quiz .quiz-right { outline: 2px solid #528244; }
+.style-quiz .quiz-wrong { outline: 2px solid #b24f45; }
