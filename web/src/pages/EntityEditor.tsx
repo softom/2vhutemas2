@@ -579,6 +579,10 @@ function EditorBody(props: any) {
               <div key="text">
                 <h2>Описание</h2>
                 <div className="row picker-open">
+                  <button type="button" className="ghost" onClick={() =>
+                    editor.insertBlocks([{type: "widget"}], editor.getTextCursorPosition().block, "after")}>
+                    Вставить виджет…
+                  </button>
                   <button type="button" className="ghost" onClick={() => openPicker("entities", "text")}>
                     Вставить запись…
                   </button>

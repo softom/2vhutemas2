@@ -174,7 +174,7 @@ function picture(row: NewsRow, large: boolean): string {
 }
 
 /** Одна новость в ленте: первая — крупно, остальные — строкой. */
-function itemHtml(row: NewsRow, large: boolean): string {
+export function itemHtml(row: NewsRow, large: boolean): string {
   const text = lead(row);
   const main = large
     ? `${picture(row, true)}${kicker(row)}<h2><a href="${e(entityPath(row.slug))}">${e(row.title_ru)}</a></h2>` +

@@ -15,6 +15,8 @@
 import { sectionCells, sectionLayout } from "../lib/sectionLayouts.ts";
 import type { CardLayout } from "../lib/layouts.ts";
 import { renderCardGrid } from "../lib/cardGrid.ts";
+import { getWidget, widgetImplementations } from "../lib/widgetRegistry.ts";
+import { sectionCapabilities } from "../lib/cardSections.ts";
 import { cardWidgetSections, widgetRenderers } from "../lib/cardWidgets.ts";
 import { Hono } from "hono";
 import type { Context } from "hono";
@@ -23,7 +25,7 @@ import { sql } from "../lib/db.ts";
 import { entities } from "./entities.ts";
 import { siteFooter, siteHeader } from "../lib/siteHeader.ts";
 import { CATALOG_GROUPS, CATALOG_HIDDEN_ROOTS } from "../lib/entityTypes.ts";
-import { dayTitle, loadNews, newsDay, newsFeedHtml, newsNavHtml, newsNeighbours, newsOrder, newsTopics, sameDayHtml, topicHtml } from "../lib/news.ts";
+import { itemHtml, dayTitle, loadNews, newsDay, newsFeedHtml, newsNavHtml, newsNeighbours, newsOrder, newsTopics, sameDayHtml, topicHtml } from "../lib/news.ts";
 import { CARD_PAGE_ID, readLayout } from "../lib/layouts.ts";
 import { config } from "../lib/config.ts";
 import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
@@ -305,14 +307,7 @@ function chipsHtml(chips: TypeChip[], allLabel: string): string {
     `</div>`;
 }
 
-/**
- * Каталог раздела той же разметкой и с теми же данными, что каталог
- * приложения (Catalog.tsx): карточки по компактному виду типа. Данные
- * вложены в страницу, и приложение начинает с них, — поэтому при загрузке
- * клиента ничего не мигает и не перестраивается.
- */
-function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string, chips: TypeChip[] = [], nextHref?: string, assigned?: CardLayout | null, offset = 0): string {
-  const tile = (row: CatalogItem, index: number) => {
+function compactTile(row: CatalogItem, index: number) {
     const view = compactParts(row.compact);
     // Первая плашка мозаики крупная — ей нужен экранный размер снимка (Р-91).
     const url = compactPicture(view, index === 0 ? "screen" : "thumbnail");
@@ -325,8 +320,16 @@ function catalogHtml(title: string, lead: string, page: CatalogPage, branch: str
       (view.params.length ? `<div class="kind">${escapeHtml(view.params.join(", "))}</div>` : "") +
       (row.title_en ? `<div class="kind">${escapeHtml(row.title_en)}</div>` : "") +
       `<div style="margin-top:8px"><span class="badge status${row.material_status === "published" ? "" : " draft"}">${row.material_status === "published" ? "опубликовано" : "черновик"}</span></div></a>`;
-  };
-  const cards = assigned ? sectionCells(assigned, page.items, offset, "record_compact", tile) : page.items.map(tile).join("");
+  }
+
+/**
+ * Каталог раздела той же разметкой и с теми же данными, что каталог
+ * приложения (Catalog.tsx): карточки по компактному виду типа. Данные
+ * вложены в страницу, и приложение начинает с них, — поэтому при загрузке
+ * клиента ничего не мигает и не перестраивается.
+ */
+function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string, chips: TypeChip[] = [], nextHref?: string, assigned?: CardLayout | null, offset = 0): string {
+  const cards = assigned ? sectionCells(assigned, page.items, offset, "record_compact", compactTile) : page.items.map(compactTile).join("");
   // Поиск и отбор работают в приложении; здесь они держат место.
   const filters = `<div class="filters"><input placeholder="Поиск по названию" disabled /></div>`;
   // «</» внутри строки закрыл бы тег скрипта раньше времени.
@@ -988,7 +991,7 @@ function materialsHtml(m: Materials | null): string {
 }
 
 function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<typeof citation>, news: NewsExtra | null = null,
-                  materials: Materials | null | undefined = undefined) {
+                  materials: Materials | null | undefined = undefined, singleWidget?: { key: string; design: string | null }) {
   const e = escapeHtml;
   const parts: string[] = [];
   const editPath = `/entities/${card.id}/edit`;
@@ -1176,6 +1179,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       `</details>`,
     ].join(""),
   };
+  if (singleWidget) return widgetRenderers(card, sections).get(singleWidget.key)?.(card.id, singleWidget.design) ?? "";
   if (card.widgetLayout) {
     const slots = card.widgetLayout.slots;
     const registry = widgetRenderers(card, sections);
@@ -1276,6 +1280,44 @@ pages.get("/entities/:key", async (c) => {
 
 // Тот же рендер для просмотра черновиков: авторизация общая для /api/v1/*.
 // Ответ не кэшируется; гость не получает ни названия, ни адреса черновика.
+pages.get("/api/v1/document-widgets", async c => {
+  requirePermission(c.get("principal"), "edit");
+  const rows = await sql<{id: string; name: string; renderer_key: string}>`select id,name,renderer_key from app.widgets order by name,id`;
+  const items = rows.flatMap(row => {
+    const spec = widgetImplementations.get(row.renderer_key) ?? sectionCapabilities(row.renderer_key);
+    return spec ? [{id: row.id, name: row.name, designs: spec.designs}] : [];
+  });
+  return c.json({items});
+});
+
+pages.get("/api/v1/document-widgets/:id/preview", async c => {
+  const principal = requirePermission(c.get("principal"), "edit");
+  const id = c.req.param("id");
+  if (!/^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(id)) throw new ApiError("validation_failed", "Некорректный UID виджета");
+  const widget = await getWidget(id);
+  if (!widget) throw new ApiError("not_found", "Виджет недоступен");
+  const design = c.req.query("design") || null;
+  if (design && !widget.designs.includes(design)) throw new ApiError("validation_failed", "Неизвестное оформление");
+  const entityId = Number(c.req.query("entity_id"));
+  if (!Number.isSafeInteger(entityId) || entityId <= 0) throw new ApiError("validation_failed", "Выберите запись");
+  const card = await loadPublicCard(entityId, principal);
+  if (!card) throw new ApiError("not_found", "Запись недоступна");
+  let html: string;
+  if (widget.renderer_key === "record_compact") {
+    const [data] = await sql<{compact: CompactItem[]}>`select app.compact_json(${entityId},${canSeeDrafts(principal)}) as compact`;
+    html = compactTile({...card, compact: data.compact, material_status: card.is_published ? "published" : "draft"}, 1);
+  } else if (widget.renderer_key === "news_compact") {
+    const target = (await newsOrder(null)).find(row => Number(row.id) === entityId);
+    html = target ? itemHtml((await loadNews([target]))[0], false) : "";
+  } else {
+    const body = card.document ? blocksHtml(card.document.body_json, {entities: card.refs, publicAssets: card.publicAssets}) : "";
+    const cite = citation({title: card.title_ru, slug: card.slug, authors: card.authors, year: new Date(card.modified_at).getFullYear()});
+    html = cardBody(card, body, cite, await newsExtra(card), undefined, {key: widget.renderer_key, design});
+  }
+  c.header("cache-control", "private, no-store");
+  return c.json({html, title: card.title_ru});
+});
+
 pages.get("/api/v1/entities/:key/card", async (c) => {
   c.header("cache-control", "private, no-store");
   const principal = c.get("principal");

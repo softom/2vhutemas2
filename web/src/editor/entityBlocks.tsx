@@ -15,6 +15,7 @@ import {
   defaultInlineContentSpecs,
 } from "@blocknote/core";
 import { createReactBlockSpec } from "@blocknote/react";
+import { WidgetBlock } from "./WidgetBlock";
 import { api, type CompactItem, compactParts, compactPicture } from "../api";
 
 /**
@@ -377,6 +378,7 @@ export function createSchema() {
       entityCard: EntityCardBlock,
       mediaImage: MediaImageBlock,
       modelEmbed: ModelEmbedBlock,
+      widget: WidgetBlock,
     },
     inlineContentSpecs: {
       ...defaultInlineContentSpecs,
@@ -387,7 +389,7 @@ export function createSchema() {
 }
 
 /** Блоки без собственного текста: курсор внутрь них поставить нельзя. */
-const VOID_BLOCKS = new Set(["entityCard", "mediaImage", "modelEmbed"]);
+const VOID_BLOCKS = new Set(["entityCard", "mediaImage", "modelEmbed", "widget"]);
 
 /**
  * Подготовка старых документов к текущей схеме BlockNote.

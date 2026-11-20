@@ -639,6 +639,12 @@ export interface RobotLearned {
 }
 
 export const api = {
+  documentWidgets: () => request<{items: {id: string; name: string; designs: string[]}[]}>("/document-widgets"),
+  documentWidgetPreview: (widget: string, entity: string, design: string) => {
+    const query = new URLSearchParams({entity_id: entity});
+    if (design) query.set("design", design);
+    return request<{html: string; title: string}>(`/document-widgets/${encodeURIComponent(widget)}/preview?${query}`);
+  },
   siteHeader: (path: string) => request<{ html: string; footer: string; viewer: { authenticated: boolean; displayName: string; permissions: string[] } }>(`/site-header?path=${encodeURIComponent(path)}`),
   // Пометки поверх страниц (Р-95): только для правящих.
   pageNotes: (path: string, all = false) =>
