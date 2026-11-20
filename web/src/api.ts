@@ -710,7 +710,9 @@ export const api = {
     request<EntityCard>(`/entities/${encodeURIComponent(String(id))}`),
   entityCardHtml: (id: number | string) =>
     request<{ html: string; title: string; path: string }>(`/entities/${encodeURIComponent(String(id))}/card`),
-  entityVersions: (id: number) => request<{items:{id:string;created_at:string;summary:string;editor:string|null;is_public:boolean;is_working:boolean;complete:boolean}[]}>(`/entities/${id}/versions`),
+  entityVersionBody: (id: number, revision: string) =>
+    request<{body: unknown[]}>(`/entities/${id}/versions/${encodeURIComponent(revision)}/body`),
+  entityVersions: (id: number) => request<{items:{id:string;created_at:string;summary:string;editor:string|null;is_public:boolean;is_working:boolean;complete:boolean;has_body:boolean}[]}>(`/entities/${id}/versions`),
   /** Снять запись с публикации: обратно в черновик, версии сохраняются. */
   changeEntityArchive: (id: number, action: "archive" | "restore", base_revision_id: string) =>
     request<{id:number;status:string;revision_id:string}>(`/entities/${id}/${action}`, {method:"POST",body:JSON.stringify({base_revision_id})}),

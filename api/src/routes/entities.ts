@@ -584,11 +584,29 @@ for (const action of ["archive", "restore"] as const) {
   });
 }
 
+/** Read the original blocks, including legacy text snapshots belonging to this entity. */
+entities.get("/:id/versions/:revision/body", async c => {
+  requirePermission(c.get("principal"), "edit");
+  c.header("cache-control", "private, no-store");
+  const id = Number(c.req.param("id"));
+  const revision = c.req.param("revision");
+  if (!Number.isSafeInteger(id) || id < 1 || !/^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(revision)) {
+    throw new ApiError("not_found", "Версия текста не найдена");
+  }
+  const [row] = await sql<{body: unknown[]}>`select r.snapshot->'body_json' as body from app.revisions r
+    where r.id=${revision} and jsonb_typeof(r.snapshot->'body_json')='array'
+      and (r.entity_id=${id} or exists(select 1 from app.materials m join app.documents d on d.id=m.document_id
+        where m.id=r.material_id and d.owner_entity_id=${id}))`;
+  if (!row) throw new ApiError("not_found", "Версия текста не найдена");
+  return c.json(row);
+});
+
 entities.get("/:id/versions", async (c: Context<AppEnv>) => {
   const principal=c.get("principal");
   if (!canSeeDrafts(principal)) throw new ApiError("permission_denied","История доступна редактору");
   const id=Number(c.req.param("id"));
   const rows=await sql`select r.id,r.created_at,r.summary,r.schema_version,
+    coalesce(jsonb_typeof(r.snapshot->'body_json')='array',false) as has_body,
     r.id=e.published_revision_id as is_public,r.id=e.working_revision_id as is_working,
     c.display_name as editor,r.entity_id is not null and r.schema_version=2 as complete
     from app.entities e join app.revisions r on r.entity_id=e.id or r.material_id in

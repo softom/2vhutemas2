@@ -383,6 +383,30 @@ function EditorBody(props: any) {
     }
   };
 
+  const openVersionText = async (revision: string) => {
+    if (!entityId || !window.confirm("Заменить открытый текст текстом выбранной версии? Изменения можно сохранить новой рабочей версией.")) return;
+    setSaving(true); setError(null);
+    try {
+      const {body} = await api.entityVersionBody(entityId, revision);
+      editor.replaceBlocks(editor.document, body.length ? prepareEditorBlocks(body) : [{type:"paragraph"}]);
+      setStatus("Текст версии открыт в редакторе. Для сохранения нажмите «Сохранить версию».");
+    } catch (e) { setError((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const publishVersion = async (revision: string) => {
+    if (!materialId || !window.confirm("Показать читателям выбранную версию материала целиком? Рабочие правки сохранятся в редакторе.")) return;
+    setSaving(true); setError(null);
+    try {
+      await api.publishMaterial(materialId, revision);
+      setPublishedRevision(revision);
+      setEntityStatus("published");
+      window.dispatchEvent(new CustomEvent("research-publication-updated"));
+      setStatus("Выбранная версия опубликована");
+    } catch (e) { setError((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
   const changeArchive = async (action: "archive" | "restore") => {
     if (!entityId || !revisionId) return;
     setSaving(true); setError(null);
@@ -484,8 +508,13 @@ function EditorBody(props: any) {
       {entityId && <details><summary>История версий</summary><ul>
         {versions.map(version => <li key={version.id}>
           {new Date(version.created_at).toLocaleString("ru-RU")} — {version.editor || "Редактор"}: {version.summary}
-          {version.is_public && " · публичная"}{version.is_working && " · в работе"}
+          {version.id === publishedRevision && " · публичная"}{version.is_working && " · в работе"}
           {!version.complete && " · прежняя частичная редакция"}
+          {version.has_body && sections.includes("text") && <button type="button" className="ghost"
+            disabled={saving} onClick={() => openVersionText(version.id)}>Открыть текст версии</button>}
+          {canPublish && version.complete && version.id !== publishedRevision && entityStatus !== "archived" &&
+            <button type="button" className="ghost" disabled={saving}
+              onClick={() => publishVersion(version.id)}>Опубликовать эту версию</button>}
         </li>)}
       </ul></details>}
 
