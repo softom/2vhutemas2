@@ -8,6 +8,7 @@
  * Право `publish` публикует свою версию сразу. Без него правка отправляется
  * на рассмотрение обладателю права `review`, и материал остаётся прежним.
  */
+import { validatePublishedWidgets } from "../lib/documentWidgets.ts";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { sql, transaction, type Tx } from "../lib/db.ts";
@@ -122,6 +123,7 @@ materials.post("/:id/publish", async (c: Context<AppEnv>) => {
       const publication=await publishOwnerRevision(tx,{kind:material.entity_id?'entity':'link',id:Number(material.entity_id??material.link_id)},String(revisionId),principal.contributorId!,input.note??null);
       return {material_id:materialId,...publication};
     } else {
+    await validatePublishedWidgets(tx, String(revisionId));
     await tx`
       update app.materials
          set status = 'published', published_revision_id = ${revisionId}, archived_at = null
@@ -187,6 +189,7 @@ materials.post("/:id/review", async (c: Context<AppEnv>) => {
       if (material.entity_id || material.link_id) {
         await publishOwnerRevision(tx,{kind:material.entity_id?"entity":"link",id:Number(material.entity_id??material.link_id)},String(revisionId),principal.contributorId!,"Принято при рассмотрении");
       } else {
+      await validatePublishedWidgets(tx, String(revisionId));
       await tx`
         update app.materials
            set status = 'published', published_revision_id = ${revisionId}

@@ -1,3 +1,4 @@
+import { validateDocumentWidgets } from "./documentWidgets.ts";
 import {sql,type Query} from './db.ts';
 import {ApiError} from './errors.ts';
 import {extractText,validateDocument,saveRefs} from '../routes/documents.ts';
@@ -12,6 +13,7 @@ export function sourceMarks(body:unknown):{block:any;props:any}[]{
 export async function validateLinkBody(db:Query,body:unknown,drafts:boolean){
  const blocks=validateDocument(body),marks=sourceMarks(blocks);
  if(!extractText(blocks).trim())throw new ApiError('link_requires_justification','Обоснование не может быть пустым');
+ await validateDocumentWidgets(db, blocks, !drafts);
  const ids=new Set<number>();
  const occurrences=new Set<string>();
  for(const {block,props} of marks){

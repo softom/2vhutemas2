@@ -1,3 +1,4 @@
+import { validatePublishedWidgets } from "./documentWidgets.ts";
 /**
  * Записи, которые заводятся не формой карточки, а удобными входами: место из
  * редактора адреса, изображение из медиатеки (Р-84, Р-85).
@@ -110,6 +111,8 @@ export async function saveRevision(
 /** Публикует рабочую редакцию или снимает запись с публикации. */
 export async function setPublished(tx: Tx, entityId: number, published: boolean) {
   if (published) {
+    const [record] = await tx<{working_revision_id: string | null}>`select working_revision_id from app.entities where id=${entityId} for update`;
+    if (record?.working_revision_id) await validatePublishedWidgets(tx, record.working_revision_id);
     await tx`update app.entities set status = 'published', published_revision_id = working_revision_id
               where id = ${entityId}`;
   } else {

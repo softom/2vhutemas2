@@ -14,6 +14,7 @@
  * Собственный текст записи — тоже значение параметра, «Текст» (Р-86), но он
  * правится вместе с записью полем body_json и в списке величин не участвует.
  */
+import { validateDocumentWidgets } from "../lib/documentWidgets.ts";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { transaction, type Tx } from "../lib/db.ts";
@@ -206,7 +207,8 @@ export async function writeIndicators(tx: Tx, entityId: number, items: Indicator
  * Собственный текст записи — значение параметра «Текст» (Р-86). Пустой текст
  * значения не оставляет: отсутствие сведения — не значение.
  */
-export async function writeText(tx: Tx, entityId: number, blocks: unknown[]) {
+export async function writeText(tx: Tx, entityId: number, blocks: unknown[], drafts = true) {
+  await validateDocumentWidgets(tx, blocks, !drafts);
   await tx`
     delete from app.indicator_values v
      using app.indicators i, app.parameters p

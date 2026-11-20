@@ -7,6 +7,7 @@
  * UID, авторских подписей и независимых объектов — медиа и отдельных
  * документов.
  */
+import { validatePublishedWidgets } from "./documentWidgets.ts";
 import { type Tx } from "./db.ts";
 import { ApiError } from "./errors.ts";
 import {sourceMarks} from "./linkCitations.ts";
@@ -48,6 +49,7 @@ export async function publishOwned(tx: Tx, owner: {entity_id: number|null;link_i
     and ((${owner.entity_id}::bigint is not null and entity_id=${owner.entity_id})
       or (${owner.link_id}::bigint is not null and link_id=${owner.link_id})) and schema_version=2`;
   if (!revisions.length) throw new ApiError("validation_failed","Нужна полная версия этого владельца");
+  await validatePublishedWidgets(tx, revisionId);
   if(owner.entity_id){
     const missing=await tx<any>`select coalesce(i.label_override,p.title_ru) as title from app.entities e
      join app.parameter_sets s on s.id in(select set_id from app.entity_parameter_sets where entity_id=e.id union select set_id from app.type_parameter_sets where type_id in(select app.entity_type_ancestors(e.type_id)))

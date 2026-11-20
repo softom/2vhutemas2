@@ -5,6 +5,7 @@
  * (body_text и search_vector), клиент его не присылает. Неизвестные типы
  * блоков сохраняются как есть: молча терять авторскую композицию нельзя.
  */
+import { validateDocumentWidgets } from "../lib/documentWidgets.ts";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { sql, transaction, type Tx } from "../lib/db.ts";
@@ -156,6 +157,9 @@ export function extractRefs(blocks: unknown): EntityRef[] {
         content?: unknown;
         children?: unknown;
       };
+      if (block.type === "widget" && block.props?.entity_id != null) {
+        take({entity_id: block.props.entity_id}, block.id ?? null, "card");
+      }
       if (block.type === "entityCard" && block.props) {
         take(block.props, block.id ?? null, "card");
       }
@@ -309,6 +313,7 @@ documents.patch("/:id", async (c: Context<AppEnv>) => {
     const updated = await tx<{ body_json: unknown; title: string | null }>`
       select body_json, title from app.documents where id = ${id}
     `;
+    await validateDocumentWidgets(tx, updated[0].body_json);
     await saveSearchText(tx, id, extractText(updated[0].body_json));
 
     const revisions = await tx<{ id: string }>`

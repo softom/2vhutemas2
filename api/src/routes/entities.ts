@@ -90,8 +90,8 @@ async function writeTypology(tx: Tx, entityId: number, typology: string | null):
  * параметра «Текст» (Р-86): снимок всегда собирается из значений, а не из
  * того, что прислал клиент. Не прислали текст — он остаётся прежним.
  */
-async function snapshot(tx: Tx, id: number, body?: unknown) {
-  if (body !== undefined) await writeText(tx, id, validateDocument(body));
+async function snapshot(tx: Tx, id: number, body: unknown, drafts: boolean) {
+  if (body !== undefined) await writeText(tx, id, validateDocument(body), drafts);
   const rows = await tx`select app.entity_snapshot(${id}) as data`;
   return rows[0].data;
 }
@@ -414,7 +414,7 @@ entities.post("/", async (c: Context<AppEnv>) => {
 
     if (input.indicators !== undefined) await writeIndicators(tx, entityId, input.indicators);
     if (input.tags !== undefined) await writeEntityTags(tx, entityId, input.tags);
-    const data = await snapshot(tx, entityId, input.body_json);
+    const data = await snapshot(tx, entityId, input.body_json, canSeeDrafts(principal));
     const revisions = await tx`
       insert into app.revisions (material_id, edited_by, operation, summary, snapshot)
       values (${materialId}, ${principal.contributorId}, 'create', 'Создание карточки', ${JSON.stringify(data)}::jsonb)
@@ -499,7 +499,7 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
 
     if (input.indicators !== undefined) await writeIndicators(tx, id, input.indicators);
     if (input.tags !== undefined) await writeEntityTags(tx, id, input.tags);
-    const data = await snapshot(tx, id, input.body_json);
+    const data = await snapshot(tx, id, input.body_json, canSeeDrafts(principal));
     const revisions = await tx`
       insert into app.revisions (material_id, base_revision_id, edited_by, operation, summary, snapshot)
       values (${material_id}, ${latest_revision_id}, ${principal.contributorId}, 'edit',
