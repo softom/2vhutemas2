@@ -1294,7 +1294,7 @@ type WidgetOutput = { html: string; title: string; reason?: string };
 const widgetUid = /^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
 
 async function documentHtml(card: PublicCard, principal: Principal | null, ancestors: readonly number[] = []) {
-  if (!card.document || ancestors.includes(card.id)) return "";
+  if (!card.document) return "";
   const chain = [...ancestors, card.id];
   return await documentBlocks(card.document.body_json, {entities: card.refs, publicAssets: card.publicAssets}, async props => {
     if (typeof props.widget_id !== "string" || !widgetUid.test(props.widget_id)) return "";
@@ -1313,6 +1313,8 @@ async function documentHtml(card: PublicCard, principal: Principal | null, ances
 
 async function drawDocumentWidget(key: string, entityId: number, design: string | null,
   principal: Principal | null, ancestors: readonly number[]): Promise<WidgetOutput> {
+  // Stop only this text expansion, before fetching the repeated entity.
+  if (key === "text" && ancestors.includes(entityId)) return {html:"", title:""};
   const editor = canSeeDrafts(principal);
   const card = await loadPublicCard(entityId, principal, true);
   if (!card) {
