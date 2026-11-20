@@ -3,6 +3,12 @@ import "./fonts.css";
 import "./styles.css";
 import { enhancePublicPage } from "./publicPage";
 
+import { clientWidgets } from "./clientWidgetRegistry";
+
+if (clientWidgets.size) {
+  void import("./clientWidgets").then(({ observeWidgets }) => observeWidgets(document.body, clientWidgets));
+}
+
 if (document.querySelector("[data-public-page]")) {
   enhancePublicPage();
 } else {
