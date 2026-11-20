@@ -174,7 +174,7 @@ export interface PublicImage {
 }
 
 /** Опубликованная запись целиком; черновик и архив гостю не существуют. */
-export async function loadPublicCard(id: number, principal: Principal | null = null): Promise<PublicCard | null> {
+export async function loadPublicCard(id: number, principal: Principal | null = null, skipArchived = false): Promise<PublicCard | null> {
   const drafts = canSeeDrafts(principal);
   const rows = await sql<Record<string, unknown>>`
     select e.id, e.is_published, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
@@ -189,6 +189,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
       join app.entity_types ty on ty.id = e.type_id
       left join app.materials m on m.entity_id = e.id
      where e.id = ${id} and (${drafts} or e.is_published)
+       and (not ${skipArchived} or exists (select 1 from app.entities live where live.id=e.id and live.status <> 'archived'))
   `;
   if (rows.length === 0) return null;
   const e = rows[0];

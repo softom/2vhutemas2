@@ -82,6 +82,7 @@ function compactCard(target: RefTarget, note: string): string {
 }
 
 export interface RenderContext {
+  widgets?: ReadonlyMap<object, string>;
   /** Опубликованные записи, на которые ссылается текст: номер → адрес. */
   entities: Map<number, RefTarget>;
   /** Файлы, которые можно показать без входа, с автором и источником. */
@@ -244,6 +245,8 @@ function block(item: Block, ctx: RenderContext): string {
       return `<pre><code>${inline(item.content, ctx)}</code></pre>`;
     case "table":
       return tableHtml(item.content, ctx);
+    case "widget":
+      return ctx.widgets?.get(item) ?? "";
     case "entityCard": {
       const target = ctx.entities.get(Number(props.entityId));
       if (!target) return "";
@@ -301,6 +304,30 @@ export function blocks(list: unknown, ctx: RenderContext): string {
   }
   if (openList) html += `</${openList}>`;
   return html;
+}
+
+/** Resolve widget blocks before the synchronous HTML pass; preserve document order. */
+export async function documentBlocks(list: unknown, ctx: RenderContext,
+  renderWidget: (props: Record<string, unknown>) => Promise<string>) {
+  const widgets = new Map<object, string>();
+  const rendered = new Map<string, string>();
+  async function visit(items: unknown) {
+    if (!Array.isArray(items)) return;
+    for (const item of items) {
+      if (item?.type === "widget") {
+        const props = item.props ?? {};
+        const key = JSON.stringify([props.widget_id, props.entity_id, props.design]);
+        let html = rendered.get(key);
+        if (html === undefined) {
+          html = await renderWidget(props);
+          rendered.set(key, html);
+        }
+        if (html) widgets.set(item, `<div class="document-widget">${html}</div>`);
+      } else if (item?.children?.length) await visit(item.children);
+    }
+  }
+  await visit(list);
+  return blocks(list, {...ctx, widgets});
 }
 
 /** Первый абзац с текстом: из него берётся описание страницы. */

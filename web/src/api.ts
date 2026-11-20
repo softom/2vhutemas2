@@ -643,7 +643,7 @@ export const api = {
   documentWidgetPreview: (widget: string, entity: string, design: string) => {
     const query = new URLSearchParams({entity_id: entity});
     if (design) query.set("design", design);
-    return request<{html: string; title: string}>(`/document-widgets/${encodeURIComponent(widget)}/preview?${query}`);
+    return request<{html: string; title: string; reason?: string}>(`/document-widgets/${encodeURIComponent(widget)}/preview?${query}`);
   },
   siteHeader: (path: string) => request<{ html: string; footer: string; viewer: { authenticated: boolean; displayName: string; permissions: string[] } }>(`/site-header?path=${encodeURIComponent(path)}`),
   // Пометки поверх страниц (Р-95): только для правящих.

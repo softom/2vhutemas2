@@ -20,7 +20,7 @@ function previewDocument(html: string) {
 }
 
 function WidgetPreview({ widget_id, entity_id, design }: WidgetProps) {
-  const [preview, setPreview] = useState<{html: string; title: string}>();
+  const [preview, setPreview] = useState<{html: string; title: string; reason?: string}>();
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
@@ -32,9 +32,10 @@ function WidgetPreview({ widget_id, entity_id, design }: WidgetProps) {
   if (error) return <p role="alert">{error}</p>;
   if (!preview) return <p role="status">Загрузка превью…</p>;
   return <figure>
-    <figcaption>{preview.title}</figcaption>
+    {preview.reason && <p role="status">{preview.reason}</p>}
+    {preview.title && <figcaption>{preview.title}</figcaption>}
     {preview.html ? <iframe title="Превью виджета" sandbox="" srcDoc={previewDocument(preview.html)} />
-      : <p>Для этой записи у виджета нет данных.</p>}
+      : !preview.reason && <p>Для этой записи у виджета нет данных.</p>}
   </figure>;
 }
 

@@ -28,7 +28,7 @@ import { CATALOG_GROUPS, CATALOG_HIDDEN_ROOTS } from "../lib/entityTypes.ts";
 import { itemHtml, dayTitle, loadNews, newsDay, newsFeedHtml, newsNavHtml, newsNeighbours, newsOrder, newsTopics, sameDayHtml, topicHtml } from "../lib/news.ts";
 import { CARD_PAGE_ID, readLayout } from "../lib/layouts.ts";
 import { config } from "../lib/config.ts";
-import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
+import { type Principal, canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import { materialsOf } from "./researchMaterials.ts";
 import { ApiError } from "../lib/errors.ts";
 import { type AppEnv, encodeCursor, decodeCursor, log } from "../lib/http.ts";
@@ -49,7 +49,7 @@ import {
   resolveEntity,
 } from "../lib/publicCard.ts";
 import {
-  blocks as blocksHtml,
+  documentBlocks,
   type CompactItem,
   compactLine,
   compactParts,
@@ -1253,8 +1253,7 @@ pages.get("/entities/:key", async (c) => {
   const card = await loadPublicCard(found.id);
   if (!card) return await notFound(c, key);
 
-  const ctx = { entities: card.refs, publicAssets: card.publicAssets };
-  const descriptionHtml = card.document ? blocksHtml(card.document.body_json, ctx) : "";
+  const descriptionHtml = await documentHtml(card, null);
   const lead = card.document ? firstParagraph(card.document.body_json) : "";
   const description = summary(lead) ||
     summary([card.type_title, ...card.values.slice(0, 4).map((v) => `${v.title}: ${valueText(v)}`)]
@@ -1290,6 +1289,50 @@ pages.get("/api/v1/document-widgets", async c => {
   return c.json({items});
 });
 
+type WidgetOutput = { html: string; title: string; reason?: string };
+const widgetUid = /^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
+
+async function documentHtml(card: PublicCard, principal: Principal | null, ancestors: readonly number[] = []) {
+  if (!card.document || ancestors.includes(card.id)) return "";
+  const chain = [...ancestors, card.id];
+  return await documentBlocks(card.document.body_json, {entities: card.refs, publicAssets: card.publicAssets}, async props => {
+    if (typeof props.widget_id !== "string" || !widgetUid.test(props.widget_id)) return "";
+    const entityId = Number(props.entity_id);
+    if (!Number.isSafeInteger(entityId) || entityId <= 0) return "";
+    const widget = await getWidget(props.widget_id);
+    const design = props.design || null;
+    if (!widget || (design !== null && (typeof design !== "string" || !widget.designs.includes(design)))) return "";
+    const output = await drawDocumentWidget(widget.renderer_key, entityId, design as string | null, principal, chain);
+    return (output.reason && canSeeDrafts(principal) ? `<p class="hint">${escapeHtml(output.reason)}</p>` : "") + output.html;
+  });
+}
+
+async function drawDocumentWidget(key: string, entityId: number, design: string | null,
+  principal: Principal | null, ancestors: readonly number[]): Promise<WidgetOutput> {
+  const editor = canSeeDrafts(principal);
+  const card = await loadPublicCard(entityId, principal, true);
+  if (!card) {
+    if (editor) {
+      const [target] = await sql<{status:string}>`select status from app.entities where id=${entityId}`;
+      if (target?.status === "archived") return {html:"", title:"", reason:"Удалена"};
+    }
+    return {html:"", title:"", reason:"Недоступна"};
+  }
+  let html: string;
+  if (key === "record_compact") {
+    const [data] = await sql<{compact: CompactItem[]}>`select app.compact_json(${entityId},${canSeeDrafts(principal)}) as compact`;
+    html = compactTile({...card, compact: data.compact, material_status: card.is_published ? "published" : "draft"}, 1);
+  } else if (key === "news_compact") {
+    const target = (await newsOrder(null)).find(row => Number(row.id) === entityId);
+    html = target ? itemHtml((await loadNews([target]))[0], false) : "";
+  } else {
+    const body = key === "text" ? await documentHtml(card, principal, ancestors) : "";
+    const cite = citation({title: card.title_ru, slug: card.slug, authors: card.authors, year: new Date(card.modified_at).getFullYear()});
+    html = cardBody(card, body, cite, key === "parameters" ? await newsExtra(card) : null, undefined, {key, design});
+  }
+  return {html, title: card.title_ru, reason: editor && !card.is_published ? "Черновик" : undefined};
+}
+
 pages.get("/api/v1/document-widgets/:id/preview", async c => {
   const principal = requirePermission(c.get("principal"), "edit");
   const id = c.req.param("id");
@@ -1300,22 +1343,10 @@ pages.get("/api/v1/document-widgets/:id/preview", async c => {
   if (design && !widget.designs.includes(design)) throw new ApiError("validation_failed", "Неизвестное оформление");
   const entityId = Number(c.req.query("entity_id"));
   if (!Number.isSafeInteger(entityId) || entityId <= 0) throw new ApiError("validation_failed", "Выберите запись");
-  const card = await loadPublicCard(entityId, principal);
-  if (!card) throw new ApiError("not_found", "Запись недоступна");
-  let html: string;
-  if (widget.renderer_key === "record_compact") {
-    const [data] = await sql<{compact: CompactItem[]}>`select app.compact_json(${entityId},${canSeeDrafts(principal)}) as compact`;
-    html = compactTile({...card, compact: data.compact, material_status: card.is_published ? "published" : "draft"}, 1);
-  } else if (widget.renderer_key === "news_compact") {
-    const target = (await newsOrder(null)).find(row => Number(row.id) === entityId);
-    html = target ? itemHtml((await loadNews([target]))[0], false) : "";
-  } else {
-    const body = card.document ? blocksHtml(card.document.body_json, {entities: card.refs, publicAssets: card.publicAssets}) : "";
-    const cite = citation({title: card.title_ru, slug: card.slug, authors: card.authors, year: new Date(card.modified_at).getFullYear()});
-    html = cardBody(card, body, cite, await newsExtra(card), undefined, {key: widget.renderer_key, design});
-  }
   c.header("cache-control", "private, no-store");
-  return c.json({html, title: card.title_ru});
+  const output = await drawDocumentWidget(widget.renderer_key, entityId, design, principal, []);
+  if (output.reason === "Недоступна") throw new ApiError("not_found", output.reason);
+  return c.json(output);
 });
 
 pages.get("/api/v1/entities/:key/card", async (c) => {
@@ -1340,9 +1371,7 @@ pages.get("/api/v1/entities/:key/card", async (c) => {
     if (preview?.page_id !== CARD_PAGE_ID) throw new ApiError("not_found", "Макет карточки не найден");
     card.widgetLayout = preview;
   }
-  const description = card.document ? blocksHtml(card.document.body_json, {
-    entities: card.refs, publicAssets: card.publicAssets,
-  }) : "";
+  const description = await documentHtml(card, principal);
   const cite = citation({ title: card.title_ru, slug: card.slug, authors: card.authors,
     year: new Date(card.modified_at).getFullYear() });
   // Редактор видит и «Материалы в работе» (0051); остальным раздел не отдаётся.
