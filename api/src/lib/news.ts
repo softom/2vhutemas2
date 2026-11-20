@@ -77,8 +77,7 @@ export async function newsOrder(topic: string | null): Promise<NewsLite[]> {
  * текст, источник, темы — только для показываемых. Возвращает на одну больше
  * `limit`, чтобы знать, есть ли продолжение.
  */
-export async function loadNews(topic: string | null, limit: number, offset: number): Promise<NewsRow[]> {
-  const order = (await newsOrder(topic)).slice(offset, offset + limit + 1);
+export async function loadNews(order: NewsLite[]): Promise<NewsRow[]> {
   if (order.length === 0) return [];
   const ids = order.map((row) => Number(row.id));
   const details = await sql<{ id: number; compact: CompactItem[]; topics: NewsRow["topics"]; body: unknown; source_title: string | null }>`
@@ -194,6 +193,8 @@ export interface FeedOptions {
   topics: Topic[];
   page: number;
   hasMore: boolean;
+  nextHref?: string;
+  prevHref?: string;
   today: NewsLite[];
 }
 
@@ -241,9 +242,9 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
     parts.push(itemHtml(row, index === 0 && opts.page === 1));
   });
   const more = opts.hasMore
-    ? `<a class="news-more" href="${e(link(opts.topic, opts.page + 1))}" rel="next">Раньше</a>` : "";
+    ? `<a class="news-more" href="${e(opts.nextHref ?? link(opts.topic, opts.page + 1))}" rel="next">Раньше</a>` : "";
   const back = opts.page > 1
-    ? `<a class="news-archive" href="${e(link(opts.topic, opts.page - 1))}" rel="prev">← Позже</a>`
+    ? `<a class="news-archive" href="${e(opts.prevHref ?? link(opts.topic, opts.page - 1))}" rel="prev">← Позже</a>`
     : `<a class="news-archive" href="/news">Архив новостей →</a>`;
   return head + `<div class="news-feed">${parts.join("")}</div><div class="news-pager">${more}${back}</div>`;
 }

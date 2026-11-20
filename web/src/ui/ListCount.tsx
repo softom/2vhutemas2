@@ -8,6 +8,7 @@ interface Props {
   shown: number;
   word: [string, string, string];
   hasMore: boolean;
+  nextHref?: string;
   onMore?: () => void;
   loading?: boolean;
 }
@@ -22,14 +23,21 @@ function plural(count: number, [one, few, many]: [string, string, string]): stri
   return many;
 }
 
-export function ListCount({ shown, word, hasMore, onMore, loading }: Props) {
+export function ListCount({ shown, word, hasMore, onMore, nextHref, loading }: Props) {
   return (
     <div className="list-count">
       <span className="hint">
         Показано {shown} {plural(shown, word)}
         {hasMore ? " — есть ещё" : ""}
       </span>
-      {hasMore && onMore && (
+      {hasMore && nextHref && !loading ? (
+        <a className="ghost" rel="next" href={nextHref} onClick={event => {
+          if (onMore && event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+            event.preventDefault();
+            onMore();
+          }
+        }}>Показать ещё</a>
+      ) : hasMore && onMore && (
         <button type="button" className="ghost" disabled={loading} onClick={onMore}>
           {loading ? "Загружаем…" : "Показать ещё"}
         </button>

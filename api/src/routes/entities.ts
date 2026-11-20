@@ -196,9 +196,18 @@ entities.get("/", async (c: Context<AppEnv>) => {
                       and o.id = (app.snapshot_value(e.id, ${drafts}, p.id)->>'option_id')::uuid))
       and (${min}::numeric is null or pv.num_value >= ${min})
       and (${max}::numeric is null or pv.num_value <= ${max})
-      and (${sortByValue} or ${after}::bigint is null
+      and (${after}::bigint is null
+           or (${sortByValue} and exists (
+             select 1 from (
+               select (app.snapshot_value(${after}, ${drafts},
+                 (select id from app.parameters where code = ${parameter}))->>'num_value')::numeric as val
+             ) anchor where
+               (pv.num_value is null and anchor.val is not null)
+               or (pv.num_value is not distinct from anchor.val and e.id > ${after})
+               or (${descending} and pv.num_value < anchor.val)
+               or (not ${descending} and pv.num_value > anchor.val)))
            or (${newest} and (origin.created_at,e.id) < (select created_at,id from app.entities where id=${after}))
-           or (not ${newest} and e.id > ${after}))
+           or (not ${sortByValue} and not ${newest} and e.id > ${after}))
     order by case when ${sortByValue} and ${descending} then pv.num_value end desc nulls last,
              case when ${sortByValue} and not ${descending} then pv.num_value end asc nulls last,
              case when ${newest} then origin.created_at end desc,
@@ -210,7 +219,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const items = hasMore ? rows.slice(0, limit) : rows;
   return c.json({
     items,
-    next_cursor: hasMore && !sortByValue
+    next_cursor: hasMore
       ? encodeCursor(Number(items[items.length - 1].id))
       : null,
   });

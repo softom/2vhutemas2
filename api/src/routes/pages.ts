@@ -27,7 +27,7 @@ import { config } from "../lib/config.ts";
 import { canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import { materialsOf } from "./researchMaterials.ts";
 import { ApiError } from "../lib/errors.ts";
-import { type AppEnv, log } from "../lib/http.ts";
+import { type AppEnv, encodeCursor, decodeCursor, log } from "../lib/http.ts";
 import {
   absolute,
   citation,
@@ -309,7 +309,7 @@ function chipsHtml(chips: TypeChip[], allLabel: string): string {
  * вложены в страницу, и приложение начинает с них, — поэтому при загрузке
  * клиента ничего не мигает и не перестраивается.
  */
-function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string, chips: TypeChip[] = []): string {
+function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string, chips: TypeChip[] = [], nextHref?: string): string {
   const cards = page.items.map((row, index) => {
     const view = compactParts(row.compact);
     // Первая плашка мозаики крупная — ей нужен экранный размер снимка (Р-91).
@@ -328,14 +328,14 @@ function catalogHtml(title: string, lead: string, page: CatalogPage, branch: str
   const filters = `<div class="filters"><input placeholder="Поиск по названию" disabled /></div>`;
   // «</» внутри строки закрыл бы тег скрипта раньше времени.
   const data = JSON.stringify({ branch: branch ?? "", page, chips }).replaceAll("</", "<\\/");
-  const count = listCountHtml(page.items.length, !!page.next_cursor);
+  const count = nextHref ? listCountHtml(page.items.length, false) + `<a rel="next" href="${escapeHtml(nextHref)}">Показать ещё</a>` : listCountHtml(page.items.length, !!page.next_cursor);
   return `<script type="application/json" id="catalog-initial">${data}</script>` +
     `<section><div class="catalog-head"><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(lead)}</p></div>` +
     `${chipsHtml(chips, branch ? "Все в разделе" : "Все")}${filters}${count}` +
-    (page.items.length ? `<div class="grid catalog-grid">${cards}</div>${count}` : "") + `</section>`;
+    (page.items.length ? `<div class="grid catalog-grid">${cards}</div>${count}` : branch === "what" ? "<p>Записей пока нет.</p>" : "") + `</section>`;
 }
 
-function listLd(path: string, title: string, rows: ListRow[]) {
+function listLd(path: string, title: string, rows: Pick<ListRow, "slug" | "title_ru">[]) {
   return {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
@@ -378,13 +378,38 @@ const SECTIONS: Record<string, { branch: string; title: string; lead: string }> 
 const NEWS_PAGE = 12;
 const NEWS_LEAD = "Три в день — что интересно архитектору и студенту: здания, нейрогенерация, программы. Каждая — со ссылкой на первоисточник.";
 
+function continuation(path: string, query: URLSearchParams, cursor: string) {
+  const params = new URLSearchParams(query);
+  params.delete("page");
+  params.set("after", cursor);
+  params.set("offset", "0"); // Both initial section patterns have one slot.
+  return path + "?" + params;
+}
+
+function validSectionQuery(query: URLSearchParams) {
+  if (query.has("offset") && query.get("offset") !== "0") return false;
+  if (!query.has("after")) return !query.has("offset");
+  try {
+    const id = decodeCursor(query.get("after")!);
+    return id !== null && Number.isSafeInteger(id) && id > 0;
+  } catch { return false; }
+}
+
 async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
   const topic = c.req.query("topic") || null;
-  const page = Math.max(1, Math.min(500, Number(c.req.query("page")) || 1));
+  const params = new URL(c.req.url).searchParams;
+  if (path === "/news" && !validSectionQuery(params)) return c.text("Некорректное продолжение выборки", 400);
+  const after = path === "/news" ? decodeCursor(c.req.query("after")) : null;
+  const order = await newsOrder(topic);
+  const index = after === null ? -1 : order.findIndex(row => Number(row.id) === after);
+  if (after !== null && index < 0) return await notFound(c);
+  const legacyPage = Math.max(1, Math.min(500, Math.trunc(Number(c.req.query("page"))) || 1));
+  const start = after === null ? (legacyPage - 1) * NEWS_PAGE : index + 1;
+  const page = Math.floor(start / NEWS_PAGE) + 1;
   const [rows, topics, latest] = await Promise.all([
-    loadNews(topic, NEWS_PAGE, (page - 1) * NEWS_PAGE),
+    loadNews(order.slice(start, start + NEWS_PAGE + 1)),
     newsTopics(),
-    newsOrder(null),
+    topic ? newsOrder(null) : order,
   ]);
   const known = !topic || topics.some((t) => t.code === topic);
   if (!known) return await notFound(c);
@@ -394,7 +419,8 @@ async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
   const title = path === "/" ? "Новости" : "Архив новостей";
   const query = new URLSearchParams();
   if (topic) query.set("topic", topic);
-  if (page > 1) query.set("page", String(page));
+  if (after !== null) { query.set("after", encodeCursor(after)); query.set("offset", "0"); }
+  else if (page > 1) query.set("page", String(page));
   const canonical = `${path}${query.toString() ? `?${query}` : ""}`;
   return await render(c, {
     status: 200,
@@ -408,6 +434,8 @@ async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
     publicReader: true,
     body: layout(newsFeedHtml(shown, {
       title, lead: NEWS_LEAD, path, topic, topics, page, hasMore,
+      nextHref: path === "/news" && hasMore ? continuation(path, query, encodeCursor(Number(shown[shown.length - 1].id))) : undefined,
+      prevHref: path === "/news" && start > NEWS_PAGE && start <= order.length ? continuation(path, query, encodeCursor(Number(order[start - NEWS_PAGE - 1].id))) : undefined,
       today: latest.filter((row) => newsDay(row) === today),
     })),
   });
@@ -418,6 +446,28 @@ pages.get("/news", (c) => newsPage(c, "/news"));
 
 for (const [path, section] of Object.entries(SECTIONS)) {
   pages.get(path, async (c) => {
+    if (path === "/objects") {
+      const params = new URL(c.req.url).searchParams;
+      if (!validSectionQuery(params)) return c.text("Некорректное продолжение выборки", 400);
+      const group = CATALOG_GROUPS.what?.find(item => item.code === params.get("g"));
+      const filters = new URLSearchParams({ scope: "objects", type: params.get("type") || group?.types.join(",") || "what" });
+      for (const name of ["q", "min", "max", "order", "opt", "archived"]) {
+        for (const value of params.getAll(name)) filters.append(name, value);
+      }
+      if (params.get("by")) { filters.set("parameter", params.get("by")!); filters.set("sort", "parameter"); }
+      if (params.has("after")) filters.set("cursor", params.get("after")!);
+      const response = await entities.request("/?" + filters);
+      if (!response.ok) return c.text("Ошибка выборки каталога", response.status === 400 ? 400 : 500);
+      const result: CatalogPage = await response.json();
+      const chips = await typeChips("what");
+      const canonical = path + (params.size ? "?" + params : "");
+      return await render(c, {
+        status: 200, title: section.title + " — " + site.name, description: section.lead, canonical, catalog: true,
+        jsonLd: [listLd(canonical, section.title, result.items)],
+        body: layout(catalogHtml(section.title, section.lead, result, "what", "Все в разделе", chips,
+          result.next_cursor ? continuation(path, params, result.next_cursor) : undefined)),
+      });
+    }
     const [rows, first, chips] = await Promise.all([
       publishedIn(section.branch),
       section.branch === "learning" ? Promise.resolve(null) : firstCatalogPage(section.branch),

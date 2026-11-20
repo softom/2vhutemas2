@@ -9,7 +9,7 @@
  * страницу с выборкой»): тип, поиск, величина и её границы, порядок и отбор
  * по параметрам-выборам (?opt=competition_state:open,jury).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ListCount } from "../ui/ListCount";
 import { EntityTile } from "../ui/EntityTile";
@@ -69,12 +69,14 @@ interface Props {
 export function Catalog({ canCreate, branch, title, sub }: Props) {
   const [search, setSearch] = useSearchParams();
   // Адрес с фильтрами — первая страница сервера (без фильтров) не подходит.
+  const after = branch === "what" ? search.get("after") || undefined : undefined;
   const filtered = [...search.keys()].length > 0;
   const [initial] = useState(() => (filtered ? null : takeInitial(branch ?? "")));
   const [items, setItems] = useState<EntityListItem[]>(initial?.page.items ?? []);
   // Каталог отдаётся страницами; без этого записи за первой страницей
   // были не видны вовсе.
   const [cursor, setCursor] = useState<string | null>(initial?.page.next_cursor ?? null);
+  const activeQuery = useRef(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [types, setTypes] = useState<EntityType[]>([]);
   const [hiddenRoots, setHiddenRoots] = useState<string[]>([]);
@@ -98,6 +100,8 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   const optKey = opt.join("|");
   const update = (changes: Record<string, string | string[] | null>) => {
     const next = new URLSearchParams(search);
+    next.delete("after");
+    next.delete("offset");
     for (const [key, value] of Object.entries(changes)) {
       next.delete(key);
       for (const item of Array.isArray(value) ? value : value ? [value] : []) next.append(key, item);
@@ -193,6 +197,8 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    activeQuery.current++;
+    setLoadingMore(false);
     setLoading(true);
     const timer = setTimeout(() => {
       const request = {
@@ -207,7 +213,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         order: descending ? "desc" : "asc",
         opt,
       };
-      api.entities(request)
+      api.entities({ ...request, cursor: after })
         .then(async (page) => {
           // An SSR button can be clicked before the application has loaded.
           // Consume it only after the authenticated first page, so it cannot
@@ -232,10 +238,18 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [branch, apiType, query, parameter, min, max, descending, optKey, archived]);
+  }, [branch, apiType, query, parameter, min, max, descending, optKey, archived, after]);
+
+  const nextQuery = new URLSearchParams(search);
+  if (cursor) {
+    nextQuery.set("after", cursor);
+    nextQuery.set("offset", "0");
+  }
+  const nextHref = branch === "what" && cursor ? "/objects?" + nextQuery : undefined;
 
   const loadMore = () => {
     if (!cursor || loading || loadingMore) return;
+    const generation = activeQuery.current;
     setLoadingMore(true);
     api.entities({
       type: apiType,
@@ -251,11 +265,15 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       cursor,
     })
       .then((page) => {
-        setItems((current) => [...current, ...page.items]);
+        if (generation !== activeQuery.current) return;
+        setItems(current => {
+          const existing = new Set(current.map(item => item.id));
+          return [...current, ...page.items.filter(item => !existing.has(item.id))];
+        });
         setCursor(page.next_cursor);
       })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoadingMore(false));
+      .catch(e => { if (generation === activeQuery.current) setError(e.message); })
+      .finally(() => { if (generation === activeQuery.current) setLoadingMore(false); });
   };
 
   return (
@@ -395,6 +413,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         word={["запись", "записи", "записей"]}
         hasMore={!!cursor}
         onMore={loadMore}
+        nextHref={nextHref}
         loading={loading || loadingMore}
       />
 
@@ -431,6 +450,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
           word={["запись", "записи", "записей"]}
           hasMore={!!cursor}
           onMore={loadMore}
+          nextHref={nextHref}
           loading={loading || loadingMore}
         />
       )}
