@@ -1,13 +1,13 @@
 """Run after bundling scripts/styleQuiz.check.ts as .cache/styleQuiz.check.js (global QuizTest)."""
 from pathlib import Path
 import json
-import re
+import hashlib
 from playwright.sync_api import expect, sync_playwright
 
 web = Path(__file__).resolve().parents[1]
 data = json.loads((web / "src/styleQuiz.json").read_text("utf8"))
-original = (web / "public/games/stili.html").read_text("utf8")
-assert data == json.loads(re.search(r"const D=(.+);\n", original)[1])
+# Fingerprint of the original standalone exercises before §6.4.
+assert hashlib.sha256(json.dumps(data, ensure_ascii=False, sort_keys=True).encode()).hexdigest() == "5b283815be236d01142f60f3e6e836aea75922203ce80681594f7b5717d9b948"
 with sync_playwright() as pw:
     browser = pw.chromium.launch(channel="msedge", headless=True)
     page = browser.new_page()

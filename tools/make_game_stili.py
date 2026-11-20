@@ -1,15 +1,10 @@
-"""Страница игры «Угадай стиль» для сайта.
+"""Задания игры «Угадай стиль» по лекции «О стилях» (запись 1736).
 
-Собирает web/public/games/stili.html из шаблона tools/game_stili.tpl.html:
-в шаблон подставляются данные стилей и зданий, счётчик Метрики и значок
-берутся из web/index.html. Названия и фотографии здания игра читает у API
-во время игры; данные стилей и порядок зданий — ниже (по лекции «О стилях», запись 1736).
 Запуск: python tools/make_game_stili.py
 """
-import json, re, pathlib
+import json, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-OUT = ROOT / 'web/public/games'
 
 # name: (период, метод, повестка, заказчик и экономика, [id зданий]).
 STYLES = {
@@ -41,14 +36,5 @@ buildings = sorted(({"id": i, "year": y, "start": bool(st), "style": of[i], "als
                    key=lambda b: (b["year"], b["id"]))
 assert set(YEARS) == set(of), set(YEARS) ^ set(of)
 
-tpl = (ROOT / 'web/index.html').read_text(encoding='utf-8')
-a = tpl.index('    <!-- Yandex.Metrika counter -->')
-b = tpl.index('    <!-- /Yandex.Metrika counter -->') + len('    <!-- /Yandex.Metrika counter -->')
-fav = re.search(r'    <link rel="icon".*?\n    <link rel="apple-touch-icon"[^\n]*', tpl, re.S).group(0)
-page = (ROOT / 'tools/game_stili.tpl.html').read_text(encoding='utf-8')
-page = page.replace('/*DATA*/', json.dumps({"styles": styles, "buildings": buildings}, ensure_ascii=False)) \
-           .replace('<!--METRIKA-->', tpl[a:b]).replace('<!--FAV-->', fav)
 (ROOT / 'web/src/styleQuiz.json').write_bytes((json.dumps({"styles": styles, "buildings": buildings}, ensure_ascii=False, indent=2) + '\n').encode('utf-8'))
-OUT.mkdir(parents=True, exist_ok=True)
-(OUT / 'stili.html').write_text(page, encoding='utf-8')
 print(len(buildings), 'зданий,', len(styles), 'стилей')
