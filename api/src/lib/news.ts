@@ -8,6 +8,8 @@
  * Отбор по теме — ссылками `?topic=`: страница целиком готовый HTML,
  * без приложения (Р-65).
  */
+import { sectionCells } from "./sectionLayouts.ts";
+import type { CardLayout } from "./layouts.ts";
 import { sql } from "./db.ts";
 import { escapeHtml as e, entityPath } from "./site.ts";
 import { type CompactItem, compactParts, compactPicture, firstParagraph } from "./blocksHtml.ts";
@@ -193,6 +195,8 @@ export interface FeedOptions {
   topics: Topic[];
   page: number;
   hasMore: boolean;
+  assigned?: CardLayout | null;
+  offset?: number;
   nextHref?: string;
   prevHref?: string;
   today: NewsLite[];
@@ -228,9 +232,10 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
       '<a href="/objects">Проекты</a>, <a href="/authors">Авторы</a>, <a href="/lectures">Лекции</a>.'}</p>`;
   }
 
-  const parts: string[] = [];
+
   let currentDay: string | null | undefined;
-  rows.forEach((row, index) => {
+  const tile = (row: NewsRow, index: number) => {
+    const parts: string[] = [];
     const day = newsDay(row);
     if (day !== currentDay) {
       currentDay = day;
@@ -240,13 +245,15 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
       }
     }
     parts.push(itemHtml(row, index === 0 && opts.page === 1));
-  });
+    return parts.join("");
+  };
+  const content = opts.assigned ? sectionCells(opts.assigned, rows, opts.offset ?? 0, "news_compact", tile) : rows.map(tile).join("");
   const more = opts.hasMore
     ? `<a class="news-more" href="${e(opts.nextHref ?? link(opts.topic, opts.page + 1))}" rel="next">Раньше</a>` : "";
   const back = opts.page > 1
     ? `<a class="news-archive" href="${e(opts.prevHref ?? link(opts.topic, opts.page - 1))}" rel="prev">← Позже</a>`
     : `<a class="news-archive" href="/news">Архив новостей →</a>`;
-  return head + `<div class="news-feed">${parts.join("")}</div><div class="news-pager">${more}${back}</div>`;
+  return head + `<div class="news-feed${opts.assigned ? " section-grid" : ""}">${content}</div><div class="news-pager">${more}${back}</div>`;
 }
 
 /** «Раньше / Позже» и «Ещё за этот день» на странице новости. */

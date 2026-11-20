@@ -1,0 +1,26 @@
+import { config } from "./config.ts";
+import { getPageLayout, type CardLayout } from "./layouts.ts";
+import { fillSectionPattern } from "./sectionPattern.ts";
+
+export const sectionPages = {
+  "/objects": { id: "39ee9267-1a0e-4928-b608-24bf91f68102", widget: "record_compact", title: "Компактная запись" },
+  "/news": { id: "39ee9267-1a0e-4928-b608-24bf91f68105", widget: "news_compact", title: "Компактная новость" },
+} as const;
+
+export async function sectionLayout(path: keyof typeof sectionPages) {
+  return config.useWidgetLayouts ? await getPageLayout(sectionPages[path].id) : null;
+}
+
+export function sectionCells<T>(layout: CardLayout, rows: T[], offset: number, key: string,
+  render: (row: T, index: number) => string) {
+  if (!layout.slots.length) return "";
+  const height = Math.max(...layout.slots.map(s => s.row_start + s.row_span - 1));
+  const pattern = fillSectionPattern(rows, layout.slots, offset, row => row);
+  return pattern.items.map(({content, slot, repeat}, index) => {
+    if (slot.renderer_key !== key) return "";
+    const html = render(content, index);
+    if (!html) return "";
+    const style = `grid-column:${slot.column_start}/span ${slot.column_span};grid-row:${repeat * height + slot.row_start}/span ${slot.row_span}`;
+    return `<div data-section-slot="${slot.id}" style="${style}">${html}</div>`;
+  }).join("");
+}

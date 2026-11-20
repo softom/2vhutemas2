@@ -12,6 +12,8 @@
  * как для гостя. Черновик отвечает 404, а вошедший редактор получает тот же HTML-рендер
  * через защищённый API со своим токеном.
  */
+import { sectionCells, sectionLayout } from "../lib/sectionLayouts.ts";
+import type { CardLayout } from "../lib/layouts.ts";
 import { renderCardGrid } from "../lib/cardGrid.ts";
 import { cardWidgetSections, widgetRenderers } from "../lib/cardWidgets.ts";
 import { Hono } from "hono";
@@ -309,8 +311,8 @@ function chipsHtml(chips: TypeChip[], allLabel: string): string {
  * вложены в страницу, и приложение начинает с них, — поэтому при загрузке
  * клиента ничего не мигает и не перестраивается.
  */
-function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string, chips: TypeChip[] = [], nextHref?: string): string {
-  const cards = page.items.map((row, index) => {
+function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string, chips: TypeChip[] = [], nextHref?: string, assigned?: CardLayout | null, offset = 0): string {
+  const tile = (row: CatalogItem, index: number) => {
     const view = compactParts(row.compact);
     // Первая плашка мозаики крупная — ей нужен экранный размер снимка (Р-91).
     const url = compactPicture(view, index === 0 ? "screen" : "thumbnail");
@@ -323,16 +325,17 @@ function catalogHtml(title: string, lead: string, page: CatalogPage, branch: str
       (view.params.length ? `<div class="kind">${escapeHtml(view.params.join(", "))}</div>` : "") +
       (row.title_en ? `<div class="kind">${escapeHtml(row.title_en)}</div>` : "") +
       `<div style="margin-top:8px"><span class="badge status${row.material_status === "published" ? "" : " draft"}">${row.material_status === "published" ? "опубликовано" : "черновик"}</span></div></a>`;
-  }).join("");
+  };
+  const cards = assigned ? sectionCells(assigned, page.items, offset, "record_compact", tile) : page.items.map(tile).join("");
   // Поиск и отбор работают в приложении; здесь они держат место.
   const filters = `<div class="filters"><input placeholder="Поиск по названию" disabled /></div>`;
   // «</» внутри строки закрыл бы тег скрипта раньше времени.
-  const data = JSON.stringify({ branch: branch ?? "", page, chips }).replaceAll("</", "<\\/");
+  const data = JSON.stringify({ branch: branch ?? "", page, chips, slots: assigned?.slots }).replaceAll("</", "<\\/");
   const count = nextHref ? listCountHtml(page.items.length, false) + `<a rel="next" href="${escapeHtml(nextHref)}">Показать ещё</a>` : listCountHtml(page.items.length, !!page.next_cursor);
   return `<script type="application/json" id="catalog-initial">${data}</script>` +
     `<section><div class="catalog-head"><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(lead)}</p></div>` +
     `${chipsHtml(chips, branch ? "Все в разделе" : "Все")}${filters}${count}` +
-    (page.items.length ? `<div class="grid catalog-grid">${cards}</div>${count}` : branch === "what" ? "<p>Записей пока нет.</p>" : "") + `</section>`;
+    (page.items.length ? `<div class="${assigned ? "section-grid" : "grid catalog-grid"}">${cards}</div>${count}` : branch === "what" ? "<p>Записей пока нет.</p>" : "") + `</section>`;
 }
 
 function listLd(path: string, title: string, rows: Pick<ListRow, "slug" | "title_ru">[]) {
@@ -378,16 +381,19 @@ const SECTIONS: Record<string, { branch: string; title: string; lead: string }> 
 const NEWS_PAGE = 12;
 const NEWS_LEAD = "Три в день — что интересно архитектору и студенту: здания, нейрогенерация, программы. Каждая — со ссылкой на первоисточник.";
 
-function continuation(path: string, query: URLSearchParams, cursor: string) {
+function continuation(path: string, query: URLSearchParams, cursor: string, offset: number) {
   const params = new URLSearchParams(query);
   params.delete("page");
   params.set("after", cursor);
-  params.set("offset", "0"); // Both initial section patterns have one slot.
+  params.set("offset", String(offset));
   return path + "?" + params;
 }
 
-function validSectionQuery(query: URLSearchParams) {
-  if (query.has("offset") && query.get("offset") !== "0") return false;
+function validSectionQuery(query: URLSearchParams, size: number) {
+  const pos = query.get("offset") ?? "0";
+  if (!/^\d+$/.test(pos) || Number(pos) >= size) return false;
+  const limit = query.get("limit");
+  if (limit !== null && (!/^\d+$/.test(limit) || Number(limit) < 1 || Number(limit) > 24)) return false;
   if (!query.has("after")) return !query.has("offset");
   try {
     const id = decodeCursor(query.get("after")!);
@@ -398,29 +404,37 @@ function validSectionQuery(query: URLSearchParams) {
 async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
   const topic = c.req.query("topic") || null;
   const params = new URL(c.req.url).searchParams;
-  if (path === "/news" && !validSectionQuery(params)) return c.text("Некорректное продолжение выборки", 400);
+  const assigned = path === "/news" ? await sectionLayout(path) : null;
+  const size = assigned?.slots.length || 1;
+  const limit = path === "/news" && params.has("limit") ? Number(params.get("limit")) : NEWS_PAGE;
+  if (path === "/news" && !validSectionQuery(params, size)) return c.text("Некорректное продолжение выборки", 400);
   const after = path === "/news" ? decodeCursor(c.req.query("after")) : null;
   const order = await newsOrder(topic);
   const index = after === null ? -1 : order.findIndex(row => Number(row.id) === after);
   if (after !== null && index < 0) return await notFound(c);
   const legacyPage = Math.max(1, Math.min(500, Math.trunc(Number(c.req.query("page"))) || 1));
-  const start = after === null ? (legacyPage - 1) * NEWS_PAGE : index + 1;
-  const page = Math.floor(start / NEWS_PAGE) + 1;
+  const start = after === null ? (legacyPage - 1) * limit : index + 1;
+  const page = Math.floor(start / limit) + 1;
+  const offset = after === null ? start % size : Number(params.get("offset") ?? 0);
   const [rows, topics, latest] = await Promise.all([
-    loadNews(order.slice(start, start + NEWS_PAGE + 1)),
+    loadNews(order.slice(start, start + limit + 1)),
     newsTopics(),
     topic ? newsOrder(null) : order,
   ]);
   const known = !topic || topics.some((t) => t.code === topic);
   if (!known) return await notFound(c);
-  const hasMore = rows.length > NEWS_PAGE;
-  const shown = rows.slice(0, NEWS_PAGE);
+  const hasMore = rows.length > limit;
+  const shown = rows.slice(0, limit);
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Moscow" });
   const title = path === "/" ? "Новости" : "Архив новостей";
   const query = new URLSearchParams();
   if (topic) query.set("topic", topic);
-  if (after !== null) { query.set("after", encodeCursor(after)); query.set("offset", "0"); }
+  if (path === "/news" && params.has("limit")) query.set("limit", String(limit));
+  if (after !== null) { query.set("after", encodeCursor(after)); query.set("offset", String(offset)); }
   else if (page > 1) query.set("page", String(page));
+  const firstQuery = new URLSearchParams(query);
+  for (const key of ["after", "offset", "page"]) firstQuery.delete(key);
+  const firstHref = path + (firstQuery.size ? "?" + firstQuery : "");
   const canonical = `${path}${query.toString() ? `?${query}` : ""}`;
   return await render(c, {
     status: 200,
@@ -433,25 +447,29 @@ async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
     ],
     publicReader: true,
     body: layout(newsFeedHtml(shown, {
-      title, lead: NEWS_LEAD, path, topic, topics, page, hasMore,
-      nextHref: path === "/news" && hasMore ? continuation(path, query, encodeCursor(Number(shown[shown.length - 1].id))) : undefined,
-      prevHref: path === "/news" && start > NEWS_PAGE && start <= order.length ? continuation(path, query, encodeCursor(Number(order[start - NEWS_PAGE - 1].id))) : undefined,
+      title, lead: NEWS_LEAD, path, topic, topics, page, hasMore, assigned, offset,
+      nextHref: path === "/news" && hasMore ? continuation(path, query, encodeCursor(Number(shown[shown.length - 1].id)), (offset + shown.length) % size) : undefined,
+      prevHref: path === "/news" && start > limit && start <= order.length ? continuation(path, query, encodeCursor(Number(order[start - limit - 1].id)), ((offset - limit) % size + size) % size) : path === "/news" ? firstHref : undefined,
       today: latest.filter((row) => newsDay(row) === today),
     })),
   });
 }
 
 pages.get("/", (c) => newsPage(c, "/"));
+pages.get("/objects/pattern", async c => c.json({slots: (await sectionLayout("/objects"))?.slots ?? null}));
 pages.get("/news", (c) => newsPage(c, "/news"));
 
 for (const [path, section] of Object.entries(SECTIONS)) {
   pages.get(path, async (c) => {
     if (path === "/objects") {
       const params = new URL(c.req.url).searchParams;
-      if (!validSectionQuery(params)) return c.text("Некорректное продолжение выборки", 400);
+      const assigned = await sectionLayout("/objects");
+      const size = assigned?.slots.length || 1;
+      const offset = Number(params.get("offset") ?? 0);
+      if (!validSectionQuery(params, size)) return c.text("Некорректное продолжение выборки", 400);
       const group = CATALOG_GROUPS.what?.find(item => item.code === params.get("g"));
       const filters = new URLSearchParams({ scope: "objects", type: params.get("type") || group?.types.join(",") || "what" });
-      for (const name of ["q", "min", "max", "order", "opt", "archived"]) {
+      for (const name of ["q", "min", "max", "order", "opt", "archived", "limit"]) {
         for (const value of params.getAll(name)) filters.append(name, value);
       }
       if (params.get("by")) { filters.set("parameter", params.get("by")!); filters.set("sort", "parameter"); }
@@ -465,7 +483,7 @@ for (const [path, section] of Object.entries(SECTIONS)) {
         status: 200, title: section.title + " — " + site.name, description: section.lead, canonical, catalog: true,
         jsonLd: [listLd(canonical, section.title, result.items)],
         body: layout(catalogHtml(section.title, section.lead, result, "what", "Все в разделе", chips,
-          result.next_cursor ? continuation(path, params, result.next_cursor) : undefined)),
+          result.next_cursor ? continuation(path, params, result.next_cursor, (offset + result.items.length) % size) : undefined, assigned, offset)),
       });
     }
     const [rows, first, chips] = await Promise.all([

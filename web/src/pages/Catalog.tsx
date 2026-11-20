@@ -27,9 +27,13 @@ import {
  * клиента сетка не исчезает за «Загружаем…» и не перестраивается.
  * Читается один раз: при переходах внутри приложения её уже нет.
  */
+interface SectionSlot {
+  id: string; renderer_key: string; row_start: number; row_span: number; column_start: number; column_span: number;
+}
 let initialCatalog: {
   branch: string;
   page: { items: EntityListItem[]; next_cursor: string | null };
+  slots?: SectionSlot[];
   chips?: { code: string; title_ru: string }[];
 } | null =
   (() => {
@@ -71,7 +75,20 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   // Адрес с фильтрами — первая страница сервера (без фильтров) не подходит.
   const after = branch === "what" ? search.get("after") || undefined : undefined;
   const filtered = [...search.keys()].length > 0;
-  const [initial] = useState(() => (filtered ? null : takeInitial(branch ?? "")));
+  const [initial] = useState(() => (filtered && branch !== "what" ? null : takeInitial(branch ?? "")));
+  const [slots, setSlots] = useState<SectionSlot[] | null>(initial?.slots ?? null);
+  useEffect(() => {
+    if (branch !== "what") { setSlots(null); return; }
+    const controller = new AbortController();
+    fetch("/objects/pattern", { signal: controller.signal })
+      .then(response => response.ok ? response.json() : Promise.reject())
+      .then(data => setSlots(data.slots))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [branch]);
+  const offset = Number(search.get("offset") ?? 0);
+  const limit = branch === "what" ? search.get("limit") ?? undefined : undefined;
+  const patternHeight = slots?.reduce((height, slot) => Math.max(height, slot.row_start + slot.row_span - 1), 0) ?? 0;
   const [items, setItems] = useState<EntityListItem[]>(initial?.page.items ?? []);
   // Каталог отдаётся страницами; без этого записи за первой страницей
   // были не видны вовсе.
@@ -202,7 +219,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
     setLoading(true);
     const timer = setTimeout(() => {
       const request = {
-        type: apiType,
+        type: apiType, limit,
         scope: branch === "what" ? "objects" : undefined,
         archived,
         q: query || undefined,
@@ -238,12 +255,12 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [branch, apiType, query, parameter, min, max, descending, optKey, archived, after]);
+  }, [branch, apiType, query, parameter, min, max, descending, optKey, archived, after, limit]);
 
   const nextQuery = new URLSearchParams(search);
   if (cursor) {
     nextQuery.set("after", cursor);
-    nextQuery.set("offset", "0");
+    nextQuery.set("offset", String((offset + items.length) % (slots?.length || 1)));
   }
   const nextHref = branch === "what" && cursor ? "/objects?" + nextQuery : undefined;
 
@@ -252,7 +269,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
     const generation = activeQuery.current;
     setLoadingMore(true);
     api.entities({
-      type: apiType,
+      type: apiType, limit,
         scope: branch === "what" ? "objects" : undefined,
         archived,
       q: query || undefined,
@@ -417,9 +434,9 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         loading={loading || loadingMore}
       />
 
-      <div className="grid catalog-grid">
-        {items.map((item, index) => (
-          <EntityTile
+      <div className={slots ? "section-grid" : "grid catalog-grid"}>
+        {items.map((item, index) => {
+          const tile = <EntityTile
             key={item.id}
             href={archived ? `/entities/${item.id}/edit` : `/entities/${item.slug}`}
             title={item.title_ru}
@@ -440,8 +457,16 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
                 {item.material_status === "archived" ? "в корзине — восстановить" : item.material_status === "published" ? "опубликовано" : "черновик"}
               </span>
             </div>
-          </EntityTile>
-        ))}
+          </EntityTile>;
+          if (!slots) return tile;
+          const position = offset + index;
+          const slot = slots[position % slots.length];
+          if (slot?.renderer_key !== "record_compact") return null;
+          const row = Math.floor(position / slots.length) * patternHeight + slot.row_start;
+          return <div key={item.id} data-section-slot={slot.id} style={{
+            gridColumn: `${slot.column_start}/span ${slot.column_span}`, gridRow: `${row}/span ${slot.row_span}`,
+          }}>{tile}</div>;
+        })}
       </div>
 
       {items.length > 0 && (

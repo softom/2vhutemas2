@@ -987,3 +987,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
   .public-card .entity-widget-grid dl { grid-template-columns: minmax(0,1fr); gap: 3px; }
   .public-card .entity-widget-grid dd { margin: 0 0 8px; }
 }
+
+.section-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.section-grid > [data-section-slot] { min-width: 0; }
+.section-grid .card { display: block; height: 100%; }
+@media (max-width: 600px) {
+  .section-grid { grid-template-columns: minmax(0, 1fr); }
+  .section-grid > [data-section-slot] { grid-column: 1 !important; grid-row: auto !important; }
+}

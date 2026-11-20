@@ -4,6 +4,9 @@ export const cardSectionNames: Readonly<Record<string,string>> = {
   citation: "Цитирование", video: "Видео",
 };
 export function sectionCapabilities(key: string) {
+  if (key === "news_compact" || key === "record_compact") {
+    return { widths: [1, 2, 3], heights: [1, 2, 3], designs: ["compact"] };
+  }
   return Object.hasOwn(cardSectionNames,key)
     ? { widths:[1,2,3], heights:[1,2,3], designs:["default"] } : undefined;
 }
