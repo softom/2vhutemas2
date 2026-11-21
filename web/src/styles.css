@@ -1109,23 +1109,27 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .pe-feedback {min-height:1.4em;}
 .pe-properties fieldset,.pe-properties label{display:grid;gap:.4rem;min-width:0;margin:0 0 .65rem}.pe-properties input,.pe-properties select,.pe-properties iframe{box-sizing:border-box;width:100%;min-width:0}.pe-properties iframe{height:20rem;border:0}
 
-/* Four equal tracks: one leading column, two editorial columns, then the ribbon and the sidebar. */
+/* The middle pair inherits the original editorial measure; the outer columns share the rest. */
 @media (min-width: 1001px) {
   .shell:has(.top nav a.active[href="/objects"]) {
+    --pad: max(24px, calc(50% - 690px));
+    --editorial: min(var(--c1), 55vw);
+    --middle-track: calc((var(--editorial) - var(--page-gap)) / 2);
+    --editorial-start: calc((100% - var(--editorial)) / 2);
     --page-gap: 60px;
     --ribbon-width: 20px;
     --frame-gap: 32px;
-    --frame-columns: minmax(0, calc(75% + var(--page-gap) / 4 - var(--ribbon-width) / 2 - var(--frame-gap))) var(--ribbon-width) minmax(0, 1fr);
-    --ribbon-center: calc(75% - var(--pad) / 2 + var(--page-gap) / 4);
+    --frame-columns: minmax(0, calc(50% + var(--editorial) / 2 + var(--page-gap) / 2 - var(--ribbon-width) / 2 - var(--frame-gap))) var(--ribbon-width) minmax(0, 1fr);
+    --ribbon-center: calc(50% + var(--editorial) / 2 + var(--page-gap) / 2);
     & > .through { left: calc(var(--ribbon-center) - 10px); }
     & > .through-marks { left: calc(var(--ribbon-center) - 31px); }
     & :is(.top, .site-foot > *) { grid-template-columns: var(--frame-columns); }
     & .top .viewer { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
-    & .top nav { padding-inline: calc(25% + var(--page-gap) / 4); }
-    & .section-grid[data-columns="4"] { column-gap: var(--page-gap); background: transparent; }
+    & .top nav { padding-inline: var(--editorial-start); }
+    & .section-grid[data-columns="4"] { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, var(--middle-track))) minmax(0, 1fr); column-gap: var(--page-gap); background: transparent; }
     & section:has(> .section-grid[data-columns="4"]) > :is(.catalog-head, .type-chips, .filters, .list-count) {
-      margin-left: calc(25% + var(--page-gap) / 4);
-      max-width: calc(50% - var(--page-gap) / 2);
+      margin-left: var(--editorial-start);
+      max-width: var(--editorial);
     }
   }
 }
