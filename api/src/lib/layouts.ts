@@ -11,7 +11,7 @@ export const CARD_PAGE_ID = "39ee9267-1a0e-4928-b608-24bf91f68101";
 export async function readLayout(id: string, query: Query = sql) {
   const [row] = await query<{ layout: CardLayout }>`
     select to_jsonb(l) || jsonb_build_object('slots',coalesce((
-      select jsonb_agg(to_jsonb(s) || jsonb_build_object('renderer_key',w.renderer_key)
+      select jsonb_agg((to_jsonb(s) - 'call_entity_id') || jsonb_build_object('renderer_key',w.renderer_key)
                        order by s.sort_order)
       from app.page_layout s join app.widgets w on w.id=s.widget_id
       where s.layout_id=l.id), '[]'::jsonb)) as layout

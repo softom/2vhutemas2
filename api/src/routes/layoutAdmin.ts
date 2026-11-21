@@ -1,3 +1,4 @@
+import { instanceContract, instanceOverrides } from "../lib/widgetInstance.ts";
 import { sectionCapabilities } from "../lib/cardSections.ts";
 import { type Context, Hono } from "hono";
 import { require as requirePermission } from "../lib/auth.ts";
@@ -62,7 +63,13 @@ async function lockDraft(q: Query, id: string, expected: unknown) {
 }
 layoutAdmin.get(
   "/widgets",
-  async (c) => c.json(await sql`select id,name,renderer_key from app.widgets order by name,id`),
+  async (c) => {
+    const rows = await sql<{ id: string; name: string; renderer_key: string }>`select id,name,renderer_key from app.widgets order by name,id`;
+    return c.json(rows.map(row => {
+      const spec = widgetImplementations.get(row.renderer_key) ?? sectionCapabilities(row.renderer_key);
+      return { ...row, instance: spec ? instanceContract(row.renderer_key, spec.designs) : null };
+    }));
+  },
 );
 layoutAdmin.get(
   "/layouts/:id",
@@ -101,8 +108,8 @@ layoutAdmin.post("/layouts/:id/copy", (c) =>
     const [copy] = await q<
       { id: string }
     >`insert into app.layouts(page_id,name,grid_columns) values(${source.page_id},${name(b.name)},${source.grid_columns}) returning id`;
-    await q`insert into app.page_layout(layout_id,widget_id,sort_order,row_start,column_start,row_span,column_span,design)
-    select ${copy.id},widget_id,sort_order,row_start,column_start,row_span,column_span,design from app.page_layout where layout_id=${id}`;
+    await q`insert into app.page_layout(layout_id,widget_id,sort_order,row_start,column_start,row_span,column_span,design,display_options,call_params)
+    select ${copy.id},widget_id,sort_order,row_start,column_start,row_span,column_span,design,display_options,call_params from app.page_layout where layout_id=${id}`;
     return readLayout(copy.id, q);
   }));
 async function saveSlot(q: Query, layout: string, slot: Body) {
@@ -114,18 +121,24 @@ async function saveSlot(q: Query, layout: string, slot: Body) {
     !widget.widths.includes(width) || !widget.heights.includes(height) ||
     (design !== null && !widget.designs.includes(design))
   ) invalid("Размер или дизайн не поддерживается");
+  const contract = instanceContract(widget.renderer_key, widget.designs);
+  const display = instanceOverrides(slot.display_options, contract.display_options);
+  const params = instanceOverrides(slot.call_params, contract.call_params);
   const pos = integer(slot.sort_order),
     row = integer(slot.row_start),
     col = integer(slot.column_start);
   if (slot.id !== undefined) {
     const updated =
       await q`update app.page_layout set widget_id=${widget.id},sort_order=${pos},row_start=${row},
-      column_start=${col},row_span=${height},column_span=${width},design=${design}
+      column_start=${col},row_span=${height},column_span=${width},
+      design=case when ${slot.design === undefined} and widget_id=${widget.id} then design else ${design} end,
+      display_options=coalesce(${display}::jsonb,case when widget_id=${widget.id} then display_options else '{}'::jsonb end),
+      call_params=coalesce(${params}::jsonb,case when widget_id=${widget.id} then call_params else '{}'::jsonb end)
       where id=${uuid(slot.id)} and layout_id=${layout} returning id`;
     if (!updated.length) missing();
   } else {
-    await q`insert into app.page_layout(layout_id,widget_id,sort_order,row_start,column_start,row_span,column_span,design)
-      values(${layout},${widget.id},${pos},${row},${col},${height},${width},${design})`;
+    await q`insert into app.page_layout(layout_id,widget_id,sort_order,row_start,column_start,row_span,column_span,design,display_options,call_params)
+      values(${layout},${widget.id},${pos},${row},${col},${height},${width},${design},coalesce(${display}::jsonb,'{}'),coalesce(${params}::jsonb,'{}'))`;
   }
 }
 layoutAdmin.post("/page_layout", (c) =>
