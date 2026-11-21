@@ -257,7 +257,7 @@ layoutAdmin.post("/type_presentations/:typeId/layout", (c) =>
 layoutAdmin.get("/page-editor", async c => {
   const [pages, types, layouts, widgets] = await Promise.all([
     sql`select id,name,current_layout_id from app.pages order by name,id`,
-    sql`select t.id,t.title_ru as name,p.layout_id from app.entity_types t
+    sql`select t.id,t.parent_id,t.title_ru as name,p.layout_id from app.entity_types t
       left join app.type_presentations p on p.type_id=t.id and p.mode='card' order by t.title_ru,t.id`,
     sql`select id,page_id,name,assigned from app.layouts order by name,id`,
     sql<{id:string;name:string;renderer_key:string}>`select id,name,renderer_key from app.widgets order by name,id`,

@@ -1,3 +1,4 @@
+import { SelectionPanel, type Selection, sectionSources } from "./SelectionPanel";
 import { SlotProperties, type Values } from "./SlotProperties";
 import { PlacementBoard, type WidgetDefinition } from "./PlacementBoard";
 import { useEffect, useState } from "react";
@@ -8,8 +9,8 @@ type Page = Named & { current_layout_id: string | null };
 type Summary = Named & { page_id: string; assigned: boolean };
 export type Slot = { id: string; widget_id: string; widget_name: string; sort_order: number; row_start: number;
   design: string | null; display_options: Values; call_params: Values; column_start: number; row_span: number; column_span: number };
-export type Layout = Summary & { revision: number; grid_columns: 3 | 4; slots: Slot[] };
-type Catalog = { card_page_id: string; pages: Page[]; types: (Named & { layout_id: string | null })[];
+export type Layout = Summary & Selection & { revision: number; grid_columns: 3 | 4; slots: Slot[] };
+type Catalog = { card_page_id: string; pages: Page[]; types: (Named & { parent_id: string | null; layout_id: string | null })[];
   layouts: Summary[]; widgets: WidgetDefinition[] };
 
 function errorText(error: unknown) {
@@ -58,6 +59,7 @@ function Workspace({page,typeId,catalog,onCreated}: {page: Page; typeId: string;
   const [error, setError] = useState("");
   const [selected, setSelected] = useState("");
   const [ready, setReady] = useState(false);
+  const [marks,setMarks] = useState<{layoutId:string;first:string;last:string} | null>(null);
   const slot = layout?.slots.find(s => s.id === selected);
   const inherited = !!typeId && active && !catalog.types.find(t => t.id === typeId)?.layout_id;
   const firstVersion = versions[0]?.id ?? "";
@@ -103,9 +105,10 @@ function Workspace({page,typeId,catalog,onCreated}: {page: Page; typeId: string;
     </div>
     {ready && <p>Действующий макет: {versions.find(l=>l.id===active)?.name ?? "не назначен"}{inherited ? " (унаследован)" : ""}</p>}
     {error && <p role="alert">{error}</p>}
+    {layout && sectionSources[page.id] && <SelectionPanel key={layout.id} layout={layout} types={catalog.types} root={sectionSources[page.id]} busy={busy} onBusy={setBusy} onSave={setLayout} onMarks={setMarks}/>}
     <div className="pe-workspace">
       <PlacementBoard key={chosen} layout={layout} widgets={catalog.widgets} selected={selected} busy={busy}
-        onSelect={setSelected} onBusy={setBusy} onSave={setLayout} />
+        first={marks?.layoutId===chosen?marks.first:layout?.first_slot_id} last={marks?.layoutId===chosen?marks.last:layout?.last_slot_id} onSelect={setSelected} onBusy={setBusy} onSave={setLayout} />
       <aside><h2>Выбранный слот</h2>{slot ? <><strong>{slot.widget_name ?? catalog.widgets.find(w=>w.id===slot.widget_id)?.name}</strong>
         <dl><dt>Строка</dt><dd>{slot.row_start}</dd><dt>Колонка</dt><dd>{slot.column_start}</dd>
         <dt>Ширина</dt><dd>{slot.column_span}</dd><dt>Высота</dt><dd>{slot.row_span}</dd><dt>Порядок чтения</dt><dd>{slot.sort_order}</dd></dl>{layout && <SlotProperties key={slot.id} slot={slot} layout={layout} widget={catalog.widgets.find(w=>w.id===slot.widget_id)} busy={busy} onBusy={setBusy} onSave={setLayout}/>}</>

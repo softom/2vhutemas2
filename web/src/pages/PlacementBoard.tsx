@@ -19,9 +19,9 @@ function obstacle(layout: Layout, source: Source, {row,col}: Cell) {
   return hit ? "Место занимает «" + hit.widget_name + "»." : "";
 }
 
-export function PlacementBoard({layout,widgets,selected,busy,onSelect,onSave,onBusy}: {
+export function PlacementBoard({layout,widgets,selected,busy,first,last,onSelect,onSave,onBusy}: {
   layout: Layout | null; widgets: WidgetDefinition[]; selected: string; busy: boolean;
-  onSelect: (id: string) => void; onSave: (layout: Layout) => void; onBusy: (busy: boolean) => void;
+  first?:string|null; last?:string|null; onSelect: (id: string) => void; onSave: (layout: Layout) => void; onBusy: (busy: boolean) => void;
 }) {
   const [source,setSource] = useState<Source | null>(null);
   const [hover,setHover] = useState<Cell | null>(null);
@@ -111,7 +111,7 @@ export function PlacementBoard({layout,widgets,selected,busy,onSelect,onSave,onB
               gridRow:`${rows.indexOf(s.row_start)+2}/span ${s.row_span}`}}
             onDragStart={e=>w && drag(e,w,s)} onDragEnd={()=>setHover(null)}
             onClick={()=>{if(source)void place({row:s.row_start,col:s.column_start});else onSelect(s.id);}}>
-            {s.widget_name ?? w?.name}<small>Ширина {s.column_span} · порядок {s.sort_order}</small></button>;
+            {s.widget_name ?? w?.name}{s.id===first && <small>Начало повтора</small>}{s.id===last && <small>Конец повтора</small>}<small>Ширина {s.column_span} · порядок {s.sort_order}</small></button>;
         })}
       </div>
       {!busy && !layout?.slots.length && <p>Слотов пока нет.</p>}
