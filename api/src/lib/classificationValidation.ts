@@ -1,14 +1,10 @@
+import {matchCandidateConcept} from './matchCandidateConcept.ts';
 import {sourceQuality} from './sourceEvidence.ts';
 export const AXES={art_epochs:'Эпоха / парадигма',form_method:'Метод формообразования',art_styles:'Направление / школа',morphological_trait:'Морфологический признак'};
 export const RELATIONS=['classification_membership','influence','classification_citation','classification_trait','classification_negation'];
 export const normalized=(s:unknown)=>String(s||'').normalize('NFC').replace(/\s+/g,' ').trim();
-const nameKey=(value:unknown)=>normalized(value).toLowerCase().replace(/ё/g,'е');
 export function resolveConcept(raw:any,catalog:any[]){
- if(raw.concept_id!=null)return catalog.find(c=>Number(c.id)===Number(raw.concept_id));
- const key=nameKey(raw.candidate_name);
- if(!key)return undefined;
- const matches=catalog.filter(c=>[c.title_ru,c.title_en,c.title_original,...(c.names||[]).map((n:any)=>n.concept_name_text)].some(n=>nameKey(n)===key));
- return matches.length===1?matches[0]:undefined;
+ return raw.concept_id==null?matchCandidateConcept(raw.candidate_name,raw.axis,catalog):catalog.find(c=>Number(c.id)===Number(raw.concept_id));
 }
 export function attributionProposal(raw:any,catalog:any[],sources:any[]){
  if(!raw||!Object.hasOwn(AXES,raw.axis)||!RELATIONS.includes(raw.relation))throw new Error('Неизвестная ось или отношение');

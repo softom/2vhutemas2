@@ -39,7 +39,7 @@ setResearch.get('/:id',async c=>{
     from app.entities e join app.entity_types t on t.id=e.type_id where e.status<>'archived' and t.code=any(${Object.keys(AXES)}::text[])`;
   for(const p of pending){
    const concept=resolveConcept(p,catalog);
-   if(concept)Object.assign(p,{concept_id:Number(concept.id),axis:concept.axis,title:concept.title_ru,candidate_name:''});
+   p.suggested_concept_id=concept?Number(concept.id):null;
   }
  }
  if(data.state.status==='running'&&active.has(id)){data.state.progress=active.get(id);data.state.log=journals.get(id)||[];}

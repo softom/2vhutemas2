@@ -50,6 +50,7 @@ async function plans(tx:Tx,entityId:number,input:any,context:any={}){
  const catalog=context.catalog||(context.catalog=(await classificationCatalog(tx,true)).filter(c=>allowedTypes.some((t:any)=>t.code===c.axis))),out:any[]=[];const seen=new Set<string>();
  for(const choice of input.selections){
   const raw=result.proposals.find((p:any)=>p.id===choice.id);if(!raw)fail('Предложение отсутствует в сохранённом результате');
+  if(!raw.concept_id&&!choice.concept_id)fail('Выберите понятие библиотеки');
   if(raw.concept_id&&choice.concept_id&&Number(choice.concept_id)!==Number(raw.concept_id))fail('Нельзя подменить установленное понятие');
   const p=checked(()=>attributionProposal({...raw,concept_id:raw.concept_id||choice.concept_id||null},catalog,data.sources.filter((s:any)=>!isExcludedResearchRow(s))));
   if(!allowedRoles.some((r:any)=>r.code===p.relation))fail('Отношение не разрешено набором');
