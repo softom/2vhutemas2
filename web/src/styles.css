@@ -1108,3 +1108,24 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .pe-placement select {margin-left:.4rem;}
 .pe-feedback {min-height:1.4em;}
 .pe-properties fieldset,.pe-properties label{display:grid;gap:.4rem;min-width:0;margin:0 0 .65rem}.pe-properties input,.pe-properties select,.pe-properties iframe{box-sizing:border-box;width:100%;min-width:0}.pe-properties iframe{height:20rem;border:0}
+
+/* Four equal tracks: one leading column, two editorial columns, then the ribbon and the sidebar. */
+@media (min-width: 1001px) {
+  .shell:has(.top nav a.active[href="/objects"]) {
+    --page-gap: 24px;
+    --ribbon-width: 20px;
+    --frame-gap: 32px;
+    --frame-columns: minmax(0, calc(75% + var(--page-gap) / 4 - var(--ribbon-width) / 2 - var(--frame-gap))) var(--ribbon-width) minmax(0, 1fr);
+    --ribbon-center: calc(75% - var(--pad) / 2 + var(--page-gap) / 4);
+    & > .through { left: calc(var(--ribbon-center) - 10px); }
+    & > .through-marks { left: calc(var(--ribbon-center) - 31px); }
+    & :is(.top, .site-foot > *) { grid-template-columns: var(--frame-columns); }
+    & .top .viewer { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+    & .top nav { padding-right: calc(25% + var(--frame-gap)); }
+    & .section-grid[data-columns="4"] { column-gap: var(--page-gap); background: transparent; }
+    & section:has(> .section-grid[data-columns="4"]) > :is(.catalog-head, .type-chips, .filters, .list-count) {
+      margin-left: calc(25% + var(--page-gap) / 4);
+      max-width: calc(50% - var(--page-gap) / 2);
+    }
+  }
+}
