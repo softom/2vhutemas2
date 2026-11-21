@@ -254,6 +254,17 @@ layoutAdmin.post("/type_presentations/:typeId/layout", (c) =>
     do update set layout_id=excluded.layout_id returning layout_id`)[0];
   }));
 
+layoutAdmin.get("/page-editor", async c => {
+  const [pages, types, layouts, widgets] = await Promise.all([
+    sql`select id,name,current_layout_id from app.pages order by name,id`,
+    sql`select t.id,t.title_ru as name,p.layout_id from app.entity_types t
+      left join app.type_presentations p on p.type_id=t.id and p.mode='card' order by t.title_ru,t.id`,
+    sql`select id,page_id,name,assigned from app.layouts order by name,id`,
+    sql`select id,name from app.widgets order by name,id`,
+  ]);
+  return c.json({ card_page_id: CARD_PAGE_ID, pages, types, layouts, widgets });
+});
+
 layoutAdmin.get("/card-layout-editor", async c => {
   const [pages,types,layouts,widgets] = await Promise.all([
     sql`select current_layout_id from app.pages where id=${CARD_PAGE_ID}`,

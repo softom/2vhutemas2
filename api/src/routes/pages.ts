@@ -1581,10 +1581,11 @@ function appOnly(c: Context<AppEnv>, title: string) {
 
 const APP_ONLY_TITLES: Record<string, string> = {
   "/login": "Вход", "/parameters": "Параметры", "/parameters/registry": "Справочник параметров", "/robot": "Робот новостей",
+  "/page-editor": "Макеты страниц",
   "/materials": "Материалы в работе",
   "/entity-intake": "Стек сущностей",
 };
-for (const path of ["/login", "/media", "/media/*", "/parameters", "/parameters/registry", "/materials", "/entity-intake", "/entity-intake/*", "/robot", "/robot/*"]) {
+for (const path of ["/login", "/page-editor", "/media", "/media/*", "/parameters", "/parameters/registry", "/materials", "/entity-intake", "/entity-intake/*", "/robot", "/robot/*"]) {
   const title = APP_ONLY_TITLES[path.replace("/*", "")] ?? "Медиатека";
   pages.get(path, (c) => appOnly(c, title));
 }

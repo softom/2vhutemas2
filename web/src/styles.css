@@ -1079,3 +1079,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
   z-index: 2;
   background: var(--paper);
 }
+
+.page-editor .pe-controls { display:flex; flex-wrap:wrap; gap:1rem; align-items:end; margin:1rem 0; }
+.pe-controls label { display:grid; gap:.3rem; }
+.pe-controls select, .pe-controls input { max-width: min(32rem, 80vw); }
+.pe-workspace { display:grid; grid-template-columns:minmax(9rem,1fr) minmax(18rem,3fr) minmax(10rem,1fr); gap:1rem; align-items:start; }
+.pe-workspace > * { min-width:0; }
+.pe-workspace h2 { font-size:1.15rem; }
+.pe-workspace ul { padding-left:1.2rem; }
+.pe-grid { display:grid; gap:.4rem; padding:.6rem; border:1px solid var(--line); }
+.pe-track { font-size:.8rem; text-align:center; }
+.pe-grid button { background:var(--paper); color:var(--text); border:1px solid var(--line); white-space:normal; overflow-wrap:anywhere; min-width:0; min-height:3rem; }
+.pe-grid button[aria-pressed="true"] { background:var(--accent); color:white; outline:2px solid var(--accent); outline-offset:-2px; }
+.pe-workspace dl { display:grid; grid-template-columns:auto auto; gap:.35rem; }
+.pe-workspace dd { margin:0; }
+@media(max-width:800px){ .pe-workspace {grid-template-columns:1fr;} }

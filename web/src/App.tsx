@@ -14,6 +14,7 @@ import { Lectures } from "./pages/Lectures";
 
 const MediaLibrary = lazy(() => import("./pages/MediaLibrary").then((m) => ({ default: m.MediaLibrary })));
 const Parameters = lazy(() => import("./pages/Parameters").then((m) => ({ default: m.Parameters })));
+const PageEditor = lazy(() => import("./pages/PageEditor"));
 const Materials = lazy(() => import("./pages/Materials").then((m) => ({ default: m.Materials })));
 const EntityIntake = lazy(() => import("./pages/EntityIntake").then(m => ({ default: m.EntityIntake })));
 const NewsRobot = lazy(() => import("./pages/NewsRobot").then((m) => ({ default: m.NewsRobot })));
@@ -244,6 +245,7 @@ export function App() {
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
           <Route path="/parameters/registry" element={<Parameters canManage={can("su")} />} />
+          <Route path="/page-editor" element={!viewer ? <p className="notice">Проверяем права…</p> : can("su") ? <PageEditor /> : <p className="notice">Для работы с макетами требуется право настройки.</p>} />
           <Route path="/materials" element={!viewer ? <p className="notice">Проверяем права…</p> : <Materials allowed={can("su")} />} />
           <Route path="/entity-intake" element={!viewer ? <p>Проверяем права…</p> : <EntityIntake allowed={can("edit")} canUpload={can("create_delete")} canPublish={can("publish")} />} />
           <Route path="/entity-intake/:id" element={!viewer ? <p>Проверяем права…</p> : <EntityIntake allowed={can("edit")} canUpload={can("create_delete")} canPublish={can("publish")} />} />
