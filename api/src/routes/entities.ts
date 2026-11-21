@@ -173,7 +173,8 @@ entities.get("/", async (c: Context<AppEnv>) => {
       on ${parameter}::text is not null
     where (${drafts} or e.is_published)
       and (not ${objects} or (e.type_id in (select app.entity_type_subtree('what'))
-           and e.type_id not in (select app.entity_type_subtree('news') union select app.entity_type_subtree('web_page'))))
+           and e.type_id not in (select app.entity_type_subtree('news') union select app.entity_type_subtree('web_page')
+                             union select app.entity_type_subtree('quotation'))))
       and (${archived} or e.status <> 'archived')
       and (not ${onlyArchived} or e.status = 'archived')
       and (${type}::text is null

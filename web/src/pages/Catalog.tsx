@@ -158,11 +158,11 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
   /** В разделе показываем только его ветвь: остальное дерево здесь лишнее. */
   const inBranch = (code: string): boolean => {
-    if (branch === "what" && ["news", "web_page"].includes(code)) return false;
+    if (branch === "what" && ["news", "web_page", "quotation"].includes(code)) return false;
     if (!branch) return true;
     let current: EntityType | undefined = types.find((item) => item.code === code);
     while (current) {
-      if (branch === "what" && ["news", "web_page"].includes(current.code)) return false;
+      if (branch === "what" && ["news", "web_page", "quotation"].includes(current.code)) return false;
       if (current.code === branch) return true;
       current = types.find((item) => item.code === current?.parent);
     }
