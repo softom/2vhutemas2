@@ -1,4 +1,5 @@
 import {isExcludedResearchRow} from '../lib/researchSourcePolicy.ts';
+import {publishOwnerRevision} from '../lib/ownedVersions.ts';
 import {Hono} from 'hono';
 import {sql,transaction,type Tx} from '../lib/db.ts';
 import {require as permit,canSeeDrafts} from '../lib/auth.ts';
@@ -97,10 +98,32 @@ classification.post('/:id/accept',async c=>{
  return c.json(await transaction(actor.contributorId,async tx=>{
   // Serialize URL resolution and attribution creation, including across objects.
   await tx`select pg_advisory_xact_lock(20620002)`;
-  const {data,out}=await plans(tx,id,input);const applied=[];const sourceCache=new Map<string,any>();const linkCache=new Map<string,any>();
+  let createdConcept:number|null=null;
+  if(input.new_concept){
+   permit(actor,'publish');
+   const title=normalized(input.new_concept.title),axis=input.new_concept.axis;
+   if(!title||title.length>200||!Object.hasOwn(AXES,axis)||input.selections?.length!==1)fail('Проверьте название и ось одного нового понятия');
+   const choice=input.selections[0],previous=await researchData(tx,id);
+   const raw=previous.state.results?.[input.set_id]?.proposals?.find((p:any)=>p.id===choice.id);
+   if(!raw||raw.concept_id||!raw.candidate_name)fail('Создать понятие можно только для несопоставленного кандидата');
+   const keys=[title,raw.candidate_name].map(s=>normalized(s).toLowerCase().replace(/ё/g,'е'));
+   const catalog=await classificationCatalog(tx,true);
+   if(catalog.some(c=>[c.title_ru,c.title_en,c.title_original,...c.names.map((n:any)=>n.concept_name_text)].some(n=>keys.includes(normalized(n).toLowerCase().replace(/ё/g,'е')))))fail('Название уже есть в библиотеке. Обновите предложения и выберите существующее понятие.');
+   const record=await createRecord(tx,{type:axis,title,contributorId:actor.contributorId});
+   createdConcept=record.id;
+   const rev=await saveRevision(tx,record.id,actor.contributorId,'Создано понятие из проверенного предложения','create');
+   await publishOwnerRevision(tx,{kind:'entity',id:record.id},rev,actor.contributorId,'Публикация понятия из предложения');
+   choice.concept_id=record.id;
+  }
+  const {data,out}=await plans(tx,id,input);
+  if(createdConcept){
+   const saved=data.state.results[input.set_id].proposals.find((p:any)=>p.id===out[0].proposal_id);
+   Object.assign(saved,{concept_id:createdConcept,axis:out[0].p.axis,title:out[0].p.title,candidate_name:''});
+  }
+const applied=[];const sourceCache=new Map<string,any>();const linkCache=new Map<string,any>();
   for(const x of out){
    const expected=input.expected?.find((e:any)=>e.proposal_id===x.proposal_id);
-   if(!expected||String(expected.link_id||'')!==String(x.current?.id||'')||expected.base_link_revision_id!==(x.current?.working_revision_id||null)||String(expected.source_entity_id||'')!==String(x.sourceEntity?.id||''))throw new ApiError('version_conflict','Эта связь изменилась другим редактором. Её статус обновлён.',{proposal_id:x.proposal_id});
+   if(!createdConcept&&(!expected||String(expected.link_id||'')!==String(x.current?.id||'')||expected.base_link_revision_id!==(x.current?.working_revision_id||null)||String(expected.source_entity_id||'')!==String(x.sourceEntity?.id||'')))throw new ApiError('version_conflict','Эта связь изменилась другим редактором. Её статус обновлён.',{proposal_id:x.proposal_id});
    const prior=linkCache.get(x.key);if(prior){x.current=prior;x.action=sourceMarks(prior.body).some(m=>normalized(extractText([m.block]))===x.p.quote)&&prior.body.some((b:any)=>b.type==='paragraph'&&normalized(extractText([b]))===x.p.rationale)?'repeat':'append';}
    if(x.current)await tx`select id from app.links where id=${x.current.id} for update`;
    // Recheck under the lock: ordinary PATCH uses the same row lock.
