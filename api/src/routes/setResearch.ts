@@ -50,7 +50,10 @@ setResearch.post('/:id/:action',async c=>{
   const data=await researchData(tx,id),job=crypto.randomUUID();
   const state={...data.state,job,action,set_id:set.id,task_id:set.task.id,config_version:set.config_version,status:'running',progress:active.get(id),log:journals.get(id),request_id:caller.requestId,warnings:[],started_at:new Date().toISOString(),error:null};
   const revision=await saveResearch(tx,id,actor.contributorId,{sources:data.sources,state});
-  return {title:entity.title_ru,identity:{title_ru:entity.title_ru,title_en:entity.title_en,title_original:entity.title_original,original_language:entity.original_language},sources:data.sources,state,revision};
+  const [context]=action==='collect'&&set.code==='style_solutions'?await tx<any>`select
+   (select x.title_ru from app.links l join app.link_roles r on r.id=l.role_id join app.entities x on x.id=case when l.from_entity_id=${id} then l.to_entity_id else l.from_entity_id end where ${id} in(l.from_entity_id,l.to_entity_id) and l.status<>'archived' and x.status<>'archived' and r.code in ('architect','author') order by (r.code='architect') desc,l.is_primary desc,l.id limit 1) architect,
+   (select city.text_value from app.indicators i join app.indicator_values v on v.indicator_id=i.id join app.indicators place on place.entity_id=v.entity_value_id join app.indicator_values city on city.indicator_id=place.id join app.parameters p on p.id=city.parameter_id where i.entity_id=${id} and i.is_current and place.is_current and p.code='settlement' order by i.sort_order,v.sort_order,city.id limit 1) city`: [];
+  return {title:entity.title_ru,identity:{...context,title_ru:entity.title_ru,title_en:entity.title_en,title_original:entity.title_original,original_language:entity.original_language},sources:data.sources,state,revision};
  });}catch(e){active.delete(id);journals.delete(id);throw e;}
  void(async()=>{
   let result:any;const progress=(value:ResearchProgress)=>{

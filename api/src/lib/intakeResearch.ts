@@ -24,7 +24,7 @@ export async function collectResearch(d:any,caller:Caller,topic='архитек�
  const title=d.sketch.title;const query=options?.query||title+' '+topic;
  async function provider(name:string,fn:()=>Promise<ResearchSource[]>){try{const found=await fn();if(!found.length)warnings.push(name+': результатов нет');sources.push(...found);}catch{warnings.push(name+': поиск не выполнен');}}
  const tasks:Promise<void>[]=[];
- for(const lang of options?[...new Set([/^[a-z]{2,3}$/.test(options.language)&&options.language!=='und'?options.language:'en','en'])]:['ru','en','es'])tasks.push(provider('Wikipedia '+lang,async()=>{
+ for(const lang of options?[...new Set([/^[a-z]{2,3}$/.test(options.language)&&options.language!=='und'?options.language:'en',...(/[А-Яа-яЁё]/.test(title)?[]:['en'])])]:['ru','en','es'])tasks.push(provider('Wikipedia '+lang,async()=>{
   const response=await fetch(`https://${lang}.wikipedia.org/w/api.php?`+new URLSearchParams({action:'query',list:'search',srsearch:title,srlimit:'10',format:'json'}),{redirect:'error',signal:AbortSignal.timeout(10000)});
   const data=JSON.parse(await bounded(response));return (data.query?.search||[]).map((s:any)=>source(`https://${lang}.wikipedia.org/wiki/`+encodeURIComponent(s.title.replace(/ /g,'_')),s.title,s.snippet,'Wikipedia '+lang));
  }));
