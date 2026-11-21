@@ -260,9 +260,12 @@ layoutAdmin.get("/page-editor", async c => {
     sql`select t.id,t.title_ru as name,p.layout_id from app.entity_types t
       left join app.type_presentations p on p.type_id=t.id and p.mode='card' order by t.title_ru,t.id`,
     sql`select id,page_id,name,assigned from app.layouts order by name,id`,
-    sql`select id,name from app.widgets order by name,id`,
+    sql<{id:string;name:string;renderer_key:string}>`select id,name,renderer_key from app.widgets order by name,id`,
   ]);
-  return c.json({ card_page_id: CARD_PAGE_ID, pages, types, layouts, widgets });
+  return c.json({ card_page_id: CARD_PAGE_ID, pages, types, layouts, widgets: widgets.map(widget => {
+    const spec = widgetImplementations.get(widget.renderer_key) ?? layoutCapabilities(widget.renderer_key);
+    return { ...widget, widths: spec?.widths ?? [], heights: spec?.heights ?? [] };
+  }) });
 });
 
 layoutAdmin.get("/card-layout-editor", async c => {

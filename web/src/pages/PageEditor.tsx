@@ -1,14 +1,15 @@
+import { PlacementBoard, type WidgetDefinition } from "./PlacementBoard";
 import { useEffect, useState } from "react";
 import { request } from "../api";
 
 type Named = { id: string; name: string };
 type Page = Named & { current_layout_id: string | null };
 type Summary = Named & { page_id: string; assigned: boolean };
-type Slot = { id: string; widget_id: string; widget_name: string; sort_order: number; row_start: number;
+export type Slot = { id: string; widget_id: string; widget_name: string; sort_order: number; row_start: number;
   column_start: number; row_span: number; column_span: number };
-type Layout = Summary & { grid_columns: 3 | 4; slots: Slot[] };
+export type Layout = Summary & { revision: number; grid_columns: 3 | 4; slots: Slot[] };
 type Catalog = { card_page_id: string; pages: Page[]; types: (Named & { layout_id: string | null })[];
-  layouts: Summary[]; widgets: Named[] };
+  layouts: Summary[]; widgets: WidgetDefinition[] };
 
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
@@ -102,16 +103,8 @@ function Workspace({page,typeId,catalog,onCreated}: {page: Page; typeId: string;
     {ready && <p>Действующий макет: {versions.find(l=>l.id===active)?.name ?? "не назначен"}{inherited ? " (унаследован)" : ""}</p>}
     {error && <p role="alert">{error}</p>}
     <div className="pe-workspace">
-      <aside><h2>Каталог виджетов</h2><ul>{catalog.widgets.map(w=><li key={w.id}>{w.name}</li>)}</ul></aside>
-      <section><h2>Сетка макета</h2>{busy && <p role="status">Загрузка…</p>}
-        <div className="pe-grid" style={{gridTemplateColumns:`repeat(${layout?.grid_columns ?? 4}, minmax(0, 1fr))`}}>
-          {Array.from({length:layout?.grid_columns ?? 4},(_,i)=><span className="pe-track" key={i}>Колонка {i+1}</span>)}
-          {layout?.slots.map(s=><button key={s.id} type="button" aria-pressed={selected===s.id}
-            style={{gridColumn:`${s.column_start}/span ${s.column_span}`,gridRow:`${s.row_start+1}/span ${s.row_span}`}}
-            onClick={()=>setSelected(s.id)}>{s.widget_name ?? catalog.widgets.find(w=>w.id===s.widget_id)?.name}</button>)}
-        </div>
-        {!busy && !layout?.slots.length && <p>Слотов пока нет.</p>}
-      </section>
+      <PlacementBoard key={chosen} layout={layout} widgets={catalog.widgets} selected={selected} busy={busy}
+        onSelect={setSelected} onBusy={setBusy} onSave={setLayout} />
       <aside><h2>Выбранный слот</h2>{slot ? <><strong>{slot.widget_name ?? catalog.widgets.find(w=>w.id===slot.widget_id)?.name}</strong>
         <dl><dt>Строка</dt><dd>{slot.row_start}</dd><dt>Колонка</dt><dd>{slot.column_start}</dd>
         <dt>Ширина</dt><dd>{slot.column_span}</dd><dt>Высота</dt><dd>{slot.row_span}</dd><dt>Порядок чтения</dt><dd>{slot.sort_order}</dd></dl></>

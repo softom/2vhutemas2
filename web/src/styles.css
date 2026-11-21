@@ -1094,3 +1094,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .pe-workspace dl { display:grid; grid-template-columns:auto auto; gap:.35rem; }
 .pe-workspace dd { margin:0; }
 @media(max-width:800px){ .pe-workspace {grid-template-columns:1fr;} }
+.pe-palette {list-style:none; margin:0; padding:0!important;}
+.pe-palette button {background:transparent;color:var(--text);padding:.3rem .5rem;text-align:left;border:0;}
+.pe-palette button[aria-pressed="true"] {background:var(--paper);outline:1px solid var(--accent);}
+.pe-palette button[draggable="true"],.pe-slot[draggable="true"] {cursor:grab;}
+.pe-grid [data-drop-row] {background:transparent;border:1px dashed var(--line);opacity:1;}
+.pe-grid [data-target] {z-index:3;opacity:.65;}
+.pe-grid [data-target="valid"] {background:#b6d6ba;}
+.pe-grid [data-target="invalid"] {background:#e8aaaa;}
+.pe-slot {z-index:1;}
+.pe-slot small {display:block;font-size:.75rem;font-weight:normal;}
+.pe-placement {display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;}
+.pe-placement select {margin-left:.4rem;}
+.pe-feedback {min-height:1.4em;}
