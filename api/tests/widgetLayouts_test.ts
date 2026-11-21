@@ -79,6 +79,12 @@ Deno.test("layouts: routes, permissions, inheritance, versions and concurrent ed
       row_span: 1,
       column_span: 1,
     };
+    check(layout.grid_columns === 3, "existing clients create three-column layouts");
+    await req("/layouts", { page_id: CARD_PAGE_ID, name: "invalid grid", grid_columns: 5 }, 400);
+    const wide = await req("/layouts", { page_id: CARD_PAGE_ID, name: "wide", grid_columns: 4 }, 200);
+    await req("/page_layout", { ...slot, layout_id: wide.id, column_start: 4, expected_revision: 0 }, 200);
+    const wideCopy = await req("/layouts/" + wide.id + "/copy", { name: "wide copy" }, 200);
+    check(wideCopy.grid_columns === 4 && wideCopy.slots[0]?.column_start === 4, "copy preserves four-column grid");
     const first = await req("/page_layout", { ...slot, expected_revision: 0 }, 200);
     await req("/page_layout", { ...slot, expected_revision: 0 }, 409);
     await req("/page_layout", { ...slot, expected_revision: 1, design: "missing" }, 400);

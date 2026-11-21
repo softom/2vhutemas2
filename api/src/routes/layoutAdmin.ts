@@ -84,27 +84,23 @@ layoutAdmin.post("/widgets", (c) =>
       name(b.name)
     },${key}) returning *`)[0];
   }));
-layoutAdmin.post(
-  "/layouts",
-  (c) =>
-    write(
-      c,
-      async (q, b) =>
-        (await q`insert into app.layouts(page_id,name) values(${uuid(b.page_id)},${
-          name(b.name)
-        }) returning *`)[0],
-    ),
-);
+layoutAdmin.post("/layouts", (c) =>
+  write(c, async (q, b) => {
+    const columns = b.grid_columns === undefined ? 3 : integer(b.grid_columns);
+    if (columns !== 3 && columns !== 4) invalid("Макет поддерживает три или четыре колонки");
+    return (await q`insert into app.layouts(page_id,name,grid_columns)
+      values(${uuid(b.page_id)},${name(b.name)},${columns}) returning *`)[0];
+  }));
 layoutAdmin.post("/layouts/:id/copy", (c) =>
   write(c, async (q, b) => {
     const id = uuid(c.req.param("id"));
     const [source] = await q<
-      { page_id: string }
-    >`select page_id from app.layouts where id=${id} for share`;
+      { page_id: string; grid_columns: number }
+    >`select page_id,grid_columns from app.layouts where id=${id} for share`;
     if (!source) missing();
     const [copy] = await q<
       { id: string }
-    >`insert into app.layouts(page_id,name) values(${source.page_id},${name(b.name)}) returning id`;
+    >`insert into app.layouts(page_id,name,grid_columns) values(${source.page_id},${name(b.name)},${source.grid_columns}) returning id`;
     await q`insert into app.page_layout(layout_id,widget_id,sort_order,row_start,column_start,row_span,column_span,design)
     select ${copy.id},widget_id,sort_order,row_start,column_start,row_span,column_span,design from app.page_layout where layout_id=${id}`;
     return readLayout(copy.id, q);
