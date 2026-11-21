@@ -1111,7 +1111,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 /* The middle pair inherits the original editorial measure; the outer columns share the rest. */
 @media (min-width: 1001px) {
-  .shell:has(.top nav a.active[href="/objects"]) {
+  .shell:has(.top nav a.active:is([href="/objects"], [href="/authors"])) {
     --pad: max(24px, calc(50% - 690px));
     --editorial: min(var(--c1), 55vw);
     --middle-track: calc((var(--editorial) - var(--page-gap)) / 2);
