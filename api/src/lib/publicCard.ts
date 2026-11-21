@@ -120,6 +120,7 @@ export interface PublicCard {
   links: {
     id: number;
     other_type_id: string;
+    other_type_code?: string;
     role_id: string | null;
     other_id: number;
     other_slug: string;
@@ -246,7 +247,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
   const document = documents[0] ?? null;
 
   const linkRows = await sql<PublicCard["links"][number] & {justification_blocks:unknown}>`
-    select l.id, other.type_id as other_type_id, l.role_id, other.id as other_id, other.slug as other_slug, other.title_ru as other_title,
+    select l.id, other.type_id as other_type_id, ot.code as other_type_code, l.role_id, other.id as other_id, other.slug as other_slug, other.title_ru as other_title,
            (app.entity_type_path(other.type_id) -> 0 ->> 'code') as other_root,
            lr.code as role, lr.title_ru as role_title,
            case when l.from_entity_id = ${id} then 'outgoing' else 'incoming' end as direction,
@@ -256,6 +257,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
       join app.read_entities(${drafts}) other
         on other.id = case when l.from_entity_id = ${id} then l.to_entity_id
                            else l.from_entity_id end
+      join app.entity_types ot on ot.id = other.type_id
       left join app.link_roles lr on lr.id = l.role_id
      where (l.from_entity_id = ${id} or l.to_entity_id = ${id}) and (${drafts} or other.is_published)
        -- Иллюстрации и источники — тоже связи, но у каждых свой раздел.
@@ -367,7 +369,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     drawings,
     document,
     links,
-    relation_sets: await loadPublicRelationSets(id, links),
+    relation_sets: await loadPublicRelationSets(id, links, drafts),
     neighbor_links,
     mentions,
     sources,

@@ -3,9 +3,9 @@ import {sql} from './db.ts';
 import {escapeHtml,entityPath} from './site.ts';
 import type {PublicCard} from './publicCard.ts';
 type Link=PublicCard['links'][number];
-export interface PublicRelationSet {id:string;code:string;title:string;side:'left'|'right';fields:{slot:string;title:string}[];links:Link[]}
+export interface PublicRelationSet {id:string;code:string;title:string;side:'left'|'right';fields:{slot:string;title:string}[];links:Link[];similar?:{id:number;slug:string;title:string;concepts:number[]}[]}
 /** Definitions select existing visible links by UID; no research corpus or proposals enter the public card. */
-export async function loadPublicRelationSets(entityId:number,links:Link[]):Promise<PublicRelationSet[]>{
+export async function loadPublicRelationSets(entityId:number,links:Link[],drafts=false):Promise<PublicRelationSet[]>{
  const sets=await sql<any>`select ps.id,ps.code,ps.title_ru as title,ps.card_side as side,
   (select jsonb_agg(jsonb_build_object('slot',i.result_slot,'title',coalesce(i.label_override,p.title_ru)) order by i.sort_order,p.sort_order,p.id)
    from app.parameter_set_items i join app.parameters p on p.id=i.parameter_id where i.set_id=ps.id and i.result_slot is not null) as fields,
@@ -16,7 +16,23 @@ export async function loadPublicRelationSets(entityId:number,links:Link[]):Promi
    or exists(select 1 from app.type_parameter_sets tps where tps.set_id=ps.id and tps.type_id in
     (select app.entity_type_ancestors((select type_id from app.entities where id=${entityId})))))
  order by ps.sort_order,ps.id`;
- return sets.map((s:any)=>({...s,fields:s.fields||[],links:links.filter(l=>l.direction==='outgoing'&&(s.types||[]).map(String).includes(String(l.other_type_id))&&(s.roles||[]).map(String).includes(String(l.role_id)))}));
+ const attached: PublicRelationSet[] = sets.map((s:any)=>({...s,fields:s.fields||[],links:links.filter(l=>l.direction==='outgoing'&&(s.types||[]).map(String).includes(String(l.other_type_id))&&(s.roles||[]).map(String).includes(String(l.role_id)))}));
+ const style = attached.find(set => set.code === 'style_solutions');
+ if (style) {
+   const comparable = style.links.filter(link => link.role_id && link.role !== 'classification_negation');
+   if (comparable.length) {
+     style.similar = await sql<NonNullable<PublicRelationSet['similar']>[number]>`select obj.id, obj.slug, obj.title_ru as title,
+       array_agg(distinct link.to_entity_id) as concepts
+       from app.read_links(${drafts}) link
+       join app.read_entities(${drafts}) obj on obj.id = link.from_entity_id
+       where obj.id <> ${entityId} and (${drafts} or obj.is_published)
+       and (app.entity_type_path(obj.type_id)->0->>'code') = 'what'
+       and (link.to_entity_id,link.role_id) in
+         (select * from unnest(${comparable.map(l=>l.other_id)}::bigint[],${comparable.map(l=>l.role_id)}::uuid[]))
+       group by obj.id,obj.slug,obj.title_ru order by count(distinct link.to_entity_id) desc,obj.title_ru,obj.id limit 12`;
+   }
+ }
+ return attached;
 }
 /** Same presentation for every relation-valued parameter set; labels/order/side come from its definition. */
 export function relationSetsHtml(sets:PublicRelationSet[],side:'left'|'right'):string{
