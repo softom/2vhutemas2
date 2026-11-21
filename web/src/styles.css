@@ -1047,3 +1047,35 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
     align-self: start;
   }
 }
+
+/* The page frame and its main region span the full four-column canvas. */
+.shell[data-page-columns="4"] {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: auto 1fr auto;
+}
+.shell[data-page-columns="4"] > :is(header, main, footer) {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+@media (min-width: 1001px) {
+  .public-card > .entity-widget-grid[data-columns="4"],
+  .section-grid[data-columns="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1000px) {
+  .shell[data-page-columns="4"], .section-grid[data-columns="4"] { grid-template-columns: minmax(0, 1fr); }
+  .section-grid[data-columns="4"] > [data-section-slot] { grid-column: 1 !important; grid-row: auto !important; }
+}
+.public-card .entity-widget-grid[data-columns="4"] figure:not(.model-embed):not(.video-cover) figcaption {
+  position: static;
+  width: auto;
+  margin-top: 8px;
+}
+/* The legacy gutter stripe stays visible around the four-column reading area. */
+:is(.entity-widget-grid, .section-grid)[data-columns="4"] {
+  position: relative;
+  z-index: 2;
+  background: var(--paper);
+}

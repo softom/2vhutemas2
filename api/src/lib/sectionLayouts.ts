@@ -1,3 +1,4 @@
+import { isPageFrame } from "./cardSections.ts";
 import { config } from "./config.ts";
 import { getPageLayout, type CardLayout } from "./layouts.ts";
 import { fillSectionPattern } from "./sectionPattern.ts";
@@ -8,7 +9,10 @@ export const sectionPages = {
 } as const;
 
 export async function sectionLayout(path: keyof typeof sectionPages) {
-  return config.useWidgetLayouts ? await getPageLayout(sectionPages[path].id) : null;
+  const layout = config.useWidgetLayouts ? await getPageLayout(sectionPages[path].id) : null;
+  if (!layout) return null;
+  return { ...layout, frame: layout.slots.filter(s => isPageFrame(s.renderer_key)),
+    slots: layout.slots.filter(s => !isPageFrame(s.renderer_key)) };
 }
 
 export function sectionCells<T>(layout: CardLayout, rows: T[], offset: number, key: string,

@@ -5,6 +5,13 @@ export const cardSectionNames: Readonly<Record<string,string>> = {
   drawings: "Чертежи", sources: "Источники", mentions: "Упоминания",
   citation: "Цитирование", video: "Видео",
 };
+export function isPageFrame(key: string) {
+  return key === "site_menu" || key === "site_footer";
+}
+export function layoutCapabilities(key: string) {
+  if (isPageFrame(key)) return { widths:[4], heights:[1], designs:["default"] };
+  return sectionCapabilities(key);
+}
 export function sectionCapabilities(key: string) {
   if (modelPath(key)) return { widths:[1,2,3], heights:[1], designs:["default"] };
   if (key === "news_compact" || key === "record_compact") {

@@ -1,4 +1,5 @@
 import { ApiError } from "./errors.ts";
+import { isPageFrame } from "./cardSections.ts";
 import { modelPath } from "./modelWidgets.ts";
 import { styleQuizKey } from "./styleQuizWidget.ts";
 
@@ -28,7 +29,7 @@ export function instanceContract(key: string, designs: string[]) {
     display_options.title = { type: "text", default: "" };
     display_options.caption = { type: "text", default: "" };
     display_options.height = { type: "integer", min: 320, max: 900, default: 560 };
-  } else if (key !== styleQuizKey) {
+  } else if (key !== styleQuizKey && !isPageFrame(key)) {
     call_params.entity_id = { type: "entity_uid", default: null, aliases: [".this"] };
   }
   return { design: { type: "enum", values: designs, default: designs[0] }, display_options, call_params };

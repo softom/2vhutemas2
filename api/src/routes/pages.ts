@@ -14,6 +14,7 @@
  */
 import { sectionCells, sectionLayout } from "../lib/sectionLayouts.ts";
 import type { CardLayout } from "../lib/layouts.ts";
+import { isPageFrame } from "../lib/cardSections.ts";
 import { renderCardGrid } from "../lib/cardGrid.ts";
 import { getWidget, widgetImplementations } from "../lib/widgetRegistry.ts";
 import { styleQuizKey, styleQuizHtml } from "../lib/styleQuizWidget.ts";
@@ -177,9 +178,14 @@ async function render(c: Context<AppEnv>, page: Page) {
 
 // ── Общие куски ──────────────────────────────────────────────────────────────
 
-function layout(inner: string): string {
-  return `<div class="shell"><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
-    `<header class="top" data-site-header>${siteHeader(null, "")}</header><main>${inner}</main><footer class="site-foot">${siteFooter()}</footer></div>`;
+function layout(inner: string, assigned?: (CardLayout & { frame?: CardLayout["slots"] }) | null): string {
+  const slots = assigned?.frame ?? assigned?.slots ?? [];
+  const frameAttribute = (key: string) => {
+    const slot = slots.find(s => s.renderer_key === key);
+    return slot ? ` data-layout-slot="${escapeHtml(slot.id)}" data-frame-widget="${key}"` : "";
+  };
+  return `<div class="shell"${assigned?.grid_columns === 4 ? ' data-page-columns="4"' : ""}><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
+    `<header class="top" data-site-header${frameAttribute("site_menu")}>${siteHeader(null, "")}</header><main>${inner}</main><footer class="site-foot"${frameAttribute("site_footer")}>${siteFooter()}</footer></div>`;
 }
 
 // Оба клиента получают один и тот же элемент меню и ту же модель прав.
@@ -336,12 +342,12 @@ function catalogHtml(title: string, lead: string, page: CatalogPage, branch: str
   // Поиск и отбор работают в приложении; здесь они держат место.
   const filters = `<div class="filters"><input placeholder="Поиск по названию" disabled /></div>`;
   // «</» внутри строки закрыл бы тег скрипта раньше времени.
-  const data = JSON.stringify({ branch: branch ?? "", page, chips, slots: assigned?.slots }).replaceAll("</", "<\\/");
+  const data = JSON.stringify({ branch: branch ?? "", page, chips, grid_columns: assigned?.grid_columns, slots: assigned?.slots }).replaceAll("</", "<\\/");
   const count = nextHref ? listCountHtml(page.items.length, false) + `<a rel="next" href="${escapeHtml(nextHref)}">Показать ещё</a>` : listCountHtml(page.items.length, !!page.next_cursor);
   return `<script type="application/json" id="catalog-initial">${data}</script>` +
     `<section><div class="catalog-head"><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(lead)}</p></div>` +
     `${chipsHtml(chips, branch ? "Все в разделе" : "Все")}${filters}${count}` +
-    (page.items.length ? `<div class="${assigned ? "section-grid" : "grid catalog-grid"}">${cards}</div>${count}` : branch === "what" ? "<p>Записей пока нет.</p>" : "") + `</section>`;
+    (page.items.length ? `<div class="${assigned ? "section-grid" : "grid catalog-grid"}" data-columns="${assigned?.grid_columns ?? 3}">${cards}</div>${count}` : branch === "what" ? "<p>Записей пока нет.</p>" : "") + `</section>`;
 }
 
 function listLd(path: string, title: string, rows: Pick<ListRow, "slug" | "title_ru">[]) {
@@ -457,12 +463,15 @@ async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
       nextHref: path === "/news" && hasMore ? continuation(path, query, encodeCursor(Number(shown[shown.length - 1].id)), (offset + shown.length) % size) : undefined,
       prevHref: path === "/news" && start > limit && start <= order.length ? continuation(path, query, encodeCursor(Number(order[start - limit - 1].id)), ((offset - limit) % size + size) % size) : path === "/news" ? firstHref : undefined,
       today: latest.filter((row) => newsDay(row) === today),
-    })),
+    }), assigned),
   });
 }
 
 pages.get("/", (c) => newsPage(c, "/"));
-pages.get("/objects/pattern", async c => c.json({slots: (await sectionLayout("/objects"))?.slots ?? null}));
+pages.get("/objects/pattern", async c => {
+  const assigned = await sectionLayout("/objects");
+  return c.json({ slots: assigned?.slots ?? null, grid_columns: assigned?.grid_columns ?? 3 });
+});
 pages.get("/news", (c) => newsPage(c, "/news"));
 
 for (const [path, section] of Object.entries(SECTIONS)) {
@@ -489,7 +498,7 @@ for (const [path, section] of Object.entries(SECTIONS)) {
         status: 200, title: section.title + " — " + site.name, description: section.lead, canonical, catalog: true,
         jsonLd: [listLd(canonical, section.title, result.items)],
         body: layout(catalogHtml(section.title, section.lead, result, "what", "Все в разделе", chips,
-          result.next_cursor ? continuation(path, params, result.next_cursor, (offset + result.items.length) % size) : undefined, assigned, offset)),
+          result.next_cursor ? continuation(path, params, result.next_cursor, (offset + result.items.length) % size) : undefined, assigned, offset), assigned),
       });
     }
     const [rows, first, chips] = await Promise.all([
@@ -1187,7 +1196,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   };
   if (singleWidget) return widgetRenderers(card, sections).get(singleWidget.key)?.(card.id, singleWidget.design) ?? "";
   if (card.widgetLayout) {
-    const slots = card.widgetLayout.slots;
+    const slots = card.widgetLayout.slots.filter(s => !isPageFrame(s.renderer_key));
     const registry = widgetRenderers(card, sections);
     const target = (slot: typeof slots[number]) => Number(resolveEntityArgument(slot.call_params?.entity_id, String(card.id)));
     const extras = new Map<string, string>();
@@ -1200,7 +1209,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       if (html) renderedWidgets.add(slot.renderer_key);
     }
     const parameterSlots = slots.filter(slot => slot.renderer_key === "parameters");
-    const splitParameters = parameterSlots.length === 2 &&
+    const splitParameters = card.widgetLayout.grid_columns !== 4 && parameterSlots.length === 2 &&
       parameterSlots.some(s => s.column_start === 1 && s.column_span === 2) &&
       parameterSlots.some(s => s.column_start === 3 && s.column_span === 1);
     const header = parts.splice(headerStart).join("");
@@ -1210,7 +1219,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       }
       if (extras.has(slot.id)) return extras.get(slot.id)!;
       return registry.get(slot.renderer_key)?.(target(slot), slot.design) ?? "";
-    }, layoutPreview, header));
+    }, layoutPreview, header, card.widgetLayout.grid_columns));
   } else {
     // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
     const layout = card.layout.length > 0
@@ -1288,7 +1297,7 @@ pages.get("/entities/:key", async (c) => {
     jsonLd: [cardLd(card, description, card.authors), breadcrumbsLd(card)],
     publicReader: true,
     entityKey: String(card.id),
-    body: layout(cardBody(card, descriptionHtml, cite, news)),
+    body: layout(cardBody(card, descriptionHtml, cite, news), card.widgetLayout),
   });
 });
 

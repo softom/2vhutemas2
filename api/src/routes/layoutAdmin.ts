@@ -1,7 +1,7 @@
 import { entities } from "./entities.ts";
 import { expandSelection } from "../lib/sectionPattern.ts";
 import { instanceContract, instanceOverrides, resolveEntityArgument } from "../lib/widgetInstance.ts";
-import { sectionCapabilities } from "../lib/cardSections.ts";
+import { layoutCapabilities } from "../lib/cardSections.ts";
 import { type Context, Hono } from "hono";
 import { require as requirePermission } from "../lib/auth.ts";
 import { type Query, sql, transaction } from "../lib/db.ts";
@@ -69,7 +69,7 @@ layoutAdmin.get(
   async (c) => {
     const rows = await sql<{ id: string; name: string; renderer_key: string }>`select id,name,renderer_key from app.widgets order by name,id`;
     return c.json(rows.map(row => {
-      const spec = widgetImplementations.get(row.renderer_key) ?? sectionCapabilities(row.renderer_key);
+      const spec = widgetImplementations.get(row.renderer_key) ?? layoutCapabilities(row.renderer_key);
       return { ...row, instance: spec ? instanceContract(row.renderer_key, spec.designs) : null };
     }));
   },
@@ -109,7 +109,7 @@ layoutAdmin.get("/layouts/:id/selection-preview", async (c) => {
 layoutAdmin.post("/widgets", (c) =>
   write(c, async (q, b) => {
     const key = name(b.renderer_key);
-    if (!widgetImplementations.has(key) && !sectionCapabilities(key)) invalid("Неизвестная реализация виджета");
+    if (!widgetImplementations.has(key) && !layoutCapabilities(key)) invalid("Неизвестная реализация виджета");
     return (await q`insert into app.widgets(name,renderer_key) values(${
       name(b.name)
     },${key}) returning *`)[0];

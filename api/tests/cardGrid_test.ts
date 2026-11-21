@@ -27,3 +27,15 @@ for (const preview of [false, true]) {
   assert.equal(html.includes("Параметры · строка 1, колонки 1–2"), preview);
   assert.equal(html.includes("Параметры · строка 1, колонка 3"), preview);
 }
+
+Deno.test("four columns use logical tracks and retain the slot reading order", () => {
+  const pilot = [1, 2, 4].map((column, index) => ({
+    id: String(index), renderer_key: "citation", design: null, row_start: 2,
+    row_span: 1, column_start: column, column_span: index === 1 ? 2 : 1,
+  }));
+  const html = renderCardGrid(pilot, slot => slot.id, false, "<h1>Карточка</h1>", 4);
+  assert.ok(html.includes('data-columns="4"'));
+  assert.deepEqual([...html.matchAll(/--slot-column:(\d+);--slot-width:(\d+)/g)].map(m => [m[1], m[2]]),
+    [["1", "1"], ["2", "2"], ["4", "1"]]);
+  assert.ok(!html.includes('data-crosses-gutter="true"'));
+});

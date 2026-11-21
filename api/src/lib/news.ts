@@ -253,7 +253,7 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
   const back = opts.page > 1
     ? `<a class="news-archive" href="${e(opts.prevHref ?? link(opts.topic, opts.page - 1))}" rel="prev">← Позже</a>`
     : `<a class="news-archive" href="/news">Архив новостей →</a>`;
-  return head + `<div class="news-feed${opts.assigned ? " section-grid" : ""}">${content}</div><div class="news-pager">${more}${back}</div>`;
+  return head + `<div class="news-feed${opts.assigned ? " section-grid" : ""}" data-columns="${opts.assigned?.grid_columns ?? 3}">${content}</div><div class="news-pager">${more}${back}</div>`;
 }
 
 /** «Раньше / Позже» и «Ещё за этот день» на странице новости. */

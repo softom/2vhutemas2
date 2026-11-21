@@ -1,0 +1,128 @@
+[
+  {
+    "viewport": 1440,
+    "scroll": 1440,
+    "columns": "288px 288px 288px 288px",
+    "headerCount": 1,
+    "footerCount": 1,
+    "header": [
+      0,
+      0,
+      1440,
+      198
+    ],
+    "footer": [
+      0,
+      2082,
+      1440,
+      249
+    ],
+    "frame": [
+      "site_menu",
+      "site_footer"
+    ],
+    "slots": [
+      {
+        "name": "pc-citation",
+        "rect": [
+          120,
+          452,
+          288,
+          1534
+        ]
+      },
+      {
+        "name": "pc-parameters",
+        "rect": [
+          424,
+          452,
+          592,
+          1534
+        ]
+      },
+      {
+        "name": "pc-gallery",
+        "rect": [
+          1032,
+          452,
+          288,
+          1534
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/",
+      "/objects",
+      "/authors",
+      "/lectures",
+      "/media",
+      "/about",
+      "/login",
+      "/old/"
+    ]
+  },
+  {
+    "viewport": 390,
+    "scroll": 390,
+    "columns": "358px",
+    "headerCount": 1,
+    "footerCount": 1,
+    "header": [
+      0,
+      0,
+      390,
+      195
+    ],
+    "footer": [
+      0,
+      3362,
+      390,
+      289
+    ],
+    "frame": [
+      "site_menu",
+      "site_footer"
+    ],
+    "slots": [
+      {
+        "name": "pc-citation",
+        "rect": [
+          16,
+          460,
+          358,
+          63
+        ]
+      },
+      {
+        "name": "pc-parameters",
+        "rect": [
+          16,
+          539,
+          358,
+          978
+        ]
+      },
+      {
+        "name": "pc-gallery",
+        "rect": [
+          16,
+          1533,
+          358,
+          1733
+        ]
+      }
+    ],
+    "links": [
+      "/",
+      "/",
+      "/objects",
+      "/authors",
+      "/lectures",
+      "/media",
+      "/about",
+      "/login",
+      "/old/"
+    ]
+  }
+]

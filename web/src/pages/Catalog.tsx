@@ -33,6 +33,7 @@ interface SectionSlot {
 let initialCatalog: {
   branch: string;
   page: { items: EntityListItem[]; next_cursor: string | null };
+  grid_columns?: number;
   slots?: SectionSlot[];
   chips?: { code: string; title_ru: string }[];
 } | null =
@@ -76,13 +77,14 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   const after = branch === "what" ? search.get("after") || undefined : undefined;
   const filtered = [...search.keys()].length > 0;
   const [initial] = useState(() => (filtered && branch !== "what" ? null : takeInitial(branch ?? "")));
+  const [columns, setColumns] = useState(initial?.grid_columns ?? 3);
   const [slots, setSlots] = useState<SectionSlot[] | null>(initial?.slots ?? null);
   useEffect(() => {
     if (branch !== "what") { setSlots(null); return; }
     const controller = new AbortController();
     fetch("/objects/pattern", { signal: controller.signal })
       .then(response => response.ok ? response.json() : Promise.reject())
-      .then(data => setSlots(data.slots))
+      .then(data => { setSlots(data.slots); setColumns(data.grid_columns ?? 3); })
       .catch(() => {});
     return () => controller.abort();
   }, [branch]);
@@ -434,7 +436,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         loading={loading || loadingMore}
       />
 
-      <div className={slots ? "section-grid" : "grid catalog-grid"}>
+      <div data-columns={columns} className={slots?.length ? "section-grid" : "grid catalog-grid"}>
         {items.map((item, index) => {
           const tile = <EntityTile
             key={item.id}
@@ -458,7 +460,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
               </span>
             </div>
           </EntityTile>;
-          if (!slots) return tile;
+          if (!slots?.length) return tile;
           const position = offset + index;
           const slot = slots[position % slots.length];
           if (slot?.renderer_key !== "record_compact") return null;

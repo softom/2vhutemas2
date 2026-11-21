@@ -25,10 +25,11 @@ export function renderCardGrid(
   render: (slot: CardSlot) => string,
   preview: boolean,
   header?: string,
+  columns: 3 | 4 = 3,
 ): string {
   const visible = slots.map(slot => ({slot, html: render(slot)}))
     .filter(item => preview || item.html);
-  if (header !== undefined && slots.some(s => s.renderer_key === "parameters" && s.column_start === 3 && s.row_start === 1) &&
+  if (columns === 3 && header !== undefined && slots.some(s => s.renderer_key === "parameters" && s.column_start === 3 && s.row_start === 1) &&
       slots.every(s => s.row_span === 1 && ((s.column_start === 1 && s.column_span === 2) ||
         (s.renderer_key === "parameters" && s.column_start === 3 && s.row_start === 1)))) {
     const sections = visible.map(({slot, html}, index) => ({
@@ -51,16 +52,16 @@ export function renderCardGrid(
   }
   // A single sidebar beside a vertical stack can span the stack when a panel closes.
   const sidebars = visible.filter(({slot}) => slot.column_start === 3 && slot.column_span === 1);
-  const independent = !preview && sidebars.length === 1 &&
+  const independent = columns === 3 && !preview && sidebars.length === 1 &&
     rows.get(sidebars[0].slot.row_start) === 1 &&
     visible.every(({slot}) => slot.row_span === 1 &&
       (slot === sidebars[0].slot || (slot.column_start === 1 && slot.column_span === 2)));
   const gridSettings = independent ? ` data-sidebar-stack style="--stack-rows:${rows.size}"` : "";
-  return (header ?? "") + `<div class="entity-widget-grid"${gridSettings}>` + visible.map(({slot,html}) => {
+  return (header ?? "") + `<div class="entity-widget-grid" data-columns="${columns}"${gridSettings}>` + visible.map(({slot,html}) => {
     const row = rows.get(slot.row_start)!;
     // The paper layout has a decorative gutter between logical columns 2 and 3.
-    const crossesGutter = slot.column_start < 3 && slot.column_start + slot.column_span > 3;
-    const track = slot.column_start === 3 ? 4 : slot.column_start;
+    const crossesGutter = columns === 3 && slot.column_start < 3 && slot.column_start + slot.column_span > 3;
+    const track = columns === 3 && slot.column_start === 3 ? 4 : slot.column_start;
     const width = slot.column_span + Number(crossesGutter);
     return `<section class="pc-${slot.renderer_key}" data-crosses-gutter="${crossesGutter}"${independent && track === 4 ? " data-stack-sidebar" : ""} data-layout-slot="${slot.id}" style="--slot-column:${track};--slot-width:${width};--slot-row:${row};--slot-height:${slot.row_span}">` +
       (html || emptySlot(slot)) + '</section>';
