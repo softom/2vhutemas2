@@ -1,6 +1,6 @@
 import { entities } from "./entities.ts";
 import { expandSelection } from "../lib/sectionPattern.ts";
-import { instanceContract, instanceOverrides } from "../lib/widgetInstance.ts";
+import { instanceContract, instanceOverrides, resolveEntityArgument } from "../lib/widgetInstance.ts";
 import { sectionCapabilities } from "../lib/cardSections.ts";
 import { type Context, Hono } from "hono";
 import { require as requirePermission } from "../lib/auth.ts";
@@ -48,7 +48,8 @@ async function write(c: Context<AppEnv>, action: (q: Query, b: Body) => Promise<
   try {
     return c.json(await transaction(c.get("principal")!.contributorId, (q) => action(q, b)));
   } catch (error) {
-    const { code } = pgFields(error);
+    const { code, constraint } = pgFields(error);
+    if (constraint === "slot_this_context") invalid("Для .this нужна карточка или слот внутри повтора");
     if (code === "23P01") invalid("Слоты пересекаются");
     if (code === "23503" || code === "23514") {
       invalid("Недопустимая ссылка, размер или изменение сохранённой версии");
@@ -102,6 +103,7 @@ layoutAdmin.get("/layouts/:id/selection-preview", async (c) => {
   const pattern = expandSelection(items, layout.slots, layout.first_slot_id, layout.last_slot_id, layout.repeat_mode);
   return c.json({ items: pattern.items.map(({ slot, content, repeat }) => ({
     slot_id: slot.id, entity_id: String(content.id), repeat,
+    call_params: { ...slot.call_params, ...(slot.call_params?.entity_id != null ? { entity_id: resolveEntityArgument(slot.call_params.entity_id, String(content.id)) } : {}) },
   })) });
 });
 layoutAdmin.post("/widgets", (c) =>

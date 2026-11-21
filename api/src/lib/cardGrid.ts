@@ -1,4 +1,7 @@
+import type { EntityArgument } from "./widgetInstance.ts";
+
 export interface CardSlot {
+  call_params?: { entity_id?: EntityArgument };
   id: string;
   renderer_key: string;
   design: string | null;

@@ -19,6 +19,7 @@ import { getWidget, widgetImplementations } from "../lib/widgetRegistry.ts";
 import { styleQuizKey, styleQuizHtml } from "../lib/styleQuizWidget.ts";
 import { modelPath } from "../lib/modelWidgets.ts";
 import { sectionCapabilities } from "../lib/cardSections.ts";
+import { resolveEntityArgument } from "../lib/widgetInstance.ts";
 import { cardWidgetSections, widgetRenderers } from "../lib/cardWidgets.ts";
 import { Hono } from "hono";
 import type { Context } from "hono";
@@ -1188,12 +1189,13 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   if (card.widgetLayout) {
     const slots = card.widgetLayout.slots;
     const registry = widgetRenderers(card, sections);
+    const target = (slot: typeof slots[number]) => Number(resolveEntityArgument(slot.call_params?.entity_id, String(card.id)));
     const extras = new Map<string, string>();
     for (const slot of slots) {
       if (Object.hasOwn(sections, slot.renderer_key)) continue;
       const render = registry.get(slot.renderer_key);
       if (!render) continue;
-      const html = render(card.id, slot.design);
+      const html = render(target(slot), slot.design);
       extras.set(slot.id, html);
       if (html) renderedWidgets.add(slot.renderer_key);
     }
@@ -1203,11 +1205,11 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       parameterSlots.some(s => s.column_start === 3 && s.column_span === 1);
     const header = parts.splice(headerStart).join("");
     parts.push(renderCardGrid(slots, slot => {
-      if (splitParameters && slot.renderer_key === "parameters") {
+      if (splitParameters && slot.renderer_key === "parameters" && target(slot) === card.id) {
         return sections.parameters(slot.column_start === 3 ? "right" : "left");
       }
       if (extras.has(slot.id)) return extras.get(slot.id)!;
-      return registry.get(slot.renderer_key)?.(card.id, slot.design) ?? "";
+      return registry.get(slot.renderer_key)?.(target(slot), slot.design) ?? "";
     }, materials !== undefined, header));
   } else {
     // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.

@@ -5,7 +5,20 @@ import { styleQuizKey } from "./styleQuizWidget.ts";
 type Field =
   | { type: "text"; default: string }
   | { type: "integer"; default: number; min: number; max: number }
-  | { type: "entity_uid"; default: null };
+  | { type: "entity_uid"; default: null; aliases: [".this"] };
+export type EntityArgument = string | null | { alias: ".this" };
+
+function isThis(value: unknown): value is { alias: ".this" } {
+  return value !== null && typeof value === "object" && Object.keys(value).length === 1 &&
+    Object.hasOwn(value, "alias") && (value as { alias: unknown }).alias === ".this";
+}
+
+// Slots keep the template argument. Only the invocation receives a concrete UID.
+export function resolveEntityArgument(value: EntityArgument | undefined, current: string | null) {
+  if (isThis(value) && current === null) throw new ApiError("validation_failed", "Для .this нужна текущая сущность");
+  return typeof value === "string" ? value : current;
+}
+
 type Fields = Record<string, Field>;
 
 export function instanceContract(key: string, designs: string[]) {
@@ -16,7 +29,7 @@ export function instanceContract(key: string, designs: string[]) {
     display_options.caption = { type: "text", default: "" };
     display_options.height = { type: "integer", min: 320, max: 900, default: 560 };
   } else if (key !== styleQuizKey) {
-    call_params.entity_id = { type: "entity_uid", default: null };
+    call_params.entity_id = { type: "entity_uid", default: null, aliases: [".this"] };
   }
   return { design: { type: "enum", values: designs, default: designs[0] }, display_options, call_params };
 }
@@ -33,7 +46,7 @@ export function instanceOverrides(value: unknown, fields: Fields): string | null
       if (field.type === "text" && typeof setting === "string") continue;
       if (field.type === "integer" && typeof setting === "number" && Number.isInteger(setting)
           && setting >= field.min && setting <= field.max) continue;
-      if (field.type === "entity_uid" && (setting === null ||
+      if (field.type === "entity_uid" && (setting === null || isThis(setting) ||
           (typeof setting === "string" && /^[1-9]\d{0,18}$/.test(setting) &&
            BigInt(setting) <= 9223372036854775807n))) continue;
     }

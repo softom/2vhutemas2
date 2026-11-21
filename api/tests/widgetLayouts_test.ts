@@ -1,4 +1,6 @@
 import "../src/lib/json.ts";
+import { config } from "../src/lib/config.ts";
+import { pages } from "../src/routes/pages.ts";
 import { Hono } from "hono";
 import type { AppEnv } from "../src/lib/http.ts";
 import { handleError } from "../src/lib/http.ts";
@@ -109,6 +111,38 @@ Deno.test("layouts: routes, permissions, inheritance, versions and concurrent ed
     check(instanceCopy.slots[0].call_params.entity_id === entity.id && instanceCopy.slots[0].design === "default", "copy retains settings");
     const reset = await save({ id: left, call_params: {} }, 5);
     check(!reset.slots[0].call_params.entity_id && reset.slots[0].design === "default", "reset one group");
+    const [legacy] = await sql<{ id: string }>`select l.id from app.layouts l
+      where l.assigned and l.grid_columns=3 and l.repeat_mode is null and exists
+      (select 1 from app.page_layout s where s.layout_id=l.id)
+      order by l.id limit 1`;
+    const original = await req("/layouts/" + legacy.id, null, 200, "GET");
+    const duplicate = await req("/layouts/" + legacy.id + "/copy", { name: "three-column baseline copy" }, 200);
+    const signature = (s: Record<string, unknown>) => [s.widget_id,s.sort_order,s.row_start,s.row_span,
+      s.column_start,s.column_span,s.design,s.display_options,s.call_params];
+    check(duplicate.grid_columns === 3 && JSON.stringify(duplicate.slots.map(signature)) ===
+      JSON.stringify(original.slots.map(signature)), "legacy copy preserves geometry, design and arguments");
+    const thisParams = { entity_id: { alias: ".this" } };
+    const citation = widgets.find((item: {renderer_key: string}) => item.renderer_key === "citation");
+    check(citation.instance.call_params.entity_id.aliases.includes(".this"), "entity alias offered");
+    await save({ id: left, call_params: { entity_id: { alias: ".other" } } }, reset.revision, 400);
+    const aliasCard = await req("/layouts", { page_id: CARD_PAGE_ID, name: "alias card" }, 200);
+    const configured = await req("/page_layout", { ...slot, layout_id: aliasCard.id, widget_id: citation.id,
+      expected_revision: 0, call_params: thisParams }, 200);
+    const copiedCard = await req("/layouts/" + aliasCard.id + "/copy", { name: "alias card copy" }, 200);
+    check(copiedCard.slots[0].call_params.entity_id.alias === ".this", "template alias survives copy");
+    const pageAssignment = "/pages/" + CARD_PAGE_ID + "/layout";
+    await req(pageAssignment, { layout_id: configured.id, expected_layout_id: null, expected_revision: configured.revision }, 200);
+    try {
+      check(config.useWidgetLayouts, "Run this integration suite with USE_WIDGET_LAYOUTS=true");
+      for (const id of [188, 238]) {
+        let response = await pages.request("/entities/" + id);
+        if (response.status === 301) response = await pages.request(new URL(response.headers.get("location")!, "http://local").pathname);
+        const html = await response.text();
+        check(response.ok && html.includes(configured.slots[0].id) && html.includes('id="cite-gost"'), "citation bound to card " + id);
+      }
+    } finally {
+      await req(pageAssignment, { layout_id: null, expected_layout_id: configured.id }, 200);
+    }
     const projectSource = "00000000-0000-4000-a000-0000000000e2";
     const authorSource = "00000000-0000-4000-a000-0000000000e1";
     for (const [page_id, source_type_id] of [
@@ -124,12 +158,16 @@ Deno.test("layouts: routes, permissions, inheritance, versions and concurrent ed
       const [, left, right] = created.slots;
       const selection = { source_type_id, filter_type_id: source_type_id, repeat_mode: "block",
         first_slot_id: left.id, last_slot_id: right.id };
-      const block = await save({ selection }, created.revision);
+      const bound = [left, right].map(s => ({ ...s, call_params: thisParams }));
+      await save({ selection, slots: [{ ...created.slots[0], call_params: thisParams }] }, created.revision, 400);
+      const block = await save({ selection, slots: bound }, created.revision);
       const preview = (id: string) => req("/layouts/" + id + "/selection-preview", null, 200, "GET");
       const entries = (await preview(target.id)).items;
       check(entries.length >= 4 && entries[0].entity_id === entries[1].entity_id &&
         entries[2].entity_id === entries[3].entity_id && entries[0].entity_id !== entries[2].entity_id &&
         entries.every((v: {slot_id: string}, i: number) => v.slot_id === (i % 2 ? right.id : left.id)), "block repeats two slots per record");
+      check(entries.every((v: { entity_id: string; call_params: {entity_id: string} }) =>
+        v.call_params.entity_id === v.entity_id), "block resolves alias for each invocation");
       const foreignSource = source_type_id === projectSource ? authorSource : projectSource;
       await save({ selection: { ...selection, source_type_id: foreignSource } }, block.revision, 400);
       await save({ selection: { ...selection, filter_type_id: foreignSource } }, block.revision, 400);
@@ -141,12 +179,15 @@ Deno.test("layouts: routes, permissions, inheritance, versions and concurrent ed
       const single = (await preview(target.id)).items;
       check(single.length * 2 === entries.length && single.every((v: {entity_id: string; slot_id: string}, i: number) =>
         v.entity_id === entries[2*i].entity_id && v.slot_id === (i % 2 ? right.id : left.id)), "journal advances each slot");
+      check(single.every((v: {entity_id: string; call_params: {entity_id: string}}) =>
+        v.call_params.entity_id === v.entity_id), "journal resolves alias for each invocation");
       const copy = await req("/layouts/" + target.id + "/copy", { name: "selection copy" }, 200);
       check(copy.first_slot_id === copy.slots[1].id && copy.last_slot_id === copy.slots[2].id &&
         copy.first_slot_id !== left.id && (await preview(copy.id)).items.length === single.length, "copy remaps bounds");
       const empty = await save({ selection: { ...selection, filter_text: crypto.randomUUID() } }, journal.revision);
       check((await preview(target.id)).items.length === 0, "catalogue text filter");
-      const cleared = await save({ selection: null }, empty.revision);
+      await save({ selection: null }, empty.revision, 400);
+      const cleared = await save({ selection: null, slots: bound.map(s => ({ ...s, call_params: {} })) }, empty.revision);
       check(cleared.source_type_id === null && cleared.last_slot_id === null, "reset selection");
     }
     const first = await req("/page_layout", { ...slot, expected_revision: 0 }, 200);
