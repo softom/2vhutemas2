@@ -106,11 +106,11 @@ function evidence(set: PublicRelationSet): string {
 
 export function styleAttributionWidgetHtml(set: PublicRelationSet | undefined): string {
   if (!set) return "";
-  const head = `<section class="parameter-set-relations style-analysis" data-parameter-set="${
+  const head = `<details open class="parameter-set-relations style-analysis rel-box" data-parameter-set="${
     e(set.id)
-  }"><h2>${e(set.title)}</h2>`;
+  }"><summary><span role="heading" aria-level="2">${e(set.title)}</span></summary>`;
   if (!set.links.length) {
-    return head + '<p class="hint">Опубликованных связей пока нет.</p></section>';
+    return head + '<p class="hint">Опубликованных связей пока нет.</p></details>';
   }
   const titles = new Map(set.links.map((l) => [String(l.other_id), l.other_title]));
   const matches = (set.similar ?? []).map((obj) =>
@@ -140,5 +140,5 @@ export function styleAttributionWidgetHtml(set: PublicRelationSet | undefined): 
   return head +
     `<fieldset class="style-tabs"><legend>Стилистический анализ</legend>${tabs}${
       panels.map(([, body], i) => `<div class="style-pane pane-${i}">${body}</div>`).join("")
-    }</fieldset></section>`;
+    }</fieldset></details>`;
 }
