@@ -1040,7 +1040,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   const renderedWidgets = new Set<string>();
   const panelSets = () => (card.relation_sets ?? []).filter(set =>
     set.code !== "style_solutions" || !renderedWidgets.has("style_analysis"));
-  const sections: Record<string, () => string> = {
+  const sections: Record<string, (side?: "left" | "right") => string> = {
     indicators: () => {
       // Новость: одни «Сведения» — выход днём и слотом, тема, первоисточник
       // ссылкой, публикация в источнике. Значимость — оценка робота для
@@ -1068,7 +1068,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     },
     // Обоснование связи — наш собственный текст, которого нет в энциклопедиях.
     // Выводим его открыто, рядом со ссылкой, а не прячем в интерфейсе.
-    parameters: () => {
+    parameters: (selectedSide) => {
       const sets = panelSets();
       const order = card.parameterSetOrder ?? [...new Set([
         ...card.values.flatMap(v => v.set_id ? [v.set_id] : []), ...sets.map(s => s.id),
@@ -1087,7 +1087,8 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         }
       }
       if (news) sides.right.push(sections.indicators());
-      return (["left", "right"] as const).map(side => {
+      const visibleSides = selectedSide ? [selectedSide] : (["left", "right"] as const);
+      return visibleSides.map(side => {
         const html = sides[side].join("");
         return html ? `<div class="parameter-groups-${side}">${html}</div>` : "";
       }).join("");
@@ -1194,7 +1195,14 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       extras.set(slot.id, html);
       if (html) renderedWidgets.add(slot.renderer_key);
     }
+    const parameterSlots = slots.filter(slot => slot.renderer_key === "parameters");
+    const splitParameters = parameterSlots.length === 2 &&
+      parameterSlots.some(s => s.column_start === 1 && s.column_span === 2) &&
+      parameterSlots.some(s => s.column_start === 3 && s.column_span === 1);
     parts.push(renderCardGrid(slots, slot => {
+      if (splitParameters && slot.renderer_key === "parameters") {
+        return sections.parameters(slot.column_start === 3 ? "right" : "left");
+      }
       if (extras.has(slot.id)) return extras.get(slot.id)!;
       return registry.get(slot.renderer_key)?.(card.id, slot.design) ?? "";
     }, materials !== undefined));

@@ -54,7 +54,6 @@ const report=await transaction(actor,async q=>{
     const ids=group.set_ids??sets.map(s=>s.id);
     if(!Array.isArray(ids))throw new Error(type.code+": invalid parameter_set_ids");
     if(!group.set_ids)await q`update app.type_presentation_items set settings=jsonb_set(settings,'{parameter_set_ids}',${JSON.stringify(ids)}::jsonb) where id=${group.id}`;
-    const left=sets.some(s=>ids.includes(s.id)&&["style_solutions","area_program"].includes(s.code));
     const extras=type.extras??[];
     if(!Array.isArray(extras))throw new Error(type.code+": invalid card_widgets");
     const entries:Entry[]=[];
@@ -72,7 +71,8 @@ const report=await transaction(actor,async q=>{
       if(i.component==="program"||i.component==="parameter_sets")continue;
       const key=i.component==="indicators"?"parameters":i.component;
       if(!Object.hasOwn(cardSectionNames,key))throw new Error(type.code+": unsupported section "+key);
-      entries.push({key,column:key==="parameters"&&!left?3:1,width:key==="parameters"&&!left?1:2});
+      entries.push({key,column:1,width:2});
+      if(key==="parameters") entries.push({key,column:3,width:1});
       entries.push(...pending.get(i.component)??[]);pending.delete(i.component);
     }
     for(const list of pending.values())entries.push(...list);
@@ -88,7 +88,7 @@ const report=await transaction(actor,async q=>{
     // Keep the draft UID for retries. Only the assignment API changes layout_id.
     await q`update app.type_presentations set settings=jsonb_set(coalesce(settings,'{}'::jsonb),
       '{prepared_card_layout_id}',to_jsonb(${layout.id}::uuid)) where id=${type.id}`;
-    migrated.push({type:type.code,type_id:type.type_id,layout:layout.id,revision:order,slots:order,sets:ids.length,parameters:left?"left":"right"});
+    migrated.push({type:type.code,type_id:type.type_id,layout:layout.id,revision:order,slots:order,sets:ids.length,parameters:["left","right"]});
   }
   return migrated;
 });
