@@ -994,7 +994,7 @@ function materialsHtml(m: Materials | null): string {
 }
 
 function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<typeof citation>, news: NewsExtra | null = null,
-                  materials: Materials | null | undefined = undefined, singleWidget?: { key: string; design: string | null }) {
+                  materials: Materials | null | undefined = undefined, singleWidget?: { key: string; design: string | null }, layoutPreview = false) {
   const e = escapeHtml;
   const parts: string[] = [];
   const editPath = `/entities/${card.id}/edit`;
@@ -1210,7 +1210,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       }
       if (extras.has(slot.id)) return extras.get(slot.id)!;
       return registry.get(slot.renderer_key)?.(target(slot), slot.design) ?? "";
-    }, materials !== undefined, header));
+    }, layoutPreview, header));
   } else {
     // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
     const layout = card.layout.length > 0
@@ -1404,7 +1404,7 @@ pages.get("/api/v1/entities/:key/card", async (c) => {
   // Редактор видит и «Материалы в работе» (0051); остальным раздел не отдаётся.
   const canEdit = !!principal && (principal.permissions.has("edit") || principal.permissions.has("su"));
   const materials = canEdit ? await materialsOf(card.id) : undefined;
-  return c.json({ html: cardBody(card, description, cite, await newsExtra(card), materials), title: `${card.title_ru} — ${site.name}`,
+  return c.json({ html: cardBody(card, description, cite, await newsExtra(card), materials, undefined, previewId !== undefined), title: `${card.title_ru} — ${site.name}`,
     path: entityPath(card.slug) });
 });
 

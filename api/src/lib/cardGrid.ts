@@ -4,11 +4,19 @@ export interface CardSlot {
   call_params?: { entity_id?: EntityArgument };
   id: string;
   renderer_key: string;
+  widget_name?: string;
   design: string | null;
   row_start: number;
   row_span: number;
   column_start: number;
   column_span: number;
+}
+
+function emptySlot(slot: CardSlot): string {
+  const name = (slot.widget_name ?? slot.renderer_key).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  const columns = slot.column_span === 1 ? `колонка ${slot.column_start}` :
+    `колонки ${slot.column_start}–${slot.column_start + slot.column_span - 1}`;
+  return `<span class="hint">${name} · строка ${slot.row_start}, ${columns} — нет данных</span>`;
 }
 
 /** Rows covered by a spanning slot remain occupied, including its lower rows. */
@@ -26,7 +34,7 @@ export function renderCardGrid(
     const sections = visible.map(({slot, html}, index) => ({
       right: slot.column_start === 3,
       html: `<section class="pc-${slot.renderer_key}" data-layout-slot="${slot.id}" style="--reading-order:${index + 1}">` +
-        (html || '<span class="hint">Нет данных</span>') + '</section>',
+        (html || emptySlot(slot)) + '</section>',
     }));
     return '<div class="card-flows"><div class="card-flow-main">' + header +
       sections.filter(s => !s.right).map(s => s.html).join("") + '</div>' +
@@ -55,6 +63,6 @@ export function renderCardGrid(
     const track = slot.column_start === 3 ? 4 : slot.column_start;
     const width = slot.column_span + Number(crossesGutter);
     return `<section class="pc-${slot.renderer_key}" data-crosses-gutter="${crossesGutter}"${independent && track === 4 ? " data-stack-sidebar" : ""} data-layout-slot="${slot.id}" style="--slot-column:${track};--slot-width:${width};--slot-row:${row};--slot-height:${slot.row_span}">` +
-      (html || '<span class="hint">Нет данных</span>') + '</section>';
+      (html || emptySlot(slot)) + '</section>';
   }).join("") + '</div>';
 }
