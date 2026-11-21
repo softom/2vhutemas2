@@ -16,7 +16,8 @@ import { CATALOG_HIDDEN_ROOTS, resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../l
 import { entityAuthors, resolveEntity } from "../lib/publicCard.ts";
 import { absolute, citation, entityPath } from "../lib/site.ts";
 import { publishOwnerRevision, unpublishOwner } from "../lib/ownedVersions.ts";
-import { notifyIndexNow } from "./pages.ts";
+import { sectionLayout } from "../lib/sectionLayouts.ts";
+import { notifyIndexNow, projectSectionItems, type CatalogItem } from "./pages.ts";
 
 import { validateDocument, saveRefs } from "./documents.ts";
 import { readAll, writeIndicators, writeText, type IndicatorInput } from "./indicators.ts";
@@ -103,7 +104,10 @@ entities.get("/", async (c: Context<AppEnv>) => {
   // Отбор идёт по ветви дерева целиком: «всё под ветвью Кто» — это прежний
   // фильтр по виду, «зрелищные здания» — ветвь ниже. Механизм один (Р-37).
   const type = resolveTypeCode(c.req.query("type"), c.req.query("kind"));
-  const objects = c.req.query("scope") === "objects";
+  const section = c.req.query("section");
+  const assigned = section === "objects" || section === "authors" ? await sectionLayout(section === "objects" ? "/objects" : "/authors") : null;
+  const selection = assigned?.repeat_mode ? assigned : null;
+  const objects = section === "objects" || c.req.query("scope") === "objects";
   const newest = objects && c.req.query("sort") !== "parameter";
   const search = c.req.query("q")?.trim() || null;
   // Сортировка и отбор по величине — то, ради чего заведены параметры (Р-38).
@@ -131,7 +135,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const onlyArchived = c.req.query("archived") === "only" && drafts;
   const archived = (c.req.query("archived") === "1" || onlyArchived) && drafts;
 
-  const rows = await sql`
+  const rows = await sql<CatalogItem & { id: string | number }>`
     select e.id, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
            ty.code as type, ty.title_ru as type_title,
            app.entity_type_path(e.type_id) as type_path,
@@ -172,6 +176,12 @@ entities.get("/", async (c: Context<AppEnv>) => {
                  (select id from app.parameters where code = ${parameter})) sv) pv
       on ${parameter}::text is not null
     where (${drafts} or e.is_published)
+      and (${selection?.source_type_id ?? null}::uuid is null or e.type_id in
+           (select app.entity_type_subtree(t.code) from app.entity_types t where t.id=${selection?.source_type_id ?? null}))
+      and (${selection?.filter_type_id ?? null}::uuid is null or e.type_id in
+           (select app.entity_type_subtree(t.code) from app.entity_types t where t.id=${selection?.filter_type_id ?? null}))
+      and (${selection?.filter_text ?? null}::text is null or e.title_ru ilike '%'||${selection?.filter_text ?? null}||'%'
+           or e.title_en ilike '%'||${selection?.filter_text ?? null}||'%')
       and (not ${objects} or (e.type_id in (select app.entity_type_subtree('what'))
            and e.type_id not in (select app.entity_type_subtree('news') union select app.entity_type_subtree('web_page')
                              union select app.entity_type_subtree('quotation'))))
@@ -219,7 +229,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
   return c.json({
-    items,
+    items: selection ? await projectSectionItems(selection, items, Number(c.req.query("offset") ?? 0), principal) : items,
     next_cursor: hasMore
       ? encodeCursor(Number(items[items.length - 1].id))
       : null,

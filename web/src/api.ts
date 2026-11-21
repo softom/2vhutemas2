@@ -168,6 +168,9 @@ export function compactPicture(
 }
 
 export interface EntityListItem {
+  section_output?: { period: number; height: number; columns: number; cells: {
+    slot_id: string; entity_id: string; html: string; row: number; height: number; column: number; width: number;
+  }[] };
   id: number;
   slug: string;
   type: string;
@@ -670,6 +673,8 @@ export const api = {
   entities: (
     params: {
       scope?: string;
+      section?: string;
+      offset?: number;
       archived?: string;
       type?: string;
       q?: string;
@@ -690,6 +695,8 @@ export const api = {
     for (const item of params.opt ?? []) search.append("opt", item);
     // Отбор по ветви целиком: корневая ветвь — это прежний фильтр по виду.
     if (params.scope) search.set("scope", params.scope);
+    if (params.section) search.set("section", params.section);
+    if (params.offset) search.set("offset", String(params.offset));
     if (params.type) search.set("type", params.type);
     if (params.q) search.set("q", params.q);
     if (params.cursor) search.set("cursor", params.cursor);

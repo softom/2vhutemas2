@@ -12,7 +12,8 @@ try {
       where c.id=${actor} and c.status='active' and ur.revoked_at is null and p.action='su' limit 1`;
     if (!role) throw new Error("A contributor with su is required");
     const result = [];
-    for (const [path, definition] of Object.entries(sectionPages)) {
+    for (const path of ["/objects", "/news"] as const) {
+      const definition = sectionPages[path];
       const [page] = await q`select current_layout_id from app.pages where id=${definition.id} for update`;
       if (!page) throw new Error("Missing section page from migration 0065: " + path);
       if (page.current_layout_id) { result.push([path, page.current_layout_id]); continue; }

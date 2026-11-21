@@ -1,6 +1,7 @@
 import type { EntityArgument } from "./widgetInstance.ts";
 
 export interface CardSlot {
+  display_options?: { title?: string; caption?: string; height?: number };
   call_params?: { entity_id?: EntityArgument };
   id: string;
   renderer_key: string;

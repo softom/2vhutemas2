@@ -74,9 +74,10 @@ interface Props {
 export function Catalog({ canCreate, branch, title, sub }: Props) {
   const [search, setSearch] = useSearchParams();
   // Адрес с фильтрами — первая страница сервера (без фильтров) не подходит.
-  const after = branch === "what" ? search.get("after") || undefined : undefined;
+  const section = branch === "what" ? "objects" : branch === "who" ? "authors" : undefined;
+  const after = section ? search.get("after") || undefined : undefined;
   const filtered = [...search.keys()].length > 0;
-  const [initial] = useState(() => (filtered && branch !== "what" ? null : takeInitial(branch ?? "")));
+  const [initial] = useState(() => (filtered && !section ? null : takeInitial(branch ?? "")));
   const [columns, setColumns] = useState(initial?.grid_columns ?? 3);
   const [slots, setSlots] = useState<SectionSlot[] | null>(initial?.slots ?? null);
   useEffect(() => {
@@ -89,7 +90,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
     return () => controller.abort();
   }, [branch]);
   const offset = Number(search.get("offset") ?? 0);
-  const limit = branch === "what" ? search.get("limit") ?? undefined : undefined;
+  const limit = section ? search.get("limit") ?? undefined : undefined;
   const patternHeight = slots?.reduce((height, slot) => Math.max(height, slot.row_start + slot.row_span - 1), 0) ?? 0;
   const [items, setItems] = useState<EntityListItem[]>(initial?.page.items ?? []);
   // Каталог отдаётся страницами; без этого записи за первой страницей
@@ -223,6 +224,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       const request = {
         type: apiType, limit,
         scope: branch === "what" ? "objects" : undefined,
+        section,
         archived,
         q: query || undefined,
         parameter: parameter || undefined,
@@ -232,7 +234,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         order: descending ? "desc" : "asc",
         opt,
       };
-      api.entities({ ...request, cursor: after })
+      api.entities({ ...request, offset, cursor: after })
         .then(async (page) => {
           // An SSR button can be clicked before the application has loaded.
           // Consume it only after the authenticated first page, so it cannot
@@ -240,7 +242,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
           if (!cancelled && document.documentElement.dataset.catalogMore === location.pathname) {
             delete document.documentElement.dataset.catalogMore;
             if (page.next_cursor) {
-              const next = await api.entities({ ...request, cursor: page.next_cursor });
+              const next = await api.entities({ ...request, offset: (offset + page.items.length) % (page.items[0]?.section_output?.period ?? (slots?.length || 1)), cursor: page.next_cursor });
               page = { items: [...page.items, ...next.items], next_cursor: next.next_cursor };
             }
           }
@@ -257,14 +259,15 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [branch, apiType, query, parameter, min, max, descending, optKey, archived, after, limit]);
+  }, [branch, apiType, query, parameter, min, max, descending, optKey, archived, after, limit, offset]);
 
   const nextQuery = new URLSearchParams(search);
+  const period = items[0]?.section_output?.period ?? (slots?.length || 1);
   if (cursor) {
     nextQuery.set("after", cursor);
-    nextQuery.set("offset", String((offset + items.length) % (slots?.length || 1)));
+    nextQuery.set("offset", String((offset + items.length) % period));
   }
-  const nextHref = branch === "what" && cursor ? "/objects?" + nextQuery : undefined;
+  const nextHref = (branch === "what" || items[0]?.section_output) && section && cursor ? "/" + section + "?" + nextQuery : undefined;
 
   const loadMore = () => {
     if (!cursor || loading || loadingMore) return;
@@ -272,8 +275,8 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
     setLoadingMore(true);
     api.entities({
       type: apiType, limit,
-        scope: branch === "what" ? "objects" : undefined,
-        archived,
+      scope: branch === "what" ? "objects" : undefined,
+      section, archived,
       q: query || undefined,
       parameter: parameter || undefined,
       min: min || undefined,
@@ -281,7 +284,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       sort: parameter ? "parameter" : undefined,
       order: descending ? "desc" : "asc",
       opt,
-      cursor,
+      cursor, offset: (offset + items.length) % period,
     })
       .then((page) => {
         if (generation !== activeQuery.current) return;
@@ -436,8 +439,15 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         loading={loading || loadingMore}
       />
 
-      <div data-columns={columns} className={slots?.length ? "section-grid" : "grid catalog-grid"}>
+      <div data-columns={items[0]?.section_output?.columns ?? columns} className={items[0]?.section_output || slots?.length ? "section-grid" : "grid catalog-grid"}>
         {items.map((item, index) => {
+          if (item.section_output) {
+            const output = item.section_output;
+            const shift = Math.floor((offset + index) / output.period) * output.height;
+            return output.cells.map(cell => <div key={item.id + ":" + cell.slot_id} data-section-slot={cell.slot_id}
+              data-entity-id={cell.entity_id} style={{ gridColumn: cell.column + "/span " + cell.width,
+                gridRow: (cell.row + shift) + "/span " + cell.height }} dangerouslySetInnerHTML={{ __html: cell.html }} />);
+          }
           const tile = <EntityTile
             key={item.id}
             href={archived ? `/entities/${item.id}/edit` : `/entities/${item.slug}`}

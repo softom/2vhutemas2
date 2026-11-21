@@ -5,6 +5,7 @@ import { fillSectionPattern } from "./sectionPattern.ts";
 
 export const sectionPages = {
   "/objects": { id: "39ee9267-1a0e-4928-b608-24bf91f68102", widget: "record_compact", title: "Компактная запись" },
+  "/authors": { id: "39ee9267-1a0e-4928-b608-24bf91f68103", widget: "record_compact", title: "Компактная запись" },
   "/news": { id: "39ee9267-1a0e-4928-b608-24bf91f68105", widget: "news_compact", title: "Компактная новость" },
 } as const;
 
@@ -12,7 +13,7 @@ export async function sectionLayout(path: keyof typeof sectionPages) {
   const layout = config.useWidgetLayouts ? await getPageLayout(sectionPages[path].id) : null;
   if (!layout) return null;
   return { ...layout, frame: layout.slots.filter(s => isPageFrame(s.renderer_key)),
-    slots: layout.slots.filter(s => !isPageFrame(s.renderer_key)) };
+    slots: layout.repeat_mode ? layout.slots : layout.slots.filter(s => !isPageFrame(s.renderer_key)) };
 }
 
 export function sectionCells<T>(layout: CardLayout, rows: T[], offset: number, key: string,

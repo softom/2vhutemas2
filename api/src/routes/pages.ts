@@ -246,7 +246,12 @@ function listHtml(rows: ListRow[], showType = true): string {
   }</ul>`;
 }
 
-interface CatalogItem {
+interface SectionCell {
+  slot_id: string; entity_id: string; html: string; column: number; width: number; row: number; height: number;
+}
+interface SectionOutput { cells: SectionCell[]; period: number; height: number; columns: number }
+export interface CatalogItem {
+  section_output?: SectionOutput;
   slug: string;
   title_ru: string;
   title_en: string | null;
@@ -337,17 +342,30 @@ function compactTile(row: CatalogItem, index: number) {
  * вложены в страницу, и приложение начинает с них, — поэтому при загрузке
  * клиента ничего не мигает и не перестраивается.
  */
+function catalogSlots(layout?: CardLayout | null) {
+  return layout?.slots.filter(s => !isPageFrame(s.renderer_key)).map(({ id, renderer_key, row_start, row_span, column_start, column_span }) =>
+    ({ id, renderer_key, row_start, row_span, column_start, column_span }));
+}
+
+function selectedCells(items: CatalogItem[], offset: number) {
+  return items.map((item, index) => {
+    const output = item.section_output!;
+    const shift = Math.floor((offset + index) / output.period) * output.height;
+    return output.cells.map(cell => `<div data-section-slot="${cell.slot_id}" data-entity-id="${cell.entity_id}" style="grid-column:${cell.column}/span ${cell.width};grid-row:${cell.row + shift}/span ${cell.height}">${cell.html}</div>`).join("");
+  }).join("");
+}
+
 function catalogHtml(title: string, lead: string, page: CatalogPage, branch: string | null, typeLabel: string, chips: TypeChip[] = [], nextHref?: string, assigned?: CardLayout | null, offset = 0): string {
-  const cards = assigned ? sectionCells(assigned, page.items, offset, "record_compact", compactTile) : page.items.map(compactTile).join("");
+  const cards = page.items[0]?.section_output ? selectedCells(page.items, offset) : assigned ? sectionCells(assigned, page.items, offset, "record_compact", compactTile) : page.items.map(compactTile).join("");
   // Поиск и отбор работают в приложении; здесь они держат место.
   const filters = `<div class="filters"><input placeholder="Поиск по названию" disabled /></div>`;
   // «</» внутри строки закрыл бы тег скрипта раньше времени.
-  const data = JSON.stringify({ branch: branch ?? "", page, chips, grid_columns: assigned?.grid_columns, slots: assigned?.slots }).replaceAll("</", "<\\/");
+  const data = JSON.stringify({ branch: branch ?? "", page, chips, grid_columns: assigned?.grid_columns, slots: catalogSlots(assigned) }).replaceAll("</", "<\\/");
   const count = nextHref ? listCountHtml(page.items.length, false) + `<a rel="next" href="${escapeHtml(nextHref)}">Показать ещё</a>` : listCountHtml(page.items.length, !!page.next_cursor);
   return `<script type="application/json" id="catalog-initial">${data}</script>` +
     `<section><div class="catalog-head"><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(lead)}</p></div>` +
     `${chipsHtml(chips, branch ? "Все в разделе" : "Все")}${filters}${count}` +
-    (page.items.length ? `<div class="${assigned ? "section-grid" : "grid catalog-grid"}" data-columns="${assigned?.grid_columns ?? 3}">${cards}</div>${count}` : branch === "what" ? "<p>Записей пока нет.</p>" : "") + `</section>`;
+    (page.items.length ? `<div class="${assigned ? "section-grid" : "grid catalog-grid"}" data-columns="${assigned?.grid_columns ?? 3}">${cards}</div>${count}` : branch === "what" || assigned?.repeat_mode ? "<p>Записей пока нет.</p>" : "") + `</section>`;
 }
 
 function listLd(path: string, title: string, rows: Pick<ListRow, "slug" | "title_ru">[]) {
@@ -470,20 +488,22 @@ async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
 pages.get("/", (c) => newsPage(c, "/"));
 pages.get("/objects/pattern", async c => {
   const assigned = await sectionLayout("/objects");
-  return c.json({ slots: assigned?.slots ?? null, grid_columns: assigned?.grid_columns ?? 3 });
+  return c.json({ slots: catalogSlots(assigned) ?? null, grid_columns: assigned?.grid_columns ?? 3 });
 });
 pages.get("/news", (c) => newsPage(c, "/news"));
 
 for (const [path, section] of Object.entries(SECTIONS)) {
   pages.get(path, async (c) => {
-    if (path === "/objects") {
+    const sectionPath = path === "/objects" || path === "/authors" ? path : null;
+    const assigned = sectionPath ? await sectionLayout(sectionPath) : null;
+    if (sectionPath && (sectionPath === "/objects" || assigned?.repeat_mode)) {
       const params = new URL(c.req.url).searchParams;
-      const assigned = await sectionLayout("/objects");
-      const size = assigned?.slots.length || 1;
+      const size = assigned?.repeat_mode ? selectionSlots(assigned).period : assigned?.slots.length || 1;
+      const branch = sectionPath === "/objects" ? "what" : "who";
       const offset = Number(params.get("offset") ?? 0);
       if (!validSectionQuery(params, size)) return c.text("Некорректное продолжение выборки", 400);
-      const group = CATALOG_GROUPS.what?.find(item => item.code === params.get("g"));
-      const filters = new URLSearchParams({ scope: "objects", type: params.get("type") || group?.types.join(",") || "what" });
+      const group = CATALOG_GROUPS[branch]?.find(item => item.code === params.get("g"));
+      const filters = new URLSearchParams({ section: sectionPath.slice(1), offset: String(offset), type: params.get("type") || group?.types.join(",") || branch });
       for (const name of ["q", "min", "max", "order", "opt", "archived", "limit"]) {
         for (const value of params.getAll(name)) filters.append(name, value);
       }
@@ -492,12 +512,12 @@ for (const [path, section] of Object.entries(SECTIONS)) {
       const response = await entities.request("/?" + filters);
       if (!response.ok) return c.text("Ошибка выборки каталога", response.status === 400 ? 400 : 500);
       const result: CatalogPage = await response.json();
-      const chips = await typeChips("what");
+      const chips = await typeChips(branch);
       const canonical = path + (params.size ? "?" + params : "");
       return await render(c, {
         status: 200, title: section.title + " — " + site.name, description: section.lead, canonical, catalog: true,
         jsonLd: [listLd(canonical, section.title, result.items)],
-        body: layout(catalogHtml(section.title, section.lead, result, "what", "Все в разделе", chips,
+        body: layout(catalogHtml(section.title, section.lead, result, branch, "Все в разделе", chips,
           result.next_cursor ? continuation(path, params, result.next_cursor, (offset + result.items.length) % size) : undefined, assigned, offset), assigned),
       });
     }
@@ -1312,6 +1332,41 @@ pages.get("/api/v1/document-widgets", async c => {
   });
   return c.json({items});
 });
+
+function selectionSlots(layout: CardLayout) {
+  const first = layout.slots.findIndex(slot => slot.id === layout.first_slot_id);
+  const last = layout.slots.findIndex(slot => slot.id === layout.last_slot_id);
+  if (first < 0 || last < first) throw new Error("Некорректные границы повторяемой части");
+  const slots = layout.slots.slice(first, last + 1).filter(slot => !isPageFrame(slot.renderer_key));
+  if (!slots.length) return { slots, start: 1, height: 1, period: 1 };
+  const start = Math.min(...slots.map(s => s.row_start));
+  const height = Math.max(...slots.map(s => s.row_start + s.row_span)) - start;
+  return { slots, start, height, period: layout.repeat_mode === "journal" ? slots.length : 1 };
+}
+
+export async function projectSectionItems(layout: CardLayout, items: (CatalogItem & { id: string | number })[], offset: number, principal: Principal | null) {
+  const { slots, start, height, period } = selectionSlots(layout);
+  if (!Number.isInteger(offset) || offset < 0 || offset >= period) throw new ApiError("validation_failed", "Некорректная позиция в образце");
+  const result = [];
+  for (const [i, item] of items.entries()) {
+    const cells: SectionCell[] = [];
+    const targets = layout.repeat_mode === "journal" && slots.length ? [slots[(offset + i) % period]] : slots;
+    for (const slot of targets) {
+      const id = resolveEntityArgument(slot.call_params?.entity_id, String(item.id))!;
+      const key = slot.renderer_key;
+      const src = modelPath(key);
+      let html: string;
+      if (src) html = modelHtml({ ...slot.display_options, src });
+      else if (key === styleQuizKey) html = styleQuizHtml();
+      else if (key === "record_compact" && id === String(item.id)) html = compactTile(item, i);
+      else html = (await drawDocumentWidget(key, Number(id), slot.design, principal, [])).html;
+      if (html) cells.push({ slot_id: slot.id, entity_id: id, html, column: slot.column_start,
+        width: slot.column_span, row: slot.row_start - start + 1, height: slot.row_span });
+    }
+    result.push({ ...item, section_output: { cells, period, height, columns: layout.grid_columns ?? 3 } });
+  }
+  return result;
+}
 
 type WidgetOutput = { html: string; title: string; reason?: string };
 const widgetUid = /^[a-f\d]{8}(-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
