@@ -6,6 +6,15 @@ export const normalized=(s:unknown)=>String(s||'').normalize('NFC').replace(/\s+
 export function resolveConcept(raw:any,catalog:any[]){
  return raw.concept_id==null?matchCandidateConcept(raw.candidate_name,raw.axis,catalog):catalog.find(c=>Number(c.id)===Number(raw.concept_id));
 }
+export function negationEvidence(raw:any,quote:string){
+ if(raw.relation!=='classification_negation')return null;
+ const e=raw.negation_evidence;
+ const clause=normalized(e?.clause),subject=normalized(e?.object_words),predicate=normalized(e?.denial_words);
+ if(e?.subject_kind!=='building_or_part'||!subject||!predicate||subject===predicate||!clause.includes(subject)||!clause.includes(predicate)||!quote.includes(clause)||/[.!?;]\s+\p{L}/u.test(clause)){
+  throw new Error('Для отрицания нужна прямая фраза источника об объекте или его части. Принадлежность автора к группе и отсутствие упоминания недостаточны.');
+ }
+ return {subject_kind:'building_or_part',clause,object_words:subject,denial_words:predicate};
+}
 export function attributionProposal(raw:any,catalog:any[],sources:any[]){
  if(!raw||!Object.hasOwn(AXES,raw.axis)||!RELATIONS.includes(raw.relation))throw new Error('Неизвестная ось или отношение');
  const concept=resolveConcept(raw,catalog);
@@ -18,10 +27,11 @@ export function attributionProposal(raw:any,catalog:any[],sources:any[]){
  const available=source.source_text||full||source.source_excerpt||source.text||'';
  if(quote.length<12||quote.length>6000||!normalized(available).includes(quote))throw new Error('Точная цитата не найдена в тексте источника');
  if(!normalized(raw.rationale))throw new Error('Нет отдельного обоснования');
- return {id:crypto.randomUUID(),kind:'attribution',axis:concept?.axis||raw.axis,concept_id:concept?Number(concept.id):null,candidate_name:concept?'':normalized(raw.candidate_name).slice(0,200),title:concept?.title_ru||normalized(raw.candidate_name),relation:raw.relation,source_id:raw.source_id,quote,rationale:normalized(raw.rationale).slice(0,4000),phase:normalized(raw.phase).slice(0,500),zone:normalized(raw.zone).slice(0,500),locator:normalized(raw.locator).slice(0,500),evidence:quality,selected:false};
+ return {id:crypto.randomUUID(),kind:'attribution',negation_evidence:negationEvidence(raw,quote),axis:concept?.axis||raw.axis,concept_id:concept?Number(concept.id):null,candidate_name:concept?'':normalized(raw.candidate_name).slice(0,200),title:concept?.title_ru||normalized(raw.candidate_name),relation:raw.relation,source_id:raw.source_id,quote,rationale:normalized(raw.rationale).slice(0,4000),phase:normalized(raw.phase).slice(0,500),zone:normalized(raw.zone).slice(0,500),locator:normalized(raw.locator).slice(0,500),evidence:quality,selected:false};
 }
 export function attributionFormat(catalog:any[],ids:string[],fragments?:number[]){
  const properties:any={axis:{type:'string',enum:Object.keys(AXES)},concept_id:{type:['integer','null'],enum:[...catalog.map(c=>Number(c.id)),null]},candidate_name:{type:'string'},relation:{type:'string',enum:RELATIONS},source_id:{type:'string',enum:ids},quote:{type:'string'},rationale:{type:'string'},phase:{type:'string'},zone:{type:'string'},locator:{type:'string'}};
+ properties.negation_evidence={anyOf:[{type:'null'},{type:'object',additionalProperties:false,required:['subject_kind','clause','object_words','denial_words'],properties:{subject_kind:{type:'string',enum:['building_or_part','person_or_group','unclear']},clause:{type:'string'},object_words:{type:'string'},denial_words:{type:'string'}}}]};
  if(fragments){delete properties.quote;properties.fragment_id={type:'integer',enum:fragments};}
  return {type:'json_schema',json_schema:{name:'classification_attributions',strict:true,schema:{type:'object',properties:{proposals:{type:'array',maxItems:100,items:{type:'object',properties,required:Object.keys(properties),additionalProperties:false}}},required:['proposals'],additionalProperties:false}}};
 }
