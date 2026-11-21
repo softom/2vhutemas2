@@ -1,3 +1,4 @@
+import {compatibleEvidence} from '../lib/attributionContext.ts';
 import {isExcludedResearchRow} from '../lib/researchSourcePolicy.ts';
 import {publishOwnerRevision} from '../lib/ownedVersions.ts';
 import {Hono} from 'hono';
@@ -65,12 +66,18 @@ async function plans(tx:Tx,entityId:number,input:any,context:any={}){
   if(matches.length>1)fail('Для URL найдено несколько сущностей источника; устраните неоднозначность');
   const sourceEntity=matches[0];
   const links=sourceEntity?await tx<any>`select l.id,l.status,l.published_revision_id,l.working_revision_id,m.id as material_id,r.snapshot->'body_json' as body from app.links l join app.materials m on m.link_id=l.id join app.revisions r on r.id=l.working_revision_id join app.link_roles role on role.id=l.role_id where l.from_entity_id=${entityId} and l.to_entity_id=${p.concept_id} and role.code=${p.relation} and l.status<>'archived' order by l.id`:[];
-  const matching=links.filter(l=>sourceMarks(l.body).some(m=>Number(m.props.entityId)===Number(sourceEntity.id)&&normalized(m.props.phase)===p.phase&&normalized(m.props.zone)===p.zone));
+  const matching=links.filter(l=>sourceMarks(l.body).some(m=>Number(m.props.entityId)===Number(sourceEntity.id)&&compatibleEvidence({phase:normalized(m.props.phase),zone:normalized(m.props.zone),quote:normalized(extractText([m.block]))},p)));
   if(matching.length>1)fail('Есть несколько связей этого источника и контекста; требуется ручное сопоставление');
   const current=matching[0];
   const repeated=current&&sourceMarks(current.body).some(m=>normalized(extractText([m.block]))===p.quote)&&current.body.some((b:any)=>b.type==='paragraph'&&normalized(extractText([b]))===p.rationale);
-  const key=JSON.stringify([p.concept_id,url,p.relation,p.phase,p.zone]);const batchAppend=seen.has(key);seen.add(key);
-  out.push({batchAppend,key,proposal_id:raw.id,p,source,url,sourceEntity,current,conceptPublished:catalog.find((c:any)=>Number(c.id)===Number(p.concept_id))?.is_published===true,action:repeated?'repeat':current?'append':'create'});
+  const identity=JSON.stringify([p.concept_id,url,p.relation]);
+  const related=out.filter(x=>x.identity===identity&&compatibleEvidence(x.p,p));
+  const keys=[...new Set(related.map(x=>x.key))];
+  if(keys.length>1)fail('У свидетельства несколько подходящих контекстов. Уточните фазу или часть объекта.');
+  const priorGroup=keys.length?out.filter(x=>x.key===keys[0]):[];
+  if(priorGroup.some(x=>!compatibleEvidence(x.p,p)))fail('Фазы или части объекта расходятся. Уточните контекст.');
+  const key=keys[0]||JSON.stringify([p.concept_id,url,p.relation,p.phase,p.zone]);const batchAppend=seen.has(key);seen.add(key);
+  out.push({identity,batchAppend,key,proposal_id:raw.id,p,source,url,sourceEntity,current,conceptPublished:catalog.find((c:any)=>Number(c.id)===Number(p.concept_id))?.is_published===true,action:repeated?'repeat':current?'append':'create'});
  }
  return {data,out};
 }
