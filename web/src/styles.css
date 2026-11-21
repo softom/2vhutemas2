@@ -1112,7 +1112,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 /* Four equal tracks: one leading column, two editorial columns, then the ribbon and the sidebar. */
 @media (min-width: 1001px) {
   .shell:has(.top nav a.active[href="/objects"]) {
-    --page-gap: 24px;
+    --page-gap: 60px;
     --ribbon-width: 20px;
     --frame-gap: 32px;
     --frame-columns: minmax(0, calc(75% + var(--page-gap) / 4 - var(--ribbon-width) / 2 - var(--frame-gap))) var(--ribbon-width) minmax(0, 1fr);
@@ -1121,7 +1121,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
     & > .through-marks { left: calc(var(--ribbon-center) - 31px); }
     & :is(.top, .site-foot > *) { grid-template-columns: var(--frame-columns); }
     & .top .viewer { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
-    & .top nav { padding-right: calc(25% + var(--frame-gap)); }
+    & .top nav { padding-inline: calc(25% + var(--page-gap) / 4); }
     & .section-grid[data-columns="4"] { column-gap: var(--page-gap); background: transparent; }
     & section:has(> .section-grid[data-columns="4"]) > :is(.catalog-head, .type-chips, .filters, .list-count) {
       margin-left: calc(25% + var(--page-gap) / 4);
