@@ -1107,3 +1107,4 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .pe-placement {display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;}
 .pe-placement select {margin-left:.4rem;}
 .pe-feedback {min-height:1.4em;}
+.pe-properties fieldset,.pe-properties label{display:grid;gap:.4rem;min-width:0;margin:0 0 .65rem}.pe-properties input,.pe-properties select,.pe-properties iframe{box-sizing:border-box;width:100%;min-width:0}.pe-properties iframe{height:20rem;border:0}

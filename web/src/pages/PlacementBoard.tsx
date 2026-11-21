@@ -1,8 +1,9 @@
+import type { Contract } from "./SlotProperties";
 import { useRef, useState, type DragEvent } from "react";
 import { request } from "../api";
 import type { Layout, Slot } from "./PageEditor";
 
-export type WidgetDefinition = { id: string; name: string; renderer_key: string; widths: number[]; heights: number[] };
+export type WidgetDefinition = { id: string; name: string; renderer_key: string; instance: Contract | null; widths: number[]; heights: number[] };
 type Source = { widget: WidgetDefinition; slot?: Slot; width: number; height: number };
 type Cell = { row: number; col: number };
 

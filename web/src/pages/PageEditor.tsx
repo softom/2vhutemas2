@@ -1,3 +1,4 @@
+import { SlotProperties, type Values } from "./SlotProperties";
 import { PlacementBoard, type WidgetDefinition } from "./PlacementBoard";
 import { useEffect, useState } from "react";
 import { request } from "../api";
@@ -6,7 +7,7 @@ type Named = { id: string; name: string };
 type Page = Named & { current_layout_id: string | null };
 type Summary = Named & { page_id: string; assigned: boolean };
 export type Slot = { id: string; widget_id: string; widget_name: string; sort_order: number; row_start: number;
-  column_start: number; row_span: number; column_span: number };
+  design: string | null; display_options: Values; call_params: Values; column_start: number; row_span: number; column_span: number };
 export type Layout = Summary & { revision: number; grid_columns: 3 | 4; slots: Slot[] };
 type Catalog = { card_page_id: string; pages: Page[]; types: (Named & { layout_id: string | null })[];
   layouts: Summary[]; widgets: WidgetDefinition[] };
@@ -107,7 +108,7 @@ function Workspace({page,typeId,catalog,onCreated}: {page: Page; typeId: string;
         onSelect={setSelected} onBusy={setBusy} onSave={setLayout} />
       <aside><h2>Выбранный слот</h2>{slot ? <><strong>{slot.widget_name ?? catalog.widgets.find(w=>w.id===slot.widget_id)?.name}</strong>
         <dl><dt>Строка</dt><dd>{slot.row_start}</dd><dt>Колонка</dt><dd>{slot.column_start}</dd>
-        <dt>Ширина</dt><dd>{slot.column_span}</dd><dt>Высота</dt><dd>{slot.row_span}</dd><dt>Порядок чтения</dt><dd>{slot.sort_order}</dd></dl></>
+        <dt>Ширина</dt><dd>{slot.column_span}</dd><dt>Высота</dt><dd>{slot.row_span}</dd><dt>Порядок чтения</dt><dd>{slot.sort_order}</dd></dl>{layout && <SlotProperties key={slot.id} slot={slot} layout={layout} widget={catalog.widgets.find(w=>w.id===slot.widget_id)} busy={busy} onBusy={setBusy} onSave={setLayout}/>}</>
         : <p>Слот не выбран.</p>}</aside>
     </div>
   </>;

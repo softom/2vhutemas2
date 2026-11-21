@@ -264,7 +264,7 @@ layoutAdmin.get("/page-editor", async c => {
   ]);
   return c.json({ card_page_id: CARD_PAGE_ID, pages, types, layouts, widgets: widgets.map(widget => {
     const spec = widgetImplementations.get(widget.renderer_key) ?? layoutCapabilities(widget.renderer_key);
-    return { ...widget, widths: spec?.widths ?? [], heights: spec?.heights ?? [] };
+    return { ...widget, widths: spec?.widths ?? [], heights: spec?.heights ?? [], instance: spec ? instanceContract(widget.renderer_key, spec.designs) : null };
   }) });
 });
 
