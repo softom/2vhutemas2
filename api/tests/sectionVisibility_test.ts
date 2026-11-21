@@ -1,3 +1,4 @@
+import { appendCatalogItems } from "../../web/src/catalogPaging.ts";
 import "../src/lib/json.ts";
 import { Hono } from "hono";
 import { pages } from "../src/routes/pages.ts";
@@ -78,29 +79,29 @@ Deno.test("section pages filter visible records before resolving widget targets"
         const slots = await admin("/page_layout", {
           layout_id: layout.id,
           expected_revision: 0,
-          slots: widgets.map((w, i) => ({
+          slots: [widgets[0], ...widgets, widgets[0]].map((w, i) => ({
             widget_id: w.id,
             sort_order: i + 1,
-            row_start: 1,
+            row_start: i === 0 ? 1 : i === 3 ? 3 : 2,
             row_span: 1,
-            column_start: 2 * i + 1,
+            column_start: i === 2 ? 3 : 1,
             column_span: 2,
           })),
         });
         const ready = await admin("/page_layout", {
           layout_id: layout.id,
           expected_revision: slots.revision,
-          slots: slots.slots.map((s: Record<string, unknown>) => ({
+          slots: slots.slots.map((s: Record<string, unknown>, i: number) => ({
             ...s,
-            call_params: { entity_id: { alias: ".this" } },
+            call_params: { entity_id: i === 0 || i === 3 ? "188" : { alias: ".this" } },
           })),
           selection: {
             source_type_id: types.source,
             filter_type_id: types.filter,
             filter_text: "а",
             repeat_mode: mode,
-            first_slot_id: slots.slots[0].id,
-            last_slot_id: slots.slots[1].id,
+            first_slot_id: slots.slots[1].id,
+            last_slot_id: slots.slots[2].id,
           },
         });
         const assign = "/pages/" + pageId + "/layout";
@@ -131,7 +132,7 @@ Deno.test("section pages filter visible records before resolving widget targets"
             for (const [j, cell] of cells.entries()) {
               check(
                 cell.entity_id === String(row.id) &&
-                  cell.slot_id === slots.slots[mode === "block" ? j : i % 2].id,
+                  cell.slot_id === slots.slots[1 + (mode === "block" ? j : i % 2)].id,
                 "Wrong widget context",
               );
               check(cell.html.includes(row.slug), "Renderer did not use resolved entity");
@@ -143,6 +144,96 @@ Deno.test("section pages filter visible records before resolving widget targets"
           const actual = [...html.matchAll(/data-section-slot="[^"]+" data-entity-id="(\d+)"/g)]
             .map((found) => found[1]);
           check(response.ok && actual.join() === expected.join(), "SSR and client API disagree");
+          const expectOnce = (markup: string) => {
+            const ids = [...markup.matchAll(/data-once-slot="([^"]+)"/g)].map((m) => m[1]);
+            check(
+              ids.join() === [slots.slots[0].id, slots.slots[3].id].join(),
+              "Outside slots and reading order",
+            );
+          };
+          const readPage = async (query: URLSearchParams) => {
+            const resp = await app.request("/entities?" + query);
+            check(resp.ok, await resp.clone().text());
+            return resp.json();
+          };
+          const search = section === "authors"
+            ? { one: "ап", three: "бе" }
+            : { one: "«б", three: "ип" };
+          for (
+            const [text, count] of [[crypto.randomUUID(), 0], [search.one, 1], [
+              search.three,
+              3,
+            ]] as const
+          ) {
+            const params = new URLSearchParams({ section, type: root, q: text, limit: "4" });
+            const full = await readPage(params);
+            check(
+              full.items.length === count && full.next_cursor === null,
+              "Fixture size and terminal cursor",
+            );
+            const url = "/" + section + "?" + new URLSearchParams({ q: text, limit: "4" });
+            const markup = await (await pages.request(url)).text();
+            expectOnce(markup);
+            check(markup.includes("Записей пока нет.") === (count === 0), "Empty state");
+            const expectedSlots = full.items.flatMap((r: typeof rows[number]) =>
+              r.section_output.cells.map((c: { slot_id: string }) => c.slot_id)
+            );
+            check(
+              [...markup.matchAll(/data-section-slot="[^"]+" data-entity-id="(\d+)"/g)].length ===
+                count * (mode === "block" ? 2 : 1),
+              "No placeholder cells",
+            );
+            if (count !== 3) continue;
+            params.set("limit", "1");
+            const first = await readPage(params);
+            check(first.items.length === 1 && first.next_cursor, "First cursor");
+            const firstMarkup = await (await pages.request(
+              "/" + section + "?" + new URLSearchParams({ q: text, limit: "1" }),
+            )).text();
+            const href = firstMarkup.match(/rel="next" href="([^"]+)"/)?.[1]?.replaceAll(
+              "&amp;",
+              "&",
+            );
+            check(href, "SSR continuation link");
+            const continuationUrl = new URL(href, "http://local");
+            const position = mode === "journal" ? "1" : "0";
+            check(
+              continuationUrl.searchParams.get("offset") === position &&
+                continuationUrl.searchParams.get("after") === first.next_cursor,
+              "Cursor and pattern position",
+            );
+            expectOnce(await (await pages.request(href)).text());
+            params.set("offset", position);
+            params.set("cursor", first.next_cursor);
+            params.set("append", "1");
+            params.set("limit", "2");
+            const next = await readPage(params), retry = await readPage(params);
+            check(
+              !next.outside && !retry.outside && next.next_cursor === null,
+              "Append excludes outside slots",
+            );
+            const merged = appendCatalogItems(
+              appendCatalogItems(first.items, next.items),
+              retry.items,
+            ) as typeof rows;
+            check(
+              merged.map((r: typeof rows[number]) => r.id).join() ===
+                full.items.map((r: typeof rows[number]) => r.id).join(),
+              "Retry preserves order without duplicates",
+            );
+            check(
+              merged.flatMap((r: typeof rows[number]) =>
+                r.section_output.cells.map((c: { slot_id: string }) => c.slot_id)
+              ).join() === expectedSlots.join(),
+              "Second portion continues the pattern",
+            );
+            console.log(
+              section,
+              mode,
+              "boundary ids",
+              merged.map((r: typeof rows[number]) => r.id).join(","),
+            );
+          }
           query.set("q", hidden.title_ru);
           const guest = await get(query), editor = await get(query, true);
           check(

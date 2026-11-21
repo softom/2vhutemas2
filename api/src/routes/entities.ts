@@ -17,7 +17,7 @@ import { entityAuthors, resolveEntity } from "../lib/publicCard.ts";
 import { absolute, citation, entityPath } from "../lib/site.ts";
 import { publishOwnerRevision, unpublishOwner } from "../lib/ownedVersions.ts";
 import { sectionLayout } from "../lib/sectionLayouts.ts";
-import { notifyIndexNow, projectSectionItems, type CatalogItem } from "./pages.ts";
+import { notifyIndexNow, projectSectionItems, sectionOutside, type CatalogItem } from "./pages.ts";
 
 import { validateDocument, saveRefs } from "./documents.ts";
 import { readAll, writeIndicators, writeText, type IndicatorInput } from "./indicators.ts";
@@ -229,6 +229,7 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
   return c.json({
+    ...(selection && !(after && c.req.query("append") === "1") ? { outside: await sectionOutside(selection, principal) } : {}),
     items: selection ? await projectSectionItems(selection, items, Number(c.req.query("offset") ?? 0), principal) : items,
     next_cursor: hasMore
       ? encodeCursor(Number(items[items.length - 1].id))

@@ -675,6 +675,7 @@ export const api = {
       scope?: string;
       section?: string;
       offset?: number;
+      append?: boolean;
       archived?: string;
       type?: string;
       q?: string;
@@ -696,6 +697,7 @@ export const api = {
     // Отбор по ветви целиком: корневая ветвь — это прежний фильтр по виду.
     if (params.scope) search.set("scope", params.scope);
     if (params.section) search.set("section", params.section);
+    if (params.append) search.set("append", "1");
     if (params.offset) search.set("offset", String(params.offset));
     if (params.type) search.set("type", params.type);
     if (params.q) search.set("q", params.q);
@@ -708,7 +710,7 @@ export const api = {
     if (params.order) search.set("order", params.order);
     if (params.values) search.set("values", params.values);
     if (params.limit) search.set("limit", params.limit);
-    return request<{ items: EntityListItem[]; next_cursor: string | null }>(
+    return request<{ items: EntityListItem[]; next_cursor: string | null; outside?: { before: string; after: string } }>(
       `/entities?${search.toString()}`,
     );
   },

@@ -11,6 +11,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { appendCatalogItems } from "../catalogPaging";
 import { ListCount } from "../ui/ListCount";
 import { EntityTile } from "../ui/EntityTile";
 import {
@@ -32,7 +33,7 @@ interface SectionSlot {
 }
 let initialCatalog: {
   branch: string;
-  page: { items: EntityListItem[]; next_cursor: string | null };
+  page: { items: EntityListItem[]; next_cursor: string | null; outside?: { before: string; after: string } };
   grid_columns?: number;
   slots?: SectionSlot[];
   chips?: { code: string; title_ru: string }[];
@@ -92,11 +93,13 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   const offset = Number(search.get("offset") ?? 0);
   const limit = section ? search.get("limit") ?? undefined : undefined;
   const patternHeight = slots?.reduce((height, slot) => Math.max(height, slot.row_start + slot.row_span - 1), 0) ?? 0;
+  const [outside, setOutside] = useState(initial?.page.outside);
   const [items, setItems] = useState<EntityListItem[]>(initial?.page.items ?? []);
   // Каталог отдаётся страницами; без этого записи за первой страницей
   // были не видны вовсе.
   const [cursor, setCursor] = useState<string | null>(initial?.page.next_cursor ?? null);
   const activeQuery = useRef(0);
+  const moreInFlight = useRef<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [types, setTypes] = useState<EntityType[]>([]);
   const [hiddenRoots, setHiddenRoots] = useState<string[]>([]);
@@ -242,11 +245,12 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
           if (!cancelled && document.documentElement.dataset.catalogMore === location.pathname) {
             delete document.documentElement.dataset.catalogMore;
             if (page.next_cursor) {
-              const next = await api.entities({ ...request, offset: (offset + page.items.length) % (page.items[0]?.section_output?.period ?? (slots?.length || 1)), cursor: page.next_cursor });
-              page = { items: [...page.items, ...next.items], next_cursor: next.next_cursor };
+              const next = await api.entities({ ...request, append: true, offset: (offset + page.items.length) % (page.items[0]?.section_output?.period ?? (slots?.length || 1)), cursor: page.next_cursor });
+              page = { ...page, items: appendCatalogItems(page.items, next.items), next_cursor: next.next_cursor };
             }
           }
           if (!cancelled) {
+            setOutside(page.outside);
             setItems(page.items);
             setCursor(page.next_cursor);
             setError(null);
@@ -270,8 +274,9 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
   const nextHref = (branch === "what" || items[0]?.section_output) && section && cursor ? "/" + section + "?" + nextQuery : undefined;
 
   const loadMore = () => {
-    if (!cursor || loading || loadingMore) return;
     const generation = activeQuery.current;
+    if (!cursor || loading || loadingMore || moreInFlight.current === generation) return;
+    moreInFlight.current = generation;
     setLoadingMore(true);
     api.entities({
       type: apiType, limit,
@@ -284,18 +289,18 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
       sort: parameter ? "parameter" : undefined,
       order: descending ? "desc" : "asc",
       opt,
-      cursor, offset: (offset + items.length) % period,
+      append: true, cursor, offset: (offset + items.length) % period,
     })
       .then((page) => {
         if (generation !== activeQuery.current) return;
-        setItems(current => {
-          const existing = new Set(current.map(item => item.id));
-          return [...current, ...page.items.filter(item => !existing.has(item.id))];
-        });
+        setItems(current => appendCatalogItems(current, page.items));
         setCursor(page.next_cursor);
       })
       .catch(e => { if (generation === activeQuery.current) setError(e.message); })
-      .finally(() => { if (generation === activeQuery.current) setLoadingMore(false); });
+      .finally(() => {
+        if (moreInFlight.current === generation) moreInFlight.current = null;
+        if (generation === activeQuery.current) setLoadingMore(false);
+      });
   };
 
   return (
@@ -424,6 +429,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
 
       {error && <p className="error">{error}</p>}
       {loading && items.length === 0 && <p className="notice">Загружаем…</p>}
+      {outside?.before && <div dangerouslySetInnerHTML={{ __html: outside.before }} />}
       {!loading && !error && items.length === 0 && (
         <p className="notice">
           Пока ничего нет. {canCreate ? "Создайте первый объект." : "Материалы появятся позже."}
@@ -481,6 +487,7 @@ export function Catalog({ canCreate, branch, title, sub }: Props) {
         })}
       </div>
 
+      {outside?.after && <div dangerouslySetInnerHTML={{ __html: outside.after }} />}
       {items.length > 0 && (
         <ListCount
           shown={items.length}

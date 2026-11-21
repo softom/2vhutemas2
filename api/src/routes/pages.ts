@@ -261,6 +261,7 @@ export interface CatalogItem {
 }
 
 interface CatalogPage {
+  outside?: { before: string; after: string };
   items: CatalogItem[];
   next_cursor: string | null;
 }
@@ -365,7 +366,8 @@ function catalogHtml(title: string, lead: string, page: CatalogPage, branch: str
   return `<script type="application/json" id="catalog-initial">${data}</script>` +
     `<section><div class="catalog-head"><h1>${escapeHtml(title)}</h1><p class="sub">${escapeHtml(lead)}</p></div>` +
     `${chipsHtml(chips, branch ? "Все в разделе" : "Все")}${filters}${count}` +
-    (page.items.length ? `<div class="${assigned ? "section-grid" : "grid catalog-grid"}" data-columns="${assigned?.grid_columns ?? 3}">${cards}</div>${count}` : branch === "what" || assigned?.repeat_mode ? "<p>Записей пока нет.</p>" : "") + `</section>`;
+    (page.outside?.before ?? "") +
+    (page.items.length ? `<div class="${assigned ? "section-grid" : "grid catalog-grid"}" data-columns="${assigned?.grid_columns ?? 3}">${cards}</div>${count}` : branch === "what" || assigned?.repeat_mode ? "<p>Записей пока нет.</p>" : "") + (page.outside?.after ?? "") + `</section>`;
 }
 
 function listLd(path: string, title: string, rows: Pick<ListRow, "slug" | "title_ru">[]) {
@@ -1344,6 +1346,40 @@ function selectionSlots(layout: CardLayout) {
   return { slots, start, height, period: layout.repeat_mode === "journal" ? slots.length : 1 };
 }
 
+type SelectionSlot = CardLayout["slots"][number];
+type SelectionRecord = CatalogItem & { id: string | number };
+
+async function selectionCell(slot: SelectionSlot, item: SelectionRecord | null, index: number, start: number, principal: Principal | null) {
+  const id = resolveEntityArgument(slot.call_params?.entity_id, item ? String(item.id) : null);
+  const key = slot.renderer_key;
+  const src = modelPath(key);
+  let html: string;
+  if (src) html = modelHtml({ ...slot.display_options, src });
+  else if (key === styleQuizKey) html = styleQuizHtml();
+  else if (id === null) return null;
+  else if (key === "record_compact" && item && id === String(item.id)) html = compactTile(item, index);
+  else html = (await drawDocumentWidget(key, Number(id), slot.design, principal, [])).html;
+  return html ? { slot_id: slot.id, entity_id: id, html, column: slot.column_start, width: slot.column_span,
+    row: slot.row_start - start + 1, height: slot.row_span } : null;
+}
+
+export async function sectionOutside(layout: CardLayout, principal: Principal | null) {
+  async function region(slots: SelectionSlot[]) {
+    const ordinary = slots.filter(s => !isPageFrame(s.renderer_key));
+    const start = Math.min(...ordinary.map(s => s.row_start));
+    const chunks = [];
+    for (const slot of ordinary) {
+      const cell = await selectionCell(slot, null, 0, start, principal);
+      if (cell) chunks.push(`<div data-section-slot="${slot.id}" data-once-slot="${slot.id}" style="grid-column:${cell.column}/span ${cell.width};grid-row:${cell.row}/span ${cell.height}">${cell.html}</div>`);
+    }
+    return chunks.length ? `<div class="section-grid" data-columns="${layout.grid_columns ?? 3}">${chunks.join("")}</div>` : "";
+  }
+  const first = layout.slots.findIndex(s => s.id === layout.first_slot_id);
+  const last = layout.slots.findIndex(s => s.id === layout.last_slot_id);
+  if (first < 0 || last < first) throw new Error("Некорректные границы повтора");
+  return { before: await region(layout.slots.slice(0, first)), after: await region(layout.slots.slice(last + 1)) };
+}
+
 export async function projectSectionItems(layout: CardLayout, items: (CatalogItem & { id: string | number })[], offset: number, principal: Principal | null) {
   const { slots, start, height, period } = selectionSlots(layout);
   if (!Number.isInteger(offset) || offset < 0 || offset >= period) throw new ApiError("validation_failed", "Некорректная позиция в образце");
@@ -1352,16 +1388,8 @@ export async function projectSectionItems(layout: CardLayout, items: (CatalogIte
     const cells: SectionCell[] = [];
     const targets = layout.repeat_mode === "journal" && slots.length ? [slots[(offset + i) % period]] : slots;
     for (const slot of targets) {
-      const id = resolveEntityArgument(slot.call_params?.entity_id, String(item.id))!;
-      const key = slot.renderer_key;
-      const src = modelPath(key);
-      let html: string;
-      if (src) html = modelHtml({ ...slot.display_options, src });
-      else if (key === styleQuizKey) html = styleQuizHtml();
-      else if (key === "record_compact" && id === String(item.id)) html = compactTile(item, i);
-      else html = (await drawDocumentWidget(key, Number(id), slot.design, principal, [])).html;
-      if (html) cells.push({ slot_id: slot.id, entity_id: id, html, column: slot.column_start,
-        width: slot.column_span, row: slot.row_start - start + 1, height: slot.row_span });
+      const cell = await selectionCell(slot, item, i, start, principal);
+      if (cell) cells.push({ ...cell, entity_id: cell.entity_id ?? String(item.id) });
     }
     result.push({ ...item, section_output: { cells, period, height, columns: layout.grid_columns ?? 3 } });
   }
