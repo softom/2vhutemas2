@@ -1,3 +1,4 @@
+import {boundedCatalogRead} from '../lib/classification.ts';
 /**
  * Сущности: каталог, карточка, создание и изменение.
  *
@@ -135,36 +136,10 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const onlyArchived = c.req.query("archived") === "only" && drafts;
   const archived = (c.req.query("archived") === "1" || onlyArchived) && drafts;
 
-  const rows = await sql<CatalogItem & { id: string | number }>`
-    select e.id, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
-           ty.code as type, ty.title_ru as type_title,
-           app.entity_type_path(e.type_id) as type_path,
-           e.is_published, e.sort_order,
-           e.status as material_status,
-           -- Обложка — первое по порядку прикреплённое изображение (решение Р-36),
-           -- но только то, которое спрашивающий может увидеть: иначе карточка
-           -- обещает картинку, а на её месте выходит битый значок (Р-68).
-           -- Иллюстрации — связи с записями «Изображение» (Р-84).
-           app.cover_asset(e.id, ${drafts}) as cover_asset_id,
-           -- Как запись выглядит в списке, решает её тип (таблица отображений).
-           app.compact_json(e.id, ${drafts}) as compact,
-           pv.num_value as parameter_value, pv.text_value as parameter_text,
-           -- Значения, названные в ?values=, — из снимка самой записи
-           -- (app.snapshot_value). Без запроса не считаются вовсе: прежде этот
-           -- подзапрос перебирал значения всех записей на каждую строку
-           -- каталога (замечание 2026-10-09: страницы грузились долго).
-           case when ${wanted}::jsonb = '[]'::jsonb then '{}'::jsonb else coalesce((
-             -- Пустое поле снимка — JSON null, а не SQL NULL: снимаем его,
-             -- иначе coalesce остановится на пустом num_value.
-             select jsonb_object_agg(p.code, coalesce(nullif(sv->'num_value', 'null'), nullif(sv->'text_value', 'null'),
-                                       to_jsonb((select o.title_ru from app.parameter_options o
-                                                  where o.id = (sv->>'option_id')::uuid)),
-                                       nullif(sv->'date_start_year', 'null'), nullif(sv->'bool_value', 'null')))
-               from app.parameters p
-               cross join lateral app.snapshot_value(e.id, ${drafts}, p.id) sv
-              where p.code in (select jsonb_array_elements_text(${wanted}::jsonb))
-                and sv is not null),
-             '{}'::jsonb) end as values
+  const rows = await boundedCatalogRead(sql,run=>run<CatalogItem & { id: string | number }>`
+    with page as materialized (
+    select e.id,e.slug,e.title_ru,e.title_en,e.title_original,e.title_la,e.type_id,e.is_published,e.sort_order,e.status,
+           ty.code as type,ty.title_ru as type_title,pv.num_value,pv.text_value,origin.created_at
     from app.read_entities(${drafts}) e
     join app.entities origin on origin.id = e.id
     join app.entity_types ty on ty.id = e.type_id
@@ -224,7 +199,42 @@ entities.get("/", async (c: Context<AppEnv>) => {
              case when ${newest} then origin.created_at end desc,
              case when ${newest} then e.id end desc, e.id
     limit ${limit + 1}
-  `;
+    )
+    select e.id, e.slug, e.title_ru, e.title_en, e.title_original, e.title_la,
+           e.type, e.type_title,
+           app.entity_type_path(e.type_id) as type_path,
+           e.is_published, e.sort_order,
+           e.status as material_status,
+           -- Обложка — первое по порядку прикреплённое изображение (решение Р-36),
+           -- но только то, которое спрашивающий может увидеть: иначе карточка
+           -- обещает картинку, а на её месте выходит битый значок (Р-68).
+           -- Иллюстрации — связи с записями «Изображение» (Р-84).
+           app.cover_asset(e.id, ${drafts}) as cover_asset_id,
+           -- Как запись выглядит в списке, решает её тип (таблица отображений).
+           app.compact_json(e.id, ${drafts}) as compact,
+           e.num_value as parameter_value, e.text_value as parameter_text,
+           -- Значения, названные в ?values=, — из снимка самой записи
+           -- (app.snapshot_value). Без запроса не считаются вовсе: прежде этот
+           -- подзапрос перебирал значения всех записей на каждую строку
+           -- каталога (замечание 2026-10-09: страницы грузились долго).
+           case when ${wanted}::jsonb = '[]'::jsonb then '{}'::jsonb else coalesce((
+             -- Пустое поле снимка — JSON null, а не SQL NULL: снимаем его,
+             -- иначе coalesce остановится на пустом num_value.
+             select jsonb_object_agg(p.code, coalesce(nullif(sv->'num_value', 'null'), nullif(sv->'text_value', 'null'),
+                                       to_jsonb((select o.title_ru from app.parameter_options o
+                                                  where o.id = (sv->>'option_id')::uuid)),
+                                       nullif(sv->'date_start_year', 'null'), nullif(sv->'bool_value', 'null')))
+               from app.parameters p
+               cross join lateral app.snapshot_value(e.id, ${drafts}, p.id) sv
+              where p.code in (select jsonb_array_elements_text(${wanted}::jsonb))
+                and sv is not null),
+             '{}'::jsonb) end as values
+    from page e
+    order by case when ${sortByValue} and ${descending} then e.num_value end desc nulls last,
+             case when ${sortByValue} and not ${descending} then e.num_value end asc nulls last,
+             case when ${newest} then e.created_at end desc,
+             case when ${newest} then e.id end desc, e.id
+  `);
 
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
