@@ -18,8 +18,8 @@ export function renderCardGrid(
   const visible = slots.map(slot => ({slot, html: render(slot)}))
     .filter(item => preview || item.html);
   if (header !== undefined && slots.some(s => s.renderer_key === "parameters" && s.column_start === 3 && s.row_start === 1) &&
-      slots.every(s => (s.column_start === 1 && s.column_span === 2) ||
-        (s.renderer_key === "parameters" && s.column_start === 3 && s.row_start === 1))) {
+      slots.every(s => s.row_span === 1 && ((s.column_start === 1 && s.column_span === 2) ||
+        (s.renderer_key === "parameters" && s.column_start === 3 && s.row_start === 1)))) {
     const sections = visible.map(({slot, html}, index) => ({
       right: slot.column_start === 3,
       html: `<section class="pc-${slot.renderer_key}" data-layout-slot="${slot.id}" style="--reading-order:${index + 1}">` +
@@ -45,7 +45,7 @@ export function renderCardGrid(
     visible.every(({slot}) => slot.row_span === 1 &&
       (slot === sidebars[0].slot || (slot.column_start === 1 && slot.column_span === 2)));
   const gridSettings = independent ? ` data-sidebar-stack style="--stack-rows:${rows.size}"` : "";
-  return `<div class="entity-widget-grid"${gridSettings}>` + visible.map(({slot,html}) => {
+  return (header ?? "") + `<div class="entity-widget-grid"${gridSettings}>` + visible.map(({slot,html}) => {
     const row = rows.get(slot.row_start)!;
     // The paper layout has a decorative gutter between logical columns 2 and 3.
     const crossesGutter = slot.column_start < 3 && slot.column_start + slot.column_span > 3;

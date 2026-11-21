@@ -997,7 +997,9 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   const e = escapeHtml;
   const parts: string[] = [];
   const editPath = `/entities/${card.id}/edit`;
-  parts.push(`<article class="public-card${news ? " is-news" : ""}">`, `<header class="pc-head">`, news ? newsHead(card, news) : "", `<h1>${e(card.title_ru)}<span class="reader-actions" data-reader-edit data-href="${e(editPath)}" hidden></span></h1>`);
+  parts.push(`<article class="public-card${news ? " is-news" : ""}">`);
+  const headerStart = parts.length;
+  parts.push(`<header class="pc-head">`, news ? newsHead(card, news) : "", `<h1>${e(card.title_ru)}<span class="reader-actions" data-reader-edit data-href="${e(editPath)}" hidden></span></h1>`);
   const alternate = [card.title_original, card.title_en, card.title_la].filter(Boolean);
   if (alternate.length > 0) parts.push(`<p class="sub">${e(alternate.join(" · "))}</p>`);
   const place = card.values.find(v => v.place)?.place;
@@ -1199,13 +1201,14 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     const splitParameters = parameterSlots.length === 2 &&
       parameterSlots.some(s => s.column_start === 1 && s.column_span === 2) &&
       parameterSlots.some(s => s.column_start === 3 && s.column_span === 1);
+    const header = parts.splice(headerStart).join("");
     parts.push(renderCardGrid(slots, slot => {
       if (splitParameters && slot.renderer_key === "parameters") {
         return sections.parameters(slot.column_start === 3 ? "right" : "left");
       }
       if (extras.has(slot.id)) return extras.get(slot.id)!;
       return registry.get(slot.renderer_key)?.(card.id, slot.design) ?? "";
-    }, materials !== undefined));
+    }, materials !== undefined, header));
   } else {
     // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
     const layout = card.layout.length > 0
