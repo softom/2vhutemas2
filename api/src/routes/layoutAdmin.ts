@@ -1,3 +1,5 @@
+import { entities } from "./entities.ts";
+import { expandSelection } from "../lib/sectionPattern.ts";
 import { instanceContract, instanceOverrides } from "../lib/widgetInstance.ts";
 import { sectionCapabilities } from "../lib/cardSections.ts";
 import { type Context, Hono } from "hono";
@@ -83,6 +85,25 @@ layoutAdmin.get(
   "/type_presentations/:id/layout",
   async (c) => c.json(await getCardLayout(uuid(c.req.param("id")))),
 );
+// Preview reads the same public catalogue as the site, including publication and archive rules.
+layoutAdmin.get("/layouts/:id/selection-preview", async (c) => {
+  const layout = await readLayout(uuid(c.req.param("id"))) ?? missing();
+  if (!layout.repeat_mode || !layout.first_slot_id || !layout.last_slot_id) invalid("Выборка не настроена");
+  const [type] = await sql<{ code: string }>`with recursive branch(id) as (
+    select ${layout.source_type_id}::uuid union select t.id from app.entity_types t join branch b on t.parent_id=b.id
+  ) select t.code from app.entity_types t join branch b on b.id=t.id where t.id=${layout.filter_type_id ?? layout.source_type_id}`;
+  if (!type) invalid("Тип фильтра вне источника");
+  const params = new URLSearchParams({ type: type.code, limit: "4" });
+  if (layout.page_id === "39ee9267-1a0e-4928-b608-24bf91f68102") params.set("scope", "objects");
+  if (layout.filter_text) params.set("q", layout.filter_text);
+  const response = await entities.request("/?" + params);
+  if (!response.ok) throw new Error("Ошибка чтения каталога");
+  const { items } = await response.json() as { items: { id: string | number }[] };
+  const pattern = expandSelection(items, layout.slots, layout.first_slot_id, layout.last_slot_id, layout.repeat_mode);
+  return c.json({ items: pattern.items.map(({ slot, content, repeat }) => ({
+    slot_id: slot.id, entity_id: String(content.id), repeat,
+  })) });
+});
 layoutAdmin.post("/widgets", (c) =>
   write(c, async (q, b) => {
     const key = name(b.renderer_key);
@@ -110,6 +131,12 @@ layoutAdmin.post("/layouts/:id/copy", (c) =>
     >`insert into app.layouts(page_id,name,grid_columns) values(${source.page_id},${name(b.name)},${source.grid_columns}) returning id`;
     await q`insert into app.page_layout(layout_id,widget_id,sort_order,row_start,column_start,row_span,column_span,design,display_options,call_params)
     select ${copy.id},widget_id,sort_order,row_start,column_start,row_span,column_span,design,display_options,call_params from app.page_layout where layout_id=${id}`;
+    await q`update app.layouts dest set source_type_id=src.source_type_id,filter_type_id=src.filter_type_id,
+      filter_text=src.filter_text,repeat_mode=src.repeat_mode,first_slot_id=ca.id,last_slot_id=cb.id
+      from app.layouts src join app.page_layout a on a.id=src.first_slot_id join app.page_layout b on b.id=src.last_slot_id
+      join app.page_layout ca on ca.layout_id=${copy.id} and ca.sort_order=a.sort_order
+      join app.page_layout cb on cb.layout_id=${copy.id} and cb.sort_order=b.sort_order
+      where src.id=${id} and dest.id=${copy.id}`;
     return readLayout(copy.id, q);
   }));
 async function saveSlot(q: Query, layout: string, slot: Body) {
@@ -141,16 +168,34 @@ async function saveSlot(q: Query, layout: string, slot: Body) {
       values(${layout},${widget.id},${pos},${row},${col},${height},${width},${design},coalesce(${display}::jsonb,'{}'),coalesce(${params}::jsonb,'{}'))`;
   }
 }
+async function saveSelection(q: Query, id: string, value: unknown) {
+  if (value === null) {
+    await q`update app.layouts set source_type_id=null,filter_type_id=null,filter_text=null,
+      repeat_mode=null,first_slot_id=null,last_slot_id=null where id=${id}`;
+    return;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) invalid("Укажите параметры выборки");
+  const selection = value as Body;
+  const keys = ["source_type_id","filter_type_id","filter_text","repeat_mode","first_slot_id","last_slot_id"];
+  if (Object.keys(selection).some(key => !keys.includes(key))) invalid("Неизвестное поле выборки");
+  if (selection.repeat_mode !== "block" && selection.repeat_mode !== "journal") invalid("Укажите режим повтора");
+  if (selection.filter_text != null && typeof selection.filter_text !== "string") invalid("Ожидается текст фильтра");
+  await q`update app.layouts set source_type_id=${uuid(selection.source_type_id)},
+    filter_type_id=${selection.filter_type_id == null ? null : uuid(selection.filter_type_id)},
+    filter_text=${selection.filter_text?.trim() || null},repeat_mode=${selection.repeat_mode},
+    first_slot_id=${uuid(selection.first_slot_id)},last_slot_id=${uuid(selection.last_slot_id)} where id=${id}`;
+}
 layoutAdmin.post("/page_layout", (c) =>
   write(c, async (q, b) => {
     const id = uuid(b.layout_id);
     await lockDraft(q, id, b.expected_revision);
-    const slots = b.slots === undefined ? [b] : b.slots;
-    if (!Array.isArray(slots) || !slots.length) invalid("Укажите слоты");
+    const slots = b.slots === undefined ? (b.widget_id !== undefined || b.selection === undefined ? [b] : []) : b.slots;
+    if (!Array.isArray(slots) || (!slots.length && b.selection === undefined)) invalid("Укажите слоты");
     for (const slot of slots) {
       if (!slot || typeof slot !== "object" || Array.isArray(slot)) invalid("Некорректный слот");
       await saveSlot(q, id, slot);
     }
+    if (b.selection !== undefined) await saveSelection(q, id, b.selection);
     return readLayout(id, q);
   }));
 layoutAdmin.delete("/page_layout/:id", (c) =>

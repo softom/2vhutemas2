@@ -1,3 +1,4 @@
+import "../src/lib/json.ts";
 import { Hono } from "hono";
 import type { AppEnv } from "../src/lib/http.ts";
 import { handleError } from "../src/lib/http.ts";
@@ -108,6 +109,46 @@ Deno.test("layouts: routes, permissions, inheritance, versions and concurrent ed
     check(instanceCopy.slots[0].call_params.entity_id === entity.id && instanceCopy.slots[0].design === "default", "copy retains settings");
     const reset = await save({ id: left, call_params: {} }, 5);
     check(!reset.slots[0].call_params.entity_id && reset.slots[0].design === "default", "reset one group");
+    const projectSource = "00000000-0000-4000-a000-0000000000e2";
+    const authorSource = "00000000-0000-4000-a000-0000000000e1";
+    for (const [page_id, source_type_id] of [
+      ["39ee9267-1a0e-4928-b608-24bf91f68102", projectSource],
+      ["39ee9267-1a0e-4928-b608-24bf91f68103", authorSource],
+    ]) {
+      const target = await req("/layouts", { page_id, name: "selection-test" }, 200);
+      const save = (body: object, expected_revision: number, status = 200) => req("/page_layout",
+        { layout_id: target.id, expected_revision, ...body }, status);
+      const created = await save({ slots: [1, 2, 3, 4].map(i => ({
+        ...slot, sort_order: i, row_start: i,
+      })) }, 0);
+      const [, left, right] = created.slots;
+      const selection = { source_type_id, filter_type_id: source_type_id, repeat_mode: "block",
+        first_slot_id: left.id, last_slot_id: right.id };
+      const block = await save({ selection }, created.revision);
+      const preview = (id: string) => req("/layouts/" + id + "/selection-preview", null, 200, "GET");
+      const entries = (await preview(target.id)).items;
+      check(entries.length >= 4 && entries[0].entity_id === entries[1].entity_id &&
+        entries[2].entity_id === entries[3].entity_id && entries[0].entity_id !== entries[2].entity_id &&
+        entries.every((v: {slot_id: string}, i: number) => v.slot_id === (i % 2 ? right.id : left.id)), "block repeats two slots per record");
+      const foreignSource = source_type_id === projectSource ? authorSource : projectSource;
+      await save({ selection: { ...selection, source_type_id: foreignSource } }, block.revision, 400);
+      await save({ selection: { ...selection, filter_type_id: foreignSource } }, block.revision, 400);
+      await save({ selection: { ...selection, last_slot_id: wideCopy.slots[0].id } }, block.revision, 400);
+      await save({ selection: { ...selection, repeat_mode: "other" } }, block.revision, 400);
+      await save({ slots: [{ ...right, sort_order: 0 }], selection }, block.revision, 400);
+      await save({ selection: null }, created.revision, 409);
+      const journal = await save({ selection: { ...selection, repeat_mode: "journal" } }, block.revision);
+      const single = (await preview(target.id)).items;
+      check(single.length * 2 === entries.length && single.every((v: {entity_id: string; slot_id: string}, i: number) =>
+        v.entity_id === entries[2*i].entity_id && v.slot_id === (i % 2 ? right.id : left.id)), "journal advances each slot");
+      const copy = await req("/layouts/" + target.id + "/copy", { name: "selection copy" }, 200);
+      check(copy.first_slot_id === copy.slots[1].id && copy.last_slot_id === copy.slots[2].id &&
+        copy.first_slot_id !== left.id && (await preview(copy.id)).items.length === single.length, "copy remaps bounds");
+      const empty = await save({ selection: { ...selection, filter_text: crypto.randomUUID() } }, journal.revision);
+      check((await preview(target.id)).items.length === 0, "catalogue text filter");
+      const cleared = await save({ selection: null }, empty.revision);
+      check(cleared.source_type_id === null && cleared.last_slot_id === null, "reset selection");
+    }
     const first = await req("/page_layout", { ...slot, expected_revision: 0 }, 200);
     await req("/page_layout", { ...slot, expected_revision: 0 }, 409);
     await req("/page_layout", { ...slot, expected_revision: 1, design: "missing" }, 400);

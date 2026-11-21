@@ -17,3 +17,17 @@ export function fillSectionPattern<Row, Slot, Result>(
   });
   return { items, nextOffset: (offset + rows.length) % slots.length };
 }
+
+/** Expand only the inclusive marked range; callers render outside slots once per page. */
+export function expandSelection<Row, Slot extends { id: string }>(
+  rows: readonly Row[], slots: readonly Slot[], first: string, last: string,
+  mode: "block" | "journal", offset = 0,
+) {
+  const start = slots.findIndex(slot => slot.id === first);
+  const end = slots.findIndex(slot => slot.id === last);
+  if (start < 0 || end < start) throw new RangeError("Invalid repeat bounds");
+  const pattern = slots.slice(start, end + 1);
+  if (mode === "journal") return fillSectionPattern(rows, pattern, offset, row => row);
+  if (offset !== 0) throw new RangeError("Block pagination starts at a record boundary");
+  return { items: rows.flatMap((content, repeat) => pattern.map(slot => ({ slot, repeat, content }))), nextOffset: 0 };
+}
