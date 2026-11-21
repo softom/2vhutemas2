@@ -1,3 +1,4 @@
+import {saveRevision} from '../lib/records.ts';
 import {analysisPlan} from '../lib/researchBudget.ts';
 import {Hono} from 'hono';
 import type {AppEnv} from '../lib/http.ts';
@@ -35,6 +36,25 @@ setResearch.get('/:id',async c=>{
  return c.json({...data,revision:chain.safe?e.working_revision_id:null});
 });
 setResearch.get('/:id/plan',async c=>{const data=await researchData(sql,entityId(c.req.param('id'))),set=await researchSet(String(c.req.query('set_id')),c.req.query('task_id')||undefined);const [e]=await sql<any>`select title_ru,title_en,title_original from app.entities where id=${entityId(c.req.param('id'))}`;return c.json(analysisPlan(data.sources,set,[e?.title_ru,e?.title_en,e?.title_original]).summary);});
+setResearch.post('/:id/clear',async c=>{
+ const actor=permit(c.get('principal'),'edit'),id=entityId(c.req.param('id')),input=await c.req.json();
+ const result=await transaction(actor.contributorId,async tx=>{
+  const [entity]=await tx<any>`select working_revision_id from app.entities where id=${id} and status<>'archived' for update`;
+  if(!entity)throw new ApiError('not_found','Запись не найдена');
+  if(active.has(id)||entity.working_revision_id!==input.base_revision_id)throw new ApiError('version_conflict','Карточка изменилась или исследование выполняется. Обновите страницу.');
+  const [row]=await tx<any>`select v.id,v.text_value from app.indicator_values v join app.indicators i on i.id=v.indicator_id join app.parameters p on p.id=v.parameter_id where i.entity_id=${id} and p.code='research_state' for update of v`;
+  const state=JSON.parse(row?.text_value||'{}');
+  let revision=entity.working_revision_id;
+  if(state.results&&Object.hasOwn(state.results,input.set_id)){
+   delete state.results[input.set_id];
+   if(state.set_id===input.set_id){Object.assign(state,{action:'clear',status:'ready',error:null,warnings:[],progress:null,finished_at:new Date().toISOString()});}
+   await tx`update app.indicator_values set text_value=${JSON.stringify(state)} where id=${row.id}`;
+   revision=await saveRevision(tx,id,actor.contributorId,'Очищены предложения LLM набора '+input.set_id);
+  }
+  return {...await researchData(tx,id),revision};
+ });
+ return c.json(result);
+});
 setResearch.post('/:id/:action',async c=>{
  const actor=permit(c.get('principal'),'edit'),caller=await callerOf(c),id=entityId(c.req.param('id')),action=c.req.param('action');
  if(!['collect','analyze'].includes(action))throw new ApiError('not_found','Действие не найдено');
