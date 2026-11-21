@@ -93,7 +93,7 @@ export function ParameterSetDialog({set,onSaved,onClose}:Props){
      <Check label="Задание включено" value={t.enabled} onChange={v=>patch({tasks:config.tasks.map((x,k)=>k===n?{...x,enabled:v}:x)})}/>
      <label>Название задания<input value={t.title} onChange={e=>patch({tasks:config.tasks.map((x,k)=>k===n?{...x,title:e.target.value}:x)})}/></label>
      <label>Инструкция LLM<textarea aria-label="Инструкция LLM" rows={9} value={t.instruction} onChange={e=>patch({tasks:config.tasks.map((x,k)=>k===n?{...x,instruction:e.target.value}:x)})}/></label>
-     <div className="row"><label>Максимум запросов<input type="number" min={1} max={2} value={t.max_calls} onChange={e=>patch({tasks:config.tasks.map((x,k)=>k===n?{...x,max_calls:Number(e.target.value)}:x)})}/></label><label>Максимум символов источников<input type="number" min={1000} max={60000} value={t.max_source_chars} onChange={e=>patch({tasks:config.tasks.map((x,k)=>k===n?{...x,max_source_chars:Number(e.target.value)}:x)})}/></label></div>
+     <div className="row"><label>Максимум запросов<input type="number" min={1} max={5} value={t.max_calls} onChange={e=>patch({tasks:config.tasks.map((x,k)=>k===n?{...x,max_calls:Number(e.target.value)}:x)})}/></label><label>Максимум символов источников<input type="number" min={1000} max={200000} value={t.max_source_chars} onChange={e=>patch({tasks:config.tasks.map((x,k)=>k===n?{...x,max_source_chars:Number(e.target.value)}:x)})}/></label></div>
      <p className="hint">Модель: {t.model_name||'настройка сервера'}. Выключенное задание сохраняется в истории и не запускается.</p>
      {!t.id&&<button type="button" className="ghost" onClick={()=>patch({tasks:config.tasks.filter((_,k)=>k!==n)})}>Убрать новое задание</button>}
     </div></details>)}

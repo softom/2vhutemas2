@@ -45,7 +45,7 @@ export async function updateSetConfiguration(id:string|null,input:any,actor:stri
   }
   for(const x of input.tasks||[]){
    if(!x.title?.trim()||!x.instruction?.trim())fail('Нужны название и инструкция задания');
-   if(!Number.isInteger(x.max_calls??2)||(x.max_calls??2)<1||(x.max_calls??2)>2||!Number.isInteger(x.max_source_chars??60000)||(x.max_source_chars??60000)<1000||(x.max_source_chars??60000)>60000)fail('Бюджет: 1–2 запроса и 1000–60000 символов');
+   if(!Number.isInteger(x.max_calls??2)||(x.max_calls??2)<1||(x.max_calls??2)>5||!Number.isInteger(x.max_source_chars??60000)||(x.max_source_chars??60000)<1000||(x.max_source_chars??60000)>200000)fail('Бюджет: 1–5 запросов и 1000–200000 символов');
    if(x.model_name&&x.model_name!==Deno.env.get('INTAKE_RESEARCH_MODEL')&&x.model_name!=='perplexity/sonar-pro')fail('Модель не разрешена сервером');
    if(x.id){const r=await tx`update app.parameter_set_research_tasks set title=${x.title},instruction=${x.instruction},sort_order=${x.sort_order??0},enabled=${x.enabled??true},model_name=${x.model_name??null},max_calls=${x.max_calls??2},max_source_chars=${x.max_source_chars??60000} where id::text=${x.id} and set_id=${set.id} returning id`;if(!r.length)fail('Задание не принадлежит набору');}
    else await tx`insert into app.parameter_set_research_tasks(set_id,title,instruction,sort_order,enabled,model_name,max_calls,max_source_chars) values(${set.id},${x.title},${x.instruction},${x.sort_order??0},${x.enabled??true},${x.model_name??null},${x.max_calls??2},${x.max_source_chars??60000})`;

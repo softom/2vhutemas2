@@ -1,15 +1,16 @@
 import {isExcludedResearchRow} from './researchSourcePolicy.ts';
 import {sourceQuality} from './sourceEvidence.ts';
-export const MAX_ANALYSIS_CALLS=2,MAX_ANALYSIS_CHARS=60000;
+export const MAX_ANALYSIS_CALLS=5,MAX_ANALYSIS_CHARS=200000;
 const nameKey=(s:string)=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').split(' ').filter(w=>w&&!['de','del','la','el','los','las','the','of','and','и','в','на'].includes(w)).join(' ');
 export function analysisPlan(sources:any[],set:any,names:string[]=[]){
- const maxChars=Math.min(MAX_ANALYSIS_CHARS,set.task?.max_source_chars||MAX_ANALYSIS_CHARS),maxCalls=Math.min(MAX_ANALYSIS_CALLS,set.task?.max_calls||MAX_ANALYSIS_CALLS);
+ const maxChars=Math.min(MAX_ANALYSIS_CHARS,set.task?.max_source_chars||60000),maxCalls=Math.min(MAX_ANALYSIS_CALLS,set.task?.max_calls||2);
  const terms=[...new Set<string>((set.search_profiles||[]).flatMap((p:any)=>p.topic_terms||[]))].map(s=>s.toLocaleLowerCase());
  const external=sources.filter(s=>!isExcludedResearchRow(s));
  const usable=external.filter(s=>!!(s.source_text||s.source_excerpt));
  const keys=[...new Set(names.filter(Boolean).map(nameKey).filter(k=>k.length>=3))];
  const relevant=keys.length?usable.filter(s=>{const haystack=' '+nameKey([s.source_title,s.source_excerpt,s.source_text].filter(Boolean).join(' '))+' ';return keys.some(k=>haystack.includes(' '+k+' '));}):usable;
- const limit=Math.min(maxChars,maxCalls*30000);
+ const chunkSize=set.code==='style_solutions'?40000:30000;
+ const limit=Math.min(maxChars,maxCalls*chunkSize);
  const inputChars=usable.reduce((sum,s)=>sum+String(s.source_text||s.source_excerpt).length,0);
  const ranked:{source:any;source_number:number;start:number;text:string;score:number}[]=[];
  for(const s of relevant){
@@ -38,7 +39,7 @@ export function analysisPlan(sources:any[],set:any,names:string[]=[]){
  }
  pieces.sort((a,b)=>a.source_number-b.source_number||a.offset-b.offset);
  const chunks:any[][]=[];let batch:any[]=[],size=0;
- for(const p of pieces){let offset=0;while(offset<p.text.length){const n=Math.min(30000-size,p.text.length-offset);batch.push({...p,offset:p.offset+offset,text:p.text.slice(offset,offset+n)});size+=n;offset+=n;if(size===30000){chunks.push(batch);batch=[];size=0;}}}if(batch.length)chunks.push(batch);
+ for(const p of pieces){let offset=0;while(offset<p.text.length){const n=Math.min(chunkSize-size,p.text.length-offset);batch.push({...p,offset:p.offset+offset,text:p.text.slice(offset,offset+n)});size+=n;offset+=n;if(size===chunkSize){chunks.push(batch);batch=[];size=0;}}}if(batch.length)chunks.push(batch);
  let fragment=0;for(const chunk of chunks)for(const piece of chunk)piece.fragment_id=++fragment;
  if(chunks.length>MAX_ANALYSIS_CALLS)throw Error('Превышен бюджет анализа');
  return {chunks,summary:{calls:chunks.length,max_calls:maxCalls,input_chars:inputChars,selected_chars:selectedChars,total_sources:external.length,excluded_unrelated:usable.length-relevant.length,analyzed_sources:used.size,limited:selectedChars<inputChars,method:'Локальный отбор фрагментов; полные тексты остаются сохранёнными'}};
