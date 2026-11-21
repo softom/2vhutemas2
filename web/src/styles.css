@@ -1111,7 +1111,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 /* The middle pair inherits the original editorial measure; the outer columns share the rest. */
 @media (min-width: 1001px) {
-  .shell:has(.top nav a.active:is([href="/objects"], [href="/authors"])) {
+  .shell:is([data-editorial-catalog], [data-page-columns="4"]:has(.catalog-head)) {
     --pad: max(24px, calc(50% - 690px));
     --editorial: min(var(--c1), 55vw);
     --middle-track: calc((var(--editorial) - var(--page-gap)) / 2);
@@ -1127,7 +1127,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
     & .top .viewer { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
     & .top nav { padding-inline: var(--editorial-start); }
     & .section-grid[data-columns="4"] { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, var(--middle-track))) minmax(0, 1fr); column-gap: var(--page-gap); background: transparent; }
-    & section:has(> .section-grid[data-columns="4"]) > :is(.catalog-head, .type-chips, .filters, .list-count) {
+    & section:has(> .catalog-head) > :is(.catalog-head, .type-chips, .filters, .list-count) {
       margin-left: var(--editorial-start);
       max-width: var(--editorial);
     }

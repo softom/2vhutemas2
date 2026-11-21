@@ -70,7 +70,7 @@ function PublicEntityPage() {
   return null;
 }
 export function App() {
-  const [headerHtml, setHeaderHtml] = useState("");
+  const [headerHtml, setHeaderHtml] = useState(() => document.querySelector("[data-site-header]")?.innerHTML ?? "");
   // Футер приходит с сервера вместе с меню; до ответа держим тот, что уже
   // нарисовала готовая страница, — подмена не видна.
   const [footerHtml, setFooterHtml] = useState(() => document.querySelector(".site-foot")?.innerHTML ?? "");
@@ -172,7 +172,7 @@ export function App() {
     (/^\/entities\/[^/]+$/.test(location.pathname) && location.pathname !== "/entities/new");
 
   return (
-    <div className="shell">
+    <div className="shell" data-editorial-catalog={["/objects", "/authors"].includes(location.pathname) || undefined}>
       {splash && <Splash onDone={hideSplash} />}
       {reading && <div className="through" aria-hidden="true" />}
       {reading && <div className="through-marks" aria-hidden="true" />}
