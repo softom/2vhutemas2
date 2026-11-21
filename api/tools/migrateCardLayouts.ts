@@ -7,8 +7,8 @@ import { widgetImplementations } from "../src/lib/widgetRegistry.ts";
 type Extra = {kind:string;after?:string;cell:"main"|"side"|"full"};
 type Entry = {key:string;column:number;width:number};
 const [db, actor, action] = Deno.args;
-if (!db || db!==Deno.env.get("APP_API_DB_NAME") || !actor || action!=="--apply") {
-  throw new Error("Usage: migrateCardLayouts.ts <APP_API_DB_NAME> <contributor UID> --apply");
+if (!db || db!==Deno.env.get("APP_API_DB_NAME") || !actor || action!=="--prepare") {
+  throw new Error("Usage: migrateCardLayouts.ts <APP_API_DB_NAME> <contributor UID> --prepare");
 }
 try {
 const report=await transaction(actor,async q=>{
@@ -23,12 +23,18 @@ const report=await transaction(actor,async q=>{
     await q`insert into app.widgets(name,renderer_key) values(${name},${key}) on conflict(renderer_key) do nothing`;
   }
   const catalog=new Map((await q<{id:string;renderer_key:string}>`select id,renderer_key from app.widgets`).map(w=>[w.renderer_key,w.id]));
-  const types=await q<{id:string;code:string;layout_id:string|null;extras:Extra[]|null}>`
-    select p.id,t.code,p.layout_id,p.settings->'card_widgets' extras from app.type_presentations p
+  const types=await q<{id:string;type_id:string;code:string;layout_id:string|null;prepared:string|null;extras:Extra[]|null}>`
+    select p.id,p.type_id,t.code,p.layout_id,p.settings->>'prepared_card_layout_id' prepared,p.settings->'card_widgets' extras from app.type_presentations p
     join app.entity_types t on t.id=p.type_id where mode='card' and not layout_only order by t.code for update of p`;
   const migrated=[];
   for (const type of types) {
-    if(type.layout_id){migrated.push({type:type.code,retained:type.layout_id});continue;}
+    if(type.layout_id || type.prepared) {
+      const id = type.layout_id ?? type.prepared;
+      const [existing] = await q`select id,revision from app.layouts where id=${id} and page_id=${CARD_PAGE_ID}`;
+      if (!existing) throw new Error(type.code + ": missing card layout " + id);
+      migrated.push({type:type.code,type_id:type.type_id,layout:existing.id,revision:existing.revision,retained:true});
+      continue;
+    }
     const items=await q<{id:string;component:string;set_ids:string[]|null}>`select id,component,settings->'parameter_set_ids' set_ids
       from app.type_presentation_items where presentation_id=${type.id} order by sort_order,id for update`;
     const group=items.find(i=>i.component==="indicators");
@@ -79,8 +85,10 @@ const report=await transaction(actor,async q=>{
       await q`insert into app.page_layout(layout_id,widget_id,sort_order,row_start,column_start,row_span,column_span)
         values(${layout.id},${catalog.get(entry.key)},${++order},${row},${entry.column},1,${entry.width})`;
     }
-    await q`update app.type_presentations set layout_id=${layout.id} where id=${type.id}`;
-    migrated.push({type:type.code,layout:layout.id,slots:order,sets:ids.length,parameters:left?"left":"right"});
+    // Keep the draft UID for retries. Only the assignment API changes layout_id.
+    await q`update app.type_presentations set settings=jsonb_set(coalesce(settings,'{}'::jsonb),
+      '{prepared_card_layout_id}',to_jsonb(${layout.id}::uuid)) where id=${type.id}`;
+    migrated.push({type:type.code,type_id:type.type_id,layout:layout.id,revision:order,slots:order,sets:ids.length,parameters:left?"left":"right"});
   }
   return migrated;
 });
