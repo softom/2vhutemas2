@@ -1,3 +1,4 @@
+import {AXES,resolveConcept} from '../lib/classificationValidation.ts';
 import {saveRevision} from '../lib/records.ts';
 import {analysisPlan} from '../lib/researchBudget.ts';
 import {Hono} from 'hono';
@@ -31,6 +32,16 @@ setResearch.get('/:id',async c=>{
  union all select r.id,r.base_revision_id,r.summary from app.revisions r join chain c on r.id=c.base_revision_id where c.id::text<>${base} and c.summary='Обновлены материалы исследования')
  select exists(select 1 from chain where id::text=${base}) as safe`: [{safe:false}];
  const data=await researchData(sql,id);
+ const pending=Object.values(data.state.results||{}).flatMap((r:any)=>r.mode==='attributions'?(r.proposals||[]).filter((p:any)=>!p.concept_id):[]);
+ if(pending.length){
+  const catalog=await sql<any>`select e.id,e.title_ru,e.title_en,e.title_original,t.code axis,
+    coalesce((select app.table_rows_json(p.id,v.table_value) from app.indicators i join app.indicator_values v on v.indicator_id=i.id join app.parameters p on p.id=v.parameter_id where i.entity_id=e.id and p.code='concept_names' order by i.sort_order,i.id limit 1),'[]'::jsonb) names
+    from app.entities e join app.entity_types t on t.id=e.type_id where e.status<>'archived' and t.code=any(${Object.keys(AXES)}::text[])`;
+  for(const p of pending){
+   const concept=resolveConcept(p,catalog);
+   if(concept)Object.assign(p,{concept_id:Number(concept.id),axis:concept.axis,title:concept.title_ru,candidate_name:''});
+  }
+ }
  if(data.state.status==='running'&&active.has(id)){data.state.progress=active.get(id);data.state.log=journals.get(id)||[];}
  if(data.state.status==='running'&&!active.has(id))data.state={...data.state,status:'error',error:'Задание прервано перезапуском сервиса. Повторите запуск.'};
  return c.json({...data,revision:chain.safe?e.working_revision_id:null});
