@@ -1143,3 +1143,30 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
     }
   }
 }
+
+/* The meter fills the row behind its label, including wrapped names. */
+.style-analysis .pane-0 > p { margin: .4rem 0 .65rem; line-height: 1.35; }
+.style-analysis .pane-0 [data-axis] { margin: .6rem 0 0; padding: 0; }
+.style-analysis .pane-0 h3 { margin: .6rem 0 .25rem; line-height: 1.2; }
+.style-analysis .pane-0 h4 { margin: .4rem 0 .15rem; line-height: 1.2; }
+.style-analysis .style-score {
+  position: relative; isolation: isolate; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  gap: 1px .5rem; margin: .18rem 0; padding: .2rem .5rem;
+  color: #231f1c; line-height: 1.15;
+  --score-fill: color-mix(in srgb, var(--axis-color, #327965) 38%, #fff);
+}
+.style-analysis .style-score a { color: inherit; overflow-wrap: anywhere; }
+.style-analysis .style-score strong { margin: 0; white-space: nowrap; }
+.style-analysis .style-score small { grid-column: 1 / -1; font-size: .72rem; }
+.style-analysis .style-score meter {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  appearance: none; width: 100%; height: 100%; margin: 0;
+  background: #f4f0e9; border: 0; border-radius: 3px; overflow: hidden;
+}
+.style-analysis .style-score meter::-webkit-meter-inner-element { display: block; height: 100%; }
+.style-analysis .style-score meter::-webkit-meter-bar {
+  box-sizing: border-box; height: 100%; border: 0; border-radius: 0; background: #f4f0e9;
+}
+.style-analysis .style-score meter::-webkit-meter-optimum-value { background: var(--score-fill); }
+.style-analysis .style-score meter::-moz-meter-bar { background: var(--score-fill); }
