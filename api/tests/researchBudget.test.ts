@@ -22,3 +22,8 @@ const dense=Array.from({length:100},(_,i)=>({...source(i),source_text:Array.from
 console.log('RESEARCH_BUDGET_AND_QUOTES_CHECKS',count);
 
 for(const axis of ['form_method','morphological_trait'])ok(attributionProposal(raw,[{...catalog[0],axis}],fragments).relation==='classification_trait','Use canonical trait relation');
+
+const variants=['Kaohsiung Music Center','Harbor Concert Hall'];
+const titles=['Kaohsiung Maritime Pop Music Center','Music center in Kaohsiung','Kaohsiung music','Kaohsiung musical center','Kaohsiung concert hall','Concert hall by the harbor'];
+const named=titles.map((title,i)=>({...source(i),source_title:title,source_text:'Architecture.'}));
+ok(analysisPlan(named,{code:'style_solutions'},variants).summary.relevant_sources===3,'All whole words from one name, independently of order and intervening words');

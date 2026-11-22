@@ -16,7 +16,14 @@ export function analysisPlan(sources:any[],set:any,names:string[]=[],depth:Depth
  const external=sources.filter(s=>!isExcludedResearchRow(s));
  const usable=external.filter(s=>!!(s.source_text||s.source_excerpt));
  const keys=[...new Set(names.filter(Boolean).map(nameKey).filter(k=>k.length>=3))];
- const relevant=keys.length?usable.filter(s=>{const haystack=' '+nameKey([s.source_title,s.source_excerpt,s.source_text].filter(Boolean).join(' '))+' ';return keys.some(k=>/\p{Script=Han}/u.test(k)?haystack.includes(k):haystack.includes(' '+k+' '));}):usable;
+ const variants=keys.map(key=>key.split(' '));
+ const relevant=variants.length?usable.filter(source=>{
+  const text=nameKey([source.source_title,source.source_excerpt,source.source_text].filter(Boolean).join(' '));
+  const words=new Set(text.split(' '));
+  return variants.some(variant=>variant.every(word=>
+   /\p{Script=Han}/u.test(word)?text.includes(word):words.has(word)
+  ));
+ }):usable;
  const chunkSize=set.code==='style_solutions'?40000:30000;
  const limit=Math.min(maxChars,maxCalls*chunkSize);
  const inputChars=relevant.reduce((sum,s)=>sum+String(s.source_text||s.source_excerpt).length,0);
