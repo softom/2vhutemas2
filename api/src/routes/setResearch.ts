@@ -1,6 +1,6 @@
 import {AXES,resolveConcept} from '../lib/classificationValidation.ts';
 import {saveRevision} from '../lib/records.ts';
-import {analysisPlan} from '../lib/researchBudget.ts';
+import {preflight,presets,type Depth} from '../lib/researchBudget.ts';
 import {Hono} from 'hono';
 import type {AppEnv} from '../lib/http.ts';
 import {log} from '../lib/http.ts';
@@ -46,7 +46,7 @@ setResearch.get('/:id',async c=>{
  if(data.state.status==='running'&&!active.has(id))data.state={...data.state,status:'error',error:'Задание прервано перезапуском сервиса. Повторите запуск.'};
  return c.json({...data,revision:chain.safe?e.working_revision_id:null});
 });
-setResearch.get('/:id/plan',async c=>{const data=await researchData(sql,entityId(c.req.param('id'))),set=await researchSet(String(c.req.query('set_id')),c.req.query('task_id')||undefined);const [e]=await sql<any>`select title_ru,title_en,title_original from app.entities where id=${entityId(c.req.param('id'))}`;return c.json(analysisPlan(data.sources,set,[e?.title_ru,e?.title_en,e?.title_original]).summary);});
+setResearch.get('/:id/plan',async c=>{const data=await researchData(sql,entityId(c.req.param('id'))),set=await researchSet(String(c.req.query('set_id')),c.req.query('task_id')||undefined);const [e]=await sql<any>`select title_ru,title_en,title_original from app.entities where id=${entityId(c.req.param('id'))}`;return c.json(preflight(data.sources,set,[e?.title_ru,e?.title_en,e?.title_original]));});
 setResearch.post('/:id/clear',async c=>{
  const actor=permit(c.get('principal'),'edit'),id=entityId(c.req.param('id')),input=await c.req.json();
  const result=await transaction(actor.contributorId,async tx=>{
@@ -70,6 +70,8 @@ setResearch.post('/:id/:action',async c=>{
  const actor=permit(c.get('principal'),'edit'),caller=await callerOf(c),id=entityId(c.req.param('id')),action=c.req.param('action');
  if(!['collect','analyze'].includes(action))throw new ApiError('not_found','Действие не найдено');
  const input=await c.req.json(),set=await researchSet(String(input.set_id),input.task_id);
+ const depth:Depth=input.mode??'medium';
+ if(!Object.hasOwn(presets,depth))throw new ApiError('validation_failed','Неизвестный режим исследования');
  if(active.has(id)||active.size>=2)throw new ApiError('rate_limited','Уже выполняется исследование. Дождитесь завершения');
  active.set(id,{phase:action==='collect'?'Поиск источников':'Подготовка анализа',done:0,total:null});journals.set(id,[]);addLog(id,caller.requestId,action==='collect'?'Начат сбор источников':'Начат анализ источников');let prepared:any;
  try{prepared=await transaction(actor.contributorId,async tx=>{
@@ -79,7 +81,7 @@ setResearch.post('/:id/:action',async c=>{
   const attached=await tx`select set_id from app.entity_parameter_sets where entity_id=${id} and set_id=${set.id} union select t.set_id from app.type_parameter_sets t join app.entities e on e.id=${id} where t.set_id=${set.id} and t.type_id in(select app.entity_type_ancestors(e.type_id))`;
   if(!attached.length)throw new ApiError('validation_failed','Сначала добавьте набор');
   const data=await researchData(tx,id),job=crypto.randomUUID();
-  const state={...data.state,job,action,set_id:set.id,task_id:set.task.id,config_version:set.config_version,status:'running',progress:active.get(id),log:journals.get(id),request_id:caller.requestId,warnings:[],started_at:new Date().toISOString(),error:null};
+  const state={...data.state,job,action,depth,set_id:set.id,task_id:set.task.id,config_version:set.config_version,status:'running',progress:active.get(id),log:journals.get(id),request_id:caller.requestId,warnings:[],started_at:new Date().toISOString(),error:null};
   const revision=await saveResearch(tx,id,actor.contributorId,{sources:data.sources,state});
   const [context]=action==='collect'&&set.code==='style_solutions'?await tx<any>`select
    (select x.title_ru from app.links l join app.link_roles r on r.id=l.role_id join app.entities x on x.id=case when l.from_entity_id=${id} then l.to_entity_id else l.from_entity_id end where ${id} in(l.from_entity_id,l.to_entity_id) and l.status<>'archived' and x.status<>'archived' and r.code in ('architect','author') order by (r.code='architect') desc,l.is_primary desc,l.id limit 1) architect,
@@ -91,7 +93,7 @@ setResearch.post('/:id/:action',async c=>{
    active.set(id,value);
    addLog(id,caller.requestId,value.phase+(value.total!=null?`: ${value.done} из ${value.total}`:'')+(value.accepted!=null?`; принято ${value.accepted}, отклонено ${value.rejected||0}`:''));
   };
-  try{result=action==='collect'?await gather(prepared.identity,set,prepared.sources,caller,progress):await analyzeSet(prepared.title,set,prepared.sources,caller,progress,[prepared.identity.title_ru,prepared.identity.title_en,prepared.identity.title_original]);}
+  try{result=action==='collect'?await gather(prepared.identity,set,prepared.sources,caller,progress,depth):await analyzeSet(prepared.title,set,prepared.sources,caller,progress,[prepared.identity.title_ru,prepared.identity.title_en,prepared.identity.title_original],depth);}
   catch(e){result={error:String(e).slice(0,500)};log('error',caller.requestId,'Исследование набора не завершено',{entity_id:id,error:String(e)});}
   for(const warning of result.warnings||[])addLog(id,caller.requestId,warning,'warning');
   addLog(id,caller.requestId,result.error?'Задание завершилось ошибкой: '+result.error:action==='analyze'?`Анализ завершён: получено ${result.received||0}, принято ${result.proposals?.length||0}, отклонено ${result.rejected||0}, ошибок частей ${result.failed_parts||0}`:`Сбор завершён: источников ${result.sources?.length||0}, полученных текстов ${result.sources?.filter((s:any)=>s.source_text).length||0}`,result.error?'error':'info');

@@ -2,8 +2,8 @@ import {analysisPlan} from '../src/lib/researchBudget.ts';
 import {attributionProposal,attributionFromFragment,attributionFormat} from '../src/lib/classificationValidation.ts';
 let count=0;const ok=(v:unknown,m:string)=>{if(!v)throw Error(m);count++;};
 const source=(n:number)=>({source_uid:String(n),source_url:`https://example.org/${n}`,source_title:'Page '+n,source_text:('Background details. '.repeat(2000)+'The podium is Brutalist. La corona es postmoderna. Método tecnicista. '+'More background. '.repeat(2000))});
-const corpus=Array.from({length:100},(_,i)=>source(i));const before=JSON.stringify(corpus);const plan=analysisPlan(corpus,{code:'style_solutions'});
-ok(plan.summary.calls<=2&&plan.summary.selected_chars<=60000,'Hard budget');ok(plan.summary.limited,'Limited coverage explicit');ok(plan.summary.analyzed_sources===100,'Every eligible source represented');
+const corpus=Array.from({length:100},(_,i)=>source(i));const before=JSON.stringify(corpus);const plan=analysisPlan(corpus,{code:'style_solutions',search_profiles:[{topic_terms:['brutalis','postmodern','tecnicis']}]});
+ok(plan.summary.calls<=5&&plan.summary.selected_chars<=200000,'Hard budget');ok(plan.summary.limited,'Limited coverage explicit');ok(plan.summary.analyzed_sources===100,'Every eligible source represented');
 const pieces=plan.chunks.flat();ok(new Set(pieces.map(p=>p.id)).size===100,'Balanced source coverage');
 for(const p of pieces)ok(corpus[Number(p.id)].source_text.slice(p.offset,p.offset+p.text.length)===p.text,'Exact original substring');
 ok(pieces.some(p=>p.text.includes('Brutalist'))&&pieces.some(p=>p.text.includes('postmoderna'))&&pieces.some(p=>p.text.includes('tecnicista')),'Relevant non-leading text retained');ok(JSON.stringify(corpus)===before,'Corpus unchanged');
@@ -18,5 +18,5 @@ const chosen=pieces.find(p=>p.text.includes('postmoderna'))!;ok(attributionFromF
 let invalid=false;try{attributionFromFragment({source_id:'wrong',fragment_id:chosen.fragment_id},pieces);}catch{invalid=true;}ok(invalid,'Cross-source fragment rejected');
 const schema=attributionFormat(catalog,['s'],[1,2]).json_schema.schema.properties.proposals.items;ok(!schema.required.includes('quote')&&schema.required.includes('fragment_id'),'Model selects rather than rewrites quotation');
 const relevant=analysisPlan([{...source(1),source_text:'Torres Colón. The podium is Brutalist.'},{...source(2),source_text:'Cristóbal Colón sailed to America.'}],{code:'style_solutions'},['Torres de Colón']);ok(relevant.summary.analyzed_sources===1&&relevant.summary.excluded_unrelated===1,'Object name disambiguates Columbus');
-const dense=Array.from({length:100},(_,i)=>({...source(i),source_text:Array.from({length:20},(_,j)=>'Brutalist structure '+i+' '+j+' '+('abc '.repeat(100))+'. ').join('')}));const bounded=analysisPlan(dense,{code:'style_solutions'});ok(bounded.summary.calls===2&&bounded.summary.selected_chars===60000,'Large unique corpus hits exact hard ceiling');
+const dense=Array.from({length:100},(_,i)=>({...source(i),source_text:Array.from({length:20},(_,j)=>'Brutalist structure '+i+' '+j+' '+('abc '.repeat(100))+'. ').join('')}));const bounded=analysisPlan(dense,{code:'style_solutions'});ok(bounded.summary.calls===5&&bounded.summary.selected_chars===200000,'Large unique corpus hits exact hard ceiling');
 console.log('RESEARCH_BUDGET_AND_QUOTES_CHECKS',count);

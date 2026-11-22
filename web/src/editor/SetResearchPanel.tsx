@@ -6,8 +6,11 @@ type Data={sources:Record<string,string>[];state:any;revision:string|null};
 export function SetResearchPanel({entityId,set,sets,beforeStart,onRevision,onAccept,children,actions,indicators,fields}:{actions?:(disabled:boolean)=>ReactNode;children?:ReactNode;entityId:number;set:ParameterSetRow;sets:ParameterSetRow[];beforeStart:()=>Promise<string|undefined>;onRevision:(revision:string)=>void;onAccept:(group:Indicator,target:string|null)=>Promise<boolean>;indicators:Indicator[];fields:SuggestedParameter[]}){
  const [data,setData]=useState<Data|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [taskId,setTaskId]=useState(set.research_tasks?.length===1?set.research_tasks[0].id:'');
+ const [depth,setDepth]=useState<'min'|'medium'|'max'>('medium');
+ const style=set.code==='style_solutions';
+ const labels={min:'Минимум',medium:'Средний',max:'Максимум'};
  const [plan,setPlan]=useState<any>(null);
- useEffect(()=>{let live=true;request(`/set-research/${entityId}/plan?set_id=${set.id}&task_id=${taskId}`).then(p=>{if(live)setPlan(p);}).catch(()=>{if(live)setPlan(null);});return()=>{live=false;};},[entityId,set.id,taskId,data?.state.finished_at]);
+ useEffect(()=>{let live=true;setPlan(null);request(`/set-research/${entityId}/plan?set_id=${set.id}&task_id=${taskId}`).then(p=>{if(live)setPlan(p);}).catch(()=>{if(live)setPlan(null);});return()=>{live=false;};},[entityId,set.id,taskId,data?.state.finished_at]);
  const lastRevision=useRef<string|null>(null);
  const running=data?.state.status==='running';
  const [now,setNow]=useState(Date.now());
@@ -20,18 +23,22 @@ export function SetResearchPanel({entityId,set,sets,beforeStart,onRevision,onAcc
  useEffect(()=>{if(data?.state.job)window.dispatchEvent(new CustomEvent('research-updated'));},[data?.state.job,data?.state.finished_at]);
  useEffect(()=>{let live=true;request<Data>(`/set-research/${entityId}`).then(v=>{if(live)setData(v);}).catch(e=>{if(live)setError(e.message);});return()=>{live=false;};},[entityId]);
  useEffect(()=>{if(!running)return;let live=true;const timer=setInterval(()=>request<Data>(`/set-research/${entityId}?base=${lastRevision.current||''}`).then(v=>{if(live){setData(v);if(v.revision){lastRevision.current=v.revision;onRevision(v.revision);}else if(lastRevision.current&&v.state.status!=='running')setError('Исследование сохранено. Есть более свежая редакция карточки; перед дальнейшим сохранением перечитайте её. Введённые поля оставлены в форме.');}}).catch(e=>{if(live)setError(e.message);}),4000);return()=>{live=false;clearInterval(timer);};},[running,entityId]);
- async function start(action:string){
+ async function start(action:string,mode=depth){
   if(busy||running)return;setBusy(true);setError('');
   try{const revision=await beforeStart();if(!revision)return;
-   const value=await request<Data>(`/set-research/${entityId}/${action}`,{method:'POST',body:JSON.stringify({set_id:set.id,task_id:taskId||undefined,base_revision_id:revision})});setData(value);if(value.revision){lastRevision.current=value.revision;onRevision(value.revision);}
+   const value=await request<Data>(`/set-research/${entityId}/${action}`,{method:'POST',body:JSON.stringify({mode,set_id:set.id,task_id:taskId||undefined,base_revision_id:revision})});setData(value);if(value.revision){lastRevision.current=value.revision;onRevision(value.revision);}
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  const result=data?.state.results?.[set.id];
  function provenance(source:Record<string,string>){try{return JSON.parse(source.source_sets||'[]').map((id:string)=>sets.find(s=>s.id===id)?.title_ru||'Архивный набор').join(', ')||'Прежнее исследование';}catch{return 'Прежнее исследование';}}
  return <div className="set-research-panel">
   {(set.research_tasks?.length||0)>1&&<label>Задание исследования<select value={taskId} disabled={busy||running} onChange={e=>setTaskId(e.target.value)}><option value="">Выберите задание…</option>{set.research_tasks.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select></label>}
-  <div className="row"><button type="button" className="ghost" disabled={busy||running||!set.research_enabled||!taskId} onClick={()=>void start('collect')}>Собрать источники</button><button type="button" className="ghost" disabled={busy||running||!set.research_enabled||!taskId||!data?.sources.length} onClick={()=>void start('analyze')}>Определить при помощи LLM</button><button type="button" className="ghost" disabled={busy||running||!result} onClick={()=>void start('clear')}>Очистить предложения LLM</button>{actions?.(busy||running)}</div>
-  {plan&&<p className="hint">Следующий анализ: {plan.calls} запрос(а), максимум {plan.max_calls}; {plan.selected_chars.toLocaleString()} из {plan.input_chars.toLocaleString()} символов; источников {plan.analyzed_sources}, посторонних исключено {plan.excluded_unrelated}. Выбираются тематические фрагменты, полный корпус сохранён. Стоимость зависит от тарифа модели; автоматического полного прохода нет.</p>}
+  {style&&<fieldset disabled={busy||running}><legend>Глубина исследования</legend>
+   {(Object.keys(labels) as (keyof typeof labels)[]).map(k=><label key={k}><input type="radio" checked={depth===k} onChange={()=>setDepth(k)}/>{labels[k]} {plan?.modes&&<>· {plan.modes[k].selected_chars.toLocaleString()} симв. · {plan.modes[k].coverage_pct}% · вызовов {plan.modes[k].estimated_calls}</>}</label>)}
+   {plan?.modes&&<p>Источников найдено {plan.total_sources}, релевантных {plan.relevant_sources}. В них {plan.input_chars.toLocaleString()} символов. {plan.low_coverage_warning?plan.reason:`Рекомендуется режим «${labels[plan.recommended_mode as keyof typeof labels]}». ${plan.reason}`}</p>}
+  </fieldset>}
+  <div className="row"><button type="button" className="ghost" disabled={busy||running||!set.research_enabled||!taskId} onClick={()=>void start('collect')}>Собрать источники</button>{style&&<button type="button" className="ghost" disabled={busy||running||!set.research_enabled||!taskId||!data?.sources.length} onClick={()=>void start('collect','max')}>Доискать источники</button>}<button type="button" className="ghost" disabled={busy||running||!set.research_enabled||!taskId||!data?.sources.length||(style&&!plan?.modes?.[depth]?.estimated_calls)} onClick={()=>void start('analyze')}>Определить при помощи LLM</button><button type="button" className="ghost" disabled={busy||running||!result} onClick={()=>void start('clear')}>Очистить предложения LLM</button>{actions?.(busy||running)}</div>
+  {plan&&!style&&<p className="hint">Следующий анализ: {plan.calls} запрос(а), максимум {plan.max_calls}; {plan.selected_chars.toLocaleString()} из {plan.input_chars.toLocaleString()} символов; источников {plan.analyzed_sources}, посторонних исключено {plan.excluded_unrelated}. Выбираются тематические фрагменты, полный корпус сохранён. Стоимость зависит от тарифа модели; автоматического полного прохода нет.</p>}
   <div className="research-progress" aria-live="polite" aria-atomic="true">
    {busy&&!running&&<p role="status">Сохраняем изменения…</p>}
    {running&&<><p role="status">{progress?.phase||(data?.state.action==='collect'?'Собираем источники':'Анализируем текст')}{progress?.total!=null?` · ${progress.done} из ${progress.total}`:''} · прошло {elapsed} с{!ownJob?' · выполняется для другого набора':''}</p><progress aria-label="Ход исследования" max={progress?.total||undefined} value={progress?.total?progress.done:undefined}/></>}

@@ -1,3 +1,4 @@
+import type {Depth} from './researchBudget.ts';
 import {analysisPlan} from './researchBudget.ts';
 import {sourceQuality} from './sourceEvidence.ts';
 import {retrieveText} from './sourceText.ts';
@@ -64,9 +65,10 @@ export function publicSourceUrl(raw:string){
  if(!/^[a-z0-9.-]+$/i.test(u.hostname)||!u.hostname.includes('.')||/^(?:\d+\.){3}\d+$/.test(u.hostname)||/\.(localhost|local|internal|lan|test|invalid)$/i.test(u.hostname))throw new Error('Непубличный адрес');
  return u.href;
 }
-export async function gather(identity:SearchIdentity|string,set:Row,previous:Row[],caller:Caller,onProgress:Progress=noProgress){
+export async function gather(identity:SearchIdentity|string,set:Row,previous:Row[],caller:Caller,onProgress:Progress=noProgress,depth:Depth="medium"){
  const name=typeof identity==='string'?{title_ru:identity}:identity;
- const queries=researchQueries(name,set as any);
+ const queries=researchQueries(name,set as any,depth);
+ const sourceLimit=depth==='max'&&set.code==='style_solutions'?Math.max(100,previous.filter(r=>!isExcludedResearchRow(r)).length+24):100;
  const rows=structuredClone(previous),warnings:string[]=[];
  for(const [index,plan] of queries.entries()){
   onProgress({phase:`Поиск (${plan.language}): ${plan.query}`,done:index,total:queries.length});
@@ -75,7 +77,7 @@ export async function gather(identity:SearchIdentity|string,set:Row,previous:Row
    if(isOwnResearchSource(s.url))continue;
    const url=new URL(s.url);url.hash='';const address=url.href.replace(/\/$/,'');
    let row=rows.find(r=>r.source_url===address);
-   if(!row){if(rows.filter(r=>!isExcludedResearchRow(r)).length>=100)continue;row={source_uid:crypto.randomUUID(),source_url:address,source_title:s.title,source_excerpt:s.excerpt,source_provider:s.provider,source_sets:'[]',source_queries:'[]',source_status:'Ожидает получения',source_text:'',source_fetched:''};rows.push(row);}
+   if(!row){if(rows.filter(r=>!isExcludedResearchRow(r)).length>=sourceLimit)continue;row={source_uid:crypto.randomUUID(),source_url:address,source_title:s.title,source_excerpt:s.excerpt,source_provider:s.provider,source_sets:'[]',source_queries:'[]',source_status:'Ожидает получения',source_text:'',source_fetched:''};rows.push(row);}
    row.source_sets=JSON.stringify([...new Set([...JSON.parse(row.source_sets||'[]'),set.id])]);
    row.source_queries=JSON.stringify([...new Set([...JSON.parse(row.source_queries||'[]'),plan.query])]);
    const observations=JSON.parse(row.source_observations||'[]');for(const item of s.observations||[{query:plan.query,language:plan.language,provider:s.provider}])observations.push({id:crypto.randomUUID(),set_id:set.id,...item,title:s.title,excerpt:s.excerpt,at:new Date().toISOString()});row.source_observations=JSON.stringify(observations);
@@ -117,11 +119,11 @@ export function validateProposal(raw:Row,parameters:Row[],sourceIds:Set<string>)
  if(!['number','integer','text','boolean','option','table','date'].includes(p.value_type))throw new Error('Этот тип требует ручного заполнения');
  return {id:crypto.randomUUID(),parameter_id:p.id,parameter:p.code,title:p.title_ru,value:v,columns:p.columns,option_code:p.options?.find((o:Row)=>o.id===v)?.code,type:p.value_type,unit:p.unit,source_ids:raw.source_ids,rationale:String(raw.rationale||'').slice(0,4000),selected:false};
 }
-export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Caller,onProgress:Progress=noProgress,names:string[]=[]){
+export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Caller,onProgress:Progress=noProgress,names:string[]=[],depth:Depth="medium"){
  if(!config.search.apiKey)throw new ApiError('unavailable','LLM не настроена');
  const excluded=sources.filter(isExcludedResearchRow).length;
  sources=sources.filter(s=>!isExcludedResearchRow(s));
- const {chunks,summary:budget}=analysisPlan(sources,set,names);if(!chunks.length)throw new Error('Нет текста с названием объекта. Проверьте названия и найденные источники перед анализом');
+ const {chunks,summary:budget}=analysisPlan(sources,set,names,depth);if(!chunks.length)throw new Error('Нет текста с названием объекта. Проверьте названия и найденные источники перед анализом');
  const attribution=set.result_kind==='relations';
  const catalog=attribution?(await classificationCatalog()).filter(c=>set.allowed_types.some((t:any)=>t.code===c.axis)):[];
  const proposals:Row[]=[],warnings:string[]=excluded?['Собственные страницы исключены из анализа: '+excluded]:[];
