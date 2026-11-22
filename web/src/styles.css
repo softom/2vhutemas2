@@ -1170,3 +1170,23 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 }
 .style-analysis .style-score meter::-webkit-meter-optimum-value { background: var(--score-fill); }
 .style-analysis .style-score meter::-moz-meter-bar { background: var(--score-fill); }
+
+/* Keep the fill behind the entire label, including its bottom padding. */
+.style-analysis .style-score {
+  padding: .28rem .5rem .42rem;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--score-fill) var(--score-share), #f4f0e9 var(--score-share));
+}
+.style-analysis .style-score meter { width: 1px; height: 1px; clip-path: inset(50%); }
+.style-analysis .style-score small[role="tooltip"] {
+  display: none; position: absolute; inset-inline-end: 0; bottom: 100%;
+  padding: .3rem .55rem; border-radius: 3px; background: #302921; color: #fff;
+  line-height: 1.3; box-shadow: 0 2px 6px #0003;
+}
+.style-analysis .style-score:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.style-analysis .style-score:focus-within { z-index: 2; }
+.style-analysis .style-score:focus-within small[role="tooltip"] { display: block; }
+@media (hover: hover) {
+  .style-analysis .style-score:hover { z-index: 3; }
+  .style-analysis .style-score:hover small[role="tooltip"] { display: block; }
+}

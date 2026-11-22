@@ -16,7 +16,8 @@ function anchor(slug: string, title: string): string {
   return `<a href="${e(entityPath(slug))}">${e(title)}</a>`;
 }
 
-function profile(links: Relation[]): string {
+function profile(links: Relation[], setId: string): string {
+  let rowNumber = 0;
   return Object.entries(AXES).map(([axis, title]) => {
     const groups = new Map<
       string,
@@ -51,11 +52,12 @@ function profile(links: Relation[]): string {
         const percent = (100 * c.sources.size / total).toLocaleString("ru", {
           maximumFractionDigits: 1,
         });
-        return `<div class="style-score">${
+        const hintId = `score-hint-${e(setId)}-${++rowNumber}`;
+        return `<div class="style-score" tabindex="0" aria-describedby="${hintId}" style="--score-share:${100 * c.sources.size / total}%">${
           anchor(c.link.other_slug, c.link.other_title)
         } <strong>${percent}%</strong><meter aria-label="${
           e(c.link.other_title)
-        }" min="0" max="${total}" value="${c.sources.size}"></meter><small>Источников: ${c.sources.size} · связей: ${c.relations.size}</small></div>`;
+        }" min="0" max="${total}" value="${c.sources.size}"></meter><small id="${hintId}" role="tooltip">Источников: ${c.sources.size} · связей: ${c.relations.size}</small></div>`;
       }).join("");
     }).join("");
     return `<section data-axis="${axis}"><h3>${e(title)}</h3>${
@@ -122,7 +124,7 @@ export function styleAttributionWidgetHtml(set: PublicRelationSet | undefined): 
     [
       "Профиль",
       "<p>Доля поддержки источниками внутри одной оси, роли, фазы и части объекта. Каждый источник даёт понятию один голос.</p>" +
-      profile(set.links),
+      profile(set.links, set.id),
     ],
     [
       "Близкие объекты",
