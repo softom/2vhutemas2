@@ -44,10 +44,11 @@ function profile(links: Relation[], setId: string): string {
     const defaultRole = axis === "art_epochs" || axis === "art_styles"
       ? "classification_membership" : "classification_trait";
     const objections = new Map<number, {link: Relation; sources: Set<number>; contexts: Set<string>; witnesses: Witnesses}>();
-    function objectionLabel(note: NonNullable<ReturnType<typeof objections.get>>): string {
+    function objectionLabel(note: NonNullable<ReturnType<typeof objections.get>>, showConcept = false): string {
       const context = [...note.contexts].map(e).join("; ");
       const id = `score-hint-${e(setId)}-${++rowNumber}`;
-      return `<span class="style-objection" tabindex="0" aria-describedby="${id}">Оспаривается: ${note.sources.size} ист.${context ? " · " + context : ""}${witnessPopup(note.witnesses,id)}</span>`;
+      const concept = showConcept ? anchor(note.link.other_slug, note.link.other_title) + " · " : "";
+      return `<span class="style-objection" tabindex="0" aria-describedby="${id}">${concept}Оспаривается: ${note.sources.size} ист.${context ? " · " + context : ""}${witnessPopup(note.witnesses,id)}</span>`;
     }
     const groups = new Map<
       string,
@@ -109,9 +110,9 @@ function profile(links: Relation[], setId: string): string {
       }).join("");
     }).join("");
     const negativeRows = [...objections.values()].map(note =>
-      `<div class="style-negative">${anchor(note.link.other_slug, note.link.other_title)} · ${objectionLabel(note)}</div>`
+      `<div class="style-counterbar style-negative">${objectionLabel(note, true)}</div>`
     ).join("");
-    const negativeGroup = negativeRows ? `<h4>Отрицание атрибуции</h4>${negativeRows}` : "";
+    const negativeGroup = negativeRows ? `<h4 class="style-negative-heading">Отрицание атрибуции</h4>${negativeRows}` : "";
     return `<section data-axis="${axis}"><h3>${e(title)}</h3>${
       (body + negativeGroup) || '<p class="hint">Нет оценки</p>'
     }</section>`;

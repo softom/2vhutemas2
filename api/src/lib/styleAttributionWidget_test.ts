@@ -155,5 +155,5 @@ Deno.test("five plus one positive votes and objections from repeated citations",
   if (!html.includes("За: 1 ист. (16,7%)") || !html.includes("83,3%") ||
       (html.match(/href="\/entities\/c2"/g)??[]).length!==1 ||
       (html.match(/Оспаривается: 1 ист\./g)??[]).length!==2 ||
-      /<meter|%/.test(html.split('class="style-negative"')[1])) throw Error(html);
+      /<meter|%/.test(html.split('class="style-counterbar style-negative"')[1])) throw Error(html);
 });
