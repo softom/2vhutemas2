@@ -119,23 +119,45 @@ export function validateProposal(raw:Row,parameters:Row[],sourceIds:Set<string>)
  if(!['number','integer','text','boolean','option','table','date'].includes(p.value_type))throw new Error('Этот тип требует ручного заполнения');
  return {id:crypto.randomUUID(),parameter_id:p.id,parameter:p.code,title:p.title_ru,value:v,columns:p.columns,option_code:p.options?.find((o:Row)=>o.id===v)?.code,type:p.value_type,unit:p.unit,source_ids:raw.source_ids,rationale:String(raw.rationale||'').slice(0,4000),selected:false};
 }
-export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Caller,onProgress:Progress=noProgress,names:string[]=[],depth:Depth="medium"){
+export function missingParts(r:Row){
+ const ids:number[]=r.pending_parts?r.pending_parts.map((p:Row)=>p.number):(r.warnings||[]).flatMap((w:string)=>{const m=/^Часть (\d+) не обработана:/.exec(w);return m?[Number(m[1])]:[];});
+ return ids.length===r.failed_parts&&new Set(ids).size===ids.length&&ids.every(i=>Number.isInteger(i)&&i>=1&&i<=r.parts)?ids:[];
+}
+export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Caller,onProgress:Progress=noProgress,names:string[]=[],depth:Depth="medium",prior?:Row,checkpoint?:(r:Row)=>Promise<void>){
  if(!config.search.apiKey)throw new ApiError('unavailable','LLM не настроена');
  const excluded=sources.filter(isExcludedResearchRow).length;
  sources=sources.filter(s=>!isExcludedResearchRow(s));
- const {chunks,summary:budget}=analysisPlan(sources,set,names,depth);if(!chunks.length)throw new Error('Нет текста с названием объекта. Проверьте названия и найденные источники перед анализом');
+ const frozen=prior?.pending_parts;
+ const plan=frozen?null:analysisPlan(sources,set,names,depth);
+ const budget=frozen?prior!.budget:plan!.summary;
+ const parts=frozen?prior!.parts:plan!.chunks.length;
+ const missing=prior?missingParts(prior):[];
+ if(prior&&(!missing.length||prior.parts!==parts||prior.budget.selected_chars!==budget.selected_chars||prior.budget.input_chars!==budget.input_chars))throw Error('План исходного анализа изменился');
+ const pending=new Map<number,any[]>(frozen?frozen.map((p:Row)=>[p.number,p.fragments]):plan!.chunks.map((chunk,i)=>[i+1,chunk] as [number,any[]]).filter(([n])=>!prior||missing.includes(n)));
+ if(!pending.size)throw new Error('Нет текста с названием объекта. Проверьте названия и найденные источники перед анализом');
  const attribution=set.result_kind==='relations';
  const catalog=attribution?(await classificationCatalog()).filter(c=>set.allowed_types.some((t:any)=>t.code===c.axis)):[];
- const proposals:Row[]=[],warnings:string[]=excluded?['Собственные страницы исключены из анализа: '+excluded]:[];
- const rejectedProposals:Row[]=[];
- warnings.push(`Бюджет: ${budget.calls} из максимум ${budget.max_calls} запросов; ${budget.selected_chars} из ${budget.input_chars} символов. ${budget.method}. Это выборочный анализ. Посторонних источников исключено: ${budget.excluded_unrelated}.`);
- let received=0,rejected=0,failedParts=0;
+ const proposals:Row[]=[...(prior?.proposals||[])],warnings:string[]=prior?(prior.warnings||[]).filter((w:string)=>!/^Часть \d+ не обработана:/.test(w)):excluded?['Собственные страницы исключены из анализа: '+excluded]:[];
+ const rejectedProposals:Row[]=[...(prior?.rejected_proposals||[])];
+ if(!prior)warnings.push(`Бюджет: ${budget.calls} из максимум ${budget.max_calls} запросов; ${budget.selected_chars} из ${budget.input_chars} символов. ${budget.method}. Это выборочный анализ. Посторонних источников исключено: ${budget.excluded_unrelated}.`);
+ let received=prior?.received||0,rejected=prior?.rejected||0;
  const fullTexts=sources.filter(s=>sourceQuality(s)==='page').length;
  if(fullTexts<sources.length)warnings.push(`Полный текст получен для ${fullTexts} из ${sources.length} внешних источников; для остальных доступны частичный текст или поисковые выдержки.`);
  if(sources.some(s=>!s.source_text&&String(s.source_status).includes('HTTP 451')))warnings.push('Некоторые источники вернули HTTP 451. Ошибка сохранена; поисковые выдержки не заменяют текст страницы.');
- let completedParts=0;
- await Promise.all(chunks.map(async (sources,index)=>{
-  onProgress({phase:'Анализ текста',done:completedParts,total:chunks.length,accepted:proposals.length,rejected});
+ const snapshot=()=>({config_version:set.config_version,task_id:set.task.id,model:set.task.model_name||Deno.env.get('INTAKE_RESEARCH_MODEL')||'perplexity/sonar-pro',mode:attribution?'attributions':'parameters',proposals,warnings,budget,rejected_proposals:rejectedProposals,parts,pending_parts:[...pending].map(([number,fragments])=>({number,fragments})),received,rejected,failed_parts:pending.size,external_sources_only:true});
+ let saves=Promise.resolve();
+ function persist(){
+  if(checkpoint){
+   const data=structuredClone(snapshot());
+   saves=saves.then(()=>checkpoint(data));
+  }
+  return saves;
+ }
+ await persist();
+ let completedParts=parts-pending.size;
+ const outcomes=await Promise.allSettled([...pending].map(async ([number,sources])=>{
+  const index=number-1;
+  onProgress({phase:'Анализ текста',done:completedParts,total:parts,accepted:proposals.length,rejected});
   const started=Date.now();const model=set.task.model_name||Deno.env.get('INTAKE_RESEARCH_MODEL')||'perplexity/sonar-pro';
   let usage;
   try{
@@ -147,7 +169,7 @@ export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Calle
    const parsed=JSON.parse(String(data.choices?.[0]?.message?.content||'').replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));
    if(!Array.isArray(parsed.proposals))throw new Error('Неверная схема');
    if(parsed.proposals.length>100)warnings.push('Часть '+(index+1)+': модель вернула более 100 предложений; приняты первые 100');
-   received+=parsed.proposals.length;
+   const acceptedPart:Row[]=[],rejectedPart:Row[]=[],partWarnings:string[]=[];
    for(const [position,p] of parsed.proposals.slice(0,100).entries()){try{const proposal:Row=attribution?attributionProposal(attributionFromFragment(p,sources),catalog,sources):validateProposal(p,set.parameters,new Set(sources.map(s=>s.id)));if(attribution&&p.concept_id==null&&proposal.concept_id){proposal.suggested_concept_id=proposal.concept_id;proposal.concept_id=null;proposal.axis=p.axis;proposal.title=proposal.candidate_name=p.candidate_name;}if(proposal.type==='table')await sql`select app.check_table_rows(${proposal.parameter_id},app.table_rows_from_codes(${proposal.parameter_id},${JSON.stringify(proposal.value)}::jsonb))`;if(!attribution){
  const field=set.parameters.find((f:Row)=>f.id===proposal.parameter_id),piece=sources.find((f:any)=>f.fragment_id===p.fragment_id);
  const rank:Row={snippet:0,partial:1,page:2};
@@ -157,10 +179,16 @@ export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Calle
  const evidence=sources.filter((f:any)=>p.source_ids.includes(f.id));
  if(!evidence.some((f:any)=>rank[f.evidence||'snippet']>=rank[field.minimum_evidence]))throw new Error('Недостаточное качество текста источника');
  Object.assign(proposal,{quote:piece?.text||null,phase:p.phase||null,zone:p.zone||null,evidence:piece?.evidence||evidence[0]?.evidence||'snippet'});
- }if(attribution&&!set.allowed_roles.some((r:any)=>r.code===proposal.relation))throw new Error('Отношение не разрешено набором');proposals.push(proposal);}catch(e){rejected++;const src=sources.find(s=>s.id===p.source_id);rejectedProposals.push({part:index+1,proposal:p,reason:reason(e)});warnings.push((src?`Источник №${src.source_number}: ${src.title||src.url} (${src.url})`:'Источник не указан')+', часть '+(index+1)+', предложение '+(position+1)+': '+reason(e));}}
+ }if(attribution&&!set.allowed_roles.some((r:any)=>r.code===proposal.relation))throw new Error('Отношение не разрешено набором');acceptedPart.push(proposal);}catch(e){const src=sources.find(s=>s.id===p.source_id);rejectedPart.push({part:index+1,proposal:p,reason:reason(e)});partWarnings.push((src?`Источник №${src.source_number}: ${src.title||src.url} (${src.url})`:'Источник не указан')+', часть '+(index+1)+', предложение '+(position+1)+': '+reason(e));}}
+   proposals.push(...acceptedPart);rejectedProposals.push(...rejectedPart);warnings.push(...partWarnings);
+   received+=parsed.proposals.length;rejected+=rejectedPart.length;
    recordAiRequest({caller,purpose:'search_answer',model,status:'ok',usage:data.usage,durationMs:Date.now()-started,output:JSON.stringify({kind:'set-research-validation',set_id:set.id,part:index+1,received:parsed.proposals.length,accepted:proposals.length,rejected,warnings})});
-  }catch(e){failedParts++;warnings.push('Часть '+(index+1)+' не обработана: '+reason(e));recordAiRequest({caller,purpose:'search_answer',model,status:'error',usage,durationMs:Date.now()-started,error:'Часть '+(index+1)+': '+reason(e)});}
-  onProgress({phase:'Проверка предложений',done:++completedParts,total:chunks.length,accepted:proposals.length,rejected});
+   pending.delete(number);
+  }catch(e){warnings.push('Часть '+(index+1)+' не обработана: '+reason(e));recordAiRequest({caller,purpose:'search_answer',model,status:'error',usage,durationMs:Date.now()-started,error:'Часть '+(index+1)+': '+reason(e)});}
+  await persist();
+  onProgress({phase:'Проверка предложений',done:++completedParts,total:parts,accepted:proposals.length,rejected});
  }));
- return {config_version:set.config_version,task_id:set.task.id,model:set.task.model_name||Deno.env.get('INTAKE_RESEARCH_MODEL')||'perplexity/sonar-pro',mode:attribution?'attributions':'parameters',proposals,warnings,budget,rejected_proposals:rejectedProposals,parts:chunks.length,received,rejected,failed_parts:failedParts,external_sources_only:true};
+ const failedSave=outcomes.find(r=>r.status==='rejected');
+ if(failedSave?.status==='rejected')throw failedSave.reason;
+ return snapshot();
 }

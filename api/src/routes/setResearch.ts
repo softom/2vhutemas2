@@ -8,7 +8,7 @@ import {sql,transaction} from '../lib/db.ts';
 import {require as permit} from '../lib/auth.ts';
 import {ApiError} from '../lib/errors.ts';
 import {callerOf} from '../lib/aiJournal.ts';
-import {researchData,saveResearch,researchSet,gather,analyzeSet,type ResearchProgress} from '../lib/setResearch.ts';
+import {researchData,saveResearch,researchSet,gather,analyzeSet,missingParts,type ResearchProgress} from '../lib/setResearch.ts';
 export const setResearch=new Hono<AppEnv>();
 const active=new Map<number,ResearchProgress>();
 type JobLog={at:string;level:'info'|'warning'|'error';message:string};
@@ -68,7 +68,7 @@ setResearch.post('/:id/clear',async c=>{
 });
 setResearch.post('/:id/:action',async c=>{
  const actor=permit(c.get('principal'),'edit'),caller=await callerOf(c),id=entityId(c.req.param('id')),action=c.req.param('action');
- if(!['collect','analyze'].includes(action))throw new ApiError('not_found','Действие не найдено');
+ if(!['collect','analyze','resume'].includes(action))throw new ApiError('not_found','Действие не найдено');
  const input=await c.req.json(),set=await researchSet(String(input.set_id),input.task_id);
  const depth:Depth=input.mode??'medium';
  if(!Object.hasOwn(presets,depth))throw new ApiError('validation_failed','Неизвестный режим исследования');
@@ -81,27 +81,37 @@ setResearch.post('/:id/:action',async c=>{
   const attached=await tx`select set_id from app.entity_parameter_sets where entity_id=${id} and set_id=${set.id} union select t.set_id from app.type_parameter_sets t join app.entities e on e.id=${id} where t.set_id=${set.id} and t.type_id in(select app.entity_type_ancestors(e.type_id))`;
   if(!attached.length)throw new ApiError('validation_failed','Сначала добавьте набор');
   const data=await researchData(tx,id),job=crypto.randomUUID();
-  const state={...data.state,job,action,depth,set_id:set.id,task_id:set.task.id,config_version:set.config_version,status:'running',progress:active.get(id),log:journals.get(id),request_id:caller.requestId,warnings:[],started_at:new Date().toISOString(),error:null};
+  const prior=action==='resume'?data.state.results?.[set.id]:undefined;
+  if(action==='resume'&&(!prior||!missingParts(prior).length||prior.task_id!==set.task.id))throw new ApiError('validation_failed','Нет пропущенных частей для этого задания');
+  if(prior&&!prior.pending_parts&&data.state.finished_at!==prior.created_at)throw new ApiError('validation_failed','Корпус старого прогона нельзя подтвердить');
+  const state={...data.state,job,action,depth:prior?.budget?.depth||depth,set_id:set.id,task_id:set.task.id,config_version:set.config_version,status:'running',progress:active.get(id),log:journals.get(id),request_id:caller.requestId,warnings:[],started_at:new Date().toISOString(),error:null};
   const revision=await saveResearch(tx,id,actor.contributorId,{sources:data.sources,state});
   const [context]=action==='collect'&&set.code==='style_solutions'?await tx<any>`select
    (select x.title_ru from app.links l join app.link_roles r on r.id=l.role_id join app.entities x on x.id=case when l.from_entity_id=${id} then l.to_entity_id else l.from_entity_id end where ${id} in(l.from_entity_id,l.to_entity_id) and l.status<>'archived' and x.status<>'archived' and r.code in ('architect','author') order by (r.code='architect') desc,l.is_primary desc,l.id limit 1) architect,
    (select city.text_value from app.indicators i join app.indicator_values v on v.indicator_id=i.id join app.indicators place on place.entity_id=v.entity_value_id join app.indicator_values city on city.indicator_id=place.id join app.parameters p on p.id=city.parameter_id where i.entity_id=${id} and i.is_current and place.is_current and p.code='settlement' order by i.sort_order,v.sort_order,city.id limit 1) city`: [];
-  return {title:entity.title_ru,identity:{...context,title_ru:entity.title_ru,title_en:entity.title_en,title_original:entity.title_original,original_language:entity.original_language},sources:data.sources,state,revision};
+  return {prior,title:entity.title_ru,identity:{...context,title_ru:entity.title_ru,title_en:entity.title_en,title_original:entity.title_original,original_language:entity.original_language},sources:data.sources,state,revision};
  });}catch(e){active.delete(id);journals.delete(id);throw e;}
  void(async()=>{
   let result:any;const progress=(value:ResearchProgress)=>{
    active.set(id,value);
    addLog(id,caller.requestId,value.phase+(value.total!=null?`: ${value.done} из ${value.total}`:'')+(value.accepted!=null?`; принято ${value.accepted}, отклонено ${value.rejected||0}`:''));
   };
-  try{result=action==='collect'?await gather(prepared.identity,set,prepared.sources,caller,progress,depth):await analyzeSet(prepared.title,set,prepared.sources,caller,progress,[prepared.identity.title_ru,prepared.identity.title_en,prepared.identity.title_original],depth);}
+  const checkpoint=async(partial:any)=>{
+   await transaction(actor.contributorId,async tx=>{
+    const changed=await tx`update app.indicator_values v set text_value=jsonb_set(v.text_value::jsonb,'{results}',coalesce(v.text_value::jsonb->'results','{}'::jsonb)||jsonb_build_object(${String(set.id)}::text,${JSON.stringify(partial)}::jsonb))::text
+     from app.indicators i,app.parameters p where i.id=v.indicator_id and i.entity_id=${id} and p.id=v.parameter_id and p.code='research_state' and v.text_value::jsonb->>'job'=${prepared.state.job} returning v.id`;
+    if(!changed.length)throw Error('Исследование уже заменено');
+   });
+  };
+  try{result=action==='collect'?await gather(prepared.identity,set,prepared.sources,caller,progress,depth):await analyzeSet(prepared.title,set,prepared.sources,caller,progress,[prepared.identity.title_ru,prepared.identity.title_en,prepared.identity.title_original],prepared.state.depth,prepared.prior,checkpoint);}
   catch(e){result={error:String(e).slice(0,500)};log('error',caller.requestId,'Исследование набора не завершено',{entity_id:id,error:String(e)});}
   for(const warning of result.warnings||[])addLog(id,caller.requestId,warning,'warning');
-  addLog(id,caller.requestId,result.error?'Задание завершилось ошибкой: '+result.error:action==='analyze'?`Анализ завершён: получено ${result.received||0}, принято ${result.proposals?.length||0}, отклонено ${result.rejected||0}, ошибок частей ${result.failed_parts||0}`:`Сбор завершён: источников ${result.sources?.length||0}, полученных текстов ${result.sources?.filter((s:any)=>s.source_text).length||0}`,result.error?'error':'info');
+  addLog(id,caller.requestId,result.error?'Задание завершилось ошибкой: '+result.error:action!=='collect'?`Анализ завершён: получено ${result.received||0}, принято ${result.proposals?.length||0}, отклонено ${result.rejected||0}, ошибок частей ${result.failed_parts||0}`:`Сбор завершён: источников ${result.sources?.length||0}, полученных текстов ${result.sources?.filter((s:any)=>s.source_text).length||0}`,result.error?'error':'info');
   await transaction(actor.contributorId,async tx=>{
    await tx`select id from app.entities where id=${id} for update`;
    const current=await researchData(tx,id);if(current.state.job!==prepared.state.job)return;
    const state={...current.state,status:result.error?'error':'ready',progress:active.get(id),log:journals.get(id),finished_at:new Date().toISOString(),error:result.error||null,warnings:result.warnings||[]};
-   if(action==='analyze'&&!result.error)state.results={...state.results,[set.id]:{...result,created_at:state.finished_at}};
+   if(action!=='collect'&&!result.error)state.results={...state.results,[set.id]:{...result,created_at:state.finished_at}};
    await saveResearch(tx,id,actor.contributorId,{sources:action==='collect'&&result.sources?result.sources:current.sources,state});
   });
  })().catch(e=>log('error',caller.requestId,'Ошибка сохранения исследования',{entity_id:id,error:String(e)})).finally(()=>{active.delete(id);journals.delete(id);});
