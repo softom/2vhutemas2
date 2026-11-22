@@ -8,6 +8,7 @@
  * Отбор по теме — ссылками `?topic=`: страница целиком готовый HTML,
  * без приложения (Р-65).
  */
+import { expandSelection } from "./sectionPattern.ts";
 import { sectionCells } from "./sectionLayouts.ts";
 import type { CardLayout } from "./layouts.ts";
 import { sql } from "./db.ts";
@@ -47,7 +48,7 @@ export interface NewsLite {
  * все значения всех записей — вызов на каждую новость стоил минуты), порядок
  * считается по лёгким полям. `topic` — код варианта «Темы новости».
  */
-export async function newsOrder(topic: string | null): Promise<NewsLite[]> {
+export async function newsOrder(topic: string | null, filter?: Pick<CardLayout,"filter_type_id"|"filter_text"> | null): Promise<NewsLite[]> {
   return await sql<NewsLite>`
     with v as materialized (
       select i.entity_id, p.code, iv.text_value, iv.date_start_year as y, iv.date_start_month as m,
@@ -60,7 +61,9 @@ export async function newsOrder(topic: string | null): Promise<NewsLite[]> {
     n as materialized (
       select e.id, e.slug, e.title_ru, e.published_revision_id
         from app.read_entities(false) e
-       where e.is_published and e.type_id in (select app.entity_type_subtree('news')))
+       where (${filter?.filter_text ?? null}::text is null or strpos(lower(e.title_ru),lower(${filter?.filter_text ?? null}::text)) > 0)
+         and (${filter?.filter_type_id ?? null}::uuid is null or e.type_id in (select app.entity_type_subtree((select code from app.entity_types where id=${filter?.filter_type_id ?? null}::uuid))))
+         and e.is_published and e.type_id in (select app.entity_type_subtree('news')))
     select n.id, n.slug, n.title_ru,
            (select format('%s-%s-%s', v.y, lpad(coalesce(v.m, 1)::text, 2, '0'), lpad(coalesce(v.d, 1)::text, 2, '0'))
               from v where v.entity_id = n.id and v.code = 'news_release' and v.y is not null
@@ -234,7 +237,7 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
 
 
   let currentDay: string | null | undefined;
-  const tile = (row: NewsRow, index: number) => {
+  const tile = (row: NewsRow, index: number, design?: string) => {
     const parts: string[] = [];
     const day = newsDay(row);
     if (day !== currentDay) {
@@ -244,6 +247,7 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
         parts.push(`<h2 class="news-day"><span>${e(title)}</span><span class="news-weekday">${e(weekday)}</span></h2>`);
       }
     }
+    if (design) return parts.join("") + itemHtml(row, design === "feature");
     if (!opts.assigned) {
       const position = index % 5;
       const feature = position === 2 && index + 2 < rows.length;
@@ -255,13 +259,27 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
     parts.push(itemHtml(row, index === 0 && opts.page === 1));
     return parts.join("");
   };
-  const content = opts.assigned ? sectionCells(opts.assigned, rows, opts.offset ?? 0, "news_compact", tile) : rows.map(tile).join("");
+  const layout = opts.assigned;
+  const journal = layout?.repeat_mode === "journal";
+  let content: string;
+  if (layout && journal) {
+    const {items} = expandSelection(rows, layout.slots, layout.first_slot_id!, layout.last_slot_id!, "journal", opts.offset ?? 0);
+    const block = layout.slots.slice(layout.slots.findIndex(s => s.id === layout.first_slot_id), layout.slots.findIndex(s => s.id === layout.last_slot_id) + 1);
+    const start = Math.min(...block.map(s => s.row_start));
+    const height = Math.max(...block.map(s => s.row_start + s.row_span)) - start;
+    const firstRow = Math.min(...items.map(({slot,repeat}) => repeat * height + slot.row_start));
+    content = items.map(({slot,repeat,content:row}, index) => {
+      const design = slot.design === "feature" || slot.design === "compact" ? slot.design : "regular";
+      const y = repeat * height + slot.row_start - firstRow + 1;
+      return `<div class="news-tile tile-${design}" data-section-slot="${slot.id}" style="grid-column:${slot.column_start}/span ${slot.column_span};grid-row:${y}/span ${slot.row_span}">${tile(row,index,design)}</div>`;
+    }).join("");
+  } else content = opts.assigned ? sectionCells(opts.assigned, rows, opts.offset ?? 0, "news_compact", tile) : rows.map((row,index) => tile(row,index)).join("");
   const more = opts.hasMore
     ? `<a class="news-more" href="${e(opts.nextHref ?? link(opts.topic, opts.page + 1))}" rel="next">Раньше</a>` : "";
   const back = opts.page > 1
     ? `<a class="news-archive" href="${e(opts.prevHref ?? link(opts.topic, opts.page - 1))}" rel="prev">← Позже</a>`
     : `<a class="news-archive" href="/news">Архив новостей →</a>`;
-  return head + `<div class="news-feed${opts.assigned ? " section-grid" : " news-mosaic"}" data-columns="${opts.assigned?.grid_columns ?? 3}">${content}</div><div class="news-pager">${more}${back}</div>`;
+  return head + `<div class="news-feed${journal ? " section-grid news-mosaic" : opts.assigned ? " section-grid" : " news-mosaic"}" data-columns="${opts.assigned?.grid_columns ?? 3}">${content}</div><div class="news-pager">${more}${back}</div>`;
 }
 
 /** «Раньше / Позже» и «Ещё за этот день» на странице новости. */

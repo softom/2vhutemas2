@@ -1,3 +1,4 @@
+import { newsOrder } from "../lib/news.ts";
 import { entities } from "./entities.ts";
 import { expandSelection } from "../lib/sectionPattern.ts";
 import { instanceContract, instanceOverrides, resolveEntityArgument } from "../lib/widgetInstance.ts";
@@ -99,7 +100,7 @@ layoutAdmin.get("/layouts/:id/selection-preview", async (c) => {
   if (layout.filter_text) params.set("q", layout.filter_text);
   const response = await entities.request("/?" + params);
   if (!response.ok) throw new Error("Ошибка чтения каталога");
-  const { items } = await response.json() as { items: { id: string | number }[] };
+  const { items } = layout.page_id === "39ee9267-1a0e-4928-b608-24bf91f68105" ? {items:(await newsOrder(null, layout)).slice(0,layout.slots.length)} : await response.json() as { items: { id: string | number }[] };
   const pattern = expandSelection(items, layout.slots, layout.first_slot_id, layout.last_slot_id, layout.repeat_mode);
   return c.json({ items: pattern.items.map(({ slot, content, repeat }) => ({
     slot_id: slot.id, entity_id: String(content.id), repeat,
@@ -257,7 +258,7 @@ layoutAdmin.post("/type_presentations/:typeId/layout", (c) =>
 layoutAdmin.get("/page-editor", async c => {
   const [pages, types, layouts, widgets] = await Promise.all([
     sql`select id,name,current_layout_id from app.pages order by name,id`,
-    sql`select t.id,t.parent_id,t.title_ru as name,p.layout_id from app.entity_types t
+    sql`select t.id,t.parent_id,t.code,t.title_ru as name,p.layout_id from app.entity_types t
       left join app.type_presentations p on p.type_id=t.id and p.mode='card' order by t.title_ru,t.id`,
     sql`select id,page_id,name,assigned from app.layouts order by name,id`,
     sql<{id:string;name:string;renderer_key:string}>`select id,name,renderer_key from app.widgets order by name,id`,

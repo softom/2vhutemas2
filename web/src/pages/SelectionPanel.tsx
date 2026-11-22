@@ -26,6 +26,7 @@ export function SelectionPanel({layout,types,root,busy,onBusy,onSave,onMarks}:{
   const [notice,setNotice]=useState("");
   const [preview,setPreview]=useState<Preview|null>(null);
   const [previewError,setPreviewError]=useState("");
+  const news = layout.page_id === "39ee9267-1a0e-4928-b608-24bf91f68105";
   const slots=layout.slots;
   const branch=types.filter(t=>{
     const seen=new Set<string>();
@@ -58,13 +59,13 @@ export function SelectionPanel({layout,types,root,busy,onBusy,onSave,onMarks}:{
     }finally{onBusy(false);}
   }
   return <section className="pe-selection"><h2>Выборка и повтор</h2>
-    <fieldset className="pe-controls" disabled={busy || layout.assigned}><label>Источник<select aria-label="Источник" value={form.source_type_id ?? ""} onChange={e=>change(e.target.value?{source_type_id:root,repeat_mode:form.repeat_mode ?? "block"}:{source_type_id:null,filter_type_id:null,filter_text:null,repeat_mode:null,first_slot_id:null,last_slot_id:null})}>
+    <fieldset className="pe-controls" disabled={busy || layout.assigned}><label>Источник<select aria-label="Источник" value={form.source_type_id ?? ""} onChange={e=>change(e.target.value?{source_type_id:root,repeat_mode:news ? "journal" : form.repeat_mode ?? "block"}:{source_type_id:null,filter_type_id:null,filter_text:null,repeat_mode:null,first_slot_id:null,last_slot_id:null})}>
       <option value="">Без выборки</option><option value={root}>{types.find(t=>t.id===root)?.name}</option></select></label>
     {form.source_type_id && <><label>Тип записей<select aria-label="Тип записей" value={form.filter_type_id ?? ""} onChange={e=>change({filter_type_id:e.target.value||null})}>
       <option value="">Все типы источника</option>{branch.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
       <label>Текст фильтра<input value={form.filter_text ?? ""} onChange={e=>change({filter_text:e.target.value||null})}/></label>
       <label>Режим повтора<select aria-label="Режим повтора" value={form.repeat_mode ?? "block"} onChange={e=>change({repeat_mode:e.target.value as "block"|"journal"})}>
-        <option value="block">Блок для каждой записи</option><option value="journal">Журнальный</option></select></label>
+        {!news && <option value="block">Блок для каждой записи</option>}<option value="journal">Журнальный</option></select></label>
       {(["first_slot_id","last_slot_id"] as const).map((key,i)=>{const label=i?"Конец повтора":"Начало повтора";return <label key={key}>{label}<select aria-label={label} value={form[key] ?? ""} onChange={e=>change({[key]:e.target.value||null})}>
         <option value="">Выберите слот</option>{slots.map(s=><option key={s.id} value={s.id}>{slotName(s.id)}</option>)}</select></label>;})}
     </>}

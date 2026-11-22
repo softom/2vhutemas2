@@ -436,12 +436,13 @@ function validSectionQuery(query: URLSearchParams, size: number) {
 async function newsPage(c: Context<AppEnv>, path: "/" | "/news") {
   const topic = c.req.query("topic") || null;
   const params = new URL(c.req.url).searchParams;
-  const assigned = path === "/news" ? await sectionLayout(path) : null;
-  const size = assigned?.slots.length || 1;
+  const newsLayout = await sectionLayout("/news");
+  const assigned = path === "/news" || newsLayout?.repeat_mode === "journal" ? newsLayout : null;
+  const size = assigned?.repeat_mode ? selectionSlots(assigned).period : assigned?.slots.length || 1;
   const limit = path === "/news" && params.has("limit") ? Number(params.get("limit")) : NEWS_PAGE;
   if (path === "/news" && !validSectionQuery(params, size)) return c.text("Некорректное продолжение выборки", 400);
   const after = path === "/news" ? decodeCursor(c.req.query("after")) : null;
-  const order = await newsOrder(topic);
+  const order = await newsOrder(topic, assigned);
   const index = after === null ? -1 : order.findIndex(row => Number(row.id) === after);
   if (after !== null && index < 0) return await notFound(c);
   const legacyPage = Math.max(1, Math.min(500, Math.trunc(Number(c.req.query("page"))) || 1));
@@ -1448,7 +1449,7 @@ async function drawDocumentWidget(key: string, entityId: number, design: string 
     html = compactTile({...card, compact: data.compact, material_status: card.is_published ? "published" : "draft"}, 1);
   } else if (key === "news_compact") {
     const target = (await newsOrder(null)).find(row => Number(row.id) === entityId);
-    html = target ? itemHtml((await loadNews([target]))[0], false) : "";
+    html = target ? itemHtml((await loadNews([target]))[0], design === "feature") : "";
   } else {
     const body = key === "text" ? await documentHtml(card, principal, ancestors) : "";
     const cite = citation({title: card.title_ru, slug: card.slug, authors: card.authors, year: new Date(card.modified_at).getFullYear()});

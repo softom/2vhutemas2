@@ -10,7 +10,7 @@ type Summary = Named & { page_id: string; assigned: boolean };
 export type Slot = { id: string; widget_id: string; widget_name: string; sort_order: number; row_start: number;
   design: string | null; display_options: Values; call_params: Values; column_start: number; row_span: number; column_span: number };
 export type Layout = Summary & Selection & { revision: number; grid_columns: 3 | 4; slots: Slot[] };
-type Catalog = { card_page_id: string; pages: Page[]; types: (Named & { parent_id: string | null; layout_id: string | null })[];
+type Catalog = { card_page_id: string; pages: Page[]; types: (Named & { code: string; parent_id: string | null; layout_id: string | null })[];
   layouts: Summary[]; widgets: WidgetDefinition[] };
 
 function errorText(error: unknown) {
@@ -50,6 +50,7 @@ export default function PageEditor() {
 }
 
 function Workspace({page,typeId,catalog,onCreated}: {page: Page; typeId: string; catalog: Catalog; onCreated: (l: Layout) => void}) {
+  const sourceRoot = page.id === "39ee9267-1a0e-4928-b608-24bf91f68105" ? catalog.types.find(t => t.code === "news")?.id : sectionSources[page.id];
   const versions = catalog.layouts.filter(l => l.page_id === page.id);
   const [active, setActive] = useState<string | null>(null);
   const [layout, setLayout] = useState<Layout | null>(null);
@@ -105,7 +106,7 @@ function Workspace({page,typeId,catalog,onCreated}: {page: Page; typeId: string;
     </div>
     {ready && <p>Действующий макет: {versions.find(l=>l.id===active)?.name ?? "не назначен"}{inherited ? " (унаследован)" : ""}</p>}
     {error && <p role="alert">{error}</p>}
-    {layout && sectionSources[page.id] && <SelectionPanel key={layout.id} layout={layout} types={catalog.types} root={sectionSources[page.id]} busy={busy} onBusy={setBusy} onSave={setLayout} onMarks={setMarks}/>}
+    {layout && sourceRoot && <SelectionPanel key={layout.id} layout={layout} types={catalog.types} root={sourceRoot} busy={busy} onBusy={setBusy} onSave={setLayout} onMarks={setMarks}/>}
     <div className="pe-workspace">
       <PlacementBoard key={chosen} layout={layout} widgets={catalog.widgets} selected={selected} busy={busy}
         first={marks?.layoutId===chosen?marks.first:layout?.first_slot_id} last={marks?.layoutId===chosen?marks.last:layout?.last_slot_id} onSelect={setSelected} onBusy={setBusy} onSave={setLayout} />
