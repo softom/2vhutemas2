@@ -178,14 +178,19 @@ async function render(c: Context<AppEnv>, page: Page) {
 
 // ── Общие куски ──────────────────────────────────────────────────────────────
 
-function layout(inner: string, assigned?: (CardLayout & { frame?: CardLayout["slots"] }) | null): string {
+function layout(inner: string, assigned?: (CardLayout & { frame?: CardLayout["slots"] }) | null, cardFrame = false): string {
   const slots = assigned?.frame ?? assigned?.slots ?? [];
   const frameAttribute = (key: string) => {
     const slot = slots.find(s => s.renderer_key === key);
     return slot ? ` data-layout-slot="${escapeHtml(slot.id)}" data-frame-widget="${key}"` : "";
   };
+  const menu = frameAttribute("site_menu");
+  const footer = frameAttribute("site_footer");
+  const implicit = !cardFrame || !assigned;
   return `<div class="shell"${assigned?.grid_columns === 4 ? ' data-page-columns="4"' : ""}><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
-    `<header class="top" data-site-header${frameAttribute("site_menu")}>${siteHeader(null, "")}</header><main>${inner}</main><footer class="site-foot"${frameAttribute("site_footer")}>${siteFooter()}</footer></div>`;
+    (implicit || menu ? `<header class="top" data-site-header${menu}>${siteHeader(null, "")}</header>` : "") +
+    `<main>${inner}</main>` +
+    (implicit || footer ? `<footer class="site-foot"${footer}>${siteFooter()}</footer>` : "") + "</div>";
 }
 
 // Оба клиента получают один и тот же элемент меню и ту же модель прав.
@@ -1083,7 +1088,18 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   const renderedWidgets = new Set<string>();
   const panelSets = () => (card.relation_sets ?? []).filter(set =>
     set.code !== "style_solutions" || !renderedWidgets.has("style_analysis"));
+  const titleHtml = parts.slice(headerStart).join("");
+  function sameDay() {
+    const release = card.values.find((v) => v.parameter === "news_release");
+    const day = release?.date_start_year
+      ? `${release.date_start_year}-${String(release.date_start_month ?? 1).padStart(2, "0")}-${String(release.date_start_day ?? 1).padStart(2, "0")}`
+      : null;
+    return news ? sameDayHtml(news.sameDay, day) : "";
+  }
   const sections: Record<string, (side?: "left" | "right") => string> = {
+    card_title: () => titleHtml,
+    news_navigation: () => news ? newsNavHtml(news.nav) : "",
+    news_same_day: sameDay,
     indicators: () => {
       // Новость: одни «Сведения» — выход днём и слотом, тема, первоисточник
       // ссылкой, публикация в источнике. Значимость — оценка робота для
@@ -1245,14 +1261,14 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     const splitParameters = parameterSlots.length === 2 &&
       parameterSlots.some(s => s.column_start === sideColumn - 2 && s.column_span === 2) &&
       parameterSlots.some(s => s.column_start === sideColumn && s.column_span === 1);
-    const header = parts.splice(headerStart).join("");
+    parts.length = headerStart;
     parts.push(renderCardGrid(slots, slot => {
       if (splitParameters && slot.renderer_key === "parameters" && target(slot) === card.id) {
         return sections.parameters(slot.column_start === sideColumn ? "right" : "left");
       }
       if (extras.has(slot.id)) return extras.get(slot.id)!;
       return registry.get(slot.renderer_key)?.(target(slot), slot.design) ?? "";
-    }, layoutPreview, header, card.widgetLayout.grid_columns));
+    }, layoutPreview, undefined, card.widgetLayout.grid_columns));
   } else {
     // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
     const layout = card.layout.length > 0
@@ -1274,18 +1290,14 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     }
     parts.push(...(widgets.get("") ?? []));
   }
-  if (news) {
+  if (news && !card.widgetLayout) {
     // Листать ленту: «Раньше / Позже» в конце, «Ещё за этот день» — на полях.
     parts.push(`<section class="pc-news-nav">${newsNavHtml(news.nav)}</section>`);
-    const release = card.values.find((v) => v.parameter === "news_release");
-    const day = release?.date_start_year
-      ? `${release.date_start_year}-${String(release.date_start_month ?? 1).padStart(2, "0")}-${String(release.date_start_day ?? 1).padStart(2, "0")}`
-      : null;
-    const same = sameDayHtml(news.sameDay, day);
+    const same = sameDay();
     if (same) parts.push(`<aside class="pc-news-day">${same}</aside>`);
   }
   // Материалы в работе — только в карточке для редактора (materials передан).
-  if (materials !== undefined && !card.widgetLayout?.slots.some(s => s.renderer_key === "research_materials")) {
+  if (materials !== undefined && !card.widgetLayout) {
     parts.push(materialsHtml(materials));
   }
   parts.push(`</article>`);
@@ -1332,7 +1344,7 @@ pages.get("/entities/:key", async (c) => {
     jsonLd: [cardLd(card, description, card.authors), breadcrumbsLd(card)],
     publicReader: true,
     entityKey: String(card.id),
-    body: layout(cardBody(card, descriptionHtml, cite, news), card.widgetLayout),
+    body: layout(cardBody(card, descriptionHtml, cite, news), card.widgetLayout, true),
   });
 });
 
@@ -1454,7 +1466,7 @@ async function drawDocumentWidget(key: string, entityId: number, design: string 
   } else {
     const body = key === "text" ? await documentHtml(card, principal, ancestors) : "";
     const cite = citation({title: card.title_ru, slug: card.slug, authors: card.authors, year: new Date(card.modified_at).getFullYear()});
-    html = cardBody(card, body, cite, key === "parameters" ? await newsExtra(card) : null, undefined, {key, design});
+    html = cardBody(card, body, cite, ["parameters", "card_title", "news_navigation", "news_same_day"].includes(key) ? await newsExtra(card) : null, undefined, {key, design});
   }
   return {html, title: card.title_ru, reason: editor && !card.is_published ? "Черновик" : undefined};
 }
@@ -1510,6 +1522,7 @@ pages.get("/api/v1/entities/:key/card", async (c) => {
   const canEdit = !!principal && (principal.permissions.has("edit") || principal.permissions.has("su"));
   const materials = canEdit ? await materialsOf(card.id) : undefined;
   return c.json({ html: cardBody(card, description, cite, await newsExtra(card), materials, undefined, previewId !== undefined), title: `${card.title_ru} — ${site.name}`,
+    frame: card.widgetLayout ? { menu: card.widgetLayout.slots.find(s => s.renderer_key === "site_menu")?.id ?? null, footer: card.widgetLayout.slots.find(s => s.renderer_key === "site_footer")?.id ?? null } : null,
     path: entityPath(card.slug) });
 });
 

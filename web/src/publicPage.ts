@@ -28,6 +28,19 @@ async function authenticatedCard() {
       const main = document.querySelector(".ssr main");
       if (main) {
         // HTML формирует единственный серверный рендер с экранированием данных.
+        if (card.frame) {
+          for (const [selector, uid, key] of [
+            ["[data-site-header]", card.frame.menu, "site_menu"],
+            [".site-foot", card.frame.footer, "site_footer"],
+          ] as const) {
+            const element = main.parentElement?.querySelector<HTMLElement>(selector);
+            if (!uid) element?.remove();
+            else if (element) {
+              element.dataset.layoutSlot = uid;
+              element.dataset.frameWidget = key;
+            }
+          }
+        }
         main.innerHTML = card.html;
         document.title = card.title;
         history.replaceState(history.state, "", card.path + location.search + location.hash);

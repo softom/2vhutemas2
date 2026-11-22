@@ -1,6 +1,7 @@
 import { modelPath } from "./modelWidgets.ts";
 
 export const cardSectionNames: Readonly<Record<string,string>> = {
+  card_title: "Заголовок карточки", news_navigation: "Листать новости", news_same_day: "Новости за день",
   parameters: "Параметры", links: "Связи", text: "Текст", gallery: "Изображения",
   drawings: "Чертежи", sources: "Источники", mentions: "Упоминания",
   research_materials: "Материалы в работе", citation: "Цитирование", video: "Видео",
