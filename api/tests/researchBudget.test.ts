@@ -27,3 +27,17 @@ const variants=['Kaohsiung Music Center','Harbor Concert Hall'];
 const titles=['Kaohsiung Maritime Pop Music Center','Music center in Kaohsiung','Kaohsiung music','Kaohsiung musical center','Kaohsiung concert hall','Concert hall by the harbor'];
 const named=titles.map((title,i)=>({...source(i),source_title:title,source_text:'Architecture.'}));
 ok(analysisPlan(named,{code:'style_solutions'},variants).summary.relevant_sources===3,'All whole words from one name, independently of order and intervening words');
+
+const longQuote='The building stands on the waterfront. '+('Its timber columns support the cantilevered roof. ').repeat(13).trim();
+const located={...raw,fragment_id:5,quote:longQuote};
+const specimen={id:'s',fragment_id:5,text:longQuote};
+const shortened=attributionFromFragment(located,[specimen]);
+ok(shortened.quote.length<=400&&shortened.quote_trimmed,'Long exact quote is shortened');
+ok(attributionProposal(shortened,catalog,[specimen]).quote===shortened.quote,'Clipped quote survives acceptance');
+let invented=false;try{attributionFromFragment({...located,quote:longQuote+' invented ending'},[specimen]);}catch{invented=true;}ok(invented,'Full match before clipping');
+
+const sameSource=[{...specimen,text:'One unrelated sentence.'},{...specimen,fragment_id:6,text:'The architect described a “folded roof” here.'}];
+const typographyQuote={...located,quote:'The architect described a "folded roof" here.'};
+const recovered=attributionFromFragment(typographyQuote,sameSource);
+ok(recovered.fragment_id===6&&recovered.quote===sameSource[1].text,'Recover actual typography within same source');
+let ambiguous=false;try{attributionFromFragment(typographyQuote,[...sameSource,{...sameSource[1],fragment_id:7}]);}catch{ambiguous=true;}ok(ambiguous,'Ambiguous alternative is rejected');
