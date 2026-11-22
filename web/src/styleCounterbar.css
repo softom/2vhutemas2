@@ -1,0 +1,16 @@
+.style-analysis .style-counterbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 .3rem;
+}
+.style-analysis .style-counterbar .style-objection {
+  max-width: 100%;
+  padding: .18rem .5rem;
+  border-inline-end: 3px solid #96575b;
+  border-radius: 3px;
+  background: repeating-linear-gradient(135deg, #f1e5e4 0 5px, #e8d8d7 5px 7px);
+  color: #60292c;
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+.style-analysis .style-score:has(+ .style-counterbar) strong { white-space: normal; }

@@ -80,9 +80,10 @@ function profile(links: Relation[], setId: string): string {
         const support = note ? `За: ${c.sources.size} ист. (${percent}%)` : `${percent}%`;
         return `<div class="style-score" tabindex="0" aria-describedby="${hintId}" style="--score-share:${100 * c.sources.size / total}%">${
           anchor(c.link.other_slug, c.link.other_title)
-        } <strong>${support}</strong>${note ? objectionLabel(note) : ""}<meter aria-label="${
+        } <strong>${support}</strong><meter aria-label="${
           e(c.link.other_title)
-        }" min="0" max="${total}" value="${c.sources.size}"></meter><small id="${hintId}" role="tooltip">Источников: ${c.sources.size} · связей: ${c.relations.size}</small></div>`;
+        }" min="0" max="${total}" value="${c.sources.size}"></meter><small id="${hintId}" role="tooltip">Источников: ${c.sources.size} · связей: ${c.relations.size}</small></div>` +
+          (note ? `<div class="style-counterbar">${objectionLabel(note)}</div>` : "");
       }).join("");
     }).join("");
     const negativeRows = [...objections.values()].map(note =>
