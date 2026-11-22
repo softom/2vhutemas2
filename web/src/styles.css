@@ -1114,7 +1114,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 
 /* The middle pair inherits the original editorial measure; the outer columns share the rest. */
 @media (min-width: 1001px) {
-  .shell:is(:has(.lectures-list), [data-editorial-catalog], [data-page-columns="4"]:has(.catalog-head), :has(.public-card > .entity-widget-grid[data-columns="4"])) {
+  .shell:is(:has(.lectures-list, .news-head), [data-editorial-catalog], [data-page-columns="4"]:has(.catalog-head), :has(.public-card > .entity-widget-grid[data-columns="4"])) {
     --pad: max(24px, calc(50% - 690px));
     --editorial: min(var(--c1), 55vw);
     --middle-track: calc((var(--editorial) - var(--page-gap)) / 2);
@@ -1138,6 +1138,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
       column-gap: var(--page-gap);
       background: transparent;
     }
+    & .news-head, & .news-mosaic {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, var(--middle-track))) minmax(0, 1fr);
+      column-gap: var(--page-gap);
+    }
+    & .news-head-main, & .tile-regular { grid-column: 2 / span 2; }
+    & .news-head-side { grid-column: 4; }
+    & .tile-feature { grid-column: 1 / span 2; grid-row: span 2; }
+    & .tile-compact { grid-column: 3; }
+    & .news-tile { min-width: 0; overflow-wrap: anywhere; }
+    & .news-tile .news-item { display: block; }
+    & .news-tile .news-side { margin-top: 12px; }
+    & .tile-compact .news-row { grid-template-columns: 1fr; gap: 12px; }
+    & .news-tile .news-day { margin-top: 24px; flex-wrap: wrap; }
+    & .news-pager, & .news-none { width: var(--editorial); margin-inline: auto; }
     & .lectures-list { width: var(--editorial); margin-inline: auto; }
     & :is(.section-grid[data-columns="4"], .public-card:has(> .entity-widget-grid[data-columns="4"])) {
       grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, var(--middle-track))) minmax(0, 1fr);

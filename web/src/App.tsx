@@ -172,7 +172,7 @@ export function App() {
     (/^\/entities\/[^/]+$/.test(location.pathname) && location.pathname !== "/entities/new");
 
   return (
-    <div className="shell" data-editorial-catalog={["/objects", "/authors", "/media"].includes(location.pathname.replace(/\/$/, "")) || undefined}>
+    <div className="shell" data-editorial-catalog={["", "/news", "/objects", "/authors", "/media"].includes(location.pathname.replace(/\/$/, "")) || undefined}>
       {splash && <Splash onDone={hideSplash} />}
       {reading && <div className="through" aria-hidden="true" />}
       {reading && <div className="through-marks" aria-hidden="true" />}

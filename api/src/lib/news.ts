@@ -244,6 +244,14 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
         parts.push(`<h2 class="news-day"><span>${e(title)}</span><span class="news-weekday">${e(weekday)}</span></h2>`);
       }
     }
+    if (!opts.assigned) {
+      const position = index % 5;
+      const feature = position === 2 && index + 2 < rows.length;
+      const compact = position >= 3 && index - position + 5 <= rows.length;
+      parts.push(itemHtml(row, feature));
+      const variant = feature ? "feature" : compact ? "compact" : "regular";
+      return `<div class="news-tile tile-${variant}">${parts.join("")}</div>`;
+    }
     parts.push(itemHtml(row, index === 0 && opts.page === 1));
     return parts.join("");
   };
@@ -253,7 +261,7 @@ export function newsFeedHtml(rows: NewsRow[], opts: FeedOptions): string {
   const back = opts.page > 1
     ? `<a class="news-archive" href="${e(opts.prevHref ?? link(opts.topic, opts.page - 1))}" rel="prev">← Позже</a>`
     : `<a class="news-archive" href="/news">Архив новостей →</a>`;
-  return head + `<div class="news-feed${opts.assigned ? " section-grid" : ""}" data-columns="${opts.assigned?.grid_columns ?? 3}">${content}</div><div class="news-pager">${more}${back}</div>`;
+  return head + `<div class="news-feed${opts.assigned ? " section-grid" : " news-mosaic"}" data-columns="${opts.assigned?.grid_columns ?? 3}">${content}</div><div class="news-pager">${more}${back}</div>`;
 }
 
 /** «Раньше / Позже» и «Ещё за этот день» на странице новости. */
