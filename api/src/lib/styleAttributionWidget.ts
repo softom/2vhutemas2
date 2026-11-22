@@ -21,10 +21,13 @@ function profile(links: Relation[], setId: string): string {
   const profileOrder = ["art_epochs", "art_styles", "form_method", "morphological_trait"] as const;
   return profileOrder.map(axis => {
     const title = AXES[axis];
+    const defaultRole = axis === "art_epochs" || axis === "art_styles"
+      ? "classification_membership" : "classification_trait";
     const groups = new Map<
       string,
       {
         label: string;
+        isDefault: boolean;
         concepts: Map<number, { link: Relation; sources: Set<number>; relations: Set<number> }>;
       }
     >();
@@ -33,6 +36,7 @@ function profile(links: Relation[], setId: string): string {
         const key = JSON.stringify([link.role_id, citation.phase || "", citation.zone || ""]);
         const group = groups.get(key) ??
           {
+            isDefault: link.role === defaultRole && !citation.phase && !citation.zone,
             label: [link.role_title, citation.phase, citation.zone].filter(Boolean).join(" · "),
             concepts: new Map(),
           };
@@ -44,13 +48,16 @@ function profile(links: Relation[], setId: string): string {
         group.concepts.set(link.other_id, concept);
       }
     }
-    const body = Array.from(groups.values(), (group) => {
+    // Put unlabelled scores first so they cannot appear under a preceding group heading.
+    const ordered = [...groups.values()].sort((a, b) => Number(b.isDefault) - Number(a.isDefault));
+    const body = ordered.map((group) => {
       const concepts = [...group.concepts.values()].sort((a, b) =>
         b.sources.size - a.sources.size ||
         a.link.other_title.localeCompare(b.link.other_title, "ru")
       );
       const total = concepts.reduce((sum, c) => sum + c.sources.size, 0);
-      return `<h4>${e(group.label)}</h4>` + concepts.map((c) => {
+      const heading = group.isDefault ? "" : `<h4>${e(group.label)}</h4>`;
+      return heading + concepts.map((c) => {
         const percent = (100 * c.sources.size / total).toLocaleString("ru", {
           maximumFractionDigits: 1,
         });

@@ -119,3 +119,25 @@ Deno.test("support counts distinct sources separately by axis, role and context"
     if (!html.includes(expected)) throw Error(expected);
   }
 });
+
+Deno.test("default scores precede labelled groups on all four axes", () => {
+  for (const [axis, role] of [
+    ["art_epochs", "classification_membership"], ["art_styles", "classification_membership"],
+    ["form_method", "classification_trait"], ["morphological_trait", "classification_trait"],
+  ]) {
+    const link = {id: 1, other_id: 2, other_type_code: axis, other_title: "Общее", other_slug: "common",
+      role, role_id: role, role_title: "Обычная роль", citations: [{source_entity_id: 3, source_slug: "s", source_title: "Источник", phase: "", zone: ""}]};
+    const links = [
+      {...link, role: "classification_citation", role_id: "citation", role_title: "Цитирование приёма"},
+      {...link, role: "classification_negation", role_id: "negation", role_title: "Отрицание атрибуции"},
+      {...link, citations: [{...link.citations[0], zone: "фасад"}]},
+      {...link, citations: [{...link.citations[0], phase: "1923"}]}, link,
+    ];
+    const html = styleAnalysis({relation_sets:[{id:"s",code:"style_solutions",title:"Стили",fields:[],links}]} as unknown as PublicCard);
+    const section = html.split(`data-axis="${axis}">`)[1].split("</section>")[0];
+    if (!section.includes('</h3><div class="style-score"') || section.includes('<h4>Обычная роль</h4>')) throw Error(axis);
+    for (const title of ["Цитирование приёма","Отрицание атрибуции","Обычная роль · фасад","Обычная роль · 1923"]) {
+      if (!section.includes(`<h4>${title}</h4>`)) throw Error(title);
+    }
+  }
+});
