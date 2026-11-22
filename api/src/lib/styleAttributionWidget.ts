@@ -112,9 +112,8 @@ function profile(links: Relation[], setId: string): string {
     const negativeRows = [...objections.values()].map(note =>
       `<div class="style-counterbar style-negative">${objectionLabel(note, true)}</div>`
     ).join("");
-    const negativeGroup = negativeRows ? `<h4 class="style-negative-heading">Отрицание атрибуции</h4>${negativeRows}` : "";
     return `<section data-axis="${axis}"><h3>${e(title)}</h3>${
-      (body + negativeGroup) || '<p class="hint">Нет оценки</p>'
+      (body + negativeRows) || '<p class="hint">Нет оценки</p>'
     }</section>`;
   }).join("");
 }

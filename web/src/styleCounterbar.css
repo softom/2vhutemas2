@@ -42,7 +42,6 @@
   padding: .65rem .8rem;
 }
 
-.style-analysis .style-negative-heading { text-align: end; }
 .style-analysis .style-counterbar.style-negative { padding: 0; border: 0; }
 .style-analysis .style-negative .style-objection > a { color: inherit; }
 .style-analysis .style-counterbar .style-objection > .witness-popup { left: auto; right: 0; }
