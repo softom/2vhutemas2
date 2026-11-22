@@ -18,7 +18,9 @@ function anchor(slug: string, title: string): string {
 
 function profile(links: Relation[], setId: string): string {
   let rowNumber = 0;
-  return Object.entries(AXES).map(([axis, title]) => {
+  const profileOrder = ["art_epochs", "art_styles", "form_method", "morphological_trait"] as const;
+  return profileOrder.map(axis => {
+    const title = AXES[axis];
     const groups = new Map<
       string,
       {
