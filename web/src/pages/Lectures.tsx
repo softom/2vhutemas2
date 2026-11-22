@@ -12,9 +12,12 @@ import { ListCount } from "../ui/ListCount";
 import { CompactLine } from "../ui/CompactLine";
 import { api, type EntityListItem } from "../api";
 
+const seed = document.getElementById("lecture-initial");
+const initialItems: EntityListItem[] = seed?.textContent ? JSON.parse(seed.textContent) : [];
+
 export function Lectures({ canCreate }: { canCreate: boolean }) {
-  const [items, setItems] = useState<EntityListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<EntityListItem[]>(initialItems);
+  const [loading, setLoading] = useState(!seed);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,7 +39,7 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
   }, []);
 
   return (
-    <section>
+    <section className="lectures-list">
       <h1>Лекции</h1>
       <p className="sub">Материалы курса по порядку номеров.</p>
 
@@ -54,13 +57,13 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
       )}
 
       {items.length > 0 && (
-        <table className="grid-table">
+        <div className="lecture-table"><table className="grid-table">
           <thead>
             <tr>
-              <th style={{ width: 60 }}>№</th>
+              <th>№</th>
               <th>Название</th>
-              <th style={{ width: 200 }}>Курс</th>
-              <th style={{ width: 140 }}>Состояние</th>
+              <th>Курс</th>
+              <th>Состояние</th>
             </tr>
           </thead>
           <tbody>
@@ -83,7 +86,7 @@ export function Lectures({ canCreate }: { canCreate: boolean }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
 
       {items.length > 0 && (

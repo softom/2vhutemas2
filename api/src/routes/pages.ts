@@ -496,6 +496,17 @@ pages.get("/news", (c) => newsPage(c, "/news"));
 
 for (const [path, section] of Object.entries(SECTIONS)) {
   pages.get(path, async (c) => {
+    if (path === "/lectures") {
+      const response = await entities.request("/?type=lecture&parameter=lecture_number&sort=parameter&order=asc&values=lecture_number,course&limit=100");
+      if (!response.ok) return c.text("Ошибка загрузки лекций", 500);
+      const { items } = await response.json() as { items: (CatalogItem & { values?: Record<string, string | number> })[] };
+      const rows = items.map(item => `<tr><td>${escapeHtml(String(item.values?.lecture_number ?? "—"))}</td><td>${compactLine({ slug: item.slug, title: item.title_ru, compact: item.compact ?? [] })}</td><td>${escapeHtml(String(item.values?.course ?? "—"))}</td><td><span class="badge">опубликовано</span></td></tr>`).join("");
+      const count = `<div class="list-count"><span class="hint">Показано ${items.length} ${plural(items.length, ["лекция", "лекции", "лекций"])}</span></div>`;
+      const table = rows ? `${count}<div class="lecture-table"><table class="grid-table"><thead><tr><th>№</th><th>Название</th><th>Курс</th><th>Состояние</th></tr></thead><tbody>${rows}</tbody></table></div>${count}` : "<p>Лекций пока нет.</p>";
+      const seed = JSON.stringify(items).replaceAll("<", "\\u003c");
+      return render(c, {status: 200, title: `${section.title} — ${site.name}`, description: section.lead, canonical: path,
+        jsonLd: [listLd(path, section.title, items)], body: layout(`<section class="lectures-list"><h1>Лекции</h1><p class="sub">Материалы курса по порядку номеров.</p>${table}</section><script type="application/json" id="lecture-initial">${seed}</script>`)});
+    }
     const sectionPath = path === "/objects" || path === "/authors" ? path : null;
     const assigned = sectionPath ? await sectionLayout(sectionPath) : null;
     if (sectionPath && (sectionPath === "/objects" || assigned?.repeat_mode)) {
@@ -525,7 +536,7 @@ for (const [path, section] of Object.entries(SECTIONS)) {
     }
     const [rows, first, chips] = await Promise.all([
       publishedIn(section.branch),
-      section.branch === "learning" ? Promise.resolve(null) : firstCatalogPage(section.branch),
+      firstCatalogPage(section.branch),
       typeChips(section.branch),
     ]);
     return await render(c, {
@@ -534,11 +545,8 @@ for (const [path, section] of Object.entries(SECTIONS)) {
       description: section.lead,
       canonical: path,
       jsonLd: [listLd(path, section.title, rows)],
-      // Проекты и авторы в приложении — каталог раздела; лекции — своя таблица.
-      catalog: section.branch !== "learning",
-      body: layout(section.branch === "learning"
-        ? `<h1>${section.title}</h1><p>${escapeHtml(section.lead)}</p>${listHtml(rows)}`
-        : catalogHtml(section.title, section.lead, first!, section.branch, "Все в разделе", chips)),
+      catalog: true,
+      body: layout(catalogHtml(section.title, section.lead, first, section.branch, "Все в разделе", chips)),
     });
   });
 }
