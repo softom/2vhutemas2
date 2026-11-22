@@ -24,7 +24,7 @@ import { dates } from "./routes/dates.ts";
 import { indicators } from "./routes/indicators.ts";
 import { parameters, parameterSets } from "./routes/parameters.ts";
 import { researchMaterials } from "./routes/researchMaterials.ts";
-import { intakeTokens } from "./routes/intakeTokens.ts";
+import { authorizeToken, intakeTokens } from "./routes/intakeTokens.ts";
 import { entityIntake, save as saveIntake } from "./routes/entityIntake.ts";
 import { classification } from "./routes/classification.ts";
 import { setResearch } from "./routes/setResearch.ts";
@@ -44,7 +44,15 @@ app.use("*", cors);
 /** Пользователь определяется по токену; гость допустим — он видит опубликованное. */
 app.post("/api/v1/incoming-materials", c => saveIntake(c,true,true));
 app.use("/api/v1/*", async (c: Context<AppEnv>, next: Next) => {
-  c.set("principal", await principalFromRequest(c.req.header("authorization")));
+  const header=c.req.header("authorization");
+  if (header?.startsWith("Bearer intake_") && /^\/api\/v1\/entities\/[0-9]+$/.test(c.req.path)
+      && (c.req.method==="GET" || c.req.method==="PATCH")) {
+    const token=await authorizeToken(header,"edit_cards");
+    c.set("principal",{authUid:token.auth_uid,contributorId:token.issued_by,displayName:token.system_name,
+      status:"active",permissions:new Set(["edit"]),tokenId:token.id});
+  } else {
+    c.set("principal",await principalFromRequest(header));
+  }
   await next();
 });
 

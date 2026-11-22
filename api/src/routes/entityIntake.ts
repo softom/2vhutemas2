@@ -1,4 +1,4 @@
-import { tokenDigest } from "./intakeTokens.ts";
+import { authorizeToken } from "./intakeTokens.ts";
 import {researchData} from '../lib/setResearch.ts';
 import { Hono } from "hono";
 import { sql, transaction, type Tx } from "../lib/db.ts";
@@ -74,11 +74,7 @@ export async function save(c: any, creating: boolean, external = false) {
  let tokenId: string | null = null;
  let contributorId: string;
  if (external) {
-   if (!/^Bearer intake_[0-9a-f]{64}$/.test(credential)) throw new ApiError("unauthenticated","Нужен токен приёма");
-   const [token] = await sql<{id:string; issued_by:string}>`select t.id,t.issued_by from app.intake_tokens t
-     join app.contributors c on c.id=t.issued_by and c.status='active'
-     where digest=${await tokenDigest(credential.slice(7))} and expires_at>now()`;
-   if (!token) throw new ApiError("unauthenticated","Токен недействителен или истёк");
+   const token=await authorizeToken(credential,"intake");
    tokenId=token.id;
    contributorId=token.issued_by;
  } else {

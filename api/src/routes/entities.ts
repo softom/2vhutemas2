@@ -525,7 +525,7 @@ entities.patch("/:id", async (c: Context<AppEnv>) => {
     const revisions = await tx`
       insert into app.revisions (material_id, base_revision_id, edited_by, operation, summary, snapshot)
       values (${material_id}, ${latest_revision_id}, ${principal.contributorId}, 'edit',
-              ${"Правка карточки"}, ${JSON.stringify(data)}::jsonb)
+              ${principal.tokenId ? "Правка карточки · токен "+principal.tokenId : "Правка карточки"}, ${JSON.stringify(data)}::jsonb)
       returning id
     `;
     await saveRefs(tx, String(revisions[0].id), (data as {body_json:unknown}).body_json);

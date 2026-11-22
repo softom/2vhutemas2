@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { request } from "../api";
 
-type Token = {id:string; system_name:string; expires_at:string};
+const labels={intake:"Приём материалов",edit_cards:"Редактирование карточек"};
+type Scope=keyof typeof labels;
+type Token = {scopes:Scope[]; id:string; system_name:string; expires_at:string};
 const endpoint="/admin/intake-tokens";
 
 export function IntakeTokens(){
   const [items,setItems]=useState<Token[]>([]);
   const [issued,setIssued]=useState<(Token & {token:string}) | null>(null);
   const [name,setName]=useState("");
+  const [scopes,setScopes]=useState<Scope[]>(["intake"]);
   const [days,setDays]=useState(7);
   const [busy,setBusy]=useState(false);
   const [copyStatus,setCopyStatus]=useState("");
@@ -29,17 +32,22 @@ export function IntakeTokens(){
   },[items]);
   return <section><h2>Токены приёма материалов</h2>
     <p>Система отправляет досье методом POST на <code>/api/v1/incoming-materials</code> с заголовком <code>Authorization: Bearer &lt;токен&gt;</code>.</p>
+    <p>Для правки получите карточку через <code>GET /api/v1/entities/&lt;UID&gt;</code> и отправьте изменения методом <code>PATCH</code> на тот же адрес с <code>base_revision_id</code>.</p>
     <form onSubmit={async e=>{
       e.preventDefault();setBusy(true);setError("");setCopyStatus("");setIssued(null);
       try {
-        const row=await request<Token & {token:string}>(endpoint,{method:"POST",body:JSON.stringify({name,days})});
-        setItems(rows=>[...rows,{id:row.id,system_name:row.system_name,expires_at:row.expires_at}]);setIssued(row);setName("");
+        const row=await request<Token & {token:string}>(endpoint,{method:"POST",body:JSON.stringify({name,days,scopes})});
+        setItems(rows=>[...rows,{scopes:row.scopes,id:row.id,system_name:row.system_name,expires_at:row.expires_at}]);setIssued(row);setName("");setScopes(["intake"]);
       } catch(e){setError((e as Error).message);} finally{setBusy(false);}
     }}>
+      <fieldset><legend>Права токена</legend>
+        {(Object.keys(labels) as Scope[]).map(key=><label key={key}><input type="checkbox" checked={scopes.includes(key)}
+          onChange={e=>setScopes(e.target.checked?[...scopes,key]:scopes.filter(s=>s!==key))}/>{labels[key]}</label>)}
+      </fieldset>
       <label>Название системы <input required maxLength={120} value={name} onChange={e=>setName(e.target.value)}/></label>
       <label> Срок действия <select value={days} onChange={e=>setDays(Number(e.target.value))}>
         {[1,7,30,90].map(n=><option key={n} value={n}>{n} {n===1?"день":"дней"}</option>)}
-      </select></label> <button disabled={busy || !name.trim()}>Выдать токен</button>
+      </select></label> <button disabled={busy || !name.trim() || !scopes.length}>Выдать токен</button>
     </form>
     {issued && <p><label>Скопируйте токен для «{issued.system_name}» <input readOnly value={issued.token} onFocus={e=>e.target.select()}/></label> <button type="button" onClick={async ()=>{
       try {
@@ -50,6 +58,6 @@ export function IntakeTokens(){
       }
     }}>Скопировать в буфер обмена</button> <span role="status">{copyStatus}</span> <button onClick={()=>setIssued(null)}>Скрыть</button></p>}
     {error && <p role="alert">{error}</p>}
-    <ul>{items.map(item=><li key={item.id}>{item.system_name} · до {new Date(item.expires_at).toLocaleString("ru-RU")}</li>)}</ul>
+    <ul>{items.map(item=><li key={item.id}>{item.system_name} · {item.scopes.map(scope=>labels[scope]).join(", ")} · до {new Date(item.expires_at).toLocaleString("ru-RU")}</li>)}</ul>
   </section>;
 }

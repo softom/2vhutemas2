@@ -14,6 +14,7 @@ import { ApiError } from "./errors.ts";
 export type Permission = "view" | "edit" | "create_delete" | "publish" | "review" | "su";
 
 export interface Principal {
+  tokenId?: string;
   authUid: string;
   contributorId: string;
   displayName: string;
