@@ -33,3 +33,11 @@
 .witness-popup .hint-relation,.witness-popup .hint-evidence,.witness-popup span > span { display:block; }
 .witness-popup .hint-relation + .hint-relation { margin-top:.55rem; border-top:1px solid #92877f; padding-top:.5rem; }
 .style-analysis .witness-popup a { color:#fff; text-decoration:underline; }
+
+/* Override the old counter tooltip's bottom anchor on a content popup. */
+.style-analysis :is(.style-score, .style-objection) > small.witness-popup[role="tooltip"] {
+  inset: 100% auto auto 0;
+  height: max-content;
+  max-height: min(40vh, 18rem);
+  padding: .65rem .8rem;
+}
