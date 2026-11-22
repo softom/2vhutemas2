@@ -293,6 +293,13 @@ function EditorBody(props: any) {
       indicator.values.some((value) => value.parameter === "url" && VIDEO_HOSTS.test(value.text_value ?? ""))
     );
 
+  function updateField(name: string, value: string) {
+    const next = { ...form, [name]: value };
+    if (name === "title_ru" && !slugTouched) next.slug = slugify(value);
+    if (name === "slug") setSlugTouched(true);
+    setForm(next);
+  }
+
   const field = (
     name: string,
     label: string,
@@ -303,13 +310,7 @@ function EditorBody(props: any) {
       {label}
       <input
         value={form[name] ?? ""}
-        onChange={(e) => {
-          const next = { ...form, [name]: e.target.value };
-          // Пока адрес страницы не правили руками, держим его в согласии с названием.
-          if (name === "title_ru" && !slugTouched) next.slug = slugify(e.target.value);
-          if (name === "slug") setSlugTouched(true);
-          setForm(next);
-        }}
+        onChange={(e) => updateField(name, e.target.value)}
         {...extra}
       />
       {hint && !problems[name] && <span className="hint">{hint}</span>}
@@ -490,12 +491,23 @@ function EditorBody(props: any) {
   return (
     <section className="entity-editor">
       <div className="editor-eyebrow">{mode==='create'?'Новая запись':'Редактор сущности'} · {typeTitle}</div>
-      <h1>
-        {mode === "create"
-          ? typeTitle
-            ? `Новая запись: ${typeTitle}`
-            : "Новая запись"
-          : form.title_ru || "Правка записи"}
+      <h1 aria-label={form.title_ru || "Новая запись"}>
+        <textarea
+          aria-label="Название сущности по-русски"
+          rows={1}
+          value={form.title_ru}
+          placeholder={mode === "create" && typeTitle ? `Новая запись: ${typeTitle}` : "Название сущности"}
+          style={{ width: "100%", display: "block", fieldSizing: "content", resize: "none",
+            font: "inherit", letterSpacing: "inherit", color: "inherit", background: "transparent",
+            border: 0, padding: 0, margin: 0, minHeight: 0 } as React.CSSProperties}
+          onChange={(e) => updateField("title_ru", e.target.value.replace(/[\r\n]+/g, " "))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+        />
       </h1>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:16,alignItems:'start',marginBottom:20}}>
         {field("title_en", "Название по-английски")}
