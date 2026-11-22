@@ -279,3 +279,7 @@ layoutAdmin.get("/card-layout-editor", async c => {
   ]);
   return c.json({page_id:CARD_PAGE_ID,current_layout_id:pages[0]?.current_layout_id,types,layouts,widgets});
 });
+
+layoutAdmin.get("/users", async c => c.json(await sql`
+  select id, display_name, status from app.contributors where auth_uid is not null
+  order by display_name, id`));
