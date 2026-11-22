@@ -69,7 +69,13 @@ function PublicEntityPage() {
   }, []);
   return null;
 }
+const initialAuthorsShell = document.querySelector(".shell[data-authors-frame]");
+const initialAuthorsFrame = initialAuthorsShell ? {
+  menu: initialAuthorsShell.querySelector<HTMLElement>(":scope > header")?.dataset.layoutSlot ?? null,
+  footer: initialAuthorsShell.querySelector<HTMLElement>(":scope > footer")?.dataset.layoutSlot ?? null,
+} : null;
 export function App() {
+  const [authorsFrame, setAuthorsFrame] = useState(initialAuthorsFrame);
   const [headerHtml, setHeaderHtml] = useState(() => document.querySelector("[data-site-header]")?.innerHTML ?? "");
   // Футер приходит с сервера вместе с меню; до ответа держим тот, что уже
   // нарисовала готовая страница, — подмена не видна.
@@ -120,7 +126,8 @@ export function App() {
 
   const refresh = async () => {
     try {
-      const { html, footer, viewer: me } = await api.siteHeader(location.pathname);
+      const { html, footer, authorsFrame: frame, viewer: me } = await api.siteHeader(location.pathname);
+      if (location.pathname.replace(/\/$/, "") === "/authors") setAuthorsFrame(frame ?? null);
       setHeaderHtml(html);
       setFooterHtml(footer);
       // Кука нужна, чтобы браузер показывал приватные файлы в тегах изображений.
@@ -168,6 +175,7 @@ export function App() {
     viewer?.permissions.includes(permission) || viewer?.permissions.includes("su") || false;
 
   // Лента знака идёт через публичные страницы; рабочие экраны — без неё (Р-91).
+  const frame = location.pathname.replace(/\/$/, "") === "/authors" ? authorsFrame : null;
   const reading = ["/", "/news", "/objects", "/authors", "/about", "/lectures", "/media"].includes(location.pathname.replace(/\/$/, "")) ||
     (/^\/entities\/[^/]+$/.test(location.pathname) && location.pathname !== "/entities/new");
 
@@ -176,7 +184,7 @@ export function App() {
       {splash && <Splash onDone={hideSplash} />}
       {reading && <div className="through" aria-hidden="true" />}
       {reading && <div className="through-marks" aria-hidden="true" />}
-      <header className="top" data-site-header
+      {(!frame || frame.menu) && <header className="top" data-site-header data-layout-slot={frame?.menu ?? undefined} data-frame-widget={frame?.menu ? "site_menu" : undefined}
         dangerouslySetInnerHTML={{ __html: headerHtml }}
         onClick={async (event) => {
           const target = event.target as HTMLElement;
@@ -194,7 +202,7 @@ export function App() {
             await supabase.auth.signOut();
             await refresh();
           }
-        }} />
+        }} />}
 
       {stale && (
         <div className="stale-banner">
@@ -271,7 +279,7 @@ export function App() {
       </main>
 
       {/* Тот же футер, что у готовых страниц: один на оба (siteHeader.ts, siteFooter). */}
-      <footer className="site-foot" dangerouslySetInnerHTML={{ __html: footerHtml }} />
+      {(!frame || frame.footer) && <footer className="site-foot" data-layout-slot={frame?.footer ?? undefined} data-frame-widget={frame?.footer ? "site_footer" : undefined} dangerouslySetInnerHTML={{ __html: footerHtml }} />}
     </div>
   );
 }

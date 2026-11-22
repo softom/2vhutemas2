@@ -186,18 +186,24 @@ function layout(inner: string, assigned?: (CardLayout & { frame?: CardLayout["sl
   };
   const menu = frameAttribute("site_menu");
   const footer = frameAttribute("site_footer");
-  const implicit = !cardFrame || !assigned?.explicit_card_slots;
-  return `<div class="shell"${assigned?.grid_columns === 4 ? ' data-page-columns="4"' : ""}><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
+  const authorFrame = assigned?.page_id === "39ee9267-1a0e-4928-b608-24bf91f68103" && assigned.explicit_card_slots;
+  const implicit = !authorFrame && (!cardFrame || !assigned?.explicit_card_slots);
+  return `<div class="shell"${authorFrame ? ' data-authors-frame' : ""}${assigned?.grid_columns === 4 ? ' data-page-columns="4"' : ""}><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
     (implicit || menu ? `<header class="top" data-site-header${menu}>${siteHeader(null, "")}</header>` : "") +
     `<main>${inner}</main>` +
     (implicit || footer ? `<footer class="site-foot"${footer}>${siteFooter()}</footer>` : "") + "</div>";
 }
 
 // Оба клиента получают один и тот же элемент меню и ту же модель прав.
-pages.get("/api/v1/site-header", (c) => {
+pages.get("/api/v1/site-header", async (c) => {
   c.header("cache-control", "private, no-store");
   const principal = c.get("principal");
+  const authors = c.req.query("path")?.replace(/\/$/, "") === "/authors" ? await sectionLayout("/authors") : null;
   return c.json({
+    authorsFrame: authors?.explicit_card_slots ? {
+      menu: authors.frame.find(s => s.renderer_key === "site_menu")?.id ?? null,
+      footer: authors.frame.find(s => s.renderer_key === "site_footer")?.id ?? null,
+    } : null,
     html: siteHeader(principal, c.req.query("path") ?? "/"),
     footer: siteFooter(),
     viewer: { authenticated: !!principal, displayName: principal?.displayName ?? "Гость",
