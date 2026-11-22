@@ -1241,13 +1241,14 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       if (html) renderedWidgets.add(slot.renderer_key);
     }
     const parameterSlots = slots.filter(slot => slot.renderer_key === "parameters");
-    const splitParameters = card.widgetLayout.grid_columns !== 4 && parameterSlots.length === 2 &&
-      parameterSlots.some(s => s.column_start === 1 && s.column_span === 2) &&
-      parameterSlots.some(s => s.column_start === 3 && s.column_span === 1);
+    const sideColumn = card.widgetLayout.grid_columns === 4 ? 4 : 3;
+    const splitParameters = parameterSlots.length === 2 &&
+      parameterSlots.some(s => s.column_start === sideColumn - 2 && s.column_span === 2) &&
+      parameterSlots.some(s => s.column_start === sideColumn && s.column_span === 1);
     const header = parts.splice(headerStart).join("");
     parts.push(renderCardGrid(slots, slot => {
       if (splitParameters && slot.renderer_key === "parameters" && target(slot) === card.id) {
-        return sections.parameters(slot.column_start === 3 ? "right" : "left");
+        return sections.parameters(slot.column_start === sideColumn ? "right" : "left");
       }
       if (extras.has(slot.id)) return extras.get(slot.id)!;
       return registry.get(slot.renderer_key)?.(target(slot), slot.design) ?? "";
