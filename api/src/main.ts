@@ -24,7 +24,7 @@ import { dates } from "./routes/dates.ts";
 import { indicators } from "./routes/indicators.ts";
 import { parameters, parameterSets } from "./routes/parameters.ts";
 import { researchMaterials } from "./routes/researchMaterials.ts";
-import { authorizeToken, intakeTokens } from "./routes/intakeTokens.ts";
+import { authorizeToken, intakeTokens, readActiveToken } from "./routes/intakeTokens.ts";
 import { entityIntake, save as saveIntake } from "./routes/entityIntake.ts";
 import { classification } from "./routes/classification.ts";
 import { setResearch } from "./routes/setResearch.ts";
@@ -45,6 +45,12 @@ app.use("*", cors);
 app.post("/api/v1/incoming-materials", c => saveIntake(c,true,true));
 app.use("/api/v1/*", async (c: Context<AppEnv>, next: Next) => {
   const header=c.req.header("authorization");
+  if (header?.startsWith("Bearer intake_") && c.req.method==="GET" && c.req.path==="/api/v1/me") {
+    c.header("Cache-Control","no-store");
+    const token=await readActiveToken(header);
+    return c.json({authenticated:true,token_type:"intake",token_id:token.id,
+      display_name:token.system_name,permissions:token.scopes,expires_at:token.expires_at});
+  }
   if (header?.startsWith("Bearer intake_") && /^\/api\/v1\/entities\/[0-9]+$/.test(c.req.path)
       && (c.req.method==="GET" || c.req.method==="PATCH")) {
     const token=await authorizeToken(header,"edit_cards");

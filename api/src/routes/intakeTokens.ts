@@ -11,13 +11,18 @@ export async function tokenDigest(token:string){
 
 export type TokenScope = "intake" | "edit_cards";
 
-export async function authorizeToken(credential:string, scope:TokenScope) {
+export async function readActiveToken(credential:string) {
   if (!/^Bearer intake_[0-9a-f]{64}$/.test(credential))
     throw new ApiError("unauthenticated","Нужен токен доступа");
-  const [row]=await sql<{id:string; issued_by:string; auth_uid:string; system_name:string; scopes:TokenScope[]}>`select t.id,t.issued_by,c.auth_uid,t.system_name,t.scopes
+  const [row]=await sql<{id:string; issued_by:string; auth_uid:string; system_name:string; scopes:TokenScope[]; expires_at:Date}>`select t.id,t.issued_by,c.auth_uid,t.system_name,t.scopes,t.expires_at
     from app.intake_tokens t join app.contributors c on c.id=t.issued_by and c.status='active'
     where digest=${await tokenDigest(credential.slice(7))} and expires_at>now()`;
   if (!row) throw new ApiError("unauthenticated","Токен недействителен или истёк");
+  return row;
+}
+
+export async function authorizeToken(credential:string, scope:TokenScope) {
+  const row=await readActiveToken(credential);
   if (!row.scopes.includes(scope)) throw new ApiError("permission_denied","Токену не выдано это право");
   return row;
 }
