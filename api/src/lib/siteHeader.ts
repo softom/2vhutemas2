@@ -37,8 +37,9 @@ export function siteHeader(principal: Principal | null, path = "/"): string {
   // Поиск (Р-109) — всем; окно и его код грузятся по нажатию, «/» и Ctrl+K.
   const search = `<button type="button" class="search-toggle" data-action="search" title="Поиск ( / )" aria-label="Поиск">` +
     `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>Поиск</button>`;
+  const adminLink = can(principal, "su") ? '<a href="/materials">Панель администратора</a>' : "";
   const viewer = search + (principal
-    ? notes + `<span title="${e([...principal.permissions].join(", "))}">${e(principal.displayName)}</span><button type="button" data-action="signout">Выйти</button>`
+    ? notes + `<span title="${e([...principal.permissions].join(", "))}">${e(principal.displayName)}</span>${adminLink}<button type="button" data-action="signout">Выйти</button>`
     : '<a href="/login">Войти</a>');
   // Знак Вх² стоит на красной ленте (Р-56, Р-91): черты и штриховка — из обложки.
   const logo = `<span class="logo-mark"><span class="logo-bar"></span><span class="lg-line l1"></span>` +
