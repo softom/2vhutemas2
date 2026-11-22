@@ -69,13 +69,14 @@ function PublicEntityPage() {
   }, []);
   return null;
 }
-const initialAuthorsShell = document.querySelector(".shell[data-authors-frame]");
-const initialAuthorsFrame = initialAuthorsShell ? {
-  menu: initialAuthorsShell.querySelector<HTMLElement>(":scope > header")?.dataset.layoutSlot ?? null,
-  footer: initialAuthorsShell.querySelector<HTMLElement>(":scope > footer")?.dataset.layoutSlot ?? null,
+const initialSectionShell = document.querySelector(".shell[data-section-frame]");
+const initialSectionFrame = initialSectionShell ? {
+  path: window.location.pathname.replace(/\/$/, ""),
+  menu: initialSectionShell.querySelector<HTMLElement>(":scope > header")?.dataset.layoutSlot ?? null,
+  footer: initialSectionShell.querySelector<HTMLElement>(":scope > footer")?.dataset.layoutSlot ?? null,
 } : null;
 export function App() {
-  const [authorsFrame, setAuthorsFrame] = useState(initialAuthorsFrame);
+  const [sectionFrame, setSectionFrame] = useState(initialSectionFrame);
   const [headerHtml, setHeaderHtml] = useState(() => document.querySelector("[data-site-header]")?.innerHTML ?? "");
   // Футер приходит с сервера вместе с меню; до ответа держим тот, что уже
   // нарисовала готовая страница, — подмена не видна.
@@ -126,8 +127,9 @@ export function App() {
 
   const refresh = async () => {
     try {
-      const { html, footer, authorsFrame: frame, viewer: me } = await api.siteHeader(location.pathname);
-      if (location.pathname.replace(/\/$/, "") === "/authors") setAuthorsFrame(frame ?? null);
+      const { html, footer, sectionFrame: frame, viewer: me } = await api.siteHeader(location.pathname);
+      const path = location.pathname.replace(/\/$/, "");
+      if (path === "/authors" || path === "/objects") setSectionFrame(frame ? {path, ...frame} : null);
       setHeaderHtml(html);
       setFooterHtml(footer);
       // Кука нужна, чтобы браузер показывал приватные файлы в тегах изображений.
@@ -175,7 +177,7 @@ export function App() {
     viewer?.permissions.includes(permission) || viewer?.permissions.includes("su") || false;
 
   // Лента знака идёт через публичные страницы; рабочие экраны — без неё (Р-91).
-  const frame = location.pathname.replace(/\/$/, "") === "/authors" ? authorsFrame : null;
+  const frame = location.pathname.replace(/\/$/, "") === sectionFrame?.path ? sectionFrame : null;
   const reading = ["/", "/news", "/objects", "/authors", "/about", "/lectures", "/media"].includes(location.pathname.replace(/\/$/, "")) ||
     (/^\/entities\/[^/]+$/.test(location.pathname) && location.pathname !== "/entities/new");
 
