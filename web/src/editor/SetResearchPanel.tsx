@@ -9,15 +9,8 @@ export function SetResearchPanel({entityId,set,sets,beforeStart,onRevision,onAcc
  const [depth,setDepth]=useState<'min'|'medium'|'max'>('medium');
  const style=set.code==='style_solutions';
  const labels={min:'Минимум',medium:'Средний',max:'Максимум'};
- const [nameInput,setNameInput]=useState<string|null>(null),[confirmed,setConfirmed]=useState('');
- const aliasLines=(s:string)=>[...new Set(s.split('\n').map(v=>v.trim()).filter(Boolean))];
  const [plan,setPlan]=useState<any>(null);
- useEffect(()=>{let live=true;setPlan(null);const query=new URLSearchParams();if(nameInput!==null)query.set('custom_aliases','1');if(nameInput!==null)for(const alias of aliasLines(nameInput))query.append('alias',alias);
- const timer=setTimeout(()=>request(`/set-research/${entityId}/plan?set_id=${set.id}&task_id=${taskId}&${query}`).then(p=>{if(live)setPlan(p);}).catch(()=>{if(live)setPlan(null);}),250);return()=>{live=false;clearTimeout(timer);};},[entityId,set.id,taskId,data?.state.finished_at,nameInput]);
- const names=plan?.identity;
- const variants=nameInput===null?(names?.aliases||[]):aliasLines(nameInput);
- const signature=JSON.stringify([names?.key,variants]);
- const namesReady=!style||!!names&&confirmed===signature;
+ useEffect(()=>{let live=true;setPlan(null);request(`/set-research/${entityId}/plan?set_id=${set.id}&task_id=${taskId}`).then(p=>{if(live)setPlan(p);}).catch(()=>{if(live)setPlan(null);});return()=>{live=false;};},[entityId,set.id,taskId,data?.state.finished_at]);
  const lastRevision=useRef<string|null>(null);
  const running=data?.state.status==='running';
  const [now,setNow]=useState(Date.now());
@@ -33,24 +26,18 @@ export function SetResearchPanel({entityId,set,sets,beforeStart,onRevision,onAcc
  async function start(action:string,mode=depth){
   if(busy||running)return;setBusy(true);setError('');
   try{const revision=await beforeStart();if(!revision)return;
-   const value=await request<Data>(`/set-research/${entityId}/${action}`,{method:'POST',body:JSON.stringify({confirmed_names:namesReady?names?.key:undefined,aliases:variants,mode,set_id:set.id,task_id:taskId||undefined,base_revision_id:revision})});setData(value);if(value.revision){lastRevision.current=value.revision;onRevision(value.revision);}
+   const value=await request<Data>(`/set-research/${entityId}/${action}`,{method:'POST',body:JSON.stringify({mode,set_id:set.id,task_id:taskId||undefined,base_revision_id:revision})});setData(value);if(value.revision){lastRevision.current=value.revision;onRevision(value.revision);}
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  const result=data?.state.results?.[set.id];
  function provenance(source:Record<string,string>){try{return JSON.parse(source.source_sets||'[]').map((id:string)=>sets.find(s=>s.id===id)?.title_ru||'Архивный набор').join(', ')||'Прежнее исследование';}catch{return 'Прежнее исследование';}}
  return <div className="set-research-panel">
   {(set.research_tasks?.length||0)>1&&<label>Задание исследования<select value={taskId} disabled={busy||running} onChange={e=>setTaskId(e.target.value)}><option value="">Выберите задание…</option>{set.research_tasks.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select></label>}
-  {style&&<fieldset disabled={busy||running}><legend>Названия объекта для поиска</legend>
-   {names&&<p>Русское: {names.title_ru||'не указано'} · Английское: {names.title_en||'не указано'} · Оригинальное: {names.title_original||'не указано'}</p>}
-   {names&&(!names.title_en||!names.title_original)&&<p>Проверьте языковые поля карточки. Добавьте полные варианты, под которыми объект описан в источниках.</p>}
-   <label>Другие названия для поиска, по одному в строке<textarea value={nameInput??(names?.aliases||[]).join('\n')} onChange={e=>{setConfirmed('');setNameInput(e.target.value);}}/></label>
-   <label><input type="checkbox" disabled={!names} checked={namesReady} onChange={e=>setConfirmed(e.target.checked?signature:'')}/> Подтверждаю названия для поиска и анализа</label>
-  </fieldset>}
   {style&&<fieldset disabled={busy||running}><legend>Глубина исследования</legend>
    {(Object.keys(labels) as (keyof typeof labels)[]).map(k=><label key={k} style={{display:'flex',alignItems:'center',gap:'0.5rem',flexWrap:'wrap',paddingBlock:'0.3rem'}}><input style={{width:'1rem',height:'1rem',minHeight:0,margin:0,flex:'none'}} name={`depth-${entityId}-${set.id}`} type="radio"  checked={depth===k} onChange={()=>setDepth(k)}/><span>{labels[k]}</span>{plan?.modes&&!plan.low_coverage_warning&&plan.recommended_mode===k&&<strong>Рекомендуется</strong>} {plan?.modes&&<>· {plan.modes[k].selected_chars.toLocaleString()} симв. · {plan.modes[k].coverage_pct}% · вызовов {plan.modes[k].estimated_calls}</>}</label>)}
    {plan?.modes&&<p>Источников найдено {plan.total_sources}, релевантных {plan.relevant_sources}. В них {plan.input_chars.toLocaleString()} символов. {plan.reason}</p>}
   </fieldset>}
-  <div className="row"><button type="button" className="ghost" disabled={busy||running||!namesReady||!set.research_enabled||!taskId} onClick={()=>void start('collect')}>Собрать источники</button>{style&&<button type="button" className="ghost" disabled={busy||running||!namesReady||!set.research_enabled||!taskId||!data?.sources.length} onClick={()=>void start('collect','max')}>Доискать источники</button>}<button type="button" className="ghost" disabled={busy||running||!namesReady||!set.research_enabled||!taskId||!data?.sources.length||(style&&!plan?.modes?.[depth]?.estimated_calls)} onClick={()=>void start('analyze')}>Определить при помощи LLM</button>{result?.failed_parts>0&&<button type="button" className="ghost" disabled={busy||running||!set.research_enabled||taskId!==result.task_id} onClick={()=>void start('resume',result.budget?.depth||'medium')}>Доделать · {result.failed_parts} из {result.parts}</button>}<button type="button" className="ghost" disabled={busy||running||!result} onClick={()=>void start('clear')}>Очистить предложения LLM</button>{actions?.(busy||running)}</div>
+  <div className="row"><button type="button" className="ghost" disabled={busy||running||!set.research_enabled||!taskId} onClick={()=>void start('collect')}>Собрать источники</button>{style&&<button type="button" className="ghost" disabled={busy||running||!set.research_enabled||!taskId||!data?.sources.length} onClick={()=>void start('collect','max')}>Доискать источники</button>}<button type="button" className="ghost" disabled={busy||running||!set.research_enabled||!taskId||!data?.sources.length||(style&&!plan?.modes?.[depth]?.estimated_calls)} onClick={()=>void start('analyze')}>Определить при помощи LLM</button>{result?.failed_parts>0&&<button type="button" className="ghost" disabled={busy||running||!set.research_enabled||taskId!==result.task_id} onClick={()=>void start('resume',result.budget?.depth||'medium')}>Доделать · {result.failed_parts} из {result.parts}</button>}<button type="button" className="ghost" disabled={busy||running||!result} onClick={()=>void start('clear')}>Очистить предложения LLM</button>{actions?.(busy||running)}</div>
   {plan&&!style&&<p className="hint">Следующий анализ: {plan.calls} запрос(а), максимум {plan.max_calls}; {plan.selected_chars.toLocaleString()} из {plan.input_chars.toLocaleString()} символов; источников {plan.analyzed_sources}, посторонних исключено {plan.excluded_unrelated}. Выбираются тематические фрагменты, полный корпус сохранён. Стоимость зависит от тарифа модели; автоматического полного прохода нет.</p>}
   <div className="research-progress" aria-live="polite" aria-atomic="true">
    {busy&&!running&&<p role="status">Сохраняем изменения…</p>}

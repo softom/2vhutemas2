@@ -93,12 +93,9 @@ setResearch.post('/:id/:action',async c=>{
   const attached=await tx`select set_id from app.entity_parameter_sets where entity_id=${id} and set_id=${set.id} union select t.set_id from app.type_parameter_sets t join app.entities e on e.id=${id} where t.set_id=${set.id} and t.type_id in(select app.entity_type_ancestors(e.type_id))`;
   if(!attached.length)throw new ApiError('validation_failed','Сначала добавьте набор');
   const data=await researchData(tx,id),job=crypto.randomUUID();
-  let review=data.state.name_review;
-  if(set.code==='style_solutions'&&action!=='resume'){
-   if(input.confirmed_names!==identityKey(entity))throw new ApiError('validation_failed','Проверьте названия объекта перед исследованием. После изменения названий обновите план.');
-   const variants=aliases(input.aliases??[]);
-   if(!entity.title_en&&!entity.title_original&&!variants.length&&!/[А-Яа-яЁё]/.test(entity.title_ru))throw new ApiError('validation_failed','Название в русском поле записано латиницей. Заполните языковые поля карточки или укажите проверенный поисковый вариант.');
-   review={key:identityKey(entity),aliases:variants};
+  const review=data.state.name_review;
+  if(set.code==='style_solutions'&&action!=='resume'&&!entity.title_en?.trim()&&!entity.title_original?.trim()&&!/[А-Яа-яЁё]/.test(entity.title_ru)&&!(review?.key===identityKey(entity)&&review.aliases?.length)){
+   throw new ApiError('validation_failed','Не удалось определить название для поиска. Укажите английское или оригинальное название в карточке объекта и повторите запуск.');
   }
   const prior=action==='resume'?data.state.results?.[set.id]:undefined;
   if(action==='resume'&&(!prior||!missingParts(prior).length||prior.task_id!==set.task.id))throw new ApiError('validation_failed','Нет пропущенных частей для этого задания');
