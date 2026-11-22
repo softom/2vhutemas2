@@ -6,6 +6,7 @@ import { fillSectionPattern } from "./sectionPattern.ts";
 export const sectionPages = {
   "/objects": { id: "39ee9267-1a0e-4928-b608-24bf91f68102", widget: "record_compact", title: "Компактная запись" },
   "/authors": { id: "39ee9267-1a0e-4928-b608-24bf91f68103", widget: "record_compact", title: "Компактная запись" },
+  "/lectures": { id: "39ee9267-1a0e-4928-b608-24bf91f68104", widget: "lecture_list", title: "Список лекций" },
   "/news": { id: "39ee9267-1a0e-4928-b608-24bf91f68105", widget: "news_compact", title: "Компактная новость" },
 } as const;
 

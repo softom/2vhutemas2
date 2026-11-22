@@ -12,6 +12,8 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string) ?? "/api/v1";
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+export type LectureSlot = {id:string;column:number;width:number;row:number};
+
 export class ApiError extends Error {
   code: string;
   details: unknown;
@@ -648,7 +650,7 @@ export const api = {
     if (design) query.set("design", design);
     return request<{html: string; title: string; reason?: string}>(`/document-widgets/${encodeURIComponent(widget)}/preview?${query}`);
   },
-  siteHeader: (path: string) => request<{ html: string; footer: string; sectionFrame?: {menu:string|null;footer:string|null} | null; viewer: { authenticated: boolean; displayName: string; permissions: string[] } }>(`/site-header?path=${encodeURIComponent(path)}`),
+  siteHeader: (path: string) => request<{ html: string; footer: string; sectionFrame?: {menu:string|null;footer:string|null;lectureSlots?: LectureSlot[]} | null; viewer: { authenticated: boolean; displayName: string; permissions: string[] } }>(`/site-header?path=${encodeURIComponent(path)}`),
   // Пометки поверх страниц (Р-95): только для правящих.
   pageNotes: (path: string, all = false) =>
     request<{ items: PageNote[] }>(`/page-notes?path=${encodeURIComponent(path)}${all ? "&status=all" : ""}`),

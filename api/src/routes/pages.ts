@@ -188,7 +188,7 @@ function layout(inner: string, assigned?: (CardLayout & { frame?: CardLayout["sl
   const footer = frameAttribute("site_footer");
   const sectionFrame = assigned?.explicit_card_slots &&
     (assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68103" || assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68102" ||
-      assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68105");
+      assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68105" || assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68104");
   const implicit = !sectionFrame && (!cardFrame || !assigned?.explicit_card_slots);
   return `<div class="shell"${sectionFrame ? ' data-section-frame' : ""}${assigned?.grid_columns === 4 ? ' data-page-columns="4"' : ""}><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
     (implicit || menu ? `<header class="top" data-site-header${menu}>${siteHeader(null, "")}</header>` : "") +
@@ -201,8 +201,9 @@ pages.get("/api/v1/site-header", async (c) => {
   c.header("cache-control", "private, no-store");
   const principal = c.get("principal");
   const path = c.req.query("path")?.replace(/\/$/, "");
-  const section = path === "/authors" || path === "/objects" ? await sectionLayout(path) : null;
+  const section = path === "/authors" || path === "/objects" || path === "/lectures" ? await sectionLayout(path) : null;
   const frame = section?.explicit_card_slots ? {
+    lectureSlots: path === "/lectures" ? lectureSlots(section) : undefined,
     menu: section.frame.find(s => s.renderer_key === "site_menu")?.id ?? null,
     footer: section.frame.find(s => s.renderer_key === "site_footer")?.id ?? null,
   } : null;
@@ -511,9 +512,21 @@ pages.get("/objects/pattern", async c => {
 });
 pages.get("/news", (c) => newsPage(c, "/news"));
 
+function lectureSlots(layout: CardLayout) {
+  return layout.slots.filter(s => s.renderer_key === "lecture_list").map(s => ({
+    id: s.id, column:s.column_start, width:s.column_span, row:s.row_start,
+  }));
+}
+
 for (const [path, section] of Object.entries(SECTIONS)) {
   pages.get(path, async (c) => {
     if (path === "/lectures") {
+      const assigned = await sectionLayout("/lectures");
+      const slots = assigned?.explicit_card_slots ? lectureSlots(assigned) : null;
+      if (slots && !slots.length) {
+        return render(c, {status: 200, title: `${section.title} — ${site.name}`, description: section.lead, canonical: path,
+          body: layout('<div class="lecture-layout"></div><script type="application/json" id="lecture-layout">[]</script>', assigned)});
+      }
       const response = await entities.request("/?type=lecture&parameter=lecture_number&sort=parameter&order=asc&values=lecture_number,course&limit=100");
       if (!response.ok) return c.text("Ошибка загрузки лекций", 500);
       const { items } = await response.json() as { items: (CatalogItem & { values?: Record<string, string | number> })[] };
@@ -521,8 +534,11 @@ for (const [path, section] of Object.entries(SECTIONS)) {
       const count = `<div class="list-count"><span class="hint">Показано ${items.length} ${plural(items.length, ["лекция", "лекции", "лекций"])}</span></div>`;
       const table = rows ? `${count}<div class="lecture-table"><table class="grid-table"><thead><tr><th>№</th><th>Название</th><th>Курс</th><th>Состояние</th></tr></thead><tbody>${rows}</tbody></table></div>${count}` : "<p>Лекций пока нет.</p>";
       const seed = JSON.stringify(items).replaceAll("<", "\\u003c");
+      const list = `<section class="lectures-list"><h1>Лекции</h1><p class="sub">Материалы курса по порядку номеров.</p>${table}</section>`;
+      const content = slots ? `<div class="section-grid lecture-layout" data-columns="${assigned!.grid_columns}">${slots.map(s =>
+        `<div data-section-slot="${s.id}" style="grid-column:${s.column}/span ${s.width};grid-row:${s.row}">${list}</div>`).join("")}</div>` : list;
       return render(c, {status: 200, title: `${section.title} — ${site.name}`, description: section.lead, canonical: path,
-        jsonLd: [listLd(path, section.title, items)], body: layout(`<section class="lectures-list"><h1>Лекции</h1><p class="sub">Материалы курса по порядку номеров.</p>${table}</section><script type="application/json" id="lecture-initial">${seed}</script>`)});
+        jsonLd: [listLd(path, section.title, items)], body: layout(`${content}<script type="application/json" id="lecture-initial">${seed}</script><script type="application/json" id="lecture-layout">${JSON.stringify(slots)}</script>`, assigned)});
     }
     const sectionPath = path === "/objects" || path === "/authors" ? path : null;
     const assigned = sectionPath ? await sectionLayout(sectionPath) : null;

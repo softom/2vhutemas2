@@ -69,9 +69,11 @@ function PublicEntityPage() {
   }, []);
   return null;
 }
+const initialLectureSlots: import("./api").LectureSlot[] | undefined = JSON.parse(document.getElementById("lecture-layout")?.textContent ?? "null") ?? undefined;
 const initialSectionShell = document.querySelector(".shell[data-section-frame]");
 const initialSectionFrame = initialSectionShell ? {
   path: window.location.pathname.replace(/\/$/, ""),
+  lectureSlots: initialLectureSlots,
   menu: initialSectionShell.querySelector<HTMLElement>(":scope > header")?.dataset.layoutSlot ?? null,
   footer: initialSectionShell.querySelector<HTMLElement>(":scope > footer")?.dataset.layoutSlot ?? null,
 } : null;
@@ -129,7 +131,7 @@ export function App() {
     try {
       const { html, footer, sectionFrame: frame, viewer: me } = await api.siteHeader(location.pathname);
       const path = location.pathname.replace(/\/$/, "");
-      if (path === "/authors" || path === "/objects") setSectionFrame(frame ? {path, ...frame} : null);
+      if (path === "/authors" || path === "/objects" || path === "/lectures") setSectionFrame(frame ? {path, ...frame, lectureSlots: frame.lectureSlots} : null);
       setHeaderHtml(html);
       setFooterHtml(footer);
       // Кука нужна, чтобы браузер показывал приватные файлы в тегах изображений.
@@ -182,7 +184,7 @@ export function App() {
     (/^\/entities\/[^/]+$/.test(location.pathname) && location.pathname !== "/entities/new");
 
   return (
-    <div className="shell" data-editorial-catalog={["", "/news", "/objects", "/authors", "/media"].includes(location.pathname.replace(/\/$/, "")) || undefined}>
+    <div className="shell" data-editorial-catalog={["", "/news", "/objects", "/authors", "/media", "/lectures"].includes(location.pathname.replace(/\/$/, "")) || undefined}>
       {splash && <Splash onDone={hideSplash} />}
       {reading && <div className="through" aria-hidden="true" />}
       {reading && <div className="through-marks" aria-hidden="true" />}
@@ -251,7 +253,12 @@ export function App() {
           <Route path="/entities/new" element={<EntityEditor mode="create" />} />
           <Route path="/entities/:id" element={<PublicEntityPage />} />
           <Route path="/entities/:id/edit" element={!viewer ? <p className="notice">Проверяем права…</p> : can("edit") ? <EntityEditor mode="edit" /> : <p className="error">Недостаточно прав для редактирования.</p>} />
-          <Route path="/lectures" element={<Lectures canCreate={can("create_delete")} />} />
+          <Route path="/lectures" element={frame?.lectureSlots
+            ? <div className="section-grid lecture-layout" data-columns="4">{frame.lectureSlots.map(s =>
+              <div key={s.id} data-section-slot={s.id} style={{gridColumn:`${s.column}/span ${s.width}`,gridRow:s.row}}>
+                <Lectures canCreate={can("create_delete")} />
+              </div>)}</div>
+            : <Lectures canCreate={can("create_delete")} />} />
           <Route path="/media" element={<MediaLibrary canUpload={can("create_delete")} />} />
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
           <Route path="/parameters/registry" element={<Parameters canManage={can("su")} />} />

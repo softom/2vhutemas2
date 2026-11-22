@@ -14,6 +14,7 @@ export function layoutCapabilities(key: string) {
   return sectionCapabilities(key);
 }
 export function sectionCapabilities(key: string) {
+  if (key === "lecture_list") return { widths:[1,2,3,4], heights:[1], designs:["default"] };
   if (modelPath(key)) return { widths:[1,2,3], heights:[1], designs:["default"] };
   if (key === "news_compact") return { widths:[1,2,3], heights:[1,2,3], designs:["regular","feature","compact"] };
   if (key === "record_compact") {
