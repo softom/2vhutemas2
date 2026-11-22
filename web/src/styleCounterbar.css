@@ -14,3 +14,22 @@
   overflow-wrap: anywhere;
 }
 .style-analysis .style-score:has(+ .style-counterbar) strong { white-space: normal; }
+
+.style-analysis .style-score .witness-popup,
+.style-analysis .style-objection .witness-popup {
+  display: none; position: absolute; z-index: 5; left: 0; right: auto;
+  top: 100%; bottom: auto; box-sizing: border-box; width: min(100%, 34rem);
+  max-height: min(40vh, 18rem); overflow: auto; overscroll-behavior: contain;
+  padding: .65rem .8rem; border-radius: 4px; background: #302921; color: #fff;
+  font-size: .83rem; font-weight: 400; line-height: 1.4; text-align: start;
+}
+.style-analysis .style-counterbar,.style-analysis .style-negative { position: relative; }
+.style-analysis :is(.style-score,.style-objection):focus-within > .witness-popup { display:block; }
+.style-analysis :is(.style-counterbar,.style-negative):focus-within { z-index:4; }
+@media (hover:hover) {
+  .style-analysis :is(.style-score,.style-objection):hover > .witness-popup { display:block; }
+  .style-analysis :is(.style-counterbar,.style-negative):hover { z-index:4; }
+}
+.witness-popup .hint-relation,.witness-popup .hint-evidence,.witness-popup span > span { display:block; }
+.witness-popup .hint-relation + .hint-relation { margin-top:.55rem; border-top:1px solid #92877f; padding-top:.5rem; }
+.style-analysis .witness-popup a { color:#fff; text-decoration:underline; }

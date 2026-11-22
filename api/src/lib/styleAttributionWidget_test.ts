@@ -111,7 +111,7 @@ Deno.test("support counts distinct sources separately by axis, role and context"
       "33,3%",
       "Отрицание · 1930 · Фасад",
       "1930 · Башня",
-      "Источников: 2 · связей: 1",
+      "Принадлежность — Модерн",
       'href="/entities/example"',
       "Метод формообразования",
     ]

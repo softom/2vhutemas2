@@ -16,6 +16,26 @@ function anchor(slug: string, title: string): string {
   return `<a href="${e(entityPath(slug))}">${e(title)}</a>`;
 }
 
+type Witnesses = Map<number, {link: Relation; citations: Citation[]}>;
+function addWitness(witnesses: Witnesses, link: Relation, citation: Citation) {
+  const entry = witnesses.get(link.id) ?? {link, citations: []};
+  entry.citations.push(citation);
+  witnesses.set(link.id, entry);
+}
+
+function witnessPopup(witnesses: Witnesses, id: string): string {
+  const items = [...witnesses.values()].map(({link, citations}) => {
+    const heading = [link.role_title, link.other_title].filter(Boolean).map(e).join(" — ");
+    const evidence = citations.map(q => {
+      const context = [q.locator, q.phase, q.zone].filter(Boolean).map(e).join(" · ");
+      const source = q.source_title ? anchor(q.source_slug, q.source_title) : "";
+      return `<span class="hint-evidence">${source}${context ? " · " + context : ""}${q.quote ? `<span>«${e(q.quote)}»</span>` : ""}</span>`;
+    }).join("");
+    return `<span class="hint-relation"><b>${heading}</b>${link.justification ? `<span>${e(link.justification)}</span>` : ""}${evidence}</span>`;
+  }).join("");
+  return `<small class="witness-popup" role="tooltip" id="${id}">${items}</small>`;
+}
+
 function profile(links: Relation[], setId: string): string {
   let rowNumber = 0;
   const profileOrder = ["art_epochs", "art_styles", "form_method", "morphological_trait"] as const;
@@ -23,23 +43,25 @@ function profile(links: Relation[], setId: string): string {
     const title = AXES[axis];
     const defaultRole = axis === "art_epochs" || axis === "art_styles"
       ? "classification_membership" : "classification_trait";
-    const objections = new Map<number, {link: Relation; sources: Set<number>; contexts: Set<string>}>();
+    const objections = new Map<number, {link: Relation; sources: Set<number>; contexts: Set<string>; witnesses: Witnesses}>();
     function objectionLabel(note: NonNullable<ReturnType<typeof objections.get>>): string {
       const context = [...note.contexts].map(e).join("; ");
-      return `<span class="style-objection">Оспаривается: ${note.sources.size} ист.${context ? " · " + context : ""}</span>`;
+      const id = `score-hint-${e(setId)}-${++rowNumber}`;
+      return `<span class="style-objection" tabindex="0" aria-describedby="${id}">Оспаривается: ${note.sources.size} ист.${context ? " · " + context : ""}${witnessPopup(note.witnesses,id)}</span>`;
     }
     const groups = new Map<
       string,
       {
         label: string;
         isDefault: boolean;
-        concepts: Map<number, { link: Relation; sources: Set<number>; relations: Set<number> }>;
+        concepts: Map<number, { link: Relation; sources: Set<number>; witnesses: Witnesses }>;
       }
     >();
     for (const link of links.filter((l) => l.other_type_code === axis)) {
       for (const citation of link.citations) {
         if (link.role === "classification_negation") {
-          const note = objections.get(link.other_id) ?? {link, sources: new Set<number>(), contexts: new Set<string>()};
+          const note = objections.get(link.other_id) ?? {link, sources: new Set<number>(), contexts: new Set<string>(), witnesses: new Map()};
+          addWitness(note.witnesses, link, citation);
           note.sources.add(citation.source_entity_id);
           const context = [citation.phase, citation.zone].filter(Boolean).join(" · ");
           if (context) note.contexts.add(context);
@@ -55,9 +77,9 @@ function profile(links: Relation[], setId: string): string {
           };
         groups.set(key, group);
         const concept = group.concepts.get(link.other_id) ??
-          { link, sources: new Set(), relations: new Set() };
+          { link, sources: new Set(), witnesses: new Map() };
         concept.sources.add(citation.source_entity_id);
-        concept.relations.add(link.id);
+        addWitness(concept.witnesses, link, citation);
         group.concepts.set(link.other_id, concept);
       }
     }
@@ -82,7 +104,7 @@ function profile(links: Relation[], setId: string): string {
           anchor(c.link.other_slug, c.link.other_title)
         } <strong>${support}</strong><meter aria-label="${
           e(c.link.other_title)
-        }" min="0" max="${total}" value="${c.sources.size}"></meter><small id="${hintId}" role="tooltip">Источников: ${c.sources.size} · связей: ${c.relations.size}</small></div>` +
+        }" min="0" max="${total}" value="${c.sources.size}"></meter>${witnessPopup(c.witnesses,hintId)}</div>` +
           (note ? `<div class="style-counterbar">${objectionLabel(note)}</div>` : "");
       }).join("");
     }).join("");
