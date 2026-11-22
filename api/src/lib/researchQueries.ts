@@ -1,5 +1,5 @@
 import {presets,type Depth} from './researchBudget.ts';
-export type SearchIdentity={architect?:string;city?:string;title_ru:string;title_en?:string|null;title_original?:string|null;original_language?:string|null};
+export type SearchIdentity={aliases?:string[];architect?:string;city?:string;title_ru:string;title_en?:string|null;title_original?:string|null;original_language?:string|null};
 export type SearchQuery={title:string;query:string;language:string;searchType:'SEARCH_TYPE_RU'|'SEARCH_TYPE_COM'};
 export function researchQueries(identity:SearchIdentity,set:{title_ru:string;code?:string;search_profiles?:any[]},depth:Depth="medium"):SearchQuery[]{
  const original=String(identity.original_language||'').trim().toLowerCase().split('-')[0];
@@ -24,6 +24,7 @@ export function researchQueries(identity:SearchIdentity,set:{title_ru:string;cod
   prioritized.push({title:name,query,language,searchType:language==='ru'?'SEARCH_TYPE_RU':'SEARCH_TYPE_COM'});
  }
  add(title+' архитектурный стиль композиция фасад');
+ for(const alias of (identity.aliases||[]).slice(0,2))add(alias,/[А-Яа-яЁё]/.test(alias)?'ru':'und',alias);
  if(identity.architect||identity.city)add([title,identity.architect,identity.city,'архитектура'].filter(Boolean).join(' '));
  if(depth==='max'){
   for(const suffix of ['стиль критика полемика атрибуция','перестройка реконструкция этапы','конструкции несущая система материал'])add(title+' '+suffix);

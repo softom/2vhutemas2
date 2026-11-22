@@ -46,7 +46,19 @@ setResearch.get('/:id',async c=>{
  if(data.state.status==='running'&&!active.has(id))data.state={...data.state,status:'error',error:'Задание прервано перезапуском сервиса. Повторите запуск.'};
  return c.json({...data,revision:chain.safe?e.working_revision_id:null});
 });
-setResearch.get('/:id/plan',async c=>{const data=await researchData(sql,entityId(c.req.param('id'))),set=await researchSet(String(c.req.query('set_id')),c.req.query('task_id')||undefined);const [e]=await sql<any>`select title_ru,title_en,title_original from app.entities where id=${entityId(c.req.param('id'))}`;return c.json(preflight(data.sources,set,[e?.title_ru,e?.title_en,e?.title_original]));});
+function identityKey(e:any){return JSON.stringify([e.title_ru,e.title_en,e.title_original,e.original_language]);}
+function aliases(value:unknown):string[]{
+ if(!Array.isArray(value)||value.length>12||value.some(s=>typeof s!=='string'||s.trim().length<3||s.length>180))throw new ApiError('validation_failed','Укажите до 12 полных названий по 3–180 символов');
+ return [...new Set(value.map(s=>s.trim()))];
+}
+setResearch.get('/:id/plan',async c=>{
+ const id=entityId(c.req.param('id')),data=await researchData(sql,id),set=await researchSet(String(c.req.query('set_id')),c.req.query('task_id')||undefined);
+ const [e]=await sql<any>`select title_ru,title_en,title_original,original_language from app.entities where id=${id}`;
+ const key=identityKey(e),saved=data.state.name_review;
+ const variants=set.code==='style_solutions'?(c.req.query('custom_aliases')==='1'?aliases(c.req.queries('alias')||[]):saved?.key===key?saved.aliases:[]):[];
+ const summary=preflight(data.sources,set,[e.title_ru,e.title_en,e.title_original,...variants]);
+ return c.json({...summary,identity:set.code==='style_solutions'?{...e,key,aliases:variants}:undefined});
+});
 setResearch.post('/:id/clear',async c=>{
  const actor=permit(c.get('principal'),'edit'),id=entityId(c.req.param('id')),input=await c.req.json();
  const result=await transaction(actor.contributorId,async tx=>{
@@ -81,15 +93,22 @@ setResearch.post('/:id/:action',async c=>{
   const attached=await tx`select set_id from app.entity_parameter_sets where entity_id=${id} and set_id=${set.id} union select t.set_id from app.type_parameter_sets t join app.entities e on e.id=${id} where t.set_id=${set.id} and t.type_id in(select app.entity_type_ancestors(e.type_id))`;
   if(!attached.length)throw new ApiError('validation_failed','Сначала добавьте набор');
   const data=await researchData(tx,id),job=crypto.randomUUID();
+  let review=data.state.name_review;
+  if(set.code==='style_solutions'&&action!=='resume'){
+   if(input.confirmed_names!==identityKey(entity))throw new ApiError('validation_failed','Проверьте названия объекта перед исследованием. После изменения названий обновите план.');
+   const variants=aliases(input.aliases??[]);
+   if(!entity.title_en&&!entity.title_original&&!variants.length&&!/[А-Яа-яЁё]/.test(entity.title_ru))throw new ApiError('validation_failed','Название в русском поле записано латиницей. Заполните языковые поля карточки или укажите проверенный поисковый вариант.');
+   review={key:identityKey(entity),aliases:variants};
+  }
   const prior=action==='resume'?data.state.results?.[set.id]:undefined;
   if(action==='resume'&&(!prior||!missingParts(prior).length||prior.task_id!==set.task.id))throw new ApiError('validation_failed','Нет пропущенных частей для этого задания');
   if(prior&&!prior.pending_parts&&data.state.finished_at!==prior.created_at)throw new ApiError('validation_failed','Корпус старого прогона нельзя подтвердить');
-  const state={...data.state,job,action,depth:prior?.budget?.depth||depth,set_id:set.id,task_id:set.task.id,config_version:set.config_version,status:'running',progress:active.get(id),log:journals.get(id),request_id:caller.requestId,warnings:[],started_at:new Date().toISOString(),error:null};
+  const state={...data.state,name_review:review,job,action,depth:prior?.budget?.depth||depth,set_id:set.id,task_id:set.task.id,config_version:set.config_version,status:'running',progress:active.get(id),log:journals.get(id),request_id:caller.requestId,warnings:[],started_at:new Date().toISOString(),error:null};
   const revision=await saveResearch(tx,id,actor.contributorId,{sources:data.sources,state});
   const [context]=action==='collect'&&set.code==='style_solutions'?await tx<any>`select
    (select x.title_ru from app.links l join app.link_roles r on r.id=l.role_id join app.entities x on x.id=case when l.from_entity_id=${id} then l.to_entity_id else l.from_entity_id end where ${id} in(l.from_entity_id,l.to_entity_id) and l.status<>'archived' and x.status<>'archived' and r.code in ('architect','author') order by (r.code='architect') desc,l.is_primary desc,l.id limit 1) architect,
    (select city.text_value from app.indicators i join app.indicator_values v on v.indicator_id=i.id join app.indicators place on place.entity_id=v.entity_value_id join app.indicator_values city on city.indicator_id=place.id join app.parameters p on p.id=city.parameter_id where i.entity_id=${id} and i.is_current and place.is_current and p.code='settlement' order by i.sort_order,v.sort_order,city.id limit 1) city`: [];
-  return {prior,title:entity.title_ru,identity:{...context,title_ru:entity.title_ru,title_en:entity.title_en,title_original:entity.title_original,original_language:entity.original_language},sources:data.sources,state,revision};
+  return {prior,title:entity.title_ru,identity:{...context,aliases:set.code==='style_solutions'&&review?.key===identityKey(entity)?review.aliases:[],title_ru:entity.title_ru,title_en:entity.title_en,title_original:entity.title_original,original_language:entity.original_language},sources:data.sources,state,revision};
  });}catch(e){active.delete(id);journals.delete(id);throw e;}
  void(async()=>{
   let result:any;const progress=(value:ResearchProgress)=>{
@@ -103,7 +122,7 @@ setResearch.post('/:id/:action',async c=>{
     if(!changed.length)throw Error('Исследование уже заменено');
    });
   };
-  try{result=action==='collect'?await gather(prepared.identity,set,prepared.sources,caller,progress,depth):await analyzeSet(prepared.title,set,prepared.sources,caller,progress,[prepared.identity.title_ru,prepared.identity.title_en,prepared.identity.title_original],prepared.state.depth,prepared.prior,checkpoint);}
+  try{result=action==='collect'?await gather(prepared.identity,set,prepared.sources,caller,progress,depth):await analyzeSet(prepared.title,set,prepared.sources,caller,progress,[prepared.identity.title_ru,prepared.identity.title_en,prepared.identity.title_original,...prepared.identity.aliases],prepared.state.depth,prepared.prior,checkpoint);}
   catch(e){result={error:String(e).slice(0,500)};log('error',caller.requestId,'Исследование набора не завершено',{entity_id:id,error:String(e)});}
   for(const warning of result.warnings||[])addLog(id,caller.requestId,warning,'warning');
   addLog(id,caller.requestId,result.error?'Задание завершилось ошибкой: '+result.error:action!=='collect'?`Анализ завершён: получено ${result.received||0}, принято ${result.proposals?.length||0}, отклонено ${result.rejected||0}, ошибок частей ${result.failed_parts||0}`:`Сбор завершён: источников ${result.sources?.length||0}, полученных текстов ${result.sources?.filter((s:any)=>s.source_text).length||0}`,result.error?'error':'info');
