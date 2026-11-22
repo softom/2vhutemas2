@@ -1,4 +1,3 @@
-import { IntakeTokens } from "./IntakeTokens";
 /**
  * Материалы в работе: таблица соответствия «папка Dropbox — запись» (0051, 0052).
  *
@@ -64,7 +63,6 @@ export function Materials({ allowed }: { allowed: boolean }) {
   return (
     <section>
       <h1>Материалы в работе</h1>
-      <IntakeTokens />
       <p className="sub">
         Папки Dropbox <code>2VHUTEMAS</code>: <code>ЧТО/ПРОЕКТЫ</code> и <code>КТО/ЛЮДИ</code>, папка записи —
         «тип_название (English)». Материалы не публикуются; опись видят только редакторы на странице записи.

@@ -6,6 +6,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { Link, Route, Routes, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { setInAppNavigate } from "./editor/entityBlocks";
 import { useScrollMemory } from "./ui/scrollMemory";
+import { IntakeTokens } from "./pages/IntakeTokens";
 import { api, supabase } from "./api";
 import { Catalog } from "./pages/Catalog";
 
@@ -263,6 +264,7 @@ export function App() {
           <Route path="/parameters" element={<Parameters canManage={can("su")} />} />
           <Route path="/parameters/registry" element={<Parameters canManage={can("su")} />} />
           <Route path="/page-editor" element={!viewer ? <p className="notice">Проверяем права…</p> : can("su") ? <PageEditor /> : <p className="notice">Для работы с макетами требуется право настройки.</p>} />
+          <Route path="/access-users" element={!viewer ? <p>Проверяем права…</p> : can("su") ? <section><h1>Доступ и пользователи</h1><IntakeTokens /></section> : <p className="error">Недостаточно прав.</p>} />
           <Route path="/materials" element={!viewer ? <p className="notice">Проверяем права…</p> : <Materials allowed={can("su")} />} />
           <Route path="/entity-intake" element={!viewer ? <p>Проверяем права…</p> : <EntityIntake allowed={can("edit")} canUpload={can("create_delete")} canPublish={can("publish")} />} />
           <Route path="/entity-intake/:id" element={!viewer ? <p>Проверяем права…</p> : <EntityIntake allowed={can("edit")} canUpload={can("create_delete")} canPublish={can("publish")} />} />
