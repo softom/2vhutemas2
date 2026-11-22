@@ -10,7 +10,7 @@ export function isPageFrame(key: string) {
   return key === "site_menu" || key === "site_footer";
 }
 export function layoutCapabilities(key: string) {
-  if (isPageFrame(key)) return { widths:[4], heights:[1], designs:["default"] };
+  if (isPageFrame(key)) return { widths:[4,3], heights:[1], designs:["default"] };
   return sectionCapabilities(key);
 }
 export function sectionCapabilities(key: string) {

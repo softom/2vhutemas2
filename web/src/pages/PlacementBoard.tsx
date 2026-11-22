@@ -11,6 +11,7 @@ function obstacle(layout: Layout, source: Source, {row,col}: Cell) {
   if (!source.widget.widths.length) return "Реализация виджета недоступна.";
   if (col + source.width - 1 > layout.grid_columns) return "Не хватает колонок справа.";
   const frame = ["site_menu", "site_footer"].includes(source.widget.renderer_key);
+  if (frame && source.width !== layout.grid_columns) return "Виджет занимает всю ширину макета.";
   if (frame && layout.slots.some(s => s.id !== source.slot?.id && s.widget_id === source.widget.id))
     return "Этот виджет уже есть в рамке страницы.";
   const hit = layout.slots.find(s => s.id !== source.slot?.id &&
@@ -38,7 +39,7 @@ export function PlacementBoard({layout,widgets,selected,busy,first,last,onSelect
   const rows = [...cells].sort((a,b)=>a-b);
   function pick(widget: WidgetDefinition, slot?: Slot) {
     const width = source?.widget.id === widget.id && source.slot?.id === slot?.id
-      ? source.width : slot?.column_span ?? widget.widths[0] ?? 1;
+      ? source.width : slot?.column_span ?? (["site_menu","site_footer"].includes(widget.renderer_key) ? layout?.grid_columns : widget.widths[0]) ?? 1;
     setSource({widget,slot,width,height:slot?.row_span ?? widget.heights[0] ?? 1});
     setMessage(""); setHover(null);
     if (slot) onSelect(slot.id);

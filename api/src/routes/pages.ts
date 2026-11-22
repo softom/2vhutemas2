@@ -186,7 +186,7 @@ function layout(inner: string, assigned?: (CardLayout & { frame?: CardLayout["sl
   };
   const menu = frameAttribute("site_menu");
   const footer = frameAttribute("site_footer");
-  const implicit = !cardFrame || !assigned;
+  const implicit = !cardFrame || !assigned?.explicit_card_slots;
   return `<div class="shell"${assigned?.grid_columns === 4 ? ' data-page-columns="4"' : ""}><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
     (implicit || menu ? `<header class="top" data-site-header${menu}>${siteHeader(null, "")}</header>` : "") +
     `<main>${inner}</main>` +
@@ -1244,7 +1244,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
   };
   if (singleWidget) return widgetRenderers(card, sections).get(singleWidget.key)?.(card.id, singleWidget.design) ?? "";
   if (card.widgetLayout) {
-    const slots = card.widgetLayout.slots.filter(s => !isPageFrame(s.renderer_key));
+    let slots = card.widgetLayout.slots.filter(s => !isPageFrame(s.renderer_key));
     const registry = widgetRenderers(card, sections);
     const target = (slot: typeof slots[number]) => Number(resolveEntityArgument(slot.call_params?.entity_id, String(card.id)));
     const extras = new Map<string, string>();
@@ -1261,6 +1261,38 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     const splitParameters = parameterSlots.length === 2 &&
       parameterSlots.some(s => s.column_start === sideColumn - 2 && s.column_span === 2) &&
       parameterSlots.some(s => s.column_start === sideColumn && s.column_span === 1);
+    let heading: string | undefined;
+    if (!card.widgetLayout.explicit_card_slots) heading = titleHtml;
+    else {
+      const first = slots[0];
+      const mainColumn = card.widgetLayout.grid_columns === 4 ? 2 : 1;
+      if (first?.renderer_key === "card_title" && first.column_start === mainColumn && first.column_span === 2 &&
+          first.row_span === 1 && slots.slice(1).every(slot => slot.row_start > first.row_start) && target(first) === card.id) {
+        heading = titleHtml.replace('<header class="pc-head"', `<header class="pc-head" data-layout-slot="${e(first.id)}"`);
+        slots = slots.slice(1);
+      }
+    }
+    const trailing: string[] = [];
+    while (card.widgetLayout.explicit_card_slots && !layoutPreview && slots.length) {
+      const slot = slots[slots.length - 1];
+      const key = slot.renderer_key;
+      const css = key === "news_navigation" ? "pc-news-nav" : key === "news_same_day" ? "pc-news-day" : "";
+      const mainColumn = sideColumn - 2;
+      const right = key === "news_same_day";
+      if ((!css && key !== "research_materials") || slot.column_start !== (right ? sideColumn : mainColumn) ||
+          slot.column_span !== (right ? 1 : 2) || slot.row_span !== 1 ||
+          slots.slice(0, -1).some(s => s.row_start + s.row_span > slot.row_start)) break;
+      const html = registry.get(key)?.(target(slot), slot.design);
+      if (html) {
+        const mark = `data-layout-slot="${e(slot.id)}"`;
+        trailing.unshift(css ? `<section class="${css}" ${mark}>${html}</section>` : html.replace("<section ", `<section ${mark} `));
+      }
+      slots = slots.slice(0,-1);
+    }
+    if (heading && slots.length && card.widgetLayout.grid_columns === 3) {
+      const start = Math.min(...slots.map(s => s.row_start));
+      slots = slots.map(s => ({...s, row_start:s.row_start - start + 1}));
+    }
     parts.length = headerStart;
     parts.push(renderCardGrid(slots, slot => {
       if (splitParameters && slot.renderer_key === "parameters" && target(slot) === card.id) {
@@ -1268,7 +1300,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
       }
       if (extras.has(slot.id)) return extras.get(slot.id)!;
       return registry.get(slot.renderer_key)?.(target(slot), slot.design) ?? "";
-    }, layoutPreview, undefined, card.widgetLayout.grid_columns));
+    }, layoutPreview, heading, card.widgetLayout.grid_columns), ...trailing);
   } else {
     // Без настройки — прежний порядок: страница не пустеет из-за недостающей строки.
     const layout = card.layout.length > 0
@@ -1290,14 +1322,14 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     }
     parts.push(...(widgets.get("") ?? []));
   }
-  if (news && !card.widgetLayout) {
+  if (news && !card.widgetLayout?.explicit_card_slots) {
     // Листать ленту: «Раньше / Позже» в конце, «Ещё за этот день» — на полях.
     parts.push(`<section class="pc-news-nav">${newsNavHtml(news.nav)}</section>`);
     const same = sameDay();
     if (same) parts.push(`<aside class="pc-news-day">${same}</aside>`);
   }
   // Материалы в работе — только в карточке для редактора (materials передан).
-  if (materials !== undefined && !card.widgetLayout) {
+  if (materials !== undefined && !card.widgetLayout?.explicit_card_slots && !card.widgetLayout?.slots.some(s => s.renderer_key === "research_materials")) {
     parts.push(materialsHtml(materials));
   }
   parts.push(`</article>`);
@@ -1522,7 +1554,7 @@ pages.get("/api/v1/entities/:key/card", async (c) => {
   const canEdit = !!principal && (principal.permissions.has("edit") || principal.permissions.has("su"));
   const materials = canEdit ? await materialsOf(card.id) : undefined;
   return c.json({ html: cardBody(card, description, cite, await newsExtra(card), materials, undefined, previewId !== undefined), title: `${card.title_ru} — ${site.name}`,
-    frame: card.widgetLayout ? { menu: card.widgetLayout.slots.find(s => s.renderer_key === "site_menu")?.id ?? null, footer: card.widgetLayout.slots.find(s => s.renderer_key === "site_footer")?.id ?? null } : null,
+    frame: card.widgetLayout?.explicit_card_slots ? { menu: card.widgetLayout.slots.find(s => s.renderer_key === "site_menu")?.id ?? null, footer: card.widgetLayout.slots.find(s => s.renderer_key === "site_footer")?.id ?? null } : null,
     path: entityPath(card.slug) });
 });
 

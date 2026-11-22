@@ -3,7 +3,7 @@ import { type Query, sql } from "./db.ts";
 import type { CardSlot } from "./cardGrid.ts";
 
 export interface CardLayout {
-  grid_columns?: 3 | 4;
+  explicit_card_slots?: boolean; grid_columns?: 3 | 4;
   source_type_id?: string | null; filter_type_id?: string | null; filter_text?: string | null;
   repeat_mode?: "block" | "journal" | null; first_slot_id?: string | null; last_slot_id?: string | null;
   id: string; page_id: string; revision: number; assigned: boolean; name: string; slots: CardSlot[];
