@@ -1,3 +1,4 @@
+import { tokenDigest } from "./intakeTokens.ts";
 import {researchData} from '../lib/setResearch.ts';
 import { Hono } from "hono";
 import { sql, transaction, type Tx } from "../lib/db.ts";
@@ -68,16 +69,33 @@ entityIntake.get("/", async c=>{
  return c.json({items,total:count[0].total});
 });
 entityIntake.get("/:id",async c=>c.json(await loadIntake(sql,uuid(c.req.param("id")))));
-async function save(c: any, creating: boolean) {
- const actor=requirePermission(c.get("principal"),"edit");
+export async function save(c: any, creating: boolean, external = false) {
+ const credential = external ? c.req.header("authorization") ?? "" : "";
+ let tokenId: string | null = null;
+ let contributorId: string;
+ if (external) {
+   if (!/^Bearer intake_[0-9a-f]{64}$/.test(credential)) throw new ApiError("unauthenticated","Нужен токен приёма");
+   const [token] = await sql<{id:string; issued_by:string}>`select t.id,t.issued_by from app.intake_tokens t
+     join app.contributors c on c.id=t.issued_by and c.status='active'
+     where digest=${await tokenDigest(credential.slice(7))} and expires_at>now()`;
+   if (!token) throw new ApiError("unauthenticated","Токен недействителен или истёк");
+   tokenId=token.id;
+   contributorId=token.issued_by;
+ } else {
+   contributorId=requirePermission(c.get("principal"),"edit").contributorId;
+ }
  const raw=await c.req.text(); if(new TextEncoder().encode(raw).length>1000000) throw new ApiError("payload_too_large","Досье больше 1 МБ; разделите материалы");
  let input: Row;try{input=JSON.parse(raw);}catch{fail("Некорректный JSON");}
  if(!input! || typeof input!=="object") fail("Нужно досье");
  const d=validate(input!);if(!creating && d.id!==uuid(c.req.param("id"))) fail("UID не совпадает с адресом");
- const result=await transaction(actor.contributorId,async tx=>{
+ const result=await transaction(contributorId,async tx=>{
   // Serializes same-UID POST retries and updates without a duplicate race.
   await tx`select pg_advisory_xact_lock(hashtextextended('entity-intake-write',0))`;
-  const exists=await tx`select id from app.entity_intake where id=${d.id}`;
+  const exists=await tx`select id,intake_token_id from app.entity_intake where id=${d.id}`;
+  if(external && exists.length){
+   if(exists[0].intake_token_id!==tokenId) throw new ApiError("version_conflict","UID досье уже занят");
+   return {id:d.id};
+  }
   if(creating && exists.length) return await loadIntake(tx,d.id);
   const old=creating?null:await loadIntake(tx,d.id,true);
   if(old?.sketch?.state === "running" && Date.now()-Date.parse(old.sketch.started_at)<300000) throw new ApiError("version_conflict","Дождитесь подготовки эскиза");
@@ -95,11 +113,11 @@ async function save(c: any, creating: boolean) {
     if(m.media_entity_id && !(await tx`select a.id from app.media_assets a join app.media_files f on f.asset_id=a.id where a.entity_id=${m.media_entity_id} and a.archived_at is null and f.variant='original' and f.status='ready' and f.is_current`).length) fail("Файл оригинала не найден в медиатеке");
    }
   }
-  if(creating) await tx`insert into app.entity_intake(id,title,description,status,reason,target_entity_id) values(${d.id},${d.title},${d.description},${d.status},${d.reason},${d.target_entity_id})`;
+  if(creating) await tx`insert into app.entity_intake(intake_token_id,id,title,description,status,reason,target_entity_id) values(${tokenId},${d.id},${d.title},${d.description},${d.status},${d.reason},${d.target_entity_id})`;
   else {
    const {history,...snapshot}=old!;
    await tx`update app.entity_intake set title=${d.title},description=${d.description},status=${d.status},reason=${d.reason},target_entity_id=${d.target_entity_id},sketch=case when sketch is null then null else sketch || '{"state":"stale"}'::jsonb end,version=version+1,
-    history=history||${JSON.stringify([{at:new Date().toISOString(),by:actor.contributorId,snapshot}])}::jsonb where id=${d.id}`;
+    history=history||${JSON.stringify([{at:new Date().toISOString(),by:contributorId,snapshot}])}::jsonb where id=${d.id}`;
   }
   // Whole-dossier replacement is atomic; previous content is retained in history.
   const sourceIds=d.sources.map((s:Row)=>s.id),mediaIds=d.sources.flatMap((s:Row)=>s.media.map((m:Row)=>m.id));
@@ -111,7 +129,7 @@ async function save(c: any, creating: boolean) {
    for(const m of s.media) await tx`insert into app.entity_intake_media(id,source_id,url,media_entity_id,kind,caption,author,status,error) values(${m.id},${s.id},${m.url},${m.media_entity_id},${m.kind},${m.caption},${m.author},${m.status},${m.error})
     on conflict(id) do update set url=excluded.url,media_entity_id=excluded.media_entity_id,kind=excluded.kind,caption=excluded.caption,author=excluded.author,status=excluded.status,error=excluded.error`;
   }
-  return await loadIntake(tx,d.id);
+  return external ? {id:d.id} : await loadIntake(tx,d.id);
  });
  return c.json(result,creating?201:200);
 }

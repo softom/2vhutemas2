@@ -24,7 +24,8 @@ import { dates } from "./routes/dates.ts";
 import { indicators } from "./routes/indicators.ts";
 import { parameters, parameterSets } from "./routes/parameters.ts";
 import { researchMaterials } from "./routes/researchMaterials.ts";
-import { entityIntake } from "./routes/entityIntake.ts";
+import { intakeTokens } from "./routes/intakeTokens.ts";
+import { entityIntake, save as saveIntake } from "./routes/entityIntake.ts";
 import { classification } from "./routes/classification.ts";
 import { setResearch } from "./routes/setResearch.ts";
 import { newsRobot } from "./routes/newsRobot.ts";
@@ -41,6 +42,7 @@ app.use("*", requestContext);
 app.use("*", cors);
 
 /** Пользователь определяется по токену; гость допустим — он видит опубликованное. */
+app.post("/api/v1/incoming-materials", c => saveIntake(c,true,true));
 app.use("/api/v1/*", async (c: Context<AppEnv>, next: Next) => {
   c.set("principal", await principalFromRequest(c.req.header("authorization")));
   await next();
@@ -170,6 +172,7 @@ app.route("/api/v1/parameters", parameters);
 app.route("/api/v1", researchMaterials);
 app.route("/api/v1/parameter-sets", parameterSets);
 app.route("/api/v1/materials", materials);
+app.route("/api/v1/admin/intake-tokens", intakeTokens);
 app.route("/api/v1/entity-intake", entityIntake);
 app.route("/api/v1/set-research", setResearch);
 app.route("/api/v1/classification", classification);
