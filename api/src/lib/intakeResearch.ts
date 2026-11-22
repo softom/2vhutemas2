@@ -17,7 +17,7 @@ async function bounded(response:Response,max=2000000):Promise<string>{
 }
 const plain=(s:string)=>s.replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&(?:nbsp|lt|gt);/g,' ').replace(/\s+/g,' ').trim();
 const source=(url:string,title:string,excerpt:string,provider:string,evidence:'snippet'|'provided'='snippet'):ResearchSource=>({id:crypto.randomUUID(),url:researchUrl(url),title:plain(title).slice(0,500),excerpt:plain(excerpt).slice(0,5000),provider,evidence});
-export async function researchCatalog(){return await classificationCatalog(sql,false);}
+export async function researchCatalog(){return await classificationCatalog(sql,false,true);}
 export async function collectResearch(d:any,caller:Caller,topic='архитектура стиль конструкция',options?:{query:string;language:string;searchType:string}){
  const sources:ResearchSource[]=[],warnings:string[]=[];
  for(const s of [...(d.sketch.sources||[]),...(d.sources||[])])if(s.url){try{sources.push(source(s.url,s.title||s.url,s.description||'','dossier','provided'));}catch{warnings.push('Пропущена некорректная ссылка досье');}}

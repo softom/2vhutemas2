@@ -136,7 +136,7 @@ export async function analyzeSet(title:string,set:Row,sources:Row[],caller:Calle
  const pending=new Map<number,any[]>(frozen?frozen.map((p:Row)=>[p.number,p.fragments]):plan!.chunks.map((chunk,i)=>[i+1,chunk] as [number,any[]]).filter(([n])=>!prior||missing.includes(n)));
  if(!pending.size)throw new Error('Нет текста с названием объекта. Проверьте названия и найденные источники перед анализом');
  const attribution=set.result_kind==='relations';
- const catalog=attribution?(await classificationCatalog()).filter(c=>set.allowed_types.some((t:any)=>t.code===c.axis)):[];
+ const catalog=attribution?(await classificationCatalog(sql,true,true)).filter(c=>set.allowed_types.some((t:any)=>t.code===c.axis)):[];
  const proposals:Row[]=[...(prior?.proposals||[])],warnings:string[]=prior?(prior.warnings||[]).filter((w:string)=>!/^Часть \d+ не обработана:/.test(w)):excluded?['Собственные страницы исключены из анализа: '+excluded]:[];
  const rejectedProposals:Row[]=[...(prior?.rejected_proposals||[])];
  if(!prior)warnings.push(`Бюджет: ${budget.calls} из максимум ${budget.max_calls} запросов; ${budget.selected_chars} из ${budget.input_chars} символов. ${budget.method}. Это выборочный анализ. Посторонних источников исключено: ${budget.excluded_unrelated}.`);

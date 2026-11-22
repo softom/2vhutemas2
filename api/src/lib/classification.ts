@@ -14,7 +14,7 @@ export async function boundedCatalogRead<T>(tx:Tx, read:(run:Tx)=>Promise<T>):Pr
  return result;
 }
 
-export async function classificationCatalog(tx:Tx=sql,drafts=true){
+export async function classificationCatalog(tx:Tx=sql,drafts=true,includeInstructions=false){
  return boundedCatalogRead(tx,async run=>{
   // Keep the full-library contract for matching and research. Enrich only selected IDs.
   const ids=await run<{id:string}>`select e.id from app.read_entities(${drafts}) e
@@ -30,13 +30,16 @@ export async function classificationCatalog(tx:Tx=sql,drafts=true){
     from unnest(${page}::bigint[]) with ordinality page(id,ord)
     join app.entities e on e.id=page.id join app.revisions r on r.id=case when ${drafts} then e.working_revision_id else e.published_revision_id end
     join app.entity_types t on t.id=(r.snapshot->'entity'->>'type_id')::uuid
-    left join lateral (select max(val->>'text_value') filter(where code='concept_definition') definition,
+    left join lateral (select max(val->>'text_value') filter(where code='llm_concept_definition') definition,
       (jsonb_agg(app.table_rows_json(pid,app.public_value(val)->'table_value')) filter(where code='concept_names'))->0 names
       from (select distinct on(p.code) p.code,p.id pid,v.val
        from jsonb_array_elements(r.snapshot->'values') v(val)
-       join app.parameters p on p.id=(v.val->>'parameter_id')::uuid and p.is_published
+       join app.parameters p on p.id=(v.val->>'parameter_id')::uuid
        join jsonb_array_elements(r.snapshot->'indicators') i(val) on i.val->>'id'=v.val->>'indicator_id'
-       where p.code in ('concept_definition','concept_names')
+       where (p.code='concept_names' and p.is_published)
+          or (${includeInstructions} and p.code='llm_concept_definition' and exists(
+           select 1 from app.parameter_set_items i join app.parameter_sets s on s.id=i.set_id
+           where i.parameter_id=p.id and s.code='llm_instructions'))
        order by p.code,(i.val->>'sort_order')::int,(v.val->>'sort_order')::int) selected) fields on true
     where (${drafts} or e.status='published') and t.code=any(${Object.keys(AXES)}::text[]) order by page.ord`;
    catalog.push(...rows.map(r=>({...r,id:Number(r.id)})));

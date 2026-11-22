@@ -29,7 +29,7 @@ classification.post('/initialize',async c=>{
    if(existing){items.push({id:Number(existing.id),created:false});continue;}
    const record=await createRecord(tx,{type:s.axis,title:s.ru,slugBase:s.slug,contributorId:actor.contributorId});
    await tx`update app.entities set title_en=${s.en} where id=${record.id}`;
-   await setAnswers(tx,record.id,[{code:'concept_definition',text:s.definition}]);
+   await setAnswers(tx,record.id,[{code:'llm_concept_definition',text:s.definition}]);
    await saveRevision(tx,record.id,actor.contributorId,'Стартовый каталог: определение требует редакторской проверки','create');
    items.push({id:record.id,created:true});
   }
