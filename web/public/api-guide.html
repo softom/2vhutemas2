@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Описание API · 2ВХУТЕМАС</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#faf7f1;color:#29241e;font:1rem/1.6 system-ui,sans-serif}main{max-width:52rem;margin:auto;padding:2rem 1.25rem 5rem}a{color:#97311f}h1,h2{line-height:1.2}h1{font-size:clamp(2rem,6vw,3.6rem)}h2{margin-top:2.3rem}pre{overflow:auto;background:#efe9df;padding:1rem}code{overflow-wrap:anywhere}nav{display:flex;gap:1rem;flex-wrap:wrap}dt{font-weight:bold}dd{margin:0 0 .65rem}
+</style>
+<main>
+<a href="/">2ВХУТЕМАС</a>
+<h1>Описание API</h1>
+<p>Через API внешняя система может читать опубликованные карточки, передавать материалы на рассмотрение и редактировать существующие карточки. Базовый адрес — <code>https://2vhutemas.ru/api/v1</code>.</p>
+<nav aria-label="Содержание"><a href="#token">Проверка токена</a><a href="#intake">Приём материалов</a><a href="#edit">Карточки</a><a href="#errors">Ошибки</a></nav>
+<h2 id="token">Проверка токена</h2>
+<p>Администратор выдаёт токен на 1, 7, 30 или 90 суток и выбирает права. Передавайте его в заголовке <code>Authorization: Bearer &lt;токен&gt;</code>. В примере переменная окружения <code>API_TOKEN</code> содержит выданный секрет.</p>
+<pre><code>curl -H "Authorization: Bearer $API_TOKEN" https://2vhutemas.ru/api/v1/me</code></pre>
+<p>В ответе <code>token_id</code> обозначает UID токена, <code>display_name</code> — имя системы, <code>permissions</code> — массив выданных прав, <code>expires_at</code> — время окончания действия с часовым поясом. Запрос без заголовка возвращает <code>authenticated: false</code>.</p>
+<h2 id="intake">Приём материалов</h2>
+<p><code>POST /incoming-materials</code> требует права <code>intake</code>. Отправьте JSON с заголовком <code>Content-Type: application/json</code>. Назначьте досье и каждому источнику отдельный UUID. Ниже пример тела запроса.</p>
+<pre><code>{
+  "id": "a95ff5bc-c904-4507-82c8-90f79bcf5413",
+  "title": "Описание архитектурного проекта",
+  "sources": [{
+    "id": "ec9aa64d-0eaa-4bde-9b22-609904e668e2",
+    "title": "Страница проекта",
+    "url": "https://example.org/project",
+    "media": []
+  }]
+}</code></pre>
+<p>Используйте новые UUID для нового материала. При повторной отправке того же досье сохраните его UID и используйте тот же токен. Успешный ответ — HTTP 201 и поле <code>id</code>. Досье поступает на рассмотрение со статусом «Предложено».</p>
+<h2 id="edit">Чтение и редактирование карточек</h2>
+<p>Без токена <code>GET /entities</code> возвращает каталог опубликованных карточек, а <code>GET /entities/{id}</code> — одну карточку. В адресах ниже <code>{id}</code> означает числовой UID сущности.</p>
+<ol>
+<li>С токеном, имеющим право <code>edit_cards</code>, вызовите <code>GET /entities/{id}</code>. Сохраните <code>latest_revision_id</code> из ответа.</li>
+<li>Отправьте <code>PATCH /entities/{id}</code> с тем же токеном и типом содержимого <code>application/json</code>. В поле <code>base_revision_id</code> подставьте сохранённый UID версии. Для изменения названия тело выглядит так:
+<pre><code>{
+  "base_revision_id": "&lt;latest_revision_id из GET&gt;",
+  "title_ru": "Новое название"
+}</code></pre></li>
+<li>В успешном ответе получите <code>revision_id</code>. Повторным <code>GET</code> проверьте изменения и номер рабочей версии. Публикация выполняется отдельно участником с правом публикации.</li>
+</ol>
+<h2 id="errors">Ошибки</h2>
+<dl><dt>401 — ошибка авторизации</dt><dd>Проверьте заголовок и срок действия токена через <code>/me</code>.</dd><dt>403 — недостаточно прав</dt><dd>Сверьте <code>permissions</code> с правом, которое требуется для операции.</dd><dt>409 — конфликт версии при правке</dt><dd>Перечитайте карточку, сверьте новые изменения и повторите запрос от актуальной версии.</dd></dl>
+</main></html>

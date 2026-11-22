@@ -12,6 +12,7 @@ export function AdminNav() {
       fontWeight:isActive ? 700 : 500, textDecoration:isActive ? "underline" : undefined,
       textUnderlineOffset:"0.3em", padding:"0.35rem 0.6rem"
     })}>{label}</NavLink>)}
+    <a href="/api-guide.html" style={{padding:"0.35rem 0.6rem"}}>Описание API</a>
   </nav>;
 }
 
