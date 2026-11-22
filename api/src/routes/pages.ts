@@ -1208,6 +1208,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
           ).join("")
         }</ul>`;
     },
+    research_materials: () => materials === undefined ? "" : materialsHtml(materials),
     citation: () => [
       `<details class="cite-disclosure"><summary>Цитировать</summary><h2>Как цитировать</h2>`,
       `<p><b>ГОСТ Р 7.0.100–2018:</b> <span id="cite-gost">${e(cite.gost)}</span></p><button type="button" class="ghost" data-copy="cite-gost">Скопировать ГОСТ</button>`,
@@ -1274,7 +1275,9 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     if (same) parts.push(`<aside class="pc-news-day">${same}</aside>`);
   }
   // Материалы в работе — только в карточке для редактора (materials передан).
-  if (materials !== undefined) parts.push(materialsHtml(materials));
+  if (materials !== undefined && !card.widgetLayout?.slots.some(s => s.renderer_key === "research_materials")) {
+    parts.push(materialsHtml(materials));
+  }
   parts.push(`</article>`);
   return parts.join("");
 }

@@ -3,7 +3,7 @@ import { modelPath } from "./modelWidgets.ts";
 export const cardSectionNames: Readonly<Record<string,string>> = {
   parameters: "Параметры", links: "Связи", text: "Текст", gallery: "Изображения",
   drawings: "Чертежи", sources: "Источники", mentions: "Упоминания",
-  citation: "Цитирование", video: "Видео",
+  research_materials: "Материалы в работе", citation: "Цитирование", video: "Видео",
 };
 export function isPageFrame(key: string) {
   return key === "site_menu" || key === "site_footer";
