@@ -25,19 +25,25 @@ export function attributionProposal(raw:any,catalog:any[],sources:any[]){
  if(!source)throw new Error('Источник отсутствует в переданном корпусе');
  const quote=normalized(raw.quote);const quality=sourceQuality(source);const full=quality==='page'?(source.source_text||source.text):'';
  const available=source.source_text||full||source.source_excerpt||source.text||'';
- if(quote.length<12||quote.length>6000||!normalized(available).includes(quote))throw new Error('Точная цитата не найдена в тексте источника');
+ if(quote.length<12||!normalized(available).includes(quote))throw new Error('Точная цитата не найдена в тексте источника');
+ if(quote.length>400)throw new Error('Выберите цитату не длиннее 400 символов');
  if(!normalized(raw.rationale))throw new Error('Нет отдельного обоснования');
- return {id:crypto.randomUUID(),kind:'attribution',negation_evidence:negationEvidence(raw,quote),axis:concept?.axis||raw.axis,concept_id:concept?Number(concept.id):null,candidate_name:concept?'':normalized(raw.candidate_name).slice(0,200),title:concept?.title_ru||normalized(raw.candidate_name),relation:raw.relation,source_id:raw.source_id,quote,rationale:normalized(raw.rationale).slice(0,4000),phase:normalized(raw.phase).slice(0,500),zone:normalized(raw.zone).slice(0,500),locator:normalized(raw.locator).slice(0,500),evidence:quality,selected:false};
+ const axis=concept?.axis||raw.axis;
+ const relation=raw.relation==='classification_membership'&&['form_method','morphological_trait'].includes(axis)?'classification_trait':raw.relation;
+ return {id:crypto.randomUUID(),kind:'attribution',negation_evidence:negationEvidence(raw,quote),axis,concept_id:concept?Number(concept.id):null,candidate_name:concept?'':normalized(raw.candidate_name).slice(0,200),title:concept?.title_ru||normalized(raw.candidate_name),relation,source_id:raw.source_id,quote,rationale:normalized(raw.rationale).slice(0,4000),phase:normalized(raw.phase).slice(0,500),zone:normalized(raw.zone).slice(0,500),locator:normalized(raw.locator).slice(0,500),evidence:quality,selected:false};
 }
 export function attributionFormat(catalog:any[],ids:string[],fragments?:number[]){
  const properties:any={axis:{type:'string',enum:Object.keys(AXES)},concept_id:{type:['integer','null'],enum:[...catalog.map(c=>Number(c.id)),null]},candidate_name:{type:'string'},relation:{type:'string',enum:RELATIONS},source_id:{type:'string',enum:ids},quote:{type:'string'},rationale:{type:'string'},phase:{type:'string'},zone:{type:'string'},locator:{type:'string'}};
  properties.negation_evidence={anyOf:[{type:'null'},{type:'object',additionalProperties:false,required:['subject_kind','clause','object_words','denial_words'],properties:{subject_kind:{type:'string',enum:['building_or_part','person_or_group','unclear']},clause:{type:'string'},object_words:{type:'string'},denial_words:{type:'string'}}}]};
- if(fragments){delete properties.quote;properties.fragment_id={type:'integer',enum:fragments};}
+ if(fragments){properties.quote={type:'string',minLength:12,maxLength:400};properties.fragment_id={type:'integer',enum:fragments};}
  return {type:'json_schema',json_schema:{name:'classification_attributions',strict:true,schema:{type:'object',properties:{proposals:{type:'array',maxItems:100,items:{type:'object',properties,required:Object.keys(properties),additionalProperties:false}}},required:['proposals'],additionalProperties:false}}};
 }
 
 export function attributionFromFragment(raw:any,fragments:any[]){
  const fragment=fragments.find(f=>f.fragment_id===raw.fragment_id);
  if(!fragment||fragment.id!==raw.source_id)throw Error('Фрагмент не принадлежит указанному источнику');
- return {...raw,quote:fragment.text};
+ const text=normalized(fragment.text),excerpt=normalized(raw.quote);
+ const offset=text.indexOf(excerpt);
+ if(excerpt.length<12||excerpt.length>400||offset<0)throw Error('Нужна дословная цитата из выбранного фрагмента длиной 12–400 символов');
+ return {...raw,quote:text.slice(offset,offset+excerpt.length)};
 }

@@ -14,9 +14,11 @@ ok(attributionProposal(raw,catalog,fragments).quote===raw.quote,'Quote in second
 let rejected=false;try{attributionProposal({...raw,quote:'The crown is postmodern.'},catalog,fragments);}catch{rejected=true;}ok(rejected,'Translated/invented quote remains rejected');
 ok(attributionProposal({...raw,quote:'La  corona es postmoderna.'},catalog,fragments).quote===raw.quote,'Whitespace normalization');
 ok(pieces.every(p=>p.text.length<=1600),'Citation fragment bounded');
-const chosen=pieces.find(p=>p.text.includes('postmoderna'))!;ok(attributionFromFragment({source_id:chosen.id,fragment_id:chosen.fragment_id,quote:'invented'},pieces).quote===chosen.text,'Quote resolved only from source');
+const chosen=pieces.find(p=>p.text.includes('postmoderna'))!;ok(attributionFromFragment({source_id:chosen.id,fragment_id:chosen.fragment_id,quote:'La corona es postmoderna.'},pieces).quote==='La corona es postmoderna.','Quote resolved only from source');
 let invalid=false;try{attributionFromFragment({source_id:'wrong',fragment_id:chosen.fragment_id},pieces);}catch{invalid=true;}ok(invalid,'Cross-source fragment rejected');
-const schema=attributionFormat(catalog,['s'],[1,2]).json_schema.schema.properties.proposals.items;ok(!schema.required.includes('quote')&&schema.required.includes('fragment_id'),'Model selects rather than rewrites quotation');
+const schema=attributionFormat(catalog,['s'],[1,2]).json_schema.schema.properties.proposals.items;ok(schema.required.includes('quote')&&schema.required.includes('fragment_id'),'Model selects rather than rewrites quotation');
 const relevant=analysisPlan([{...source(1),source_text:'Torres Colón. The podium is Brutalist.'},{...source(2),source_text:'Cristóbal Colón sailed to America.'}],{code:'style_solutions'},['Torres de Colón']);ok(relevant.summary.analyzed_sources===1&&relevant.summary.excluded_unrelated===1,'Object name disambiguates Columbus');
 const dense=Array.from({length:100},(_,i)=>({...source(i),source_text:Array.from({length:20},(_,j)=>'Brutalist structure '+i+' '+j+' '+('abc '.repeat(100))+'. ').join('')}));const bounded=analysisPlan(dense,{code:'style_solutions'});ok(bounded.summary.calls===5&&bounded.summary.selected_chars===200000,'Large unique corpus hits exact hard ceiling');
 console.log('RESEARCH_BUDGET_AND_QUOTES_CHECKS',count);
+
+for(const axis of ['form_method','morphological_trait'])ok(attributionProposal(raw,[{...catalog[0],axis}],fragments).relation==='classification_trait','Use canonical trait relation');
