@@ -175,7 +175,6 @@ export function styleAttributionWidgetHtml(set: PublicRelationSet | undefined): 
   const panels = [
     [
       "Профиль",
-      "<p>Доля поддержки источниками внутри одной оси, роли, фазы и части объекта. Каждый источник даёт понятию один голос.</p>" +
       profile(set.links, set.id),
     ],
     [
