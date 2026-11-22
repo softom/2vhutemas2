@@ -1,3 +1,4 @@
+import {singleConstructionYear} from './attributionPhase.ts';
 import {styleAttributionWidgetHtml} from './styleAttributionWidget.ts';
 import {sql} from './db.ts';
 import {escapeHtml,entityPath} from './site.ts';
@@ -19,6 +20,10 @@ export async function loadPublicRelationSets(entityId:number,links:Link[],drafts
  const attached: PublicRelationSet[] = sets.map((s:any)=>({...s,fields:s.fields||[],links:links.filter(l=>l.direction==='outgoing'&&(s.types||[]).map(String).includes(String(l.other_type_id))&&(s.roles||[]).map(String).includes(String(l.role_id)))}));
  const style = attached.find(set => set.code === 'style_solutions');
  if (style) {
+   if(style.links.some(l=>l.citations.some(c=>/^\d{4}$/.test(c.phase||'')))){
+    const year=await singleConstructionYear(sql,entityId,drafts);
+    if(year)style.links=style.links.map(l=>({...l,citations:l.citations.map(c=>c.phase===year?{...c,phase:''}:c)}));
+   }
    const comparable = style.links.filter(link => link.role_id && link.role !== 'classification_negation');
    if (comparable.length) {
      style.similar = await sql<NonNullable<PublicRelationSet['similar']>[number]>`select obj.id, obj.slug, obj.title_ru as title,

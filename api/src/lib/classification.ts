@@ -19,7 +19,7 @@ export async function classificationCatalog(tx:Tx=sql,drafts=true){
   // Keep the full-library contract for matching and research. Enrich only selected IDs.
   const ids=await run<{id:string}>`select e.id from app.read_entities(${drafts}) e
    join app.entity_types t on t.id=e.type_id where t.code=any(${Object.keys(AXES)}::text[])
-   and (${drafts} or e.is_published) order by t.sort_order,e.id`;
+   and e.status<>'archived' and (${drafts} or e.is_published) order by t.sort_order,e.id`;
   const catalog=[];
   for(let offset=0;offset<ids.length;offset+=32){
    const page=ids.slice(offset,offset+32).map(row=>row.id);

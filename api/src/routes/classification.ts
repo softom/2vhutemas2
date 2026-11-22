@@ -1,3 +1,4 @@
+import {singleConstructionYear} from '../lib/attributionPhase.ts';
 import {compatibleEvidence} from '../lib/attributionContext.ts';
 import {isExcludedResearchRow} from '../lib/researchSourcePolicy.ts';
 import {publishOwnerRevision} from '../lib/ownedVersions.ts';
@@ -49,11 +50,14 @@ async function plans(tx:Tx,entityId:number,input:any,context:any={}){
  const allowedTypes=await tx<any>`select code from app.entity_types where id=any(${config.types}::uuid[])`;
  const allowedRoles=await tx<any>`select code from app.link_roles where id=any(${config.roles}::uuid[])`;
  const catalog=context.catalog||(context.catalog=(await classificationCatalog(tx,true)).filter(c=>allowedTypes.some((t:any)=>t.code===c.axis))),out:any[]=[];const seen=new Set<string>();
+ const baseYear=context.baseYear??(context.baseYear=await singleConstructionYear(tx,entityId,true));
+ const phase=(value:unknown)=>normalized(value)===baseYear?'':normalized(value);
  for(const choice of input.selections){
   const raw=result.proposals.find((p:any)=>p.id===choice.id);if(!raw)fail('Предложение отсутствует в сохранённом результате');
   if(!raw.concept_id&&!choice.concept_id)fail('Выберите понятие библиотеки');
   if(raw.concept_id&&choice.concept_id&&Number(choice.concept_id)!==Number(raw.concept_id))fail('Нельзя подменить установленное понятие');
   const p=checked(()=>attributionProposal({...raw,concept_id:raw.concept_id||choice.concept_id||null},catalog,data.sources.filter((s:any)=>!isExcludedResearchRow(s))));
+  p.phase=phase(p.phase);
   if(!allowedRoles.some((r:any)=>r.code===p.relation))fail('Отношение не разрешено набором');
   if(config.items.some((i:any)=>i.research_enabled&&i.phase_required)&&!p.phase)fail('Нужна строительная фаза');
   if(config.items.some((i:any)=>i.research_enabled&&i.zone_required)&&!p.zone)fail('Нужна зона объекта');
@@ -66,7 +70,7 @@ async function plans(tx:Tx,entityId:number,input:any,context:any={}){
   if(matches.length>1)fail('Для URL найдено несколько сущностей источника; устраните неоднозначность');
   const sourceEntity=matches[0];
   const links=sourceEntity?await tx<any>`select l.id,l.status,l.published_revision_id,l.working_revision_id,m.id as material_id,r.snapshot->'body_json' as body from app.links l join app.materials m on m.link_id=l.id join app.revisions r on r.id=l.working_revision_id join app.link_roles role on role.id=l.role_id where l.from_entity_id=${entityId} and l.to_entity_id=${p.concept_id} and role.code=${p.relation} and l.status<>'archived' order by l.id`:[];
-  const matching=links.filter(l=>sourceMarks(l.body).some(m=>Number(m.props.entityId)===Number(sourceEntity.id)&&compatibleEvidence({phase:normalized(m.props.phase),zone:normalized(m.props.zone),quote:normalized(extractText([m.block]))},p)));
+  const matching=links.filter(l=>sourceMarks(l.body).some(m=>Number(m.props.entityId)===Number(sourceEntity.id)&&compatibleEvidence({phase:phase(m.props.phase),zone:normalized(m.props.zone),quote:normalized(extractText([m.block]))},p)));
   if(matching.length>1)fail('Есть несколько связей этого источника и контекста; требуется ручное сопоставление');
   const current=matching[0];
   const repeated=current&&sourceMarks(current.body).some(m=>normalized(extractText([m.block]))===p.quote)&&current.body.some((b:any)=>b.type==='paragraph'&&normalized(extractText([b]))===p.rationale);
@@ -90,7 +94,7 @@ classification.post('/:id/check',async c=>{
   const [entity]=await tx<any>`select working_revision_id from app.entities where id=${id} and status<>'archived' for update`;
   if(!entity)throw new ApiError('not_found','Сущность не найдена');
   const context:any={entity},items=[];const seen=new Map<string,string>();
-  for(const choice of input.selections){try{const result=await plans(tx,id,{...input,base_revision_id:entity.working_revision_id,selections:[choice]},context);const x=result.out[0],signature=JSON.stringify([x.key,x.p.quote,x.p.rationale]);const item=planView(x);if(seen.has(signature)&&seen.get(signature)!==x.proposal_id)item.action='duplicate';else seen.set(signature,x.proposal_id);items.push(item);}catch(e){if(!(e instanceof ApiError)||e.status!==400)throw e;items.push({proposal_id:choice.id,action:'blocked',error:e.message});}}
+ for(const choice of input.selections){try{const result=await plans(tx,id,{...input,base_revision_id:entity.working_revision_id,selections:[choice]},context);const x=result.out[0],signature=JSON.stringify([x.key,x.p.quote,x.p.rationale]);const item=planView(x);if(seen.has(signature)&&seen.get(signature)!==x.proposal_id)item.action='duplicate';else seen.set(signature,x.proposal_id);items.push(item);}catch(e){if(!(e instanceof ApiError)||e.status!==400)throw e;items.push({proposal_id:choice.id,action:'blocked',error:e.message});}}
   return {items};
  }));
 });
