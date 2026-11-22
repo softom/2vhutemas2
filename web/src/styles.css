@@ -1194,3 +1194,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
   .style-analysis .style-score:hover { z-index: 3; }
   .style-analysis .style-score:hover small[role="tooltip"] { display: block; }
 }
+
+.style-score .style-objection { grid-column: 1 / -1; }
+.style-objection { font-size: .82em; color: #702f32; font-weight: 600; }
+.style-analysis .style-negative { padding: .28rem .5rem; margin: .18rem 0; border-inline-start: 2px solid #9a6467; }
+.style-analysis .style-score:has(.style-objection) { grid-template-columns: minmax(0,1fr) fit-content(50%); }
+.style-analysis .style-score:has(.style-objection) strong { white-space: normal; }

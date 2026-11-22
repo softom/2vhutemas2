@@ -136,8 +136,24 @@ Deno.test("default scores precede labelled groups on all four axes", () => {
     const html = styleAnalysis({relation_sets:[{id:"s",code:"style_solutions",title:"Стили",fields:[],links}]} as unknown as PublicCard);
     const section = html.split(`data-axis="${axis}">`)[1].split("</section>")[0];
     if (!section.includes('</h3><div class="style-score"') || section.includes('<h4>Обычная роль</h4>')) throw Error(axis);
-    for (const title of ["Цитирование приёма","Отрицание атрибуции","Обычная роль · фасад","Обычная роль · 1923"]) {
+    for (const title of ["Цитирование приёма","Обычная роль · фасад","Обычная роль · 1923"]) {
       if (!section.includes(`<h4>${title}</h4>`)) throw Error(title);
     }
   }
+});
+
+Deno.test("five plus one positive votes and objections from repeated citations", () => {
+  const link = (id: number, role: string, ids: number[]) => ({
+    id, role, role_id: role, other_type_code: "art_styles", other_id: id, other_slug: "c"+id,
+    other_title: "Понятие "+id, citations: ids.map(source_entity_id => ({source_entity_id})),
+  });
+  const set = {code:"style_solutions", fields:[], links:[
+    link(1,"classification_membership",[1,2,3,4,5]), link(2,"classification_membership",[6]),
+    link(2,"classification_negation",[7,7]), link(3,"classification_negation",[8])
+  ]};
+  const html = styleAnalysis({relation_sets:[set]} as unknown as PublicCard).split('data-axis="art_styles">')[1].split("</section>")[0];
+  if (!html.includes("За: 1 ист. (16,7%)") || !html.includes("83,3%") ||
+      (html.match(/href="\/entities\/c2"/g)??[]).length!==1 ||
+      (html.match(/Оспаривается: 1 ист\./g)??[]).length!==2 ||
+      /<meter|%/.test(html.split('class="style-negative"')[1])) throw Error(html);
 });

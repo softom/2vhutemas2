@@ -23,6 +23,11 @@ function profile(links: Relation[], setId: string): string {
     const title = AXES[axis];
     const defaultRole = axis === "art_epochs" || axis === "art_styles"
       ? "classification_membership" : "classification_trait";
+    const objections = new Map<number, {link: Relation; sources: Set<number>; contexts: Set<string>}>();
+    function objectionLabel(note: NonNullable<ReturnType<typeof objections.get>>): string {
+      const context = [...note.contexts].map(e).join("; ");
+      return `<span class="style-objection">Оспаривается: ${note.sources.size} ист.${context ? " · " + context : ""}</span>`;
+    }
     const groups = new Map<
       string,
       {
@@ -33,6 +38,14 @@ function profile(links: Relation[], setId: string): string {
     >();
     for (const link of links.filter((l) => l.other_type_code === axis)) {
       for (const citation of link.citations) {
+        if (link.role === "classification_negation") {
+          const note = objections.get(link.other_id) ?? {link, sources: new Set<number>(), contexts: new Set<string>()};
+          note.sources.add(citation.source_entity_id);
+          const context = [citation.phase, citation.zone].filter(Boolean).join(" · ");
+          if (context) note.contexts.add(context);
+          objections.set(link.other_id, note);
+          continue;
+        }
         const key = JSON.stringify([link.role_id, citation.phase || "", citation.zone || ""]);
         const group = groups.get(key) ??
           {
@@ -62,15 +75,22 @@ function profile(links: Relation[], setId: string): string {
           maximumFractionDigits: 1,
         });
         const hintId = `score-hint-${e(setId)}-${++rowNumber}`;
+        const note = c.link.role === defaultRole ? objections.get(c.link.other_id) : undefined;
+        if (note) objections.delete(c.link.other_id);
+        const support = note ? `За: ${c.sources.size} ист. (${percent}%)` : `${percent}%`;
         return `<div class="style-score" tabindex="0" aria-describedby="${hintId}" style="--score-share:${100 * c.sources.size / total}%">${
           anchor(c.link.other_slug, c.link.other_title)
-        } <strong>${percent}%</strong><meter aria-label="${
+        } <strong>${support}</strong>${note ? objectionLabel(note) : ""}<meter aria-label="${
           e(c.link.other_title)
         }" min="0" max="${total}" value="${c.sources.size}"></meter><small id="${hintId}" role="tooltip">Источников: ${c.sources.size} · связей: ${c.relations.size}</small></div>`;
       }).join("");
     }).join("");
+    const negativeRows = [...objections.values()].map(note =>
+      `<div class="style-negative">${anchor(note.link.other_slug, note.link.other_title)} · ${objectionLabel(note)}</div>`
+    ).join("");
+    const negativeGroup = negativeRows ? `<h4>Отрицание атрибуции</h4>${negativeRows}` : "";
     return `<section data-axis="${axis}"><h3>${e(title)}</h3>${
-      body || '<p class="hint">Нет оценки</p>'
+      (body + negativeGroup) || '<p class="hint">Нет оценки</p>'
     }</section>`;
   }).join("");
 }
