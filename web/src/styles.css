@@ -1129,6 +1129,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
     & :is(.top, .site-foot > *) { grid-template-columns: var(--frame-columns); }
     & .top .viewer { min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
     & .top nav { padding-inline: var(--editorial-start); }
+    & .media-library > :is(.row, .sub, .notice, .error, .list-count) {
+      width: var(--editorial);
+      margin-inline: auto;
+    }
+    & .media-library > .grid {
+      grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, var(--middle-track))) minmax(0, 1fr);
+      column-gap: var(--page-gap);
+      background: transparent;
+    }
     & .lectures-list { width: var(--editorial); margin-inline: auto; }
     & :is(.section-grid[data-columns="4"], .public-card:has(> .entity-widget-grid[data-columns="4"])) {
       grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, var(--middle-track))) minmax(0, 1fr);

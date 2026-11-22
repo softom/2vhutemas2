@@ -51,7 +51,7 @@ export function MediaLibrary({ canUpload }: { canUpload: boolean }) {
   };
 
   return (
-    <section>
+    <section className="media-library">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
         <h1>Медиатека</h1>
         {canUpload && (

@@ -5,7 +5,7 @@ import { escapeHtml as e, site } from "./site.ts";
 export function siteHeader(principal: Principal | null, path = "/"): string {
   const items: [string, string, boolean][] = [
     ["/", "Новости", true], ["/objects", "Проекты", true], ["/authors", "Авторы", true],
-    ["/lectures", "Лекции", true], ["/media", "Медиатека", true],
+    ["/lectures", "Лекции", true],
     ["/parameters", "Параметры", can(principal, "edit")],
     ["/page-editor", "Макеты страниц", can(principal, "su")],
     ["/materials", "Материалы", can(principal, "su")],
