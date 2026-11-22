@@ -187,7 +187,8 @@ function layout(inner: string, assigned?: (CardLayout & { frame?: CardLayout["sl
   const menu = frameAttribute("site_menu");
   const footer = frameAttribute("site_footer");
   const sectionFrame = assigned?.explicit_card_slots &&
-    (assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68103" || assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68102");
+    (assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68103" || assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68102" ||
+      assigned.page_id === "39ee9267-1a0e-4928-b608-24bf91f68105");
   const implicit = !sectionFrame && (!cardFrame || !assigned?.explicit_card_slots);
   return `<div class="shell"${sectionFrame ? ' data-section-frame' : ""}${assigned?.grid_columns === 4 ? ' data-page-columns="4"' : ""}><div class="through" aria-hidden="true"></div><div class="through-marks" aria-hidden="true"></div>` +
     (implicit || menu ? `<header class="top" data-site-header${menu}>${siteHeader(null, "")}</header>` : "") +
