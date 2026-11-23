@@ -8,7 +8,7 @@ const pieces=plan.chunks.flat();ok(new Set(pieces.map(p=>p.id)).size===100,'Bala
 for(const p of pieces)ok(corpus[Number(p.id)].source_text.slice(p.offset,p.offset+p.text.length)===p.text,'Exact original substring');
 ok(pieces.some(p=>p.text.includes('Brutalist'))&&pieces.some(p=>p.text.includes('postmoderna'))&&pieces.some(p=>p.text.includes('tecnicista')),'Relevant non-leading text retained');ok(JSON.stringify(corpus)===before,'Corpus unchanged');
 ok(analysisPlan([{...source(1),source_url:'https://2vhutemas.ru/x'}],{code:'style_solutions'}).summary.calls===0,'Own site excluded');
-const catalog=[{id:1,axis:'art_styles',title_ru:'Test'}],raw={axis:'art_styles',concept_id:1,relation:'classification_membership',source_id:'s',quote:'La corona es postmoderna.',rationale:'Source explicitly states it.'};
+const catalog=[{id:1,axis:'art_styles',title_ru:'Test'}],raw={axis:'art_styles',concept_id:1,relation:'classification_membership',source_id:'s',quote:'La corona es postmoderna.',rationale:'Источник прямо указывает на этот стиль.'};
 const fragments=[{id:'s',text:'Other completely separate paragraph.',evidence:'page'},{id:'s',text:'La corona es postmoderna.',evidence:'page'}];
 ok(attributionProposal(raw,catalog,fragments).quote===raw.quote,'Quote in second fragment is valid');
 let rejected=false;try{attributionProposal({...raw,quote:'The crown is postmodern.'},catalog,fragments);}catch{rejected=true;}ok(rejected,'Translated/invented quote remains rejected');
@@ -41,3 +41,9 @@ const typographyQuote={...located,quote:'The architect described a "folded roof"
 const recovered=attributionFromFragment(typographyQuote,sameSource);
 ok(recovered.fragment_id===6&&recovered.quote===sameSource[1].text,'Recover actual typography within same source');
 let ambiguous=false;try{attributionFromFragment(typographyQuote,[...sameSource,{...sameSource[1],fragment_id:7}]);}catch{ambiguous=true;}ok(ambiguous,'Ambiguous alternative is rejected');
+
+const methodRole=attributionProposal({...raw,relation:'classification_citation',zone:'CANOPY'},[{...catalog[0],axis:'form_method'}],fragments);
+ok(methodRole.relation==='classification_trait'&&methodRole.zone==='навес','Method citation and multilingual zone normalized');
+for(const [axis,relation] of [['art_epochs','influence'],['morphological_trait','classification_citation'],['form_method','influence']]){
+ let blocked=false;try{attributionProposal({...raw,relation},[{...catalog[0],axis}],fragments);}catch{blocked=true;}ok(blocked,'Unexpected axis role blocked');
+}

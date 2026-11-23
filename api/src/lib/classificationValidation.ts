@@ -1,3 +1,5 @@
+import {normalizeZone} from './attributionZones.ts';
+export {normalizeZone} from './attributionZones.ts';
 import {matchCandidateConcept} from './matchCandidateConcept.ts';
 import {sourceQuality} from './sourceEvidence.ts';
 export const AXES={art_epochs:'Эпоха / парадигма',form_method:'Метод формообразования',art_styles:'Направление / школа',morphological_trait:'Морфологический признак'};
@@ -16,7 +18,7 @@ export function negationEvidence(raw:any,quote:string){
  return {subject_kind:'building_or_part',clause,object_words:subject,denial_words:predicate};
 }
 export function attributionProposal(raw:any,catalog:any[],sources:any[]){
- const aliases:Record<string,string>={membership:'classification_membership',trait:'classification_trait'};
+ const aliases:Record<string,string>={membership:'classification_membership',trait:'classification_trait',classification_influence:'influence'};
  const requested=aliases[raw?.relation]||raw?.relation;
  if(!raw||!Object.hasOwn(AXES,raw.axis)||!RELATIONS.includes(requested))throw new Error('Неизвестная ось или отношение');
  const concept=resolveConcept(raw,catalog);
@@ -34,9 +36,16 @@ export function attributionProposal(raw:any,catalog:any[],sources:any[]){
  if(!normalized(raw.rationale))throw new Error('Нет отдельного обоснования');
  const axis=concept?.axis||raw.axis;
  const positive=requested==='classification_membership'||requested==='classification_trait';
- const relation=positive?(['form_method','morphological_trait'].includes(axis)?'classification_trait':'classification_membership'):requested;
+ const traitAxis=axis==='form_method'||axis==='morphological_trait';
+ const relation=positive?(traitAxis?'classification_trait':'classification_membership'):
+  axis==='form_method'&&requested==='classification_citation'?'classification_trait':requested;
+ if(relation!=='classification_negation'&&!positive&&axis!=='art_styles'&&relation!=='classification_trait')throw Error('Роль недопустима для выбранной оси');
+ const zone=normalizeZone(raw.zone),phase=normalized(raw.phase),rationale=normalized(raw.rationale);
+ const foreign=(s:string)=>s.replace(/[а-яё]/gi,'').match(/\p{L}/gu)?.length||0;
+ if(foreign(zone)||foreign(phase))throw Error('Название зоны и описание фазы должны быть на русском языке');
+ if(!(rationale.match(/[а-яё]/gi)?.length)||foreign(rationale)>(rationale.match(/[а-яё]/gi)?.length||0))throw Error('Обоснование должно быть на русском языке');
  if(axis==='art_epochs'&&positive&&/современная архитектура (?:xxi|21)(?:-го)? века/i.test(normalized(concept?.title_ru||raw.candidate_name)))throw Error('Календарный век не является архитектурной парадигмой');
- return {id:crypto.randomUUID(),kind:'attribution',quote_trimmed:raw.quote_trimmed===true,negation_evidence:negationEvidence(raw,quote),axis,concept_id:concept?Number(concept.id):null,candidate_name:concept?'':normalized(raw.candidate_name).slice(0,200),title:concept?.title_ru||normalized(raw.candidate_name),relation,source_id:raw.source_id,quote,rationale:normalized(raw.rationale).slice(0,4000),phase:normalized(raw.phase).slice(0,500),zone:normalized(raw.zone).slice(0,500),locator:normalized(raw.locator).slice(0,500),evidence:quality,selected:false};
+ return {id:crypto.randomUUID(),kind:'attribution',quote_trimmed:raw.quote_trimmed===true,negation_evidence:negationEvidence(raw,quote),axis,concept_id:concept?Number(concept.id):null,candidate_name:concept?'':normalized(raw.candidate_name).slice(0,200),title:concept?.title_ru||normalized(raw.candidate_name),relation,source_id:raw.source_id,quote,rationale:rationale.slice(0,4000),phase:phase.slice(0,500),zone:zone.slice(0,500),locator:normalized(raw.locator).slice(0,500),evidence:quality,selected:false};
 }
 export function attributionFormat(catalog:any[],ids:string[],fragments?:number[]){
  const properties:any={axis:{type:'string',enum:Object.keys(AXES)},concept_id:{type:['integer','null'],enum:[...catalog.map(c=>Number(c.id)),null]},candidate_name:{type:'string'},relation:{type:'string',enum:RELATIONS},source_id:{type:'string',enum:ids},quote:{type:'string'},rationale:{type:'string',maxLength:200},phase:{type:'string'},zone:{type:'string'},locator:{type:'string'}};
