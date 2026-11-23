@@ -84,7 +84,7 @@ links.post("/", async (c: Context<AppEnv>) => {
     `;
     const revisions = await tx`
       insert into app.revisions (material_id, edited_by, operation, summary, snapshot)
-      values (${materials[0].id}, ${principal.contributorId}, 'create', 'Создание связи',
+      values (${materials[0].id}, ${principal.contributorId}, 'create', ${principal.tokenId ? 'Создание связи · токен '+principal.tokenId : 'Создание связи'},
               ${JSON.stringify({ body_json: blocks })}::jsonb) returning id
     `;
 

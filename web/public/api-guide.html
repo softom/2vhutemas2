@@ -8,7 +8,7 @@
 <a href="/">2ВХУТЕМАС</a>
 <h1>Описание API</h1>
 <p>Через API внешняя система может читать опубликованные карточки, передавать материалы на рассмотрение и редактировать существующие карточки. Базовый адрес — <code>https://2vhutemas.ru/api/v1</code>.</p>
-<nav aria-label="Содержание"><a href="#token">Проверка токена</a><a href="#intake">Приём материалов</a><a href="#create">Создание карточки</a><a href="#edit">Карточки</a><a href="#errors">Ошибки</a></nav>
+<nav aria-label="Содержание"><a href="#token">Проверка токена</a><a href="#intake">Приём материалов</a><a href="#create">Создание карточки</a><a href="#edit">Карточки</a><a href="#links">Создание связей</a><a href="#errors">Ошибки</a></nav>
 <h2 id="token">Проверка токена</h2>
 <p>Администратор выдаёт токен на 1, 7, 30 или 90 суток и выбирает права. Передавайте его в заголовке <code>Authorization: Bearer &lt;токен&gt;</code>. В примере переменная окружения <code>API_TOKEN</code> содержит выданный секрет.</p>
 <pre><code>curl -H "Authorization: Bearer $API_TOKEN" https://2vhutemas.ru/api/v1/me</code></pre>
@@ -45,6 +45,13 @@
 }</code></pre></li>
 <li>В успешном ответе получите <code>revision_id</code>. Повторным <code>GET</code> проверьте изменения и номер рабочей версии. Публикация выполняется отдельно участником с правом публикации.</li>
 </ol>
+<h2 id="links">Создание связей</h2>
+<p>При выдаче токена отметьте «Создание связей». В ответе <code>GET /me</code> появится право <code>create_links</code>. Чтобы связать две существующие карточки, отправьте их числовые UID и обоснование на <code>POST /links</code>. Подставьте UID своих карточек и текст, объясняющий связь.</p>
+<pre><code>curl -X POST https://2vhutemas.ru/api/v1/links \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"from_entity_id":101,"to_entity_id":102,"justification":{"text":"Автор указан в проектной документации."}}'</code></pre>
+<p>HTTP 201 возвращает <code>id</code> связи, <code>material_id</code> и <code>revision_id</code> первой версии. Связь создаётся как черновик. Публикация, изменение и удаление связи требуют отдельных полномочий.</p>
 <h2 id="errors">Ошибки</h2>
 <dl><dt>401 — ошибка авторизации</dt><dd>Проверьте заголовок и срок действия токена через <code>/me</code>.</dd><dt>403 — недостаточно прав</dt><dd>Сверьте <code>permissions</code> с правом, которое требуется для операции.</dd><dt>409 — конфликт версии при правке</dt><dd>Перечитайте карточку, сверьте новые изменения и повторите запрос от актуальной версии.</dd></dl>
 </main></html>

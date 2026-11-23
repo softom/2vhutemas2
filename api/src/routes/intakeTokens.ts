@@ -9,7 +9,7 @@ export async function tokenDigest(token:string){
   return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
 }
 
-const tokenScopes = ["intake","edit_cards","create_cards"] as const;
+const tokenScopes = ["intake","edit_cards","create_cards","create_links"] as const;
 export type TokenScope = typeof tokenScopes[number];
 
 export async function readActiveToken(credential:string) {

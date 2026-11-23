@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { request } from "../api";
 
-const labels={intake:"Приём материалов",edit_cards:"Редактирование карточек",create_cards:"Создание карточек"};
+const labels={intake:"Приём материалов",edit_cards:"Редактирование карточек",create_cards:"Создание карточек",create_links:"Создание связей"};
 type Scope=keyof typeof labels;
 type Token = {scopes:Scope[]; id:string; system_name:string; expires_at:string};
 const endpoint="/admin/intake-tokens";
