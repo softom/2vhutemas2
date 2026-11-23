@@ -51,11 +51,13 @@ app.use("/api/v1/*", async (c: Context<AppEnv>, next: Next) => {
     return c.json({authenticated:true,token_type:"intake",token_id:token.id,
       display_name:token.system_name,permissions:token.scopes,expires_at:token.expires_at});
   }
-  if (header?.startsWith("Bearer intake_") && /^\/api\/v1\/entities\/[0-9]+$/.test(c.req.path)
-      && (c.req.method==="GET" || c.req.method==="PATCH")) {
-    const token=await authorizeToken(header,"edit_cards");
+  const creatingCard = c.req.method==="POST" && c.req.path==="/api/v1/entities";
+  const editingCard = /^\/api\/v1\/entities\/[0-9]+$/.test(c.req.path)
+      && (c.req.method==="GET" || c.req.method==="PATCH");
+  if (header?.startsWith("Bearer intake_") && (creatingCard || editingCard)) {
+    const token=await authorizeToken(header,creatingCard ? "create_cards" : "edit_cards");
     c.set("principal",{authUid:token.auth_uid,contributorId:token.issued_by,displayName:token.system_name,
-      status:"active",permissions:new Set(["edit"]),tokenId:token.id});
+      status:"active",permissions:new Set([creatingCard ? "create_delete" : "edit"]),tokenId:token.id});
   } else {
     c.set("principal",await principalFromRequest(header));
   }

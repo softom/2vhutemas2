@@ -9,7 +9,8 @@ export async function tokenDigest(token:string){
   return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
 }
 
-export type TokenScope = "intake" | "edit_cards";
+const tokenScopes = ["intake","edit_cards","create_cards"] as const;
+export type TokenScope = typeof tokenScopes[number];
 
 export async function readActiveToken(credential:string) {
   if (!/^Bearer intake_[0-9a-f]{64}$/.test(credential))
@@ -40,8 +41,8 @@ intakeTokens.post("/",async c=>{
   if(typeof body?.name!=="string" || !body.name.trim() || body.name.length>120 || ![1,7,30,90].includes(body.days))
     throw new ApiError("validation_failed","Укажите название системы и срок действия");
   const scopes:unknown = body.scopes === undefined ? ["intake"] : body.scopes;
-  if (!Array.isArray(scopes) || !scopes.length || scopes.length>2 ||
-      scopes.some(s=>s!=="intake" && s!=="edit_cards") || new Set(scopes).size!==scopes.length)
+  if (!Array.isArray(scopes) || !scopes.length || scopes.length>tokenScopes.length ||
+      scopes.some(s=>!tokenScopes.includes(s)) || new Set(scopes).size!==scopes.length)
     throw new ApiError("validation_failed","Выберите права токена");
   const bytes=crypto.getRandomValues(new Uint8Array(32));
   const token="intake_"+Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");

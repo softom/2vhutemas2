@@ -8,7 +8,7 @@
 <a href="/">2ВХУТЕМАС</a>
 <h1>Описание API</h1>
 <p>Через API внешняя система может читать опубликованные карточки, передавать материалы на рассмотрение и редактировать существующие карточки. Базовый адрес — <code>https://2vhutemas.ru/api/v1</code>.</p>
-<nav aria-label="Содержание"><a href="#token">Проверка токена</a><a href="#intake">Приём материалов</a><a href="#edit">Карточки</a><a href="#errors">Ошибки</a></nav>
+<nav aria-label="Содержание"><a href="#token">Проверка токена</a><a href="#intake">Приём материалов</a><a href="#create">Создание карточки</a><a href="#edit">Карточки</a><a href="#errors">Ошибки</a></nav>
 <h2 id="token">Проверка токена</h2>
 <p>Администратор выдаёт токен на 1, 7, 30 или 90 суток и выбирает права. Передавайте его в заголовке <code>Authorization: Bearer &lt;токен&gt;</code>. В примере переменная окружения <code>API_TOKEN</code> содержит выданный секрет.</p>
 <pre><code>curl -H "Authorization: Bearer $API_TOKEN" https://2vhutemas.ru/api/v1/me</code></pre>
@@ -26,6 +26,14 @@
   }]
 }</code></pre>
 <p>Используйте новые UUID для нового материала. При повторной отправке того же досье сохраните его UID и используйте тот же токен. Успешный ответ — HTTP 201 и поле <code>id</code>. Досье поступает на рассмотрение со статусом «Предложено».</p>
+<h2 id="create">Создание карточки</h2>
+<p>При выдаче токена выберите «Создание карточек». Проверьте, что <code>GET /me</code> возвращает <code>create_cards</code> в массиве <code>permissions</code>. Чтобы затем читать и править созданный черновик, выберите также «Редактирование карточек» (<code>edit_cards</code>).</p>
+<p>Для <code>POST /entities</code> укажите код типа, уникальный адрес <code>slug</code> и русское название. Пример создаёт черновик метода формообразования:</p>
+<pre><code>curl -X POST https://2vhutemas.ru/api/v1/entities \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"form_method","slug":"example-form-method","title_ru":"Пример метода"}'</code></pre>
+<p>При успехе API возвращает HTTP 201, числовой <code>id</code> карточки, <code>material_id</code> и <code>revision_id</code> первой версии. Для публикации требуется отдельное действие участника с правом публикации.</p>
 <h2 id="edit">Чтение и редактирование карточек</h2>
 <p>Без токена <code>GET /entities</code> возвращает каталог опубликованных карточек, а <code>GET /entities/{id}</code> — одну карточку. В адресах ниже <code>{id}</code> означает числовой UID сущности.</p>
 <ol>

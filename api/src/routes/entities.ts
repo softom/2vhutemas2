@@ -439,7 +439,7 @@ entities.post("/", async (c: Context<AppEnv>) => {
     const data = await snapshot(tx, entityId, input.body_json, canSeeDrafts(principal));
     const revisions = await tx`
       insert into app.revisions (material_id, edited_by, operation, summary, snapshot)
-      values (${materialId}, ${principal.contributorId}, 'create', 'Создание карточки', ${JSON.stringify(data)}::jsonb)
+      values (${materialId}, ${principal.contributorId}, 'create', ${principal.tokenId ? 'Создание карточки · токен '+principal.tokenId : 'Создание карточки'}, ${JSON.stringify(data)}::jsonb)
       returning id
     `;
 
