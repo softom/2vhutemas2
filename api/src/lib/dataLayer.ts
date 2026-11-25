@@ -73,7 +73,10 @@ export function clearDataLayerCache(): void {
  *
  * Записи ветви «Что», у которых есть те же понятия с теми же ролями.
  * Порядок и отбор — по опубликованной версии записи, как в остальном
- * публичном выводе; в режиме черновиков — по рабочей версии.
+ * публичном выводе; в режиме черновиков — по рабочей версии. Роль самой
+ * связи тоже берётся из снимка версии: у гостя — из опубликованной, у
+ * редактора — из рабочей. Текущая роль в таблице связей может отличаться
+ * от опубликованной, и подбор должен смотреть на ту, что видна читателю.
  */
 export async function readRelatedObjects(
   entityId: number,
@@ -95,10 +98,19 @@ export async function readRelatedObjects(
         select l.from_entity_id as obj_id, l.to_entity_id
           from app.links l
           join app.entities obj on obj.id = l.from_entity_id
+          -- Роль связи — из снимка той версии, которую видит спрашивающий:
+          -- опубликованной гостю, рабочей редактору. Текущая роль в
+          -- app.links может отличаться от опубликованной (Р29, философия версий).
+          join app.revisions linkrev
+            on linkrev.id = case when ${drafts} then l.working_revision_id else l.published_revision_id end
          where l.status <> 'archived'
            and (${drafts} or (l.status = 'published' and obj.status = 'published' and obj.is_published))
            and obj.id <> ${entityId}
-           and (l.to_entity_id, l.role_id) in
+           -- Условия по понятию и роли дублируют пары ниже: они помогают
+           -- отбору идти по индексу связей, а не перебирать таблицу.
+           and l.to_entity_id = any(${concepts}::bigint[])
+           and (linkrev.snapshot->'link'->>'role_id')::uuid = any(${roles}::uuid[])
+           and (l.to_entity_id, (linkrev.snapshot->'link'->>'role_id')::uuid) in
              (select * from unnest(${concepts}::bigint[], ${roles}::uuid[]))
       ), ranked as (
         select obj_id,
