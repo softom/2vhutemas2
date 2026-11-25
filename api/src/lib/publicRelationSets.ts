@@ -1,5 +1,5 @@
 import {normalizeZone} from './attributionZones.ts';
-import {singleConstructionYear} from './attributionPhase.ts';
+import {readConceptAttributes, readConstructionYear, readRelatedObjects} from './dataLayer.ts';
 import {styleAttributionWidgetHtml} from './styleAttributionWidget.ts';
 import {sql} from './db.ts';
 import {escapeHtml,entityPath} from './site.ts';
@@ -23,21 +23,21 @@ export async function loadPublicRelationSets(entityId:number,links:Link[],drafts
  if (style) {
    style.links=style.links.map(l=>({...l,citations:l.citations.map(c=>({...c,zone:normalizeZone(c.zone)}))}));
    if(style.links.some(l=>l.citations.some(c=>/^\d{4}$/.test(c.phase||'')))){
-    const year=await singleConstructionYear(sql,entityId,drafts);
+    const year=await readConstructionYear(entityId,drafts);
     if(year)style.links=style.links.map(l=>({...l,citations:l.citations.map(c=>c.phase===year?{...c,phase:''}:c)}));
    }
    const comparable = style.links.filter(link => link.role_id && link.role !== 'classification_negation');
    if (comparable.length) {
-     style.similar = await sql<NonNullable<PublicRelationSet['similar']>[number]>`select obj.id, obj.slug, obj.title_ru as title,
-       array_agg(distinct link.to_entity_id) as concepts
-       from app.read_links(${drafts}) link
-       join app.read_entities(${drafts}) obj on obj.id = link.from_entity_id
-       where obj.id <> ${entityId} and (${drafts} or obj.is_published)
-       and (app.entity_type_path(obj.type_id)->0->>'code') = 'what'
-       and (link.to_entity_id,link.role_id) in
-         (select * from unnest(${comparable.map(l=>l.other_id)}::bigint[],${comparable.map(l=>l.role_id)}::uuid[]))
-       group by obj.id,obj.slug,obj.title_ru order by count(distinct link.to_entity_id) desc,obj.title_ru,obj.id limit 12`;
+     // Подбор — общий слой чтения (Р29): здесь только данные виджета.
+     style.similar = await readRelatedObjects(entityId, comparable.map(l=>({concept_id:l.other_id,role_id:l.role_id!})), drafts);
    }
+   // Атрибуты понятий (цвет и знак) — общий слой (Д1); пока параметров нет,
+   // значения пустые, виджет это переживает.
+   const attributes = await readConceptAttributes(style.links.map(l=>l.other_id), drafts);
+   style.links = style.links.map(l=>{
+     const attribute = attributes.get(l.other_id);
+     return attribute ? {...l,concept_color:attribute.color,concept_icon:attribute.icon} : l;
+   });
  }
  return attached;
 }

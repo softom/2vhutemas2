@@ -131,6 +131,9 @@ export interface PublicCard {
     direction: "incoming" | "outgoing";
     justification: string | null;
     citations: LinkCitation[];
+    /** Атрибуты понятия (Д1): цвет и знак из параметров записи. */
+    concept_color?: string | null;
+    concept_icon?: string | null;
   }[];
   /** Связи соседей между собой и с остальными записями — для графа (Р-112). */
   neighbor_links: { a_slug: string; a_title: string; b_slug: string; b_title: string }[];
