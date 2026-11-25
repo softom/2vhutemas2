@@ -43,6 +43,20 @@ export function renderCardGrid(
       sections.filter(s => s.right).map(s => s.html).join("") + '</div>';
   }
   if (!visible.length) return header ?? "";
+  const lanes = [[1, 1], [2, 2], [4, 1]];
+  if (columns === 4 && !preview && visible.every(({slot}) =>
+    lanes.some(([start, width]) => slot.column_start === start && slot.column_span === width))) {
+    const stacks = lanes.map(([start, width]) => {
+      const sections = visible.map(({slot, html}, index) => ({slot, html, index}))
+        .filter(({slot}) => slot.column_start === start)
+        .sort((a, b) => a.slot.row_start - b.slot.row_start)
+        .map(({slot, html, index}) =>
+          `<section class="pc-${slot.renderer_key}" data-layout-slot="${slot.id}" style="--reading-order:${index + 1}">${html}</section>`
+        ).join("");
+      return sections ? `<div class="card-lane" style="--slot-column:${start};--slot-width:${width}">${sections}</div>` : "";
+    });
+    return (header ?? "") + `<div class="entity-widget-grid" data-columns="4" data-card-lanes>${stacks.join("")}</div>`;
+  }
   const rows = new Map<number,number>();
   let end = 1;
   let removed = 0;

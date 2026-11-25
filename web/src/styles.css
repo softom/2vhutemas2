@@ -955,6 +955,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
   grid-template-columns: repeat(2, minmax(0, calc((var(--c1) - 16px) / 2))) 52px minmax(0, 1fr);
   gap: 16px;
 }
+.card-lane {
+  grid-column: var(--slot-column) / span var(--slot-width);
+  grid-row: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.card-lane > section { min-width: 0; }
+@media (max-width: 1000px) {
+  .public-card > .entity-widget-grid[data-card-lanes] { display: flex; flex-direction: column; }
+  .card-lane { display: contents; }
+  .card-lane > section { order: var(--reading-order); }
+}
 .entity-widget-grid > [data-crosses-gutter="true"] {
   position: relative;
   z-index: 2;
