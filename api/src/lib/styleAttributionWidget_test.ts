@@ -483,6 +483,23 @@ Deno.test("hint for a link brings the witnesses of the same concept only", () =>
   if (styleAnalysisHintHtml(set as unknown as PublicRelationSet, 999) !== "") throw Error("чужая подсказка");
 });
 
+Deno.test("hint finds the link when the driver returns ids as strings", () => {
+  const set = stage6Set();
+  // Драйвер отдаёт bigint строкой — искать связь строгим сравнением нельзя.
+  const asStrings = {
+    ...set,
+    links: set.links.map((l) => ({ ...l, id: String(l.id), other_id: String(l.other_id) })),
+  };
+  const hint = styleAnalysisHintHtml(asStrings as unknown as PublicRelationSet, 1);
+  if (!hint.includes("Принадлежность — Модерн")) throw Error("подсказка не найдена");
+  if (styleAnalysisHintHtml(asStrings as unknown as PublicRelationSet, 999) !== "") {
+    throw Error("чужая подсказка");
+  }
+  // Адрес в разметке и в подсказке — один и тот же.
+  const primary = styleAnalysis({ relation_sets: [asStrings] } as unknown as PublicCard);
+  if (!primary.includes('data-style-hint="1"')) throw Error("нет адреса связи в разметке");
+});
+
 Deno.test("tabs are addressed by feature, not by position", () => {
   const set = stage6Set();
   const primary = styleAnalysis({ relation_sets: [set] } as unknown as PublicCard);

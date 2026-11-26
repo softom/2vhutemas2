@@ -432,14 +432,18 @@ export function styleAnalysisPopupHtml(set: PublicRelationSet): string {
 /**
  * Свидетельства по связи — для подсказки, которая приходит по требованию
  * (Р22). Берутся все связи того же понятия: положительные или отрицания.
+ *
+ * Идентификаторы сравниваются числами: драйвер отдаёт `bigint` строкой, и
+ * строгое сравнение со строкой запроса искало бы связь впустую.
  */
 export function styleAnalysisHintHtml(set: PublicRelationSet, linkId: number): string {
-  const link = set.links.find((l) => l.id === linkId);
+  const wanted = Number(linkId);
+  const link = set.links.find((l) => Number(l.id) === wanted);
   if (!link) return "";
   const negation = link.role === "classification_negation";
   const witnesses: Witnesses = new Map();
   for (const l of set.links) {
-    if (l.other_id !== link.other_id) continue;
+    if (Number(l.other_id) !== Number(link.other_id)) continue;
     if ((l.role === "classification_negation") !== negation) continue;
     for (const q of l.citations) {
       const entry = witnesses.get(l.id) ?? { link: l, citations: [] };
