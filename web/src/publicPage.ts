@@ -93,6 +93,11 @@ export async function enhancePublicPage() {
     host?.dispatchEvent(new CustomEvent("rel-extra", { detail: box!.checked }));
   });
   await authenticatedCard();
+  // «Стилистические решения»: поп-ап полного вида и подгрузка частей
+  // (Р4, Р21, Р22). После карточки редактора: она перерисовывает разметку.
+  if (document.querySelector(".style-analysis[data-style-uid]")) {
+    import("./styleAnalysis").then(({ mountStyleAnalysis }) => mountStyleAnalysis()).catch(() => {});
+  }
   // Чертежи DXF: просмотр с замерами грузится отдельно и только там, где
   // раздел «Чертежи» есть, — остальные страницы его не тянут.
   if (document.querySelector("[data-drawing]")) {

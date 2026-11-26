@@ -1,6 +1,36 @@
-import { styleAnalysis } from "./styleAttributionWidget.ts";
+import {
+  styleAnalysis,
+  styleAnalysisHintHtml,
+  styleAnalysisPopupHtml,
+} from "./styleAttributionWidget.ts";
 import { conceptIconPaths } from "./conceptIcons.ts";
 import type { PublicCard } from "./publicCard.ts";
+import type { PublicRelationSet } from "./publicRelationSets.ts";
+
+/** Панель вкладки по её признаку — вкладки адресуются признаком (Р20). */
+function pane(html: string, name: string): string {
+  const marker = `<div class="style-pane" data-style-pane="${name}">`;
+  const start = html.indexOf(marker);
+  if (start < 0) return "";
+  const body = start + marker.length;
+  // Внутри панели вложенных div может быть — считаем закрытие по балансу.
+  let depth = 1;
+  let cursor = body;
+  while (cursor < html.length) {
+    const open = html.indexOf("<div", cursor);
+    const close = html.indexOf("</div>", cursor);
+    if (close < 0) return html.slice(body);
+    if (open >= 0 && open < close) {
+      depth++;
+      cursor = open + 4;
+      continue;
+    }
+    depth--;
+    if (depth === 0) return html.slice(body, close);
+    cursor = close + 6;
+  }
+  return html.slice(body);
+}
 
 Deno.test("style_analysis preserves each citation's own context and attached empty panels", () => {
   const set = {
@@ -41,13 +71,17 @@ Deno.test("style_analysis preserves each citation's own context and attached emp
     ],
   });
   const html = render([set]);
+  // Первичный HTML лёгкий: вкладка «Источники» приходит по требованию (Р22).
   const rows = html.match(/<section><h3><a.*?<\/section>/g) ?? [];
+  if (rows.length) throw Error("источники попали в первичный HTML");
+  const popup = styleAnalysisPopupHtml(set as unknown as PublicRelationSet);
+  const sections = popup.split('<section><h3><a').slice(1).map((part) => '<section><h3><a' + part.split("</section>")[0]);
   if (
-    !html.includes("&lt;обоснование&gt;") || !html.includes("Отрицание") ||
-    !html.includes('href="/entities/concept"') || rows.length !== 2 ||
-    !/first.*Цитата А.*1930.*Фасад/.test(rows[0]) || !/second.*Цитата Б.*1960/.test(rows[1]) ||
-    rows[1].includes("Фасад") || rows[1].includes("<dt>zone")
-  ) throw Error(html);
+    !popup.includes("&lt;обоснование&gt;") || !popup.includes("Отрицание") ||
+    !popup.includes('href="/entities/concept"') || sections.length !== 2 ||
+    !/first.*Цитата А.*1930.*Фасад/.test(sections[0]) || !/second.*Цитата Б.*1960/.test(sections[1]) ||
+    sections[1].includes("Фасад") || sections[1].includes("<dt>zone")
+  ) throw Error(popup);
 });
 
 Deno.test("style_analysis takes over the attached panel only for a visible placement", async () => {
@@ -106,18 +140,20 @@ Deno.test("support counts distinct sources separately by axis, role and context"
     similar: [{ id: 42, title: "Пример", slug: "example", concepts: [7] }],
   };
   const html = styleAnalysis({ relation_sets: [set] } as unknown as PublicCard);
-  for (
-    const expected of [
-      "66,7%",
-      "33,3%",
-      "Отрицание · 1930 · Фасад",
-      "1930 · Башня",
-      "Принадлежность — Модерн",
-      'href="/entities/example"',
-      "Метод формообразования",
-    ]
-  ) {
+  const popup = styleAnalysisPopupHtml(set as unknown as PublicRelationSet);
+  // Профиль и его доли — в первичном HTML.
+  for (const expected of [
+    "66,7%",
+    "33,3%",
+    "Отрицание · 1930 · Фасад",
+    "1930 · Башня",
+    "Метод формообразования",
+  ]) {
     if (!html.includes(expected)) throw Error(expected);
+  }
+  // Свидетельства и близкие объекты — по требованию, в полном виде (Р22).
+  for (const expected of ["Принадлежность — Модерн", 'href="/entities/example"']) {
+    if (!popup.includes(expected)) throw Error(expected);
   }
 });
 
@@ -214,10 +250,10 @@ Deno.test("concept icon shows in sources and similar objects", () => {
     links: [link],
     similar: [{ id: 42, title: "Пример", slug: "example", concepts: [7] }],
   };
-  const html = styleAnalysis({ relation_sets: [set] } as unknown as PublicCard);
-  const sources = html.split('class="style-pane pane-2"')[1] ?? "";
+  const html = styleAnalysisPopupHtml(set as unknown as PublicRelationSet);
+  const sources = pane(html, "sources");
   if (!sources.includes(conceptIconPaths("style_historicism"))) throw Error("нет знака в источниках");
-  const similar = html.split('class="style-pane pane-1"')[1] ?? "";
+  const similar = pane(html, "similar");
   if (!similar.includes(conceptIconPaths("style_historicism"))) throw Error("нет знака у близкого объекта");
   if (!similar.includes("Модерн")) throw Error("потеряно название понятия");
 });
@@ -356,4 +392,108 @@ Deno.test("compact summary and expanded profile agree on concepts and sources", 
   // Счётчик источников — по уникальным источникам всех связей набора.
   const sources = new Set(links.flatMap((l) => l.citations.map((c) => c.source_entity_id)));
   if (!summary.includes(`Источники: ${sources.size}`)) throw Error("счётчик источников неверен");
+});
+
+/** Набор для сценариев этапа 6: понятие, его отрицание и второе понятие. */
+function stage6Set() {
+  const citation = (source_entity_id: number, zone = "") => ({
+    source_entity_id, source_slug: "src", source_title: "Источник", zone,
+  });
+  const link = {
+    id: 1, other_id: 7, other_type_code: "art_styles", other_title: "Модерн", other_slug: "modern",
+    role: "classification_membership", role_id: "membership", role_title: "Принадлежность",
+    concept_icon: "style_historicism", concept_color: "#A9381F",
+    citations: [citation(10), citation(11)],
+  };
+  const negation = {
+    id: 2, other_id: 7, other_type_code: "art_styles", other_title: "Модерн", other_slug: "modern",
+    role: "classification_negation", role_id: "negation", role_title: "Отрицание",
+    concept_icon: "style_historicism", concept_color: "#A9381F",
+    citations: [citation(12)],
+  };
+  const other = {
+    id: 3, other_id: 8, other_type_code: "art_styles", other_title: "Архитектура", other_slug: "architecture",
+    role: "classification_membership", role_id: "membership", role_title: "Принадлежность",
+    concept_icon: "style_historicism", concept_color: "#A9381F",
+    citations: [citation(13)],
+  };
+  return {
+    id: "s", code: "style_solutions", title: "Стили", fields: [],
+    links: [link, negation, other],
+    similar: [{ id: 42, title: "Пример", slug: "example", concepts: [7] }],
+  };
+}
+
+Deno.test("primary html stays light: no witnesses, empty lazy panes, hint markers instead", () => {
+  const set = stage6Set();
+  const primary = styleAnalysis({ relation_sets: [set] } as unknown as PublicCard);
+  // Свидетельств в первичном HTML нет — они приходят по требованию (Р22).
+  if (primary.includes("witness-popup")) throw Error("свидетельства в первичном HTML");
+  if (primary.includes("aria-describedby")) throw Error("подсказка уже встроена");
+  // Строка профиля несёт адрес связи, по которому подсказка и придёт.
+  if (!primary.includes('data-style-hint="1"')) throw Error("нет адреса связи");
+  if (!primary.includes('data-style-hint="2"')) throw Error("нет адреса связи отрицания");
+  if (!/data-style-hint-id="score-hint-style-s-\d+"/.test(primary)) throw Error("нет адреса подсказки");
+  // Вкладки «Близкие объекты» и «Источники» пусты до запроса.
+  if (pane(primary, "similar") !== "") throw Error("вкладка близких объектов не пуста");
+  if (pane(primary, "sources") !== "") throw Error("вкладка источников не пуста");
+  if (!pane(primary, "profile").includes("Модерн")) throw Error("профиль пуст");
+  // Поп-ап открывается по действию читателя — кнопка есть в первичном HTML.
+  if (!primary.includes("data-style-research")) throw Error("нет кнопки «Исследовать»");
+  // Первичный профиль легче: в нём нет свидетельств, они приходят по требованию.
+  const popup = styleAnalysisPopupHtml(set as unknown as PublicRelationSet);
+  if (pane(primary, "profile").length >= pane(popup, "profile").length) {
+    throw Error("первичный профиль не легче полного");
+  }
+});
+
+Deno.test("popup carries all three parts with witnesses and their own tab prefix", () => {
+  const set = stage6Set();
+  const popup = styleAnalysisPopupHtml(set as unknown as PublicRelationSet);
+  for (const part of ["profile", "similar", "sources"]) {
+    if (!popup.includes(`data-style-pane="${part}"`)) throw Error(`нет части ${part}`);
+  }
+  // Свидетельства в полном виде уже внутри, с адресом для aria-describedby.
+  const profile = pane(popup, "profile");
+  if (!profile.includes('class="witness-popup"')) throw Error("нет подсказок в полном виде");
+  if (!profile.includes('role="tooltip"')) throw Error("нет роли подсказки");
+  if (!/aria-describedby="score-hint-style-popup-s-\d+"/.test(profile)) {
+    throw Error("нет связи подсказки со строкой");
+  }
+  if (!pane(popup, "similar").includes('href="/entities/example"')) throw Error("нет близких объектов");
+  if (!pane(popup, "sources").includes("Источник")) throw Error("нет источников");
+  // Свой префикс вкладок: в документе уже есть вкладки карточки (Р13).
+  if (!popup.includes('id="style-popup-s-0"') || !popup.includes('name="style-popup-s"')) {
+    throw Error("нет своего префикса вкладок");
+  }
+});
+
+Deno.test("hint for a link brings the witnesses of the same concept only", () => {
+  const set = stage6Set();
+  const positive = styleAnalysisHintHtml(set as unknown as PublicRelationSet, 1);
+  if (!positive.includes('class="witness-popup"')) throw Error("нет подсказки");
+  if (!positive.includes("Принадлежность — Модерн")) throw Error("нет заголовка связи");
+  if (!positive.includes("Источник")) throw Error("нет свидетельства");
+  if (positive.includes("Отрицание")) throw Error("в подсказку попало отрицание");
+  // Отрицание того же понятия — отдельная подсказка.
+  const negative = styleAnalysisHintHtml(set as unknown as PublicRelationSet, 2);
+  if (!negative.includes("Отрицание — Модерн")) throw Error("нет заголовка отрицания");
+  if (negative.includes("Принадлежность")) throw Error("в подсказку попала положительная связь");
+  // Чужой связи нет — пустой ответ, а не чужая подсказка.
+  if (styleAnalysisHintHtml(set as unknown as PublicRelationSet, 999) !== "") throw Error("чужая подсказка");
+});
+
+Deno.test("tabs are addressed by feature, not by position", () => {
+  const set = stage6Set();
+  const primary = styleAnalysis({ relation_sets: [set] } as unknown as PublicCard);
+  for (const part of ["profile", "similar", "sources"]) {
+    if (!primary.includes(`data-style-tab="${part}"`)) throw Error(`нет переключателя ${part}`);
+  }
+  // Никаких позиционных классов: порядок вкладок может измениться (Р20).
+  for (const legacy of ["pane-0", "pane-1", "pane-2", "choice-0"]) {
+    if (primary.includes(legacy)) throw Error(`остался позиционный класс ${legacy}`);
+  }
+  if (!primary.includes('id="style-s-0"') || !primary.includes('name="style-s"')) {
+    throw Error("нет своей группы переключателей");
+  }
 });

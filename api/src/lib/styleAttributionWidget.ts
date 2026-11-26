@@ -157,7 +157,7 @@ function compactSummary(links: Relation[]): string {
     sources.size
   }</span><span class="style-counter">Связи: ${relations}</span><span class="style-counter">Оси: ${
     blocks.length
-  }</span></div>`;
+  }</span><button type="button" class="style-research" data-style-research>Исследовать</button></div>`;
   return `<div class="style-summary">${blocks.join("")}${foot}</div>`;
 }
 
@@ -165,6 +165,7 @@ export function styleAnalysis(card: Readonly<PublicCard>, design?: string | null
   return styleAttributionWidgetHtml(
     card.relation_sets?.find((set) => set.code === "style_solutions"),
     design,
+    card.id,
   );
 }
 
@@ -179,7 +180,7 @@ function addWitness(witnesses: Witnesses, link: Relation, citation: Citation) {
   witnesses.set(link.id, entry);
 }
 
-function witnessPopup(witnesses: Witnesses, id: string): string {
+function witnessPopup(witnesses: Witnesses, id?: string): string {
   const items = [...witnesses.values()].map(({link, citations}) => {
     const heading = [link.role_title, link.other_title].filter(Boolean).map(e).join(" — ");
     const evidence = citations.map(q => {
@@ -189,10 +190,17 @@ function witnessPopup(witnesses: Witnesses, id: string): string {
     }).join("");
     return `<span class="hint-relation"><b>${heading}</b>${link.justification ? `<span>${e(link.justification)}</span>` : ""}${evidence}</span>`;
   }).join("");
-  return `<small class="witness-popup" role="tooltip" id="${id}">${items}</small>`;
+  return `<small class="witness-popup" role="tooltip"${id ? ` id="${id}"` : ""}>${items}</small>`;
 }
 
-function profile(links: Relation[], setId: string): string {
+/**
+ * Профиль — раскрытый режим (Р3).
+ *
+ * `hints` решает, где живут свидетельства: в первичном HTML их нет (Р22),
+ * строка несёт адрес связи, и подсказка приходит по требованию; в поп-апе
+ * подсказки вставлены сразу — там вес разметки не важен.
+ */
+function profile(links: Relation[], setId: string, hints: boolean, prefix: string): string {
   let rowNumber = 0;
   const profileOrder = ["art_epochs", "art_styles", "form_method", "morphological_trait"] as const;
   return profileOrder.map(axis => {
@@ -202,9 +210,14 @@ function profile(links: Relation[], setId: string): string {
     const objections = new Map<number, {link: Relation; sources: Set<number>; contexts: Set<string>; witnesses: Witnesses}>();
     function objectionLabel(note: NonNullable<ReturnType<typeof objections.get>>, showConcept = false): string {
       const context = [...note.contexts].map(e).join("; ");
-      const id = `score-hint-${e(setId)}-${++rowNumber}`;
+      const id = `score-hint-${e(prefix)}-${++rowNumber}`;
       const concept = showConcept ? conceptLink(note.link, axis) + " · " : "";
-      return `<span class="style-objection" tabindex="0" aria-describedby="${id}">${concept}Оспаривается: ${note.sources.size} ист.${context ? " · " + context : ""}${witnessPopup(note.witnesses,id)}</span>`;
+      const described = hints
+        ? ` aria-describedby="${id}"`
+        : ` data-style-hint="${note.link.id}" data-style-hint-id="${id}"`;
+      return `<span class="style-objection" tabindex="0"${described}>${concept}Оспаривается: ${note.sources.size} ист.${
+        context ? " · " + context : ""
+      }${hints ? witnessPopup(note.witnesses, id) : ""}</span>`;
     }
     const groups = new Map<
       string,
@@ -253,15 +266,20 @@ function profile(links: Relation[], setId: string): string {
         const percent = (100 * c.sources.size / total).toLocaleString("ru", {
           maximumFractionDigits: 1,
         });
-        const hintId = `score-hint-${e(setId)}-${++rowNumber}`;
+        const hintId = `score-hint-${e(prefix)}-${++rowNumber}`;
         const note = c.link.role === defaultRole ? objections.get(c.link.other_id) : undefined;
         if (note) objections.delete(c.link.other_id);
         const support = note ? `За: ${c.sources.size} ист. (${percent}%)` : `${percent}%`;
-        return `<div class="style-score" tabindex="0" aria-describedby="${hintId}" style="--score-share:${100 * c.sources.size / total}%">${
+        const described = hints
+          ? ` aria-describedby="${hintId}"`
+          : ` data-style-hint="${c.link.id}" data-style-hint-id="${hintId}"`;
+        return `<div class="style-score" tabindex="0"${described} style="--score-share:${100 * c.sources.size / total}%">${
           conceptLink(c.link, axis)
         } <strong>${support}</strong><meter aria-label="${
           e(c.link.other_title)
-        }" min="0" max="${total}" value="${c.sources.size}"></meter>${witnessPopup(c.witnesses,hintId)}</div>` +
+        }" min="0" max="${total}" value="${c.sources.size}"></meter>${
+          hints ? witnessPopup(c.witnesses, hintId) : ""
+        }</div>` +
           (note ? `<div class="style-counterbar">${objectionLabel(note)}</div>` : "");
       }).join("");
     }).join("");
@@ -314,21 +332,31 @@ function evidence(set: PublicRelationSet): string {
     (uncited ? `<h3>Связи без доступного источника</h3><ul>${uncited}</ul>` : "");
 }
 
-export function styleAttributionWidgetHtml(
-  set: PublicRelationSet | undefined,
-  design?: string | null,
-): string {
-  if (!set) return "";
-  // Режим 1 — компактный по умолчанию; «expanded» в макете открывает профиль (Р6).
-  const expanded = design === "expanded";
-  const head = `<details open class="parameter-set-relations style-analysis rel-box" data-parameter-set="${
-    e(set.id)
-  }" data-style-mode="${expanded ? "expanded" : "compact"}"><summary><span role="heading" aria-level="2">${
-    e(set.title)
-  }</span></summary>`;
-  if (!set.links.length) {
-    return head + '<p class="hint">Опубликованных связей пока нет.</p></details>';
-  }
+/** Части полного вида: профиль, близкие объекты, источники. */
+const PARTS = ["profile", "similar", "sources"] as const;
+type Part = (typeof PARTS)[number];
+
+/** Переключатели вкладок: связь по признаку, а не по позиции (Р20). */
+function tabInputs(prefix: string): string {
+  const labels: [string, Part][] = [
+    ["Профиль", "profile"],
+    ["Близкие объекты", "similar"],
+    ["Источники", "sources"],
+  ];
+  return labels.map(([label, part], i) =>
+    `<input class="style-choice" type="radio" id="${e(prefix)}-${i}" name="${e(prefix)}" data-style-tab="${part}"${
+      i === 0 ? " checked" : ""
+    }><label for="${e(prefix)}-${i}">${label}</label>`
+  ).join("");
+}
+
+/** Панели вкладок — каждая с признаком своей части. */
+function tabPanes(parts: Record<Part, string>): string {
+  return PARTS.map((part) => `<div class="style-pane" data-style-pane="${part}">${parts[part]}</div>`).join("");
+}
+
+/** Близкие объекты — общие понятия с одинаковой ролью. */
+function similarObjects(set: PublicRelationSet): string {
   const titles = new Map(set.links.map((l) => [String(l.other_id), l.other_title]));
   const byId = new Map(set.links.map((l) => [String(l.other_id), l]));
   const matches = (set.similar ?? []).map((obj) =>
@@ -341,29 +369,83 @@ export function styleAttributionWidgetHtml(
       }).join(" · ")
     }</p></li>`
   ).join("");
-  const panels = [
-    [
-      "Профиль",
-      profile(set.links, set.id),
-    ],
-    [
-      "Близкие объекты",
-      matches
-        ? `<p>По числу общих понятий с одинаковой ролью. Отрицания исключены.</p><ol>${matches}</ol>`
-        : '<p class="hint">Объектов с общими атрибуциями пока нет.</p>',
-    ],
-    ["Источники", evidence(set)],
-  ];
-  const tabs = panels.map(([label], i) =>
-    `<input class="style-choice" type="radio" id="style-${e(set.id)}-${i}" name="style-${
-      e(set.id)
-    }" ${i === 0 ? "checked" : ""}><label for="style-${e(set.id)}-${i}">${label}</label>`
-  ).join("");
-  const panes = panels.map(([, body], i) => `<div class="style-pane pane-${i}">${body}</div>`).join("");
+  return matches
+    ? `<p>По числу общих понятий с одинаковой ролью. Отрицания исключены.</p><ol>${matches}</ol>`
+    : '<p class="hint">Объектов с общими атрибуциями пока нет.</p>';
+}
+
+export function styleAttributionWidgetHtml(
+  set: PublicRelationSet | undefined,
+  design?: string | null,
+  uid?: number | null,
+): string {
+  if (!set) return "";
+  // Режим 1 — компактный по умолчанию; «expanded» в макете открывает профиль (Р6).
+  const expanded = design === "expanded";
+  const prefix = `style-${e(set.id)}`;
+  const head = `<details open class="parameter-set-relations style-analysis rel-box" data-parameter-set="${
+    e(set.id)
+  }" data-style-mode="${expanded ? "expanded" : "compact"}"${
+    uid ? ` data-style-uid="${uid}"` : ""
+  }><summary><span role="heading" aria-level="2">${
+    e(set.title)
+  }</span></summary>`;
+  if (!set.links.length) {
+    return head + '<p class="hint">Опубликованных связей пока нет.</p></details>';
+  }
   // Профиль — раскрытый режим (Р3): в потоке карточки, по кнопке или сразу,
-  // если так задан макетом (Р6). Переход без перезагрузки (Р5).
+  // если так задан макетом (Р6). Переход без перезагрузки (Р5). Свидетельства
+  // строк в первичном HTML не лежат — они приходят по требованию (Р22);
+  // вкладки «Близкие объекты» и «Источники» тоже подгружаются по требованию.
   const profileBlock = `<details class="style-profile"${
     expanded ? " open" : ""
-  }><summary class="style-profile-toggle"><span class="style-when-closed">Развернуть профиль</span><span class="style-when-open">Свернуть профиль</span></summary><fieldset class="style-tabs"><legend>Стилистический анализ</legend>${tabs}${panes}</fieldset></details>`;
+  }><summary class="style-profile-toggle"><span class="style-when-closed">Развернуть профиль</span><span class="style-when-open">Свернуть профиль</span></summary><fieldset class="style-tabs"><legend>Стилистический анализ</legend>${
+    tabInputs(prefix)
+  }${
+    tabPanes({
+      profile: profile(set.links, set.id, false, prefix),
+      similar: "",
+      sources: "",
+    })
+  }</fieldset></details>`;
   return head + compactSummary(set.links) + profileBlock + "</details>";
+}
+
+/**
+ * Полный вид для поп-апа и для подгрузки вкладок (Р22, Р4): профиль со
+ * свидетельствами, близкие объекты и источники. Префикс вкладок свой — в
+ * документе уже есть вкладки карточки (Р13).
+ */
+export function styleAnalysisPopupHtml(set: PublicRelationSet): string {
+  const prefix = `style-popup-${e(set.id)}`;
+  return `<fieldset class="style-tabs style-tabs-popup"><legend>Стилистический анализ</legend>${
+    tabInputs(prefix)
+  }${
+    tabPanes({
+      profile: profile(set.links, set.id, true, prefix),
+      similar: similarObjects(set),
+      sources: evidence(set),
+    })
+  }</fieldset>`;
+}
+
+/**
+ * Свидетельства по связи — для подсказки, которая приходит по требованию
+ * (Р22). Берутся все связи того же понятия: положительные или отрицания.
+ */
+export function styleAnalysisHintHtml(set: PublicRelationSet, linkId: number): string {
+  const link = set.links.find((l) => l.id === linkId);
+  if (!link) return "";
+  const negation = link.role === "classification_negation";
+  const witnesses: Witnesses = new Map();
+  for (const l of set.links) {
+    if (l.other_id !== link.other_id) continue;
+    if ((l.role === "classification_negation") !== negation) continue;
+    for (const q of l.citations) {
+      const entry = witnesses.get(l.id) ?? { link: l, citations: [] };
+      entry.citations.push(q);
+      witnesses.set(l.id, entry);
+    }
+  }
+  return witnessPopup(witnesses);
 }

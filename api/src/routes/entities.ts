@@ -14,7 +14,9 @@ import { ApiError } from "../lib/errors.ts";
 import { can, canSeeDrafts, require as requirePermission } from "../lib/auth.ts";
 import { type AppEnv, decodeCursor, encodeCursor, pageSize } from "../lib/http.ts";
 import { CATALOG_HIDDEN_ROOTS, resolveTypeCode, ROOT_TO_LEGACY_KIND } from "../lib/entityTypes.ts";
-import { entityAuthors, resolveEntity } from "../lib/publicCard.ts";
+import { entityAuthors, loadEntityLinks, resolveEntity } from "../lib/publicCard.ts";
+import { loadPublicRelationSets } from "../lib/publicRelationSets.ts";
+import { styleAnalysisHintHtml, styleAnalysisPopupHtml } from "../lib/styleAttributionWidget.ts";
 import { absolute, citation, entityPath } from "../lib/site.ts";
 import { publishOwnerRevision, unpublishOwner } from "../lib/ownedVersions.ts";
 import { sectionLayout } from "../lib/sectionLayouts.ts";
@@ -393,6 +395,35 @@ entities.get("/:id/parameters", async (c: Context<AppEnv>) => {
      order by ep.set_inherited desc,ep.attached_at asc nulls first,ep.set_sort,ep.set_id,ep.sort_order,ep.parameter_id
   `;
   return c.json({ items: rows });
+});
+
+entities.get("/:id/style-analysis", async (c: Context<AppEnv>) => {
+  const principal = c.get("principal");
+  const drafts = canSeeDrafts(principal);
+  // Запись ищется и по номеру, и по адресу — как на странице (Р-65).
+  const key = c.req.param("id") ?? "";
+  const resolved = /^\d+$/.test(key) ? null : await resolveEntity(key, drafts);
+  const id = resolved ? resolved.id : Number(key);
+  if (!Number.isInteger(id)) throw new ApiError("not_found", "Сущность не найдена");
+  const part = c.req.query("part") ?? "popup";
+  if (part !== "popup" && part !== "hint") throw new ApiError("validation_failed", "Неизвестная часть");
+  // Несуществующей записи — 404; гости не видят и неопубликованной.
+  const existing = await sql`select 1 from app.read_entities(${drafts}) e
+    where e.id = ${id} and (${drafts} or e.is_published) limit 1`;
+  if (!existing.length) throw new ApiError("not_found", "Сущность не найдена");
+  // Проекция та же, что в карточке: гостю опубликованная, редактору — черновики.
+  const links = await loadEntityLinks(id, drafts);
+  const sets = await loadPublicRelationSets(id, links, drafts);
+  const set = sets.find((item) => item.code === "style_solutions");
+  // Запись без набора — режим 0: пустой ответ, а не ошибка.
+  const html = !set
+    ? ""
+    : part === "hint"
+    ? styleAnalysisHintHtml(set, Number(c.req.query("link")))
+    : styleAnalysisPopupHtml(set);
+  // Гостю ответ кэшируется публично, редактору — не кэшируется вовсе.
+  c.header("cache-control", drafts ? "private, no-store" : "public, max-age=60, stale-while-revalidate=300");
+  return c.json({ html });
 });
 
 entities.post("/", async (c: Context<AppEnv>) => {

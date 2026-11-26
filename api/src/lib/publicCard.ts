@@ -177,6 +177,33 @@ export interface PublicImage {
   source_url: string | null;
 }
 
+/**
+ * Связи записи с цитатами и обоснованиями — те же, что в карточке.
+ * Вынесено отдельно, чтобы эндпоинт подгрузки (Р22) не тянул всю карточку.
+ */
+export async function loadEntityLinks(id: number, drafts: boolean): Promise<PublicCard["links"]> {
+  const linkRows = await sql<PublicCard["links"][number] & {justification_blocks:unknown}>`
+    select l.id, other.type_id as other_type_id, ot.code as other_type_code, l.role_id, other.id as other_id, other.slug as other_slug, other.title_ru as other_title,
+           (app.entity_type_path(other.type_id) -> 0 ->> 'code') as other_root,
+           lr.code as role, lr.title_ru as role_title,
+           case when l.from_entity_id = ${id} then 'outgoing' else 'incoming' end as direction,
+           (select app.public_body(r.snapshot) from app.revisions r
+            where r.id=case when ${drafts} then l.working_revision_id else l.published_revision_id end) as justification_blocks
+      from app.read_links(${drafts}) l
+      join app.read_entities(${drafts}) other
+        on other.id = case when l.from_entity_id = ${id} then l.to_entity_id
+                           else l.from_entity_id end
+      join app.entity_types ot on ot.id = other.type_id
+      left join app.link_roles lr on lr.id = l.role_id
+     where (l.from_entity_id = ${id} or l.to_entity_id = ${id}) and (${drafts} or other.is_published)
+       -- Иллюстрации и источники — тоже связи, но у каждых свой раздел.
+       and coalesce(lr.code, '') not in ('illustration', 'drawing', 'source')
+     order by l.is_primary desc, l.sort_order, l.id
+  `;
+  const linkBodies = await presentLinkBodies(linkRows.map(row => row.justification_blocks), drafts);
+  return linkRows.map(({justification_blocks: _body,...row},i) => ({...row, justification:linkBodies[i].justification,citations:linkBodies[i].citations}));
+}
+
 /** Опубликованная запись целиком; черновик и архив гостю не существуют. */
 export async function loadPublicCard(id: number, principal: Principal | null = null, skipArchived = false): Promise<PublicCard | null> {
   const drafts = canSeeDrafts(principal);
@@ -249,28 +276,7 @@ export async function loadPublicCard(id: number, principal: Principal | null = n
     where e.id=${id}`;
   const document = documents[0] ?? null;
 
-  const linkRows = await sql<PublicCard["links"][number] & {justification_blocks:unknown}>`
-    select l.id, other.type_id as other_type_id, ot.code as other_type_code, l.role_id, other.id as other_id, other.slug as other_slug, other.title_ru as other_title,
-           (app.entity_type_path(other.type_id) -> 0 ->> 'code') as other_root,
-           lr.code as role, lr.title_ru as role_title,
-           case when l.from_entity_id = ${id} then 'outgoing' else 'incoming' end as direction,
-           (select app.public_body(r.snapshot) from app.revisions r
-            where r.id=case when ${drafts} then l.working_revision_id else l.published_revision_id end) as justification_blocks
-      from app.read_links(${drafts}) l
-      join app.read_entities(${drafts}) other
-        on other.id = case when l.from_entity_id = ${id} then l.to_entity_id
-                           else l.from_entity_id end
-      join app.entity_types ot on ot.id = other.type_id
-      left join app.link_roles lr on lr.id = l.role_id
-     where (l.from_entity_id = ${id} or l.to_entity_id = ${id}) and (${drafts} or other.is_published)
-       -- Иллюстрации и источники — тоже связи, но у каждых свой раздел.
-       and coalesce(lr.code, '') not in ('illustration', 'drawing', 'source')
-     order by l.is_primary desc, l.sort_order, l.id
-  `;
-
-  const linkBodies = await presentLinkBodies(linkRows.map(row => row.justification_blocks), drafts);
-  const links = linkRows.map(({justification_blocks: _body,...row},i) => ({...row, justification:linkBodies[i].justification,citations:linkBodies[i].citations}));
-
+  const links = await loadEntityLinks(id, drafts);
   // Связи соседей: по паре записей одна черта; связи самой записи не повторяем.
   const neighborIds = [...new Set(links.map(l => l.other_id))];
   const neighbor_links = neighborIds.length === 0 ? [] : await sql<PublicCard["neighbor_links"][number]>`
