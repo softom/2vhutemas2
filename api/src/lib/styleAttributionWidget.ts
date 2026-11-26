@@ -11,6 +11,9 @@ type Citation = Relation["citations"][number];
 /** Оси классификации — по ним выбирается запасной знак (Р2.6). */
 const AXIS_ORDER = ["art_epochs", "art_styles", "form_method", "morphological_trait"] as const;
 
+/** Ось, где вместо числа — пиктограмма и мягкая заливка (Р2.4). */
+const AXIS_FILL_ONLY: ConceptAxis = "morphological_trait";
+
 /**
  * Ось связи: код типа понятия, если это одна из четырёх осей
  * классификации. Прочие типы (например, изображения) понятиями не
@@ -52,9 +55,116 @@ function conceptLink(link: Relation, axis: ConceptAxis | null, size = 16): strin
   }${e(link.other_title)}</a>`;
 }
 
-export function styleAnalysis(card: Readonly<PublicCard>): string {
+/** Понятие на оси: голоса за и голоса против. */
+interface AxisConcept {
+  link: Relation;
+  sources: Set<number>;
+  objections: Set<number>;
+}
+
+interface AxisSummary {
+  concepts: Map<number, AxisConcept>;
+  total: number;
+}
+
+/**
+ * Сводка по осям (Р2.2–Р2.5): понятие — один чип на ось, сколько бы зон и
+ * ролей оно ни встречало; голос считается по уникальным источникам, а
+ * знаменатель — сумма голосов понятий оси. Отрицание в знаменатель не
+ * попадает, но помечает чип (Р2.5); понятие без положительной поддержки
+ * показывается без числа и без заливки (Р18).
+ */
+function axisSummaries(links: Relation[]): Map<ConceptAxis, AxisSummary> {
+  const axes = new Map<ConceptAxis, AxisSummary>(
+    AXIS_ORDER.map((axis) => [axis, { concepts: new Map(), total: 0 }]),
+  );
+  for (const link of links) {
+    const axis = axisOf(link);
+    if (!axis) continue;
+    const summary = axes.get(axis)!;
+    const entry = summary.concepts.get(link.other_id) ?? {
+      link,
+      sources: new Set<number>(),
+      objections: new Set<number>(),
+    };
+    for (const q of link.citations) {
+      if (link.role === "classification_negation") entry.objections.add(q.source_entity_id);
+      else entry.sources.add(q.source_entity_id);
+    }
+    summary.concepts.set(link.other_id, entry);
+  }
+  for (const summary of axes.values()) {
+    summary.total = [...summary.concepts.values()].reduce((sum, c) => sum + c.sources.size, 0);
+  }
+  return axes;
+}
+
+/** Чип понятия: знак, название, доля по оси; оспаривание — знаком, не цветом. */
+function chipHtml(concept: AxisConcept, total: number, axis: ConceptAxis): string {
+  const supported = concept.sources.size > 0;
+  const share = supported && total > 0 ? (100 * concept.sources.size / total) : 0;
+  const shareText = share.toLocaleString("ru", { maximumFractionDigits: 1 });
+  const color = conceptColor(concept.link.concept_color);
+  const variables = [color ? `--concept-color:${color}` : "", axis === AXIS_FILL_ONLY && supported ? `--fill:${shareText}%` : ""]
+    .filter(Boolean)
+    .join("; ");
+  const style = variables ? ` style="${variables}"` : "";
+  const share_markup = supported && axis !== AXIS_FILL_ONLY
+    ? `<span class="style-chip-share">${shareText}%</span>`
+    : "";
+  const objection = concept.objections.size > 0
+    ? `<span class="style-chip-mark" role="img" aria-label="Оспаривается: ${
+      concept.objections.size
+    } ист."></span>`
+    : "";
+  return `<li class="style-chip"${style}${
+    concept.objections.size ? ' data-objected="true"' : ""
+  }><a class="style-chip-link" href="${e(entityPath(concept.link.other_slug))}">${
+    conceptMark(concept.link, axis)
+  }<span class="style-chip-name">${e(concept.link.other_title)}</span></a>${
+    share_markup
+  }${objection}</li>`;
+}
+
+/**
+ * Компактная сводка (режим 1, Р2): чипы по заполненным осям, итоговые
+ * счётчики. Не растягивает страницу — чипы переносятся (Р2.8).
+ */
+function compactSummary(links: Relation[]): string {
+  const axes = axisSummaries(links);
+  const sources = new Set<number>();
+  let relations = 0;
+  for (const link of links) {
+    if (link.role === "classification_negation") continue;
+    relations++;
+    for (const q of link.citations) sources.add(q.source_entity_id);
+  }
+  const blocks: string[] = [];
+  for (const axis of AXIS_ORDER) {
+    const summary = axes.get(axis)!;
+    const concepts = [...summary.concepts.values()].sort((a, b) =>
+      b.sources.size - a.sources.size ||
+      a.link.other_title.localeCompare(b.link.other_title, "ru")
+    );
+    if (!concepts.length) continue;
+    const chips = concepts.map((c) => chipHtml(c, summary.total, axis)).join("");
+    blocks.push(
+      `<section class="style-axis" data-axis="${axis}"><h3>${e(AXES[axis])}</h3><ul class="style-chips">${chips}</ul></section>`,
+    );
+  }
+  if (!blocks.length) return "";
+  const foot = `<div class="style-summary-foot"><span class="style-counter">Источники: ${
+    sources.size
+  }</span><span class="style-counter">Связи: ${relations}</span><span class="style-counter">Оси: ${
+    blocks.length
+  }</span></div>`;
+  return `<div class="style-summary">${blocks.join("")}${foot}</div>`;
+}
+
+export function styleAnalysis(card: Readonly<PublicCard>, design?: string | null): string {
   return styleAttributionWidgetHtml(
     card.relation_sets?.find((set) => set.code === "style_solutions"),
+    design,
   );
 }
 
@@ -204,11 +314,18 @@ function evidence(set: PublicRelationSet): string {
     (uncited ? `<h3>Связи без доступного источника</h3><ul>${uncited}</ul>` : "");
 }
 
-export function styleAttributionWidgetHtml(set: PublicRelationSet | undefined): string {
+export function styleAttributionWidgetHtml(
+  set: PublicRelationSet | undefined,
+  design?: string | null,
+): string {
   if (!set) return "";
+  // Режим 1 — компактный по умолчанию; «expanded» в макете открывает профиль (Р6).
+  const expanded = design === "expanded";
   const head = `<details open class="parameter-set-relations style-analysis rel-box" data-parameter-set="${
     e(set.id)
-  }"><summary><span role="heading" aria-level="2">${e(set.title)}</span></summary>`;
+  }" data-style-mode="${expanded ? "expanded" : "compact"}"><summary><span role="heading" aria-level="2">${
+    e(set.title)
+  }</span></summary>`;
   if (!set.links.length) {
     return head + '<p class="hint">Опубликованных связей пока нет.</p></details>';
   }
@@ -242,8 +359,11 @@ export function styleAttributionWidgetHtml(set: PublicRelationSet | undefined): 
       e(set.id)
     }" ${i === 0 ? "checked" : ""}><label for="style-${e(set.id)}-${i}">${label}</label>`
   ).join("");
-  return head +
-    `<fieldset class="style-tabs"><legend>Стилистический анализ</legend>${tabs}${
-      panels.map(([, body], i) => `<div class="style-pane pane-${i}">${body}</div>`).join("")
-    }</fieldset></details>`;
+  const panes = panels.map(([, body], i) => `<div class="style-pane pane-${i}">${body}</div>`).join("");
+  // Профиль — раскрытый режим (Р3): в потоке карточки, по кнопке или сразу,
+  // если так задан макетом (Р6). Переход без перезагрузки (Р5).
+  const profileBlock = `<details class="style-profile"${
+    expanded ? " open" : ""
+  }><summary class="style-profile-toggle"><span class="style-when-closed">Развернуть профиль</span><span class="style-when-open">Свернуть профиль</span></summary><fieldset class="style-tabs"><legend>Стилистический анализ</legend>${tabs}${panes}</fieldset></details>`;
+  return head + compactSummary(set.links) + profileBlock + "</details>";
 }

@@ -1266,3 +1266,51 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
   display: inline-block; vertical-align: -.16em;
   color: var(--concept-color, var(--axis-color, #327965));
 }
+
+/* Компактная сводка виджета «Стилистические решения»: чипы понятий,
+   итоговые счётчики и переход в раскрытый профиль (Р2). */
+.style-analysis .style-summary { margin: .3rem 0 .1rem; }
+.style-analysis .style-axis { margin: .45rem 0 .15rem; }
+.style-analysis .style-axis h3 {
+  margin: 0 0 .25rem; font-size: .78rem; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted);
+}
+.style-analysis .style-chips {
+  display: flex; flex-wrap: wrap; gap: .35rem; list-style: none; margin: 0; padding: 0;
+}
+.style-analysis .style-chip {
+  display: inline-flex; align-items: center; gap: .35rem; max-width: 100%;
+  padding: .16rem .55rem .16rem .38rem; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--concept-color, var(--axis-color, #327965)) 32%, var(--line));
+  background: color-mix(in srgb, var(--concept-color, var(--axis-color, #327965)) 7%, var(--surface));
+  font-size: .84rem; line-height: 1.35;
+}
+.style-analysis .style-chip-link {
+  display: inline-flex; align-items: center; gap: .35rem; min-width: 0; color: var(--text);
+}
+.style-analysis .style-chip-name { color: var(--text); }
+.style-analysis .style-chip-share { color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Оспаривание — знаком, а не цветом (Р2.5). */
+.style-analysis .style-chip-mark {
+  flex: none; width: .62rem; height: .62rem; border-radius: 2px;
+  background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 4px);
+}
+/* На морфологических — мягкая заливка вместо чисел (Р2.4). */
+.style-analysis .style-axis[data-axis="morphological_trait"] .style-chip {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--concept-color, var(--axis-color, #327965)) 26%, transparent) var(--fill, 0%),
+    color-mix(in srgb, var(--concept-color, var(--axis-color, #327965)) 7%, var(--surface)) var(--fill, 0%));
+}
+.style-analysis .style-summary-foot {
+  display: flex; flex-wrap: wrap; gap: .9rem; align-items: baseline;
+  margin: .55rem 0 .1rem; font-size: .78rem; color: var(--muted);
+}
+.style-analysis .style-counter { white-space: nowrap; }
+/* Профиль — раскрытый режим: по кнопке или сразу, если так задан макет (Р3, Р6). */
+.style-analysis .style-profile { margin: .55rem 0 0; }
+.style-analysis .style-profile > summary { cursor: pointer; padding: .25rem 0; font-size: .82rem; color: var(--muted); }
+.style-analysis .style-profile > summary:focus-visible { outline: 2px solid currentColor; }
+.style-analysis .style-profile .style-when-open { display: none; }
+.style-analysis .style-profile[open] > summary .style-when-closed { display: none; }
+.style-analysis .style-profile[open] > summary .style-when-open { display: inline; }
+.style-analysis[data-style-mode="expanded"] .style-summary { display: none; }
