@@ -175,7 +175,7 @@ export function conceptIconsSheetHtml(): string {
   figcaption { margin-top: 4px; font: 11px/1.3 ui-monospace, "Cascadia Mono", monospace; color: #8C8272; }
   .concept-icon { display: block; }
   .paper .concept-icon { color: #26221D; }
-  .chip .concept-icon { color: #A9381F; }
+  .chip .concept-icon { flex: none; color: #A9381F; }
   .big .concept-icon { color: #2F5D8A; }
 </style></head><body>
 <h1>Вх² Чертёжный алфавит — 101 знак</h1>
