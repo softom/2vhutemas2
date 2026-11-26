@@ -1,10 +1,56 @@
 import { entityPath, escapeHtml as e } from "./site.ts";
 import { AXES } from "./classificationValidation.ts";
+import { conceptIconSvg } from "./conceptIcons.ts";
+import type { ConceptAxis } from "./conceptIcons.ts";
 import type { PublicRelationSet } from "./publicRelationSets.ts";
 import type { PublicCard } from "./publicCard.ts";
 
 type Relation = PublicRelationSet["links"][number];
 type Citation = Relation["citations"][number];
+
+/** Оси классификации — по ним выбирается запасной знак (Р2.6). */
+const AXIS_ORDER = ["art_epochs", "art_styles", "form_method", "morphological_trait"] as const;
+
+/**
+ * Ось связи: код типа понятия, если это одна из четырёх осей
+ * классификации. Прочие типы (например, изображения) понятиями не
+ * являются — им знак не полагается.
+ */
+function axisOf(link: Relation): ConceptAxis | null {
+  const code = link.other_type_code;
+  return (AXIS_ORDER as readonly string[]).includes(code ?? "") ? (code as ConceptAxis) : null;
+}
+
+/** Цвет понятия из данных: только HEX, иначе цвет своей оси (Р25, Р2.6). */
+function conceptColor(color: string | null | undefined): string {
+  const value = typeof color === "string" ? color.trim() : "";
+  return /^#[0-9a-f]{3,8}$/i.test(value) ? value : "";
+}
+
+/**
+ * Знак понятия инлайном: свой ключ — свой знак, неизвестный — знак своей оси
+ * (Р2.6, Р11, Р12). Знак несут ссылка или строка понятия; цвет приходит из
+ * данных и живёт переменной `--concept-color` (Р25), сам знак окрашивается
+ * через `currentColor`, поэтому гость без JavaScript его видит.
+ */
+function conceptMark(link: Relation, axis: ConceptAxis | null, size = 16): string {
+  if (!axis) return "";
+  const color = conceptColor(link.concept_color);
+  const style = color ? ` style="--concept-color:${color}"` : "";
+  return `<span class="style-concept"${style}>${
+    conceptIconSvg(link.concept_icon, axis, { size })
+  }</span>`;
+}
+
+/**
+ * Ссылка на понятие вместе со знаком: знак часть названия и живёт внутри
+ * ссылки, чтобы не ломать сетку строки профиля.
+ */
+function conceptLink(link: Relation, axis: ConceptAxis | null, size = 16): string {
+  return `<a href="${e(entityPath(link.other_slug))}">${
+    conceptMark(link, axis, size)
+  }${e(link.other_title)}</a>`;
+}
 
 export function styleAnalysis(card: Readonly<PublicCard>): string {
   return styleAttributionWidgetHtml(
@@ -47,7 +93,7 @@ function profile(links: Relation[], setId: string): string {
     function objectionLabel(note: NonNullable<ReturnType<typeof objections.get>>, showConcept = false): string {
       const context = [...note.contexts].map(e).join("; ");
       const id = `score-hint-${e(setId)}-${++rowNumber}`;
-      const concept = showConcept ? anchor(note.link.other_slug, note.link.other_title) + " · " : "";
+      const concept = showConcept ? conceptLink(note.link, axis) + " · " : "";
       return `<span class="style-objection" tabindex="0" aria-describedby="${id}">${concept}Оспаривается: ${note.sources.size} ист.${context ? " · " + context : ""}${witnessPopup(note.witnesses,id)}</span>`;
     }
     const groups = new Map<
@@ -102,7 +148,7 @@ function profile(links: Relation[], setId: string): string {
         if (note) objections.delete(c.link.other_id);
         const support = note ? `За: ${c.sources.size} ист. (${percent}%)` : `${percent}%`;
         return `<div class="style-score" tabindex="0" aria-describedby="${hintId}" style="--score-share:${100 * c.sources.size / total}%">${
-          anchor(c.link.other_slug, c.link.other_title)
+          conceptLink(c.link, axis)
         } <strong>${support}</strong><meter aria-label="${
           e(c.link.other_title)
         }" min="0" max="${total}" value="${c.sources.size}"></meter>${witnessPopup(c.witnesses,hintId)}</div>` +
@@ -124,7 +170,7 @@ function evidence(set: PublicRelationSet): string {
     for (const q of link.citations) {
       const group = sources.get(q.source_entity_id) ?? { source: q, items: [] };
       const values: Record<string, string> = {
-        concept: anchor(link.other_slug, link.other_title),
+        concept: conceptLink(link, axisOf(link)),
         relation: e(link.role_title),
         rationale: e(link.justification),
         quote: q.quote ? `<blockquote>${e(q.quote)}</blockquote>` : "",
@@ -167,9 +213,15 @@ export function styleAttributionWidgetHtml(set: PublicRelationSet | undefined): 
     return head + '<p class="hint">Опубликованных связей пока нет.</p></details>';
   }
   const titles = new Map(set.links.map((l) => [String(l.other_id), l.other_title]));
+  const byId = new Map(set.links.map((l) => [String(l.other_id), l]));
   const matches = (set.similar ?? []).map((obj) =>
     `<li>${anchor(obj.slug, obj.title)}<p>${
-      e(obj.concepts.map((id) => titles.get(String(id))).join(" · "))
+      obj.concepts.map((id) => {
+        const link = byId.get(String(id));
+        const title = e(titles.get(String(id)));
+        const mark = link ? conceptMark(link, axisOf(link)) : "";
+        return mark ? `${mark} ${title}` : title;
+      }).join(" · ")
     }</p></li>`
   ).join("");
   const panels = [

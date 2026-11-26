@@ -1258,3 +1258,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .style-analysis .style-negative { padding: .28rem .5rem; margin: .18rem 0; border-inline-start: 2px solid #9a6467; }
 .style-analysis .style-score:has(.style-objection) { grid-template-columns: minmax(0,1fr) fit-content(50%); }
 .style-analysis .style-score:has(.style-objection) strong { white-space: normal; }
+
+/* Знак понятия: цвет приходит из данных переменной --concept-color,
+   без значения — цвет своей оси (Р25, Р2.6). Знак окрашивается через currentColor. */
+.style-analysis .style-concept { display: inline-block; margin-inline-end: .35em; }
+.style-analysis .concept-icon {
+  display: inline-block; vertical-align: -.16em;
+  color: var(--concept-color, var(--axis-color, #327965));
+}

@@ -1,4 +1,5 @@
 import { styleAnalysis } from "./styleAttributionWidget.ts";
+import { conceptIconPaths } from "./conceptIcons.ts";
 import type { PublicCard } from "./publicCard.ts";
 
 Deno.test("style_analysis preserves each citation's own context and attached empty panels", () => {
@@ -156,4 +157,67 @@ Deno.test("five plus one positive votes and objections from repeated citations",
       (html.match(/href="\/entities\/c2"/g)??[]).length!==1 ||
       (html.match(/Оспаривается: 1 ист\./g)??[]).length!==2 ||
       /<meter|%/.test(html.split('class="style-counterbar style-negative"')[1])) throw Error(html);
+});
+
+Deno.test("concept icon rides with the concept and takes its colour from data", () => {
+  const render = (extra: Record<string, unknown>) =>
+    styleAnalysis({
+      relation_sets: [{
+        id: "s", code: "style_solutions", title: "Стили", fields: [],
+        links: [{
+          id: 1, other_id: 7, other_type_code: "art_styles", other_title: "Модерн", other_slug: "modern",
+          role: "classification_membership", role_id: "membership", role_title: "Принадлежность",
+          citations: [{ source_entity_id: 1, source_slug: "s", source_title: "Источник" }],
+          ...extra,
+        }],
+      }],
+    } as unknown as PublicCard);
+
+  const own = render({ concept_icon: "style_historicism", concept_color: "#A9381F" });
+  if (!own.includes('<span class="style-concept" style="--concept-color:#A9381F">')) throw Error("нет цвета из данных");
+  if (!own.includes(conceptIconPaths("style_historicism"))) throw Error("нет своего знака");
+  if (!own.includes('<svg class="concept-icon"') || !own.includes('stroke="currentColor"')) throw Error("нет инлайнового знака");
+  if (!/<a href="\/entities\/modern"><span class="style-concept"/.test(own)) throw Error("знак не в ссылке");
+  if (own.includes("<script")) throw Error("в разметке появился скрипт");
+
+  // Своего знака нет — знак своей оси (Р2.6), цвет понятия при этом остаётся.
+  const noIcon = render({ concept_color: "#123456" });
+  if (!noIcon.includes(conceptIconPaths("axis_styles"))) throw Error("нет запасного знака оси");
+  if (noIcon.includes(conceptIconPaths("style_historicism"))) throw Error("чужой знак вместо запасного");
+  if (!noIcon.includes("--concept-color:#123456")) throw Error("потерян цвет понятия");
+
+  // Ключ не из набора — тоже запасной знак оси (Р11, Р12).
+  const unknown = render({ concept_icon: "no_such_icon" });
+  if (!unknown.includes(conceptIconPaths("axis_styles"))) throw Error("нет запасного знака для чужого ключа");
+  if (unknown.includes("--concept-color")) throw Error("цвет без данных");
+
+  // Цвет не HEX — цвет оси, значение из данных не подставляется (Р25).
+  const badColor = render({ concept_icon: "style_historicism", concept_color: "red; background:url(x)" });
+  if (badColor.includes("--concept-color")) throw Error("чужое значение попало в разметку");
+  if (!badColor.includes(conceptIconPaths("style_historicism"))) throw Error("потерян знак");
+
+  // Связь не с понятием классификации (например, изображение) — знака нет.
+  const other = render({ other_type_code: "image", concept_icon: "style_historicism", concept_color: "#A9381F" });
+  if (other.includes("concept-icon")) throw Error("знак у связи не с понятием");
+});
+
+Deno.test("concept icon shows in sources and similar objects", () => {
+  const link = {
+    id: 1, other_id: 7, other_type_code: "art_styles", other_title: "Модерн", other_slug: "modern",
+    role: "classification_membership", role_id: "membership", role_title: "Принадлежность",
+    concept_icon: "style_historicism", concept_color: "#A9381F",
+    citations: [{ source_entity_id: 1, source_slug: "s", source_title: "Источник" }],
+  };
+  const set = {
+    id: "s", code: "style_solutions", title: "Стили",
+    fields: [{ slot: "concept", title: "Понятие" }],
+    links: [link],
+    similar: [{ id: 42, title: "Пример", slug: "example", concepts: [7] }],
+  };
+  const html = styleAnalysis({ relation_sets: [set] } as unknown as PublicCard);
+  const sources = html.split('class="style-pane pane-2"')[1] ?? "";
+  if (!sources.includes(conceptIconPaths("style_historicism"))) throw Error("нет знака в источниках");
+  const similar = html.split('class="style-pane pane-1"')[1] ?? "";
+  if (!similar.includes(conceptIconPaths("style_historicism"))) throw Error("нет знака у близкого объекта");
+  if (!similar.includes("Модерн")) throw Error("потеряно название понятия");
 });
