@@ -43,7 +43,7 @@ export function AttributionAcceptance({entityId,setId,proposals,sources,beforeSt
  const locked=disabled||busy||checking;
  function candidateEditor(p:any){
   if(p.concept_id||mapped(p)||!library)return null;
-  if(draft?.id!==p.id)return <button type="button" className="ghost" disabled={locked} onClick={()=>setDraft({id:p.id,title:p.candidate_name||p.title,axis:p.axis})}>Создать понятие</button>;
+  if(!draft||draft.id!==p.id)return <button type="button" className="ghost" disabled={locked} onClick={()=>setDraft({id:p.id,title:p.candidate_name||p.title,axis:p.axis})}>Создать понятие</button>;
   return <fieldset disabled={locked}><legend>Новое понятие библиотеки</legend>
    <label>Название<input maxLength={200} value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})}/></label>
    <label>Ось<select value={draft.axis} onChange={e=>setDraft({...draft,axis:e.target.value})}>{Object.entries(library.axes).map(([key,label])=><option key={key} value={key}>{String(label)}</option>)}</select></label>
