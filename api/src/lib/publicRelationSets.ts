@@ -1,5 +1,6 @@
 import {normalizeZone} from './attributionZones.ts';
 import {readConceptAttributes, readConstructionYear, readRelatedObjects} from './dataLayer.ts';
+import {withConceptAttributes} from './conceptAttributes.ts';
 import {styleAttributionWidgetHtml} from './styleAttributionWidget.ts';
 import {sql} from './db.ts';
 import {escapeHtml,entityPath} from './site.ts';
@@ -31,13 +32,9 @@ export async function loadPublicRelationSets(entityId:number,links:Link[],drafts
      // Подбор — общий слой чтения (Р29): здесь только данные виджета.
      style.similar = await readRelatedObjects(entityId, comparable.map(l=>({concept_id:l.other_id,role_id:l.role_id!})), drafts);
    }
-   // Атрибуты понятий (цвет и знак) — общий слой (Д1); пока параметров нет,
-   // значения пустые, виджет это переживает.
+   // Атрибуты понятий (цвет и знак) — общий слой (Д1).
    const attributes = await readConceptAttributes(style.links.map(l=>l.other_id), drafts);
-   style.links = style.links.map(l=>{
-     const attribute = attributes.get(l.other_id);
-     return attribute ? {...l,concept_color:attribute.color,concept_icon:attribute.icon} : l;
-   });
+   style.links = withConceptAttributes(style.links, attributes);
  }
  return attached;
 }

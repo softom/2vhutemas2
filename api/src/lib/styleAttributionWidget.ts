@@ -149,7 +149,7 @@ function compactSummary(links: Relation[]): string {
     if (!concepts.length) continue;
     const chips = concepts.map((c) => chipHtml(c, summary.total, axis)).join("");
     blocks.push(
-      `<section class="style-axis" data-axis="${axis}"><h3>${e(AXES[axis])}</h3><ul class="style-chips">${chips}</ul></section>`,
+      `<section class="style-axis" title="${e(AXES[axis])}" data-axis="${axis}"><h3>${e(AXES[axis])}</h3><ul class="style-chips">${chips}</ul></section>`,
     );
   }
   if (!blocks.length) return "";
