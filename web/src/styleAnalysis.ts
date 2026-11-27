@@ -4,8 +4,11 @@
  * Первичный HTML карточки лёгкий: в нём нет ни вкладок «Близкие объекты»
  * и «Источники», ни подсказок по строкам профиля (Р22). Они приходят по
  * требованию, когда читатель их запросил: поп-ап открывается по кнопке
- * «Исследовать» (Р4, Р6), вкладки — при выборе, подсказка — при наведении
- * или фокусе на строку.
+ * «Исследовать» (Р4, Р6), вкладки — при выборе, подсказка — при наведении,
+ * фокусе или касании строки (Р19).
+ *
+ * Экземпляров виджета на странице может быть несколько: каждый подключается
+ * отдельно, со своим адресом подгрузки и своими обработчиками (Р13, Р14).
  */
 import { loadWidgetPart, openWidgetDialog } from "./widgetModes";
 
@@ -16,11 +19,27 @@ function part(html: string, name: string): string {
   return template.content.querySelector(`[data-style-pane="${name}"]`)?.innerHTML ?? "";
 }
 
-export function mountStyleAnalysis(root: ParentNode = document) {
-  const widget = root.querySelector<HTMLElement>(".style-analysis[data-style-uid]");
-  if (!widget) return;
+/**
+ * Подсказка строки: адрес строки — связь, фаза и часть объекта (Р15).
+ * Подсказка показывает ровно те свидетельства, из которых получена оценка
+ * строки, — столько же, сколько показывает полный вид.
+ */
+function hintUrl(base: string, trigger: HTMLElement): string {
+  const params = new URLSearchParams({
+    part: "hint",
+    link: trigger.dataset.styleHint ?? "",
+    phase: trigger.dataset.stylePhase ?? "",
+    zone: trigger.dataset.styleZone ?? "",
+  });
+  return `${base}?${params.toString()}`;
+}
+
+/** Один экземпляр виджета: свои вкладки, своя кнопка и свои подсказки. */
+function mountInstance(widget: HTMLElement) {
   const uid = widget.dataset.styleUid ?? "";
-  const base = `/api/v1/entities/${uid}/style-analysis`;
+  if (!uid) return;
+  // Путь без префикса API: его подставляет общий клиент вместе с токеном.
+  const base = `/entities/${uid}/style-analysis`;
   let popup: string | null = null;
   const loadPopup = async (): Promise<string> => {
     popup ??= await loadWidgetPart(`${base}?part=popup`);
@@ -58,26 +77,41 @@ export function mountStyleAnalysis(root: ParentNode = document) {
     });
   });
 
-  // Подсказка строки — по требованию (Р22): свидетельства приходят по связи.
-  widget.querySelectorAll<HTMLElement>("[data-style-hint]").forEach((row) => {
+  // Подсказка строки — по требованию (Р22): свидетельства приходят по адресу
+  // строки. Триггер — интерактивный элемент строки (процент поддержки или
+  // плашка отрицания), а сама плашка встаёт в строку: её правила ждут
+  // прямого потомка строки (Р24).
+  widget.querySelectorAll<HTMLElement>("[data-style-hint]").forEach((trigger) => {
+    const holder = trigger.closest<HTMLElement>(".style-score, .style-objection") ?? trigger;
     const load = async () => {
-      const hintId = row.dataset.styleHintId ?? "";
-      if (!hintId || row.dataset.hintLoaded === "true") return;
-      const html = await loadWidgetPart(`${base}?part=hint&link=${row.dataset.styleHint ?? ""}`);
+      if (trigger.dataset.hintLoaded === "true") return;
+      const hintId = trigger.dataset.styleHintId ?? "";
+      if (!hintId) return;
+      const html = await loadWidgetPart(hintUrl(base, trigger));
       if (!html) return;
       const template = document.createElement("template");
       template.innerHTML = html;
       const tip = template.content.firstElementChild;
       if (!tip) return;
       tip.id = hintId;
-      row.append(tip);
-      row.setAttribute("aria-describedby", hintId);
-      row.dataset.hintLoaded = "true";
+      holder.append(tip);
+      trigger.setAttribute("aria-describedby", hintId);
+      trigger.dataset.hintLoaded = "true";
     };
-    const request = () => {
+    const ask = () => {
       load().catch(() => {});
     };
-    row.addEventListener("mouseenter", request);
-    row.addEventListener("focus", request);
+    trigger.addEventListener("mouseenter", ask);
+    trigger.addEventListener("focus", ask);
+    trigger.addEventListener("touchstart", ask, { passive: true });
+  });
+}
+
+/**
+ * Подключение виджетов: каждый экземпляр на странице — отдельно (Р14).
+ */
+export function mountStyleAnalysis(root: ParentNode = document) {
+  root.querySelectorAll<HTMLElement>(".style-analysis[data-style-uid]").forEach((widget) => {
+    mountInstance(widget);
   });
 }

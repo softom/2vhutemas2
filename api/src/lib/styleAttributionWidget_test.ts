@@ -433,7 +433,11 @@ Deno.test("primary html stays light: no witnesses, empty lazy panes, hint marker
   // Строка профиля несёт адрес связи, по которому подсказка и придёт.
   if (!primary.includes('data-style-hint="1"')) throw Error("нет адреса связи");
   if (!primary.includes('data-style-hint="2"')) throw Error("нет адреса связи отрицания");
-  if (!/data-style-hint-id="score-hint-style-s-\d+"/.test(primary)) throw Error("нет адреса подсказки");
+  if (!/data-style-hint-id="score-hint-style-s-\d+-\d+"/.test(primary)) throw Error("нет адреса подсказки");
+  // Адрес строки — связь, фаза и часть объекта (Р15).
+  if (!primary.includes('data-style-phase=""') || !primary.includes('data-style-zone=""')) {
+    throw Error("нет фазы и части объекта в адресе");
+  }
   // Вкладки «Близкие объекты» и «Источники» пусты до запроса.
   if (pane(primary, "similar") !== "") throw Error("вкладка близких объектов не пуста");
   if (pane(primary, "sources") !== "") throw Error("вкладка источников не пуста");
@@ -457,13 +461,13 @@ Deno.test("popup carries all three parts with witnesses and their own tab prefix
   const profile = pane(popup, "profile");
   if (!profile.includes('class="witness-popup"')) throw Error("нет подсказок в полном виде");
   if (!profile.includes('role="tooltip"')) throw Error("нет роли подсказки");
-  if (!/aria-describedby="score-hint-style-popup-s-\d+"/.test(profile)) {
+  if (!/aria-describedby="score-hint-style-popup-s-\d+-\d+"/.test(profile)) {
     throw Error("нет связи подсказки со строкой");
   }
   if (!pane(popup, "similar").includes('href="/entities/example"')) throw Error("нет близких объектов");
   if (!pane(popup, "sources").includes("Источник")) throw Error("нет источников");
   // Свой префикс вкладок: в документе уже есть вкладки карточки (Р13).
-  if (!popup.includes('id="style-popup-s-0"') || !popup.includes('name="style-popup-s"')) {
+  if (!/id="style-popup-s-\d+-0"/.test(popup) || !/name="style-popup-s-\d+"/.test(popup)) {
     throw Error("нет своего префикса вкладок");
   }
 });
@@ -510,7 +514,67 @@ Deno.test("tabs are addressed by feature, not by position", () => {
   for (const legacy of ["pane-0", "pane-1", "pane-2", "choice-0"]) {
     if (primary.includes(legacy)) throw Error(`остался позиционный класс ${legacy}`);
   }
-  if (!primary.includes('id="style-s-0"') || !primary.includes('name="style-s"')) {
+  if (!/id="style-s-\d+-0"/.test(primary) || !/name="style-s-\d+"/.test(primary)) {
     throw Error("нет своей группы переключателей");
+  }
+});
+
+Deno.test("two instances of one set keep their own prefixes and identifiers", () => {
+  const set = stage6Set();
+  const first = styleAnalysis({ relation_sets: [set] } as unknown as PublicCard);
+  const second = styleAnalysis({ relation_sets: [set] } as unknown as PublicCard);
+  const instance = (html: string) => html.match(/data-style-instance="([^"]+)"/)?.[1] ?? "";
+  const a = instance(first);
+  const b = instance(second);
+  if (!a || !b) throw Error("нет признака экземпляра");
+  if (a === b) throw Error("префиксы экземпляров совпали");
+  const ids = (html: string) => [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+  const names = (html: string) => [...html.matchAll(/ name="([^"]+)"/g)].map((m) => m[1]);
+  for (const [left, right, what] of [[ids(first), ids(second), "идентификаторы"], [names(first), names(second), "группы переключателей"]] as const) {
+    const overlap = left.filter((value) => (right as string[]).includes(value));
+    if (overlap.length) throw Error(`${what} повторились: ${overlap.join(", ")}`);
+  }
+  // И поп-ап — со своим префиксом (Р13).
+  const popup = styleAnalysisPopupHtml(set as unknown as PublicRelationSet);
+  const popupPrefix = instance(popup);
+  if (!popupPrefix || popupPrefix === a || popupPrefix === b) throw Error("у поп-апа свой префикс");
+});
+
+Deno.test("row hint brings the witnesses of that row only, and the full view agrees", () => {
+  const citation = (source_entity_id: number, phase: string, zone: string, quote: string) => ({
+    source_entity_id, source_slug: "src", source_title: "Источник", phase, zone, quote,
+  });
+  const base = {
+    other_id: 7, other_type_code: "art_styles", other_title: "Модерн", other_slug: "modern",
+    role: "classification_membership", role_id: "membership", role_title: "Принадлежность",
+    concept_icon: "style_historicism", concept_color: "#A9381F",
+  };
+  const set = {
+    id: "s", code: "style_solutions", title: "Стили", fields: [],
+    links: [
+      { ...base, id: 1, citations: [citation(10, "1923", "фасад", "Цитата фасада")] },
+      { ...base, id: 2, citations: [citation(11, "1960", "крыша", "Цитата крыши")] },
+    ],
+  };
+  const facade = styleAnalysisHintHtml(set as unknown as PublicRelationSet, 1, "1923", "фасад");
+  if (!facade.includes("Цитата фасада")) throw Error("нет цитаты своей строки");
+  if (facade.includes("Цитата крыши")) throw Error("в подсказку попала чужая цитата");
+  const roof = styleAnalysisHintHtml(set as unknown as PublicRelationSet, 2, "1960", "крыша");
+  if (!roof.includes("Цитата крыши") || roof.includes("Цитата фасада")) {
+    throw Error("подсказка другой строки");
+  }
+  // Адрес строки в разметке — тот же, что у запроса подсказки.
+  const html = styleAnalysis({ relation_sets: [set] } as unknown as PublicCard);
+  if (!html.includes('data-style-hint="1" data-style-phase="1923" data-style-zone="фасад"')) {
+    throw Error("нет адреса строки в разметке");
+  }
+  // Одна и та же плашка в обоих режимах раскрывает одни и те же связи и цитаты.
+  const profile = pane(styleAnalysisPopupHtml(set as unknown as PublicRelationSet), "profile");
+  const shown = [...profile.matchAll(/<small class="witness-popup"[^>]*>([\s\S]*?)<\/small>/g)]
+    .map((m) => m[1]);
+  const body = (tip: string) => tip.replace(/^<small[^>]*>/, "").replace(/<\/small>$/, "");
+  if (shown.length !== 2) throw Error(`плашек в полном виде ${shown.length}`);
+  if (shown[0] !== body(facade) || shown[1] !== body(roof)) {
+    throw Error("плашка и полный вид показывают разное");
   }
 });

@@ -39,9 +39,10 @@ export async function loadPublicRelationSets(entityId:number,links:Link[],drafts
  return attached;
 }
 /** Same presentation for every relation-valued parameter set; labels/order/side come from its definition. */
-export function relationSetsHtml(sets:PublicRelationSet[],side:'left'|'right'):string{
+/** `uid` — UID записи: он нужен виджету, чтобы подгружать подсказки и полный вид. */
+export function relationSetsHtml(sets:PublicRelationSet[],side:'left'|'right',uid?:number|null):string{
  const e=escapeHtml;
- return sets.filter(s=>s.side===side).map(s=>s.code==='style_solutions'?styleAttributionWidgetHtml(s):`<section class="parameter-set-relations" data-parameter-set="${e(s.id)}"><h2>${e(s.title)}</h2>${s.links.length?'':'<p class="hint">Опубликованных связей пока нет.</p>'}${s.links.map(l=>{
+ return sets.filter(s=>s.side===side).map(s=>s.code==='style_solutions'?styleAttributionWidgetHtml(s,null,uid):`<section class="parameter-set-relations" data-parameter-set="${e(s.id)}"><h2>${e(s.title)}</h2>${s.links.length?'':'<p class="hint">Опубликованных связей пока нет.</p>'}${s.links.map(l=>{
   const values:Record<string,string>={concept:`<a href="${e(entityPath(l.other_slug))}">${e(l.other_title)}</a>`,relation:e(l.role_title||''),rationale:e(l.justification||''),
    quote:l.citations.map(q=>q.quote?`<blockquote><p>${e(q.quote)}</p><footer><a href="${e(entityPath(q.source_slug))}">${e(q.source_title)}</a></footer></blockquote>`:'').join(''),
    source:[...new Map(l.citations.map(q=>[q.source_entity_id,`<a href="${e(entityPath(q.source_slug))}">${e(q.source_title)}</a>`])).values()].join('<br>'),

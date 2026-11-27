@@ -426,10 +426,16 @@ entities.get("/:id/style-analysis", async (c: Context<AppEnv>) => {
   const sets = await loadPublicRelationSets(id, links, drafts);
   const set = sets.find((item) => item.code === "style_solutions");
   // Запись без набора — режим 0: пустой ответ, а не ошибка.
+  // Подсказка строки приходит по её адресу: связь, фаза и часть объекта (Р15).
   const html = !set
     ? ""
     : part === "hint"
-    ? styleAnalysisHintHtml(set, Number(c.req.query("link")))
+    ? styleAnalysisHintHtml(
+      set,
+      Number(c.req.query("link")),
+      c.req.query("phase") ?? "",
+      c.req.query("zone") ?? "",
+    )
     : styleAnalysisPopupHtml(set);
   // Гостю ответ кэшируется публично, редактору — не кэшируется вовсе.
   c.header("cache-control", drafts ? "private, no-store" : "public, max-age=60, stale-while-revalidate=300");

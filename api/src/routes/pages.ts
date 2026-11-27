@@ -1150,7 +1150,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         if (published) rows.push(["Опубликовано в источнике", e(valueText(published))]);
         return rows.length ? `<h2>Сведения</h2><dl>${rows.map(([t, v]) => `<dt>${t}</dt><dd>${v}</dd>`).join("")}</dl>` : "";
       }
-      return parameterValuesHtml(card.values.filter(v => v.card_side !== 'left')) + relationSetsHtml(panelSets(), 'right') +
+      return parameterValuesHtml(card.values.filter(v => v.card_side !== 'left')) + relationSetsHtml(panelSets(), 'right', card.id) +
         (programSide === 'right' ? programHtml(card) : '');
     },
     // Обоснование связи — наш собственный текст, которого нет в энциклопедиях.
@@ -1173,7 +1173,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
               sides[side].push(programHtml(card));
               programShown = true;
             }
-            sides[side].push(relationSetsHtml(sets.filter(s => s.id === id), side));
+            sides[side].push(relationSetsHtml(sets.filter(s => s.id === id), side, card.id));
           }
         }
       }
@@ -1233,7 +1233,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
     // У новости текст идёт сразу за заголовком, без «Описания».
     // Площадная программа — под связями, по уровням классификатора.
     program: () => programSide === 'left' ? programHtml(card) : '',
-    parameter_sets: () => parameterValuesHtml(card.values.filter(v=>v.card_side==='left')) + relationSetsHtml(panelSets(), 'left'),
+    parameter_sets: () => parameterValuesHtml(card.values.filter(v=>v.card_side==='left')) + relationSetsHtml(panelSets(), 'left', card.id),
     text: () => descriptionHtml ? `${news ? "" : "<h2>Описание</h2>"}<div class="public-document">${descriptionHtml}</div>` : "",
     // Изображение — цитата (Р-68): под каждым автор и источник.
     gallery: () => card.media.length === 0 ? "" :

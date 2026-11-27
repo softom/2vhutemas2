@@ -5,6 +5,7 @@
  * действию читателя, фокус уходит внутрь, выход — по Esc и по кнопке, после
  * закрытия фокус возвращается на элемент, который открыл.
  */
+import { request } from "./api";
 
 let opener: HTMLElement | null = null;
 
@@ -44,11 +45,15 @@ export function openWidgetDialog(
 /**
  * Часть виджета по требованию (Р22): сервер отдаёт фрагмент разметки,
  * а не страницу; гость и редактор получают одну и ту же проекцию.
+ *
+ * Запрос идёт через общий клиент API: он прикладывает заголовок
+ * Authorization, и редактор видит ту же проекцию, что и в карточке, — со
+ * черновиками. Отдельный запрос без заголовка терял бы режим просмотра.
  */
-export async function loadWidgetPart(url: string): Promise<string> {
-  const response = await fetch(url, { headers: { accept: "application/json" } });
-  if (!response.ok) throw new Error("Не удалось загрузить часть виджета");
-  const data = (await response.json()) as { html?: string };
+export async function loadWidgetPart(path: string): Promise<string> {
+  const data = await request<{ html?: string }>(path, {
+    headers: { accept: "application/json" },
+  });
   return typeof data.html === "string" ? data.html : "";
 }
 

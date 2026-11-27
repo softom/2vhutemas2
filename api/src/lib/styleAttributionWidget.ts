@@ -180,6 +180,49 @@ function addWitness(witnesses: Witnesses, link: Relation, citation: Citation) {
   witnesses.set(link.id, entry);
 }
 
+/**
+ * Адрес строки профиля (Р15): связь, фаза и часть объекта. По нему подсказка
+ * получает ровно те свидетельства, что показывает полный вид: без фазы и зоны
+ * плашка «1923 · фасад» тянула бы цитату про «1960 · крыша».
+ */
+interface RowAddress {
+  linkId: number;
+  phase: string;
+  zone: string;
+}
+
+/**
+ * Свидетельства строки: связи того же понятия с той же ролью, фазой и зоной.
+ * Профиль и подсказка считают их этим одним способом — иначе плашка и полный
+ * вид показывали бы разное.
+ *
+ * Отрицание своё: у него своя плашка и свой счётчик источников, поэтому
+ * берутся все отрицания того же понятия, а не только по фазе и зоне.
+ */
+function rowWitnesses(links: Relation[], address: RowAddress): Witnesses {
+  const witnesses: Witnesses = new Map();
+  const wanted = links.find((l) => Number(l.id) === address.linkId);
+  if (!wanted) return witnesses;
+  const negation = wanted.role === "classification_negation";
+  for (const link of links) {
+    if (Number(link.other_id) !== Number(wanted.other_id)) continue;
+    if (link.other_type_code !== wanted.other_type_code) continue;
+    if (negation) {
+      if (link.role !== "classification_negation") continue;
+      for (const q of link.citations) addWitness(witnesses, link, q);
+      continue;
+    }
+    if (link.role === "classification_negation") continue;
+    if (link.role_id !== wanted.role_id) continue;
+    for (const q of link.citations) {
+      if ((q.phase ?? "") !== address.phase) continue;
+      if ((q.zone ?? "") !== address.zone) continue;
+      addWitness(witnesses, link, q);
+    }
+  }
+  return witnesses;
+}
+
 function witnessPopup(witnesses: Witnesses, id?: string): string {
   const items = [...witnesses.values()].map(({link, citations}) => {
     const heading = [link.role_title, link.other_title].filter(Boolean).map(e).join(" — ");
@@ -194,44 +237,59 @@ function witnessPopup(witnesses: Witnesses, id?: string): string {
 }
 
 /**
+ * Признаки адреса строки: по ним приходит подсказка (Р22). Адрес — связь,
+ * фаза и часть объекта; без них плашка потянула бы чужое свидетельство.
+ */
+function hintAttrs(address: RowAddress, hintId: string): string {
+  return ` data-style-hint="${e(String(address.linkId))}" data-style-phase="${e(address.phase)}" data-style-zone="${
+    e(address.zone)
+  }" data-style-hint-id="${e(hintId)}"`;
+}
+
+/**
  * Профиль — раскрытый режим (Р3).
  *
  * `hints` решает, где живут свидетельства: в первичном HTML их нет (Р22),
  * строка несёт адрес связи, и подсказка приходит по требованию; в поп-апе
  * подсказки вставлены сразу — там вес разметки не важен.
  */
-function profile(links: Relation[], setId: string, hints: boolean, prefix: string): string {
+function profile(links: Relation[], hints: boolean, prefix: string): string {
   let rowNumber = 0;
   const profileOrder = ["art_epochs", "art_styles", "form_method", "morphological_trait"] as const;
   return profileOrder.map(axis => {
     const title = AXES[axis];
     const defaultRole = axis === "art_epochs" || axis === "art_styles"
       ? "classification_membership" : "classification_trait";
-    const objections = new Map<number, {link: Relation; sources: Set<number>; contexts: Set<string>; witnesses: Witnesses}>();
+    const objections = new Map<number, {link: Relation; sources: Set<number>; contexts: Set<string>; address: RowAddress}>();
     function objectionLabel(note: NonNullable<ReturnType<typeof objections.get>>, showConcept = false): string {
       const context = [...note.contexts].map(e).join("; ");
       const id = `score-hint-${e(prefix)}-${++rowNumber}`;
       const concept = showConcept ? conceptLink(note.link, axis) + " · " : "";
       const described = hints
         ? ` aria-describedby="${id}"`
-        : ` data-style-hint="${note.link.id}" data-style-hint-id="${id}"`;
+        : hintAttrs(note.address, id);
+      const witnesses = rowWitnesses(links, note.address);
       return `<span class="style-objection" tabindex="0"${described}>${concept}Оспаривается: ${note.sources.size} ист.${
         context ? " · " + context : ""
-      }${hints ? witnessPopup(note.witnesses, id) : ""}</span>`;
+      }${hints ? witnessPopup(witnesses, id) : ""}</span>`;
     }
     const groups = new Map<
       string,
       {
         label: string;
         isDefault: boolean;
-        concepts: Map<number, { link: Relation; sources: Set<number>; witnesses: Witnesses }>;
+        concepts: Map<number, { link: Relation; sources: Set<number>; address: RowAddress }>;
       }
     >();
     for (const link of links.filter((l) => l.other_type_code === axis)) {
       for (const citation of link.citations) {
         if (link.role === "classification_negation") {
-          const note = objections.get(link.other_id) ?? {link, sources: new Set<number>(), contexts: new Set<string>(), witnesses: new Map()};
-          addWitness(note.witnesses, link, citation);
+          const note = objections.get(link.other_id) ?? {
+            link,
+            sources: new Set<number>(),
+            contexts: new Set<string>(),
+            address: {linkId: Number(link.id), phase: "", zone: ""} as RowAddress,
+          };
           note.sources.add(citation.source_entity_id);
           const context = [citation.phase, citation.zone].filter(Boolean).join(" · ");
           if (context) note.contexts.add(context);
@@ -247,9 +305,16 @@ function profile(links: Relation[], setId: string, hints: boolean, prefix: strin
           };
         groups.set(key, group);
         const concept = group.concepts.get(link.other_id) ??
-          { link, sources: new Set(), witnesses: new Map() };
+          {
+            link,
+            sources: new Set<number>(),
+            address: {
+              linkId: Number(link.id),
+              phase: citation.phase ?? "",
+              zone: citation.zone ?? "",
+            } as RowAddress,
+          };
         concept.sources.add(citation.source_entity_id);
-        addWitness(concept.witnesses, link, citation);
         group.concepts.set(link.other_id, concept);
       }
     }
@@ -272,13 +337,15 @@ function profile(links: Relation[], setId: string, hints: boolean, prefix: strin
         const support = note ? `За: ${c.sources.size} ист. (${percent}%)` : `${percent}%`;
         const described = hints
           ? ` aria-describedby="${hintId}"`
-          : ` data-style-hint="${c.link.id}" data-style-hint-id="${hintId}"`;
-        return `<div class="style-score" tabindex="0"${described} style="--score-share:${100 * c.sources.size / total}%">${
+          : hintAttrs(c.address, hintId);
+        const witnesses = rowWitnesses(links, c.address);
+        // Фокус с клавиатуры — на проценте поддержки, а не на строке (Р19).
+        return `<div class="style-score" style="--score-share:${100 * c.sources.size / total}%">${
           conceptLink(c.link, axis)
-        } <strong>${support}</strong><meter aria-label="${
+        } <strong tabindex="0"${described}>${support}</strong><meter aria-label="${
           e(c.link.other_title)
         }" min="0" max="${total}" value="${c.sources.size}"></meter>${
-          hints ? witnessPopup(c.witnesses, hintId) : ""
+          hints ? witnessPopup(witnesses, hintId) : ""
         }</div>` +
           (note ? `<div class="style-counterbar">${objectionLabel(note)}</div>` : "");
       }).join("");
@@ -374,6 +441,17 @@ function similarObjects(set: PublicRelationSet): string {
     : '<p class="hint">Объектов с общими атрибуциями пока нет.</p>';
 }
 
+/**
+ * Счётчик экземпляров: у каждого вызова рендера свой префикс (Р13).
+ * Два экземпляра одного набора на странице получают разные идентификаторы,
+ * иначе вкладки попали бы в одну радиогруппу.
+ */
+let instanceCounter = 0;
+
+function instancePrefix(kind: string, setId: string): string {
+  return `${kind}-${e(setId)}-${++instanceCounter}`;
+}
+
 export function styleAttributionWidgetHtml(
   set: PublicRelationSet | undefined,
   design?: string | null,
@@ -382,10 +460,10 @@ export function styleAttributionWidgetHtml(
   if (!set) return "";
   // Режим 1 — компактный по умолчанию; «expanded» в макете открывает профиль (Р6).
   const expanded = design === "expanded";
-  const prefix = `style-${e(set.id)}`;
+  const prefix = instancePrefix("style", set.id);
   const head = `<details open class="parameter-set-relations style-analysis rel-box" data-parameter-set="${
     e(set.id)
-  }" data-style-mode="${expanded ? "expanded" : "compact"}"${
+  }" data-style-mode="${expanded ? "expanded" : "compact"}" data-style-instance="${e(prefix)}"${
     uid ? ` data-style-uid="${uid}"` : ""
   }><summary><span role="heading" aria-level="2">${
     e(set.title)
@@ -403,7 +481,7 @@ export function styleAttributionWidgetHtml(
     tabInputs(prefix)
   }${
     tabPanes({
-      profile: profile(set.links, set.id, false, prefix),
+      profile: profile(set.links, false, prefix),
       similar: "",
       sources: "",
     })
@@ -417,13 +495,13 @@ export function styleAttributionWidgetHtml(
  * документе уже есть вкладки карточки (Р13).
  */
 export function styleAnalysisPopupHtml(set: PublicRelationSet): string {
-  const prefix = `style-popup-${e(set.id)}`;
+  const prefix = instancePrefix("style-popup", set.id);
   // Корень поп-апа — с классом виджета: оформление карточки действует и здесь (Р23).
-  return `<fieldset class="style-tabs style-tabs-popup style-analysis"><legend>Стилистический анализ</legend>${
+  return `<fieldset class="style-tabs style-tabs-popup style-analysis" data-style-instance="${e(prefix)}"><legend>Стилистический анализ</legend>${
     tabInputs(prefix)
   }${
     tabPanes({
-      profile: profile(set.links, set.id, true, prefix),
+      profile: profile(set.links, true, prefix),
       similar: similarObjects(set),
       sources: evidence(set),
     })
@@ -431,26 +509,23 @@ export function styleAnalysisPopupHtml(set: PublicRelationSet): string {
 }
 
 /**
- * Свидетельства по связи — для подсказки, которая приходит по требованию
- * (Р22). Берутся все связи того же понятия: положительные или отрицания.
+ * Свидетельства строки профиля — для подсказки, которая приходит по требованию
+ * (Р22). Берутся ровно те связи, из которых получена оценка строки: то же
+ * понятие, та же роль, та же фаза и часть объекта. Поэтому плашка «1923 · фасад»
+ * не потянула бы цитату про «1960 · крыша».
  *
  * Идентификаторы сравниваются числами: драйвер отдаёт `bigint` строкой, и
  * строгое сравнение со строкой запроса искало бы связь впустую.
  */
-export function styleAnalysisHintHtml(set: PublicRelationSet, linkId: number): string {
+export function styleAnalysisHintHtml(
+  set: PublicRelationSet,
+  linkId: number,
+  phase = "",
+  zone = "",
+): string {
   const wanted = Number(linkId);
-  const link = set.links.find((l) => Number(l.id) === wanted);
-  if (!link) return "";
-  const negation = link.role === "classification_negation";
-  const witnesses: Witnesses = new Map();
-  for (const l of set.links) {
-    if (Number(l.other_id) !== Number(link.other_id)) continue;
-    if ((l.role === "classification_negation") !== negation) continue;
-    for (const q of l.citations) {
-      const entry = witnesses.get(l.id) ?? { link: l, citations: [] };
-      entry.citations.push(q);
-      witnesses.set(l.id, entry);
-    }
-  }
+  if (!Number.isFinite(wanted)) return "";
+  const witnesses = rowWitnesses(set.links, {linkId: wanted, phase: phase ?? "", zone: zone ?? ""});
+  if (!witnesses.size) return "";
   return witnessPopup(witnesses);
 }
