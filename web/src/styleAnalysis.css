@@ -50,9 +50,11 @@
   line-height: 1.45;
 }
 
-/* 1.3. Поп-ап режимов: единый диалог на страницу (Р4, Р21). */
+/* 1.3. Поп-ап режимов: единый диалог на страницу (Р4, Р21). Ширина задана
+   явно: корень виджета внутри диалога — контейнер по ширине, и без заданной
+   ширины диалог сжимался бы по содержимому до пустого поля. */
 dialog.widget-dialog {
-  max-width: min(58rem, 92vw); max-height: 88vh; overflow: auto;
+  width: min(58rem, 92vw); max-width: 92vw; max-height: 88vh; overflow: auto;
   padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--bg); color: var(--text);
 }
