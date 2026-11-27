@@ -48,7 +48,7 @@ const ICON_PATHS: Record<string, string> = {
     '<path d="M12.1 3.7a4.7 4.7 0 1 1-6.5 6.1"/><path d="M2 2l8.4 5.8-6.8 1.1z" fill="currentColor" fill-opacity="0.95" stroke="none"/>',
 
   epoch_modernism:
-    '<path d="M2 3.6h12v6.3H2zM4.4 10v3m7.2-3v3"/><path d="M4.3 6.7h7.4" stroke-width="1"/>',
+    '<path d="M2 6l8.5-2.8 3.5 1.6v4.4l-8.5 2.9L2 10.4zM2.2 6.2l3.3 1.5 8.3-2.8M5.5 7.8v4M4 11.6v1.7m7.3-3.1v2"/><path d="M7.2 8.8l2.2-.75m1.2-.4 1.7-.6" stroke-width="1"/>',
 
   epoch_postmodernism:
     '<path d="M2 10l4.6-5.8v3.6M14 10L9.4 4.2v3.6M2 10h4m4 0h4M4 10v3m8-3v3"/>',
