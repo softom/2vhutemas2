@@ -17,6 +17,7 @@ import type { CardLayout } from "../lib/layouts.ts";
 import { isPageFrame } from "../lib/cardSections.ts";
 import { renderCardGrid } from "../lib/cardGrid.ts";
 import { getWidget, widgetImplementations } from "../lib/widgetRegistry.ts";
+import { designTitles } from "../lib/widgetDesigns.ts";
 import { styleQuizKey, styleQuizHtml } from "../lib/styleQuizWidget.ts";
 import { modelPath } from "../lib/modelWidgets.ts";
 import { sectionCapabilities } from "../lib/cardSections.ts";
@@ -1414,7 +1415,7 @@ pages.get("/api/v1/document-widgets", async c => {
   const rows = await sql<{id: string; name: string; renderer_key: string}>`select id,name,renderer_key from app.widgets order by name,id`;
   const items = rows.flatMap(row => {
     const spec = widgetImplementations.get(row.renderer_key) ?? sectionCapabilities(row.renderer_key);
-    return spec ? [{id: row.id, name: row.name, renderer_key: row.renderer_key, designs: spec.designs, standalone: row.renderer_key === styleQuizKey, model_path: modelPath(row.renderer_key)}] : [];
+    return spec ? [{id: row.id, name: row.name, renderer_key: row.renderer_key, designs: spec.designs, design_titles: designTitles(row.renderer_key, spec.designs), standalone: row.renderer_key === styleQuizKey, model_path: modelPath(row.renderer_key)}] : [];
   });
   return c.json({items});
 });

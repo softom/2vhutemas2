@@ -3,6 +3,7 @@ import { createReactBlockSpec } from "@blocknote/react";
 import { api, type SearchHit } from "../api";
 
 import { clientWidgets } from "../clientWidgetRegistry";
+import { designTitle } from "../widgetModes";
 
 type WidgetProps = { widget_id: string; entity_id: string; design: string; title:string; caption:string; height:string };
 type Definition = Awaited<ReturnType<typeof api.documentWidgets>>["items"][number];
@@ -76,7 +77,7 @@ function WidgetEditor({ value, change }: {value: WidgetProps; change: (next: Par
     {catalogError && <p role="alert">{catalogError}</p>}
     {chosen && <label>Оформление <select aria-label="Оформление" value={value.design} onChange={e => change({design: e.target.value})}>
       <option value="">По умолчанию</option>
-      {chosen.designs.map(design => <option key={design}>{design}</option>)}
+      {chosen.designs.map(design => <option key={design}>{designTitle(design, chosen.design_titles)}</option>)}
     </select></label>}
     {chosen?.model_path ? <div>
       <label>Заголовок модели <input value={value.title} onChange={e => change({title:e.target.value})} /></label>

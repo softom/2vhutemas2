@@ -51,3 +51,19 @@ export async function loadWidgetPart(url: string): Promise<string> {
   const data = (await response.json()) as { html?: string };
   return typeof data.html === "string" ? data.html : "";
 }
+
+/**
+ * Название варианта оформления (Р6): сервер присылает свои названия, а клиент
+ * знает имена режимов стандарта «Вх²» § 1. Кода без названия не остаётся —
+ * виден сам код.
+ */
+const modeTitles: Record<string, string> = {
+  empty: "Нет данных",
+  compact: "Компактная",
+  expanded: "Раскрытая",
+  popup: "Поп-ап — полная",
+};
+
+export function designTitle(code: string, titles?: Record<string, string> | null): string {
+  return titles?.[code] ?? modeTitles[code] ?? code;
+}

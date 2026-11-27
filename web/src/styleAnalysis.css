@@ -1,0 +1,312 @@
+/* ==========================================================================
+   Оформление виджетов: общий каркас и правила «Стилистических решений».
+
+   ТЗ «Стилистические решения» § 7:
+   Р23 — один файл стилей виджета и один импорт (web/src/main.tsx);
+   Р24 — каждое свойство задано в одном месте, молчаливых перекрытий нет;
+   Р25 — только переменные темы: базовые цвета из :root, акценты осей и
+         отрицания — локальные переменные с фолбэком, цвет понятия — из данных;
+   Р26 — единая типографика во всех режимах и вкладках;
+   Р27 — адаптация к ширине слота через @container;
+   Р28 — правила печати.
+
+   Раздел 1 — общий каркас: переменные, контейнер, поп-ап режимов, печать.
+   Этот раздел переносится на следующие виджеты без изменений.
+   Раздел 2 — частные правила «Стилистических решений».
+
+   Файл заменил web/src/styleCounterbar.css (удалён) и правила виджета,
+   вынесенные из web/src/styles.css.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Общий каркас (переносится на следующие виджеты)
+   -------------------------------------------------------------------------- */
+
+/* 1.1. Переменные оформления (Р25): базовые цвета — из :root; собственные
+   акценты виджета — локальные переменные с фолбэком на значение по умолчанию. */
+.style-analysis {
+  --style-axis-default: #327965;
+  --style-axis-form_method: #90621f;
+  --style-axis-art_styles: #6267a4;
+  --style-axis-morphological_trait: #aa5467;
+  --style-negation-ink: #702f32;
+  --style-negation-line: #9a6467;
+  --style-negation-fill: #f1e5e4;
+  --style-negation-fill-2: #e8d8d7;
+  --style-tip-bg: #302921;
+  --style-tip-ink: #fff;
+  --style-scale-track: #f4f0e9;
+  --style-scale-mix: 38%;
+  /* Цвет оси по умолчанию; секция своей оси переопределяет его (раздел 2.1). */
+  --axis-color: var(--style-axis-default, #327965);
+}
+
+/* 1.2. Виджет — контейнер по ширине слота (Р27) и общая база текста (Р26). */
+.style-analysis {
+  container-type: inline-size;
+  container-name: style-analysis;
+  min-width: 0;
+  font-size: .95rem;
+  line-height: 1.45;
+}
+
+/* 1.3. Поп-ап режимов: единый диалог на страницу (Р4, Р21). */
+dialog.widget-dialog {
+  max-width: min(58rem, 92vw); max-height: 88vh; overflow: auto;
+  padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg); color: var(--text);
+}
+dialog.widget-dialog::backdrop {
+  background: color-mix(in srgb, var(--text, #231F1C) 40%, transparent);
+}
+.widget-dialog-bar { display: flex; justify-content: flex-end; margin-bottom: .6rem; }
+.widget-dialog-bar button {
+  cursor: pointer; font: inherit; font-size: .85rem; padding: .25rem .75rem;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--text);
+}
+.widget-dialog-bar button:focus-visible { outline: 2px solid currentColor; }
+
+/* --------------------------------------------------------------------------
+   2. Частные правила «Стилистических решений»
+   -------------------------------------------------------------------------- */
+
+/* 2.1. Акцент оси: свой цвет у своей оси, общий — по умолчанию (Р25). */
+.style-analysis section[data-axis="form_method"] {
+  --axis-color: var(--style-axis-form_method, #90621f);
+}
+.style-analysis section[data-axis="art_styles"] {
+  --axis-color: var(--style-axis-art_styles, #6267a4);
+}
+.style-analysis section[data-axis="morphological_trait"] {
+  --axis-color: var(--style-axis-morphological_trait, #aa5467);
+}
+
+/* 2.2. Единая типографика (Р26): одна шкала заголовков в сводке, в профиле
+   и во всех трёх вкладках — «Близкие объекты» и «Источники» не крупнее. */
+.style-analysis section[data-axis] > h3 {
+  margin: .5rem 0 .25rem;
+  font-size: .86rem; font-weight: 600; line-height: 1.25;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+}
+.style-analysis .style-pane > h3,
+.style-analysis .style-pane > section:not([data-axis]) > h3 {
+  margin: .5rem 0 .25rem;
+  font-size: .86rem; font-weight: 600; line-height: 1.25;
+}
+.style-analysis .style-pane h4 {
+  margin: .4rem 0 .15rem;
+  font-size: .8rem; font-weight: 600; line-height: 1.25;
+}
+
+/* 2.3. Вкладки: переключение по признаку, без позиционных селекторов (Р20). */
+.style-tabs { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+.style-tabs legend,
+.style-choice { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.style-tabs > label {
+  display: inline-block; cursor: pointer; padding: .45em .6em;
+  border-bottom: 2px solid transparent;
+}
+.style-choice:checked + label { font-weight: 700; border-color: currentColor; }
+.style-choice:focus-visible + label { outline: 2px solid currentColor; }
+.style-pane { display: none; overflow-wrap: anywhere; }
+.style-choice[data-style-tab="profile"]:checked ~ .style-pane[data-style-pane="profile"],
+.style-choice[data-style-tab="similar"]:checked ~ .style-pane[data-style-pane="similar"],
+.style-choice[data-style-tab="sources"]:checked ~ .style-pane[data-style-pane="sources"] {
+  display: block;
+}
+
+/* 2.4. Компактная сводка: чипы по осям, итоговые счётчики, переход в полный
+   режим (Р2). В компактной сводке заголовок оси скрыт визуально (остаётся для
+   скринридеров), чтобы ось занимала одну строку, а не две; геометрия строго
+   прямоугольная (--radius), в духе Вх². */
+.style-analysis .style-summary { margin: .25rem 0 .1rem; }
+.style-analysis .style-axis { margin: .25rem 0; }
+.style-analysis .style-summary .style-axis > h3 {
+  position: absolute; width: 1px; height: 1px; margin: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.style-analysis .style-chips {
+  display: flex; flex-wrap: wrap; gap: .3rem; list-style: none; margin: 0; padding: 0;
+}
+.style-analysis .style-chip {
+  display: inline-flex; align-items: center; gap: .35rem; max-width: 100%;
+  padding: .14rem .48rem .14rem .36rem; border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--concept-color, var(--axis-color, #327965)) 32%, var(--line));
+  background: color-mix(in srgb, var(--concept-color, var(--axis-color, #327965)) 7%, var(--surface));
+  font-size: .84rem; line-height: 1.35;
+}
+.style-analysis .style-chip-link {
+  display: inline-flex; align-items: center; gap: .35rem; min-width: 0; color: var(--text);
+}
+.style-analysis .style-chip-name { overflow-wrap: anywhere; }
+.style-analysis .style-chip-share {
+  color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* Оспаривание — знаком, а не цветом (Р2.5). */
+.style-analysis .style-chip-mark {
+  flex: none; width: .62rem; height: .62rem; border-radius: 2px;
+  background: repeating-linear-gradient(135deg, var(--muted) 0 2px, transparent 2px 4px);
+}
+/* На морфологических — мягкая заливка вместо чисел (Р2.4). */
+.style-analysis .style-axis[data-axis="morphological_trait"] .style-chip {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--concept-color, var(--axis-color, #327965)) 26%, transparent) var(--fill, 0%),
+    color-mix(in srgb, var(--concept-color, var(--axis-color, #327965)) 7%, var(--surface)) var(--fill, 0%));
+}
+.style-analysis .style-summary-foot {
+  display: flex; flex-wrap: wrap; gap: .9rem; align-items: baseline;
+  margin: .55rem 0 .1rem; font-size: .78rem; color: var(--muted);
+}
+.style-analysis .style-counter { white-space: nowrap; }
+
+/* 2.5. Раскрытый профиль в потоке карточки (Р3, Р6): заменяет компактную сводку. */
+.style-analysis .style-profile { margin: .45rem 0 0; }
+.style-analysis .style-profile[open] { margin-top: .2rem; }
+.style-analysis .style-profile > summary {
+  cursor: pointer; padding: .25rem 0; font-size: .82rem; color: var(--muted);
+}
+.style-analysis .style-profile > summary:focus-visible { outline: 2px solid currentColor; }
+.style-analysis .style-profile .style-when-open { display: none; }
+.style-analysis .style-profile[open] > summary .style-when-closed { display: none; }
+.style-analysis .style-profile[open] > summary .style-when-open { display: inline; }
+.style-analysis[data-style-mode="expanded"] .style-summary,
+.style-analysis:has(> .style-profile[open]) > .style-summary { display: none; }
+
+/* 2.6. Строка профиля: понятие, доля и шкала поддержки (Р3). Шкала рисуется
+   заливкой строки по --score-share, сам <meter> скрыт от глаз, но остаётся
+   в дереве доступности (Р24). */
+.style-analysis .style-score {
+  --style-score-fill: color-mix(in srgb, var(--axis-color, #327965) var(--style-scale-mix, 38%), #fff);
+  position: relative; isolation: isolate;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .5rem;
+  margin: .18rem 0; padding: .28rem .5rem .42rem; border-radius: var(--radius);
+  background: linear-gradient(to right,
+    var(--style-score-fill) var(--score-share, 0%),
+    var(--style-scale-track, #f4f0e9) var(--score-share, 0%));
+  color: var(--text); line-height: 1.15;
+}
+.style-analysis .style-score a { color: inherit; overflow-wrap: anywhere; min-width: 0; }
+.style-analysis .style-score strong {
+  margin: 0; font-weight: 600; flex: 0 0 auto; white-space: nowrap;
+}
+.style-analysis .style-score meter {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.style-analysis .style-score:is(:hover, :focus-within) { z-index: 3; }
+
+/* 2.7. Оспаривание: плашка с акцентом отрицания (Р2.5, Р25). */
+.style-analysis .style-counterbar {
+  position: relative; display: flex; justify-content: flex-end; margin: 0 0 .3rem;
+}
+.style-analysis .style-objection {
+  max-width: 100%; padding: .18rem .5rem;
+  border-inline-end: 3px solid var(--style-negation-line, #9a6467);
+  border-radius: var(--radius);
+  background: repeating-linear-gradient(135deg,
+    var(--style-negation-fill, #f1e5e4) 0 5px,
+    var(--style-negation-fill-2, #e8d8d7) 5px 7px);
+  color: var(--style-negation-ink, #702f32);
+  text-align: end; overflow-wrap: anywhere;
+  font-size: .82em; font-weight: 600;
+}
+.style-analysis .style-negative .style-objection > a { color: inherit; }
+
+/* 2.8. Подсказка со свидетельствами: одна плашка на все места (Р22, Р24). */
+.style-analysis .witness-popup {
+  position: absolute; z-index: 5; display: none; box-sizing: border-box;
+  width: min(100%, 34rem); max-height: min(40vh, 18rem);
+  overflow: auto; overscroll-behavior: contain;
+  padding: .65rem .8rem; border-radius: var(--radius);
+  background: var(--style-tip-bg, #302921); color: var(--style-tip-ink, #fff);
+  font-size: .83rem; font-weight: 400; line-height: 1.4; text-align: start;
+}
+.style-analysis .style-score > .witness-popup { inset: 100% auto auto 0; }
+.style-analysis .style-objection > .witness-popup { inset: 100% 0 auto auto; }
+.style-analysis :is(.style-score, .style-objection):is(:hover, :focus-within) > .witness-popup {
+  display: block;
+}
+.style-analysis .style-counterbar:is(:hover, :focus-within) { z-index: 4; }
+.style-analysis .witness-popup :is(.hint-relation, .hint-evidence) { display: block; }
+.style-analysis .witness-popup span > span { display: block; }
+.style-analysis .witness-popup .hint-relation + .hint-relation {
+  margin-top: .55rem; padding-top: .5rem;
+  border-top: 1px solid color-mix(in srgb, var(--style-tip-ink, #fff) 35%, transparent);
+}
+.style-analysis .witness-popup a { color: var(--style-tip-ink, #fff); text-decoration: underline; }
+
+/* 2.9. Переход в полный режим и состояния загрузки (Р4, Р22). */
+.style-analysis .style-research {
+  cursor: pointer; font: inherit; font-size: .82rem; padding: .2rem .65rem;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--text);
+}
+.style-analysis .style-research:hover { border-color: var(--accent); }
+.style-analysis .style-research:focus-visible { outline: 2px solid currentColor; }
+.style-analysis .style-loading { color: var(--muted); font-size: .82rem; }
+
+/* 2.10. Знак понятия: цвет приходит из данных переменной --concept-color,
+   без значения — цвет своей оси (Р25, Р2.6). Знак окрашивается через
+   currentColor, поэтому гость без JavaScript его видит. */
+.style-analysis .style-concept { display: inline-block; margin-inline-end: .35em; }
+.style-analysis .concept-icon {
+  display: inline-block; vertical-align: -.16em;
+  color: var(--concept-color, var(--axis-color, #327965));
+}
+
+/* 2.11. Содержимое вкладок: свои списки и определения, без переполнения
+   в узком слоте (Р26, Р27). */
+.style-analysis .style-pane section[data-axis] { margin: .6rem 0 0; padding: 0; }
+.style-analysis .style-pane :is(ul, ol) { margin: .25rem 0 .5rem; padding-inline-start: 1.2rem; }
+.style-analysis .style-pane li { margin: .2rem 0; }
+.style-analysis .style-pane dl {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: .15rem .5rem; margin: .25rem 0;
+}
+.style-analysis .style-pane dt { color: var(--muted); font-size: .78rem; }
+.style-analysis .style-pane dd { margin: 0; overflow-wrap: anywhere; }
+.style-analysis .style-pane blockquote {
+  margin: .2rem 0; padding-inline-start: .6rem;
+  border-inline-start: 2px solid var(--line); font-size: .86rem;
+}
+
+/* 2.12. Адаптация к ширине слота (Р27): узкий слот — плотнее, переносы
+   разрешены, горизонтального переполнения нет. */
+@container style-analysis (max-width: 26rem) {
+  .style-analysis .style-summary-foot { gap: .5rem .7rem; }
+  .style-analysis .style-chip { font-size: .8rem; padding: .14rem .45rem .14rem .32rem; }
+  .style-analysis .style-score { padding: .24rem .4rem .34rem; }
+  .style-analysis .style-tabs > label { padding: .4em .45em; }
+}
+@container style-analysis (max-width: 18rem) {
+  .style-analysis section[data-axis] > h3 { font-size: .78rem; }
+  .style-analysis .style-score strong { flex-basis: 100%; white-space: normal; }
+}
+
+/* 2.13. Раскладка карточки: свёрнутый виджет не растягивает боковую колонку. */
+@media (min-width: 1001px) {
+  .public-card > [data-sidebar-stack]:has(.style-analysis:not([open])) {
+    grid-template-rows: repeat(var(--stack-rows), max-content) minmax(0, 1fr);
+  }
+  [data-sidebar-stack]:has(.style-analysis:not([open])) > [data-stack-sidebar] {
+    grid-row: 1 / -1;
+    align-self: start;
+  }
+}
+
+/* 2.14. Печать (Р28): подсказки и штрихованные плашки не печатаются, шкала
+   поддержки печатается, страница не разъезжается. */
+@media print {
+  dialog.widget-dialog { display: none !important; }
+  .style-analysis { max-width: 100%; overflow-wrap: anywhere; break-inside: avoid; }
+  .style-analysis :is(.style-score, .style-objection):is(:hover, :focus-within) > .witness-popup {
+    display: none;
+  }
+  .style-analysis .style-chip-mark { display: none; }
+  .style-analysis .style-objection {
+    background: none; border-inline-end: 0; padding: 0;
+  }
+  .style-analysis .style-score {
+    print-color-adjust: exact; -webkit-print-color-adjust: exact; break-inside: avoid;
+  }
+}

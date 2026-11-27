@@ -418,7 +418,8 @@ export function styleAttributionWidgetHtml(
  */
 export function styleAnalysisPopupHtml(set: PublicRelationSet): string {
   const prefix = `style-popup-${e(set.id)}`;
-  return `<fieldset class="style-tabs style-tabs-popup"><legend>Стилистический анализ</legend>${
+  // Корень поп-апа — с классом виджета: оформление карточки действует и здесь (Р23).
+  return `<fieldset class="style-tabs style-tabs-popup style-analysis"><legend>Стилистический анализ</legend>${
     tabInputs(prefix)
   }${
     tabPanes({

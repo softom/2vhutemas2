@@ -1,7 +1,7 @@
 // Готовое публичное содержание не заменяется приложением редактора.
 import "./fonts.css";
 import "./styles.css";
-import "./styleCounterbar.css";
+import "./styleAnalysis.css";
 import { enhancePublicPage } from "./publicPage";
 
 import { clientWidgets } from "./clientWidgetRegistry";

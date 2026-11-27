@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { request } from "../api";
+import { designTitle } from "../widgetModes";
 import type { Slot, Layout } from "./PageEditor";
 import type { WidgetDefinition } from "./PlacementBoard";
 
 type Field = { type:"text"|"integer"|"entity_uid"; default:string|number|null; min?:number; max?:number; aliases?:string[] };
-export type Contract = {design:{values:string[];default:string}; display_options:Record<string,Field>; call_params:Record<string,Field>};
+export type Contract = {design:{values:string[];default:string;titles?:Record<string,string>}; display_options:Record<string,Field>; call_params:Record<string,Field>};
 export type Values = Record<string,string|number|null|{alias:string}>;
 const labels:Record<string,string>={entity_id:"Сущность",height:"Высота модели",title:"Заголовок",caption:"Подпись"};
 
@@ -64,7 +65,7 @@ export function SlotProperties({slot,layout,widget,busy,onSave,onBusy}:{
   return <div className="pe-properties"><form onSubmit={e=>{e.preventDefault();void save();}}>
     <fieldset disabled={busy || layout.assigned}><legend>Отображение</legend>
       <label>Оформление<select value={design} onChange={e=>{setDesign(e.target.value);setNotice("");}}>
-        <option value="">По умолчанию ({contract.design.default})</option>{contract.design.values.map(d=><option key={d}>{d}</option>)}
+        <option value="">По умолчанию ({designTitle(contract.design.default, contract.design.titles)})</option>{contract.design.values.map(d=><option key={d}>{designTitle(d, contract.design.titles)}</option>)}
       </select></label>{fields(contract.display_options,display,setDisplay)}
     </fieldset><fieldset disabled={busy || layout.assigned}><legend>Начальные параметры вызова</legend>
       {fields(contract.call_params,params,setParams)}{!Object.keys(contract.call_params).length && <small>Нет параметров вызова.</small>}

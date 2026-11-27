@@ -1,4 +1,5 @@
 import { ApiError } from "./errors.ts";
+import { designTitles } from "./widgetDesigns.ts";
 import { isPageFrame } from "./cardSections.ts";
 import { modelPath } from "./modelWidgets.ts";
 import { styleQuizKey } from "./styleQuizWidget.ts";
@@ -32,7 +33,11 @@ export function instanceContract(key: string, designs: string[]) {
   } else if (key !== styleQuizKey && !isPageFrame(key)) {
     call_params.entity_id = { type: "entity_uid", default: null, aliases: [".this"] };
   }
-  return { design: { type: "enum", values: designs, default: designs[0] }, display_options, call_params };
+  return {
+    design: { type: "enum", values: designs, default: designs[0], titles: designTitles(key, designs) },
+    display_options,
+    call_params,
+  };
 }
 
 // An omitted group is preserved on a same-widget edit; an empty object resets it.
