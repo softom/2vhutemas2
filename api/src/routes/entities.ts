@@ -141,16 +141,26 @@ entities.get("/", async (c: Context<AppEnv>) => {
   const rows = await boundedCatalogRead(sql,run=>run<CatalogItem & { id: string | number }>`
     with page as materialized (
     select e.id,e.slug,e.title_ru,e.title_en,e.title_original,e.title_la,e.type_id,e.is_published,e.sort_order,e.status,
-           ty.code as type,ty.title_ru as type_title,pv.num_value,pv.text_value,origin.created_at
+           ty.code as type,ty.title_ru as type_title,pv.num_value,pv.text_value,e.created_at
     from app.read_entities(${drafts}) e
-    join app.entities origin on origin.id = e.id
     join app.entity_types ty on ty.id = e.type_id
     left join app.materials m on m.entity_id = e.id
-    -- Величина для отбора и сортировки — из снимка самой записи.
+    -- Величина для отбора и сортировки — из снимка самой записи. Снимок
+    -- разбираем прямо здесь: вызов app.snapshot_value на каждую строку
+    -- каталога обходился перебором версий и ронял отбор по величине
+    -- в предел времени запроса (27.11.2026).
     left join lateral (
-        select (sv->>'num_value')::numeric as num_value, sv->>'text_value' as text_value
-          from app.snapshot_value(e.id, ${drafts},
-                 (select id from app.parameters where code = ${parameter})) sv) pv
+        select (v->>'num_value')::numeric as num_value, v->>'text_value' as text_value
+          from app.revisions r
+          cross join lateral jsonb_array_elements(r.snapshot->'values') v
+          left join lateral (select i from jsonb_array_elements(r.snapshot->'indicators') i
+                              where i->>'id' = v->>'indicator_id') ind on true
+         where r.id = case when ${drafts} then e.working_revision_id else e.published_revision_id end
+           and (v->>'parameter_id')::uuid =
+               (select p.id from app.parameters p where p.code = ${parameter} and p.is_published)
+           and coalesce((ind.i->>'is_current')::boolean, true)
+         order by coalesce((ind.i->>'sort_order')::int, 0), coalesce((v->>'sort_order')::int, 0)
+         limit 1) pv
       on ${parameter}::text is not null
     where (${drafts} or e.is_published)
       and (${selection?.source_type_id ?? null}::uuid is null or e.type_id in
@@ -194,11 +204,11 @@ entities.get("/", async (c: Context<AppEnv>) => {
                or (pv.num_value is not distinct from anchor.val and e.id > ${after})
                or (${descending} and pv.num_value < anchor.val)
                or (not ${descending} and pv.num_value > anchor.val)))
-           or (${newest} and (origin.created_at,e.id) < (select created_at,id from app.entities where id=${after}))
+           or (${newest} and (e.created_at,e.id) < (select created_at,id from app.entities where id=${after}))
            or (not ${sortByValue} and not ${newest} and e.id > ${after}))
     order by case when ${sortByValue} and ${descending} then pv.num_value end desc nulls last,
              case when ${sortByValue} and not ${descending} then pv.num_value end asc nulls last,
-             case when ${newest} then origin.created_at end desc,
+             case when ${newest} then e.created_at end desc,
              case when ${newest} then e.id end desc, e.id
     limit ${limit + 1}
     )

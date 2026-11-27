@@ -1161,6 +1161,7 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
         ...card.values.flatMap(v => v.set_id ? [v.set_id] : []), ...sets.map(s => s.id),
       ])];
       const sides: Record<"left" | "right", string[]> = {left: [], right: []};
+      let programShown = false;
       for (const id of [...order, null]) {
         const values = card.values.filter(v => (v.set_id ?? null) === id);
         for (const side of ["left", "right"] as const) {
@@ -1168,10 +1169,20 @@ function cardBody(card: PublicCard, descriptionHtml: string, cite: ReturnType<ty
           // News uses a dedicated published-field list; keep its right-hand metadata below.
           if (!news || side === "left") {
             sides[side].push(parameterValuesHtml(group));
-            if (group.some(v => v.parameter === "area_program")) sides[side].push(programHtml(card));
+            if (group.some(v => v.parameter === "area_program")) {
+              sides[side].push(programHtml(card));
+              programShown = true;
+            }
             sides[side].push(relationSetsHtml(sets.filter(s => s.id === id), side));
           }
         }
+      }
+      // Площадная программа — раздел презентации типа, но набор её
+      // параметров может не быть назван в списке наборов: тогда группа не
+      // попала в обход и раздел некуда было показать. Программа — часть
+      // записи, поэтому выводим её в своей колонке (27.11.2026).
+      if (!programShown && card.values.some(v => v.parameter === "area_program")) {
+        sides[programSide].push(programHtml(card));
       }
       if (news) sides.right.push(sections.indicators());
       const visibleSides = selectedSide ? [selectedSide] : (["left", "right"] as const);
